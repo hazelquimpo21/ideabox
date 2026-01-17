@@ -14,11 +14,14 @@
 ### Backend
 - **Runtime**: Node.js (via Next.js API routes + separate services)
 - **Database**: Supabase (PostgreSQL + Auth + RLS)
-- **Authentication**: Supabase Auth + Gmail OAuth
-- **AI/LLM**: OpenAI (GPT-4o-mini primarily) + Anthropic (Claude for complex analysis)
+- **Authentication**: Supabase Auth + Gmail OAuth (External app, testing mode)
+- **AI/LLM**: OpenAI GPT-4.1-mini (single model, no fallback - see PROJECT_OVERVIEW.md for rationale)
 - **Email API**: Gmail API via googleapis npm package
-- **Background Jobs**: Cron jobs (initially) or Supabase Edge Functions
+- **Background Jobs**: Supabase pg_cron + Edge Functions (NOT Vercel Cron - see limitations below)
 - **Queue System**: Consider pg-boss (PostgreSQL-based) for Phase 2+
+
+> **Why not Vercel Cron?** Hobby tier limits to 2 cron jobs at once-per-day frequency.
+> We need hourly sync, so Supabase pg_cron is the better choice since we're already using Supabase.
 
 ### Infrastructure
 - **Hosting**: Vercel (for Next.js)
@@ -36,13 +39,16 @@
     "@supabase/supabase-js": "^2.0.0",
     "googleapis": "^128.0.0",
     "openai": "^4.0.0",
-    "@anthropic-ai/sdk": "^0.20.0",
     "zod": "^3.22.0",
     "date-fns": "^3.0.0",
-    "tailwindcss": "^3.4.0"
+    "tailwindcss": "^3.4.0",
+    "pino": "^8.0.0",
+    "pino-pretty": "^10.0.0"
   }
 }
 ```
+
+> **Note:** Anthropic SDK removed - using GPT-4.1-mini only for simplicity and cost efficiency.
 
 ## Folder Structure
 
@@ -86,8 +92,8 @@ ideabox/
 │   │   ├── sync.ts               # Email sync logic
 │   │   └── types.ts
 │   ├── ai/
-│   │   ├── openai-client.ts
-│   │   ├── anthropic-client.ts
+│   │   ├── openai-client.ts      # GPT-4.1-mini client with function calling
+│   │   ├── prompts.ts            # System prompts for each analyzer
 │   │   └── types.ts
 │   ├── utils/
 │   │   ├── logger.ts             # Logging utility
@@ -269,20 +275,22 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx
 
-# Gmail API
+# Gmail API (OAuth - External app in testing mode)
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxx
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/callback
 
-# OpenAI
+# OpenAI (GPT-4.1-mini only)
 OPENAI_API_KEY=sk-xxx
-
-# Anthropic (optional, for complex analysis)
-ANTHROPIC_API_KEY=sk-ant-xxx
 
 # App Config
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NODE_ENV=development
+LOG_LEVEL=info  # debug, info, warn, error
+
+# Feature Flags (for gradual rollout)
+ENABLE_GMAIL_LABEL_SYNC=true
+MAX_BODY_CHARS=16000
 ```
 
 ## Performance Considerations

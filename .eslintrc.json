@@ -1,0 +1,11 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "max-lines": ["error", {
+      "max": 400,
+      "skipBlankLines": true,
+      "skipComments": true
+    }],
+    "no-console": ["warn", { "allow": ["warn", "error"] }]
+  }
+}

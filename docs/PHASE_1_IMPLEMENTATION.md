@@ -233,14 +233,19 @@ export function EmailCard({ email, selected, onClick }: EmailCardProps) {
 ```
 
 #### Category Filters
+
+> **Note:** "Clients" filter is based on `client_id` relationship, NOT category.
+> This allows client emails to appear in both "Action" and "Clients" views.
+
 ```tsx
 // app/inbox/components/CategoryFilter.tsx
 const categories = [
   { value: 'all', label: 'All', count: totalCount },
   { value: 'action_required', label: 'Action', count: actionCount },
-  { value: 'client', label: 'Clients', count: clientCount },
+  { value: 'clients', label: 'Clients', count: clientCount, isRelationFilter: true },
   { value: 'event', label: 'Events', count: eventCount },
-  { value: 'other', label: 'Other', count: otherCount },
+  { value: 'newsletter', label: 'News', count: newsletterCount },
+  { value: 'other', label: 'Other', count: otherCount }, // promo, admin, personal, noise
 ];
 
 export function CategoryFilter({ selected, onSelect }: CategoryFilterProps) {
@@ -307,11 +312,11 @@ export function useEmails({ category = 'all' }) {
 // app/api/emails/route.ts
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const category = searchParams.get('category') || 'all';
-  
+  const filter = searchParams.get('filter') || 'all';
+
   const supabase = createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   let query = supabase
     .from('emails')
     .select(`
@@ -323,17 +328,24 @@ export async function GET(request: Request) {
     .eq('is_archived', false)
     .order('date', { ascending: false })
     .limit(50);
-  
-  if (category !== 'all') {
-    query = query.eq('category', category);
+
+  // Handle different filter types
+  // "clients" filters by relationship, not category
+  if (filter === 'clients') {
+    query = query.not('client_id', 'is', null);
+  } else if (filter === 'other') {
+    // "other" groups less common categories
+    query = query.in('category', ['promo', 'admin', 'personal', 'noise']);
+  } else if (filter !== 'all') {
+    query = query.eq('category', filter);
   }
-  
+
   const { data: emails, error } = await query;
-  
+
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  
+
   return NextResponse.json({ emails });
 }
 ```

@@ -138,42 +138,51 @@ CREATE TABLE emails (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   gmail_account_id UUID NOT NULL REFERENCES gmail_accounts(id) ON DELETE CASCADE,
-  
+
   -- Gmail identifiers
   gmail_id TEXT NOT NULL, -- Gmail message ID
   thread_id TEXT NOT NULL, -- Gmail thread ID
-  
+
   -- Email metadata
   subject TEXT,
   sender_email TEXT NOT NULL,
   sender_name TEXT,
   recipient_email TEXT,
   date TIMESTAMPTZ NOT NULL,
-  
-  -- Content
+
+  -- Content (body_text truncated to 16K chars for AI analysis cost efficiency)
   snippet TEXT, -- Gmail's short preview
-  body_text TEXT, -- Plain text body
-  body_html TEXT, -- HTML body
-  
+  body_text TEXT, -- Plain text body (may be truncated)
+  body_html TEXT, -- HTML body (stored in full for display)
+
   -- Labels & categorization
+  -- NOTE: Category is action-focused. "client" is NOT a category - use client_id relationship instead.
+  -- This allows a client email to be "action_required" rather than hidden in a "client" category.
   gmail_labels TEXT[], -- Original Gmail labels
-  category TEXT, -- Our AI category: action_required, event, client, newsletter, promo, admin
+  category TEXT, -- action_required, event, newsletter, promo, admin, personal, noise
   priority_score INTEGER DEFAULT 5, -- 1-10 scale
-  
-  -- Relations
+  topics TEXT[], -- AI-extracted topics: ['billing', 'meeting', 'feedback']
+
+  -- Relations (client tracked separately from category for better filtering)
   client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
   project_tags TEXT[], -- ['PodcastPipeline', 'HappenlistScraper']
-  
+
   -- State
   is_read BOOLEAN DEFAULT FALSE,
   is_archived BOOLEAN DEFAULT FALSE,
   is_starred BOOLEAN DEFAULT FALSE,
   analyzed_at TIMESTAMPTZ, -- When AI analysis completed
-  
+
+  -- Analysis failure tracking (if AI analysis fails, we mark why instead of retrying)
+  analysis_error TEXT, -- NULL if successful, error message if failed
+
+  -- Gmail label sync (we sync our categories back to Gmail as labels)
+  gmail_label_synced BOOLEAN DEFAULT FALSE,
+
   -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
+
   UNIQUE(user_id, gmail_id)
 );
 
@@ -461,6 +470,80 @@ CREATE POLICY "Users can view own sync logs"
   USING (auth.uid() = user_id);
 ```
 
+### api_usage_logs
+Track API usage for cost monitoring and budget alerts.
+
+```sql
+CREATE TABLE api_usage_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- API details
+  service TEXT NOT NULL, -- 'openai', 'gmail'
+  endpoint TEXT, -- 'chat.completions', 'users.messages.list'
+  model TEXT, -- 'gpt-4.1-mini'
+
+  -- Usage metrics
+  tokens_input INTEGER DEFAULT 0,
+  tokens_output INTEGER DEFAULT 0,
+  tokens_total INTEGER DEFAULT 0,
+  estimated_cost DECIMAL(10, 6), -- Cost in USD (6 decimal places for precision)
+
+  -- Context
+  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
+  analyzer_name TEXT, -- 'categorizer', 'action_extractor', 'client_tagger'
+
+  -- Performance
+  duration_ms INTEGER,
+  success BOOLEAN DEFAULT TRUE,
+  error_message TEXT,
+
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_api_usage_logs_user_id ON api_usage_logs(user_id);
+CREATE INDEX idx_api_usage_logs_created_at ON api_usage_logs(created_at DESC);
+CREATE INDEX idx_api_usage_logs_service ON api_usage_logs(service, created_at DESC);
+
+-- RLS Policies
+ALTER TABLE api_usage_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own API usage"
+  ON api_usage_logs FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Helper function: Get daily API cost for a user
+CREATE OR REPLACE FUNCTION get_daily_api_cost(p_user_id UUID, p_date DATE DEFAULT CURRENT_DATE)
+RETURNS DECIMAL AS $$
+BEGIN
+  RETURN COALESCE(
+    (SELECT SUM(estimated_cost)
+     FROM api_usage_logs
+     WHERE user_id = p_user_id
+       AND created_at >= p_date
+       AND created_at < p_date + INTERVAL '1 day'),
+    0
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Helper function: Get monthly API cost for a user
+CREATE OR REPLACE FUNCTION get_monthly_api_cost(p_user_id UUID, p_month DATE DEFAULT DATE_TRUNC('month', CURRENT_DATE)::DATE)
+RETURNS DECIMAL AS $$
+BEGIN
+  RETURN COALESCE(
+    (SELECT SUM(estimated_cost)
+     FROM api_usage_logs
+     WHERE user_id = p_user_id
+       AND created_at >= p_month
+       AND created_at < p_month + INTERVAL '1 month'),
+    0
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
 ## Database Functions & Triggers
 
 ### Update updated_at timestamp automatically
@@ -557,18 +640,45 @@ WHERE a.user_id = $1
 ORDER BY a.urgency_score DESC, a.deadline ASC;
 ```
 
+## Log Cleanup (30-day retention)
+
+```sql
+-- Cleanup function for old logs (run daily via pg_cron)
+CREATE OR REPLACE FUNCTION cleanup_old_logs()
+RETURNS void AS $$
+BEGIN
+  -- Delete sync logs older than 30 days
+  DELETE FROM sync_logs
+  WHERE started_at < NOW() - INTERVAL '30 days';
+
+  -- Delete API usage logs older than 30 days
+  DELETE FROM api_usage_logs
+  WHERE created_at < NOW() - INTERVAL '30 days';
+
+  -- Log the cleanup
+  RAISE NOTICE 'Cleaned up logs older than 30 days at %', NOW();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Schedule cleanup to run daily at 3am (via pg_cron)
+-- Run this after enabling pg_cron extension:
+-- SELECT cron.schedule('cleanup-old-logs', '0 3 * * *', 'SELECT cleanup_old_logs()');
+```
+
 ## Migration Files Structure
 
 ```
 supabase/migrations/
   001_initial_schema.sql          # user_profiles, gmail_accounts
   002_clients_table.sql           # clients
-  003_emails_table.sql            # emails, email_analyses
-  004_actions_table.sql           # actions
-  005_sync_logs.sql               # sync_logs
-  006_rls_policies.sql            # All RLS policies
-  007_functions_triggers.sql      # Helper functions
-  
+  003_emails_table.sql            # emails (with topics, analysis_error, gmail_label_synced)
+  004_email_analyses_table.sql    # email_analyses
+  005_actions_table.sql           # actions
+  006_sync_logs.sql               # sync_logs
+  007_api_usage_logs.sql          # api_usage_logs (for cost tracking)
+  008_rls_policies.sql            # All RLS policies
+  009_functions_triggers.sql      # Helper functions + cleanup function
+
   # Phase 2 migrations
   101_urls_table.sql
   102_events_table.sql

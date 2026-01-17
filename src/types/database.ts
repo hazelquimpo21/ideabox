@@ -1,0 +1,529 @@
+/**
+ * Database Types for IdeaBox
+ *
+ * These types represent the Supabase/PostgreSQL database schema.
+ *
+ * HOW TO REGENERATE:
+ * After making database schema changes, regenerate this file:
+ * ```bash
+ * npx supabase gen types typescript --project-id <your-project-id> > src/types/database.ts
+ * ```
+ *
+ * WHY TYPE THE DATABASE?
+ * - Catch errors at compile time, not runtime
+ * - IDE autocompletion for table/column names
+ * - Refactoring safety
+ *
+ * NOTE: This is a placeholder file. The actual types will be generated
+ * from the Supabase database schema once migrations are applied.
+ */
+
+/**
+ * Email categories (action-focused).
+ * "client" is NOT a category - client relationship is tracked via client_id.
+ */
+export type EmailCategory =
+  | 'action_required'
+  | 'event'
+  | 'newsletter'
+  | 'promo'
+  | 'admin'
+  | 'personal'
+  | 'noise';
+
+/**
+ * Action types that can be extracted from emails.
+ */
+export type ActionType =
+  | 'respond'
+  | 'review'
+  | 'create'
+  | 'schedule'
+  | 'decide'
+  | 'none';
+
+/**
+ * Action status tracking.
+ */
+export type ActionStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
+
+/**
+ * Client status.
+ */
+export type ClientStatus = 'active' | 'inactive' | 'archived';
+
+/**
+ * Client priority levels.
+ */
+export type ClientPriority = 'low' | 'medium' | 'high' | 'vip';
+
+/**
+ * Sync log status.
+ */
+export type SyncStatus = 'started' | 'completed' | 'failed';
+
+/**
+ * Database schema types.
+ * This will be replaced by auto-generated types from Supabase CLI.
+ */
+export interface Database {
+  public: {
+    Tables: {
+      user_profiles: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string | null;
+          timezone: string;
+          onboarding_completed: boolean;
+          default_view: string;
+          emails_per_page: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          full_name?: string | null;
+          timezone?: string;
+          onboarding_completed?: boolean;
+          default_view?: string;
+          emails_per_page?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string | null;
+          timezone?: string;
+          onboarding_completed?: boolean;
+          default_view?: string;
+          emails_per_page?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      gmail_accounts: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string;
+          display_name: string | null;
+          access_token: string;
+          refresh_token: string;
+          token_expiry: string;
+          last_sync_at: string | null;
+          last_history_id: string | null;
+          sync_enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email: string;
+          display_name?: string | null;
+          access_token: string;
+          refresh_token: string;
+          token_expiry: string;
+          last_sync_at?: string | null;
+          last_history_id?: string | null;
+          sync_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          email?: string;
+          display_name?: string | null;
+          access_token?: string;
+          refresh_token?: string;
+          token_expiry?: string;
+          last_sync_at?: string | null;
+          last_history_id?: string | null;
+          sync_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      clients: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          company: string | null;
+          email: string | null;
+          status: ClientStatus;
+          priority: ClientPriority;
+          email_domains: string[] | null;
+          keywords: string[] | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          company?: string | null;
+          email?: string | null;
+          status?: ClientStatus;
+          priority?: ClientPriority;
+          email_domains?: string[] | null;
+          keywords?: string[] | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          company?: string | null;
+          email?: string | null;
+          status?: ClientStatus;
+          priority?: ClientPriority;
+          email_domains?: string[] | null;
+          keywords?: string[] | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      emails: {
+        Row: {
+          id: string;
+          user_id: string;
+          gmail_account_id: string;
+          gmail_id: string;
+          thread_id: string;
+          subject: string | null;
+          sender_email: string;
+          sender_name: string | null;
+          recipient_email: string | null;
+          date: string;
+          snippet: string | null;
+          body_text: string | null;
+          body_html: string | null;
+          gmail_labels: string[] | null;
+          category: EmailCategory | null;
+          priority_score: number;
+          topics: string[] | null;
+          client_id: string | null;
+          project_tags: string[] | null;
+          is_read: boolean;
+          is_archived: boolean;
+          is_starred: boolean;
+          analyzed_at: string | null;
+          analysis_error: string | null;
+          gmail_label_synced: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          gmail_account_id: string;
+          gmail_id: string;
+          thread_id: string;
+          subject?: string | null;
+          sender_email: string;
+          sender_name?: string | null;
+          recipient_email?: string | null;
+          date: string;
+          snippet?: string | null;
+          body_text?: string | null;
+          body_html?: string | null;
+          gmail_labels?: string[] | null;
+          category?: EmailCategory | null;
+          priority_score?: number;
+          topics?: string[] | null;
+          client_id?: string | null;
+          project_tags?: string[] | null;
+          is_read?: boolean;
+          is_archived?: boolean;
+          is_starred?: boolean;
+          analyzed_at?: string | null;
+          analysis_error?: string | null;
+          gmail_label_synced?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          gmail_account_id?: string;
+          gmail_id?: string;
+          thread_id?: string;
+          subject?: string | null;
+          sender_email?: string;
+          sender_name?: string | null;
+          recipient_email?: string | null;
+          date?: string;
+          snippet?: string | null;
+          body_text?: string | null;
+          body_html?: string | null;
+          gmail_labels?: string[] | null;
+          category?: EmailCategory | null;
+          priority_score?: number;
+          topics?: string[] | null;
+          client_id?: string | null;
+          project_tags?: string[] | null;
+          is_read?: boolean;
+          is_archived?: boolean;
+          is_starred?: boolean;
+          analyzed_at?: string | null;
+          analysis_error?: string | null;
+          gmail_label_synced?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      email_analyses: {
+        Row: {
+          id: string;
+          email_id: string;
+          user_id: string;
+          categorization: Record<string, unknown> | null;
+          action_extraction: Record<string, unknown> | null;
+          client_tagging: Record<string, unknown> | null;
+          event_detection: Record<string, unknown> | null;
+          url_extraction: Record<string, unknown> | null;
+          content_opportunity: Record<string, unknown> | null;
+          analyzer_version: string;
+          tokens_used: number | null;
+          processing_time_ms: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          email_id: string;
+          user_id: string;
+          categorization?: Record<string, unknown> | null;
+          action_extraction?: Record<string, unknown> | null;
+          client_tagging?: Record<string, unknown> | null;
+          event_detection?: Record<string, unknown> | null;
+          url_extraction?: Record<string, unknown> | null;
+          content_opportunity?: Record<string, unknown> | null;
+          analyzer_version?: string;
+          tokens_used?: number | null;
+          processing_time_ms?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          email_id?: string;
+          user_id?: string;
+          categorization?: Record<string, unknown> | null;
+          action_extraction?: Record<string, unknown> | null;
+          client_tagging?: Record<string, unknown> | null;
+          event_detection?: Record<string, unknown> | null;
+          url_extraction?: Record<string, unknown> | null;
+          content_opportunity?: Record<string, unknown> | null;
+          analyzer_version?: string;
+          tokens_used?: number | null;
+          processing_time_ms?: number | null;
+          created_at?: string;
+        };
+      };
+      actions: {
+        Row: {
+          id: string;
+          user_id: string;
+          email_id: string | null;
+          client_id: string | null;
+          title: string;
+          description: string | null;
+          action_type: ActionType | null;
+          priority: string;
+          urgency_score: number;
+          deadline: string | null;
+          estimated_minutes: number | null;
+          status: ActionStatus;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email_id?: string | null;
+          client_id?: string | null;
+          title: string;
+          description?: string | null;
+          action_type?: ActionType | null;
+          priority?: string;
+          urgency_score?: number;
+          deadline?: string | null;
+          estimated_minutes?: number | null;
+          status?: ActionStatus;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          email_id?: string | null;
+          client_id?: string | null;
+          title?: string;
+          description?: string | null;
+          action_type?: ActionType | null;
+          priority?: string;
+          urgency_score?: number;
+          deadline?: string | null;
+          estimated_minutes?: number | null;
+          status?: ActionStatus;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      sync_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          gmail_account_id: string | null;
+          sync_type: string;
+          emails_fetched: number;
+          emails_analyzed: number;
+          errors_count: number;
+          status: SyncStatus;
+          error_message: string | null;
+          duration_ms: number | null;
+          started_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          gmail_account_id?: string | null;
+          sync_type: string;
+          emails_fetched?: number;
+          emails_analyzed?: number;
+          errors_count?: number;
+          status: SyncStatus;
+          error_message?: string | null;
+          duration_ms?: number | null;
+          started_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          gmail_account_id?: string | null;
+          sync_type?: string;
+          emails_fetched?: number;
+          emails_analyzed?: number;
+          errors_count?: number;
+          status?: SyncStatus;
+          error_message?: string | null;
+          duration_ms?: number | null;
+          started_at?: string;
+          completed_at?: string | null;
+        };
+      };
+      api_usage_logs: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          service: string;
+          endpoint: string | null;
+          model: string | null;
+          tokens_input: number;
+          tokens_output: number;
+          tokens_total: number;
+          estimated_cost: number | null;
+          email_id: string | null;
+          analyzer_name: string | null;
+          duration_ms: number | null;
+          success: boolean;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          service: string;
+          endpoint?: string | null;
+          model?: string | null;
+          tokens_input?: number;
+          tokens_output?: number;
+          tokens_total?: number;
+          estimated_cost?: number | null;
+          email_id?: string | null;
+          analyzer_name?: string | null;
+          duration_ms?: number | null;
+          success?: boolean;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          service?: string;
+          endpoint?: string | null;
+          model?: string | null;
+          tokens_input?: number;
+          tokens_output?: number;
+          tokens_total?: number;
+          estimated_cost?: number | null;
+          email_id?: string | null;
+          analyzer_name?: string | null;
+          duration_ms?: number | null;
+          success?: boolean;
+          error_message?: string | null;
+          created_at?: string;
+        };
+      };
+    };
+    Views: Record<string, never>;
+    Functions: {
+      get_daily_api_cost: {
+        Args: { p_user_id: string; p_date?: string };
+        Returns: number;
+      };
+      get_monthly_api_cost: {
+        Args: { p_user_id: string; p_month?: string };
+        Returns: number;
+      };
+    };
+    Enums: Record<string, never>;
+  };
+}
+
+/**
+ * Helper type to get a table row type.
+ */
+export type TableRow<T extends keyof Database['public']['Tables']> =
+  Database['public']['Tables'][T]['Row'];
+
+/**
+ * Helper type to get a table insert type.
+ */
+export type TableInsert<T extends keyof Database['public']['Tables']> =
+  Database['public']['Tables'][T]['Insert'];
+
+/**
+ * Helper type to get a table update type.
+ */
+export type TableUpdate<T extends keyof Database['public']['Tables']> =
+  Database['public']['Tables'][T]['Update'];
+
+/**
+ * Convenient type aliases for common table rows.
+ */
+export type Email = TableRow<'emails'>;
+export type Client = TableRow<'clients'>;
+export type Action = TableRow<'actions'>;
+export type GmailAccount = TableRow<'gmail_accounts'>;
+export type UserProfile = TableRow<'user_profiles'>;
+export type EmailAnalysis = TableRow<'email_analyses'>;
+export type SyncLog = TableRow<'sync_logs'>;
+export type ApiUsageLog = TableRow<'api_usage_logs'>;

@@ -2,10 +2,13 @@
 
 ## Overview
 
-IdeaBox integrates with three main external services:
-1. **Gmail API** - Email fetching and management
-2. **OpenAI/Anthropic APIs** - AI analysis and processing
+IdeaBox integrates with these external services:
+1. **Gmail API** - Email fetching, management, and label syncing
+2. **OpenAI API** - AI analysis (GPT-4.1-mini only, no fallback)
 3. **Google Calendar API** - Event syncing (Phase 2)
+
+> **Model Decision:** We use GPT-4.1-mini exclusively. No Anthropic fallback.
+> See PROJECT_OVERVIEW.md for cost analysis and rationale.
 
 ---
 
@@ -582,89 +585,47 @@ export const CATEGORIZE_FUNCTION: FunctionSchema = {
 
 ### Cost Optimization
 
-**Model Selection:**
+**Single Model Strategy (GPT-4.1-mini):**
 ```typescript
-// Use cheapest model that works
-const modelPricing = {
-  'gpt-4o-mini': 0.15 / 1_000_000,    // Best for most tasks
-  'gpt-4o': 2.50 / 1_000_000,         // Complex analysis only
+// We use GPT-4.1-mini for ALL analysis - no model selection complexity
+const MODEL = 'gpt-4.1-mini';
+const MODEL_PRICING = {
+  input: 0.15 / 1_000_000,   // $0.15 per 1M input tokens
+  output: 0.60 / 1_000_000,  // $0.60 per 1M output tokens
 };
-
-// Default to mini, upgrade only when needed
-function selectModel(complexity: 'simple' | 'complex'): string {
-  return complexity === 'complex' ? 'gpt-4o' : 'gpt-4o-mini';
-}
 ```
 
-**Estimated Costs for 250 emails/day:**
+**Estimated Costs for 250 emails/day (3 analyzers each):**
 ```
-Average tokens per email: 600 (400 input + 200 output)
-Total tokens per day: 250 × 600 = 150,000 tokens
-Cost with gpt-4o-mini: 150,000 × $0.15 / 1M = $0.0225/day
-Monthly cost: ~$0.68/month
+Per email:
+  Input:  ~500 tokens × 3 analyzers = 1,500 tokens
+  Output: ~100 tokens × 3 analyzers = 300 tokens
+
+Daily (250 emails):
+  Input:  375,000 tokens × $0.15/1M = $0.056
+  Output: 75,000 tokens × $0.60/1M = $0.045
+  Total:  ~$0.10/day
+
+Monthly: ~$3.00/month (well under $50 budget)
 ```
 
----
-
-## 3. Anthropic API Integration (Optional)
-
-Use Anthropic's Claude for complex analysis or as fallback.
-
+**Body Truncation for Cost Control:**
 ```typescript
-// lib/ai/anthropic-client.ts
-import Anthropic from '@anthropic-ai/sdk';
+// Truncate email body to 16K chars before sending to AI
+const MAX_BODY_CHARS = parseInt(process.env.MAX_BODY_CHARS || '16000');
 
-export class AnthropicClient {
-  private client: Anthropic;
-  private logger = createLogger('AnthropicClient');
-  
-  constructor() {
-    this.client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-  }
-  
-  async analyze<T>(
-    systemPrompt: string,
-    userContent: string,
-    schema: z.ZodSchema<T>,
-    options: {
-      model?: string;
-      temperature?: number;
-      maxTokens?: number;
-    } = {}
-  ): Promise<{ data: T; tokensUsed: number }> {
-    const model = options.model || 'claude-sonnet-4';
-    
-    const response = await this.client.messages.create({
-      model,
-      max_tokens: options.maxTokens || 1000,
-      temperature: options.temperature ?? 0.3,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: userContent },
-      ],
-    });
-    
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Expected text response');
-    }
-    
-    // Parse and validate response
-    const data = schema.parse(JSON.parse(content.text));
-    
-    return {
-      data,
-      tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
-    };
-  }
+function truncateBody(body: string): string {
+  if (body.length <= MAX_BODY_CHARS) return body;
+
+  // Keep beginning and end for context
+  const halfLimit = Math.floor(MAX_BODY_CHARS / 2);
+  return body.slice(0, halfLimit) + '\n\n[...truncated...]\n\n' + body.slice(-halfLimit);
 }
 ```
 
 ---
 
-## 4. Google Calendar API (Phase 2)
+## 3. Google Calendar API (Phase 2)
 
 ### Setup
 
@@ -821,17 +782,16 @@ if (dailyCost > 5) {  // Alert at $5/day
 ## Environment Variables Summary
 
 ```bash
-# Gmail API
+# Gmail API (External app in testing mode)
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxx
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/callback
 
-# OpenAI
+# OpenAI (GPT-4.1-mini only)
 OPENAI_API_KEY=sk-proj-xxx
-OPENAI_ORG_ID=org-xxx  # Optional
 
-# Anthropic (Optional)
-ANTHROPIC_API_KEY=sk-ant-xxx
+# Body truncation for cost control
+MAX_BODY_CHARS=16000
 
 # Google Calendar (Phase 2)
 # Uses same GOOGLE_CLIENT_ID/SECRET, just add scope
