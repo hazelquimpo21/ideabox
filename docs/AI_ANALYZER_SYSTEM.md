@@ -11,6 +11,19 @@ Instead of one large prompt that tries to do everything, IdeaBox uses multiple f
 - Enables cost optimization (use cheaper models for simple tasks)
 - Makes the system more transparent (see what each analyzer determined)
 
+## Model Selection: GPT-4.1-mini Only
+
+After cost analysis, we chose **GPT-4.1-mini** as the sole model for all analyzers:
+
+| Factor | Decision |
+|--------|----------|
+| Cost | ~$3-5/month for 250 emails/day |
+| Capability | Optimized for function calling (our primary use case) |
+| Context | 1M tokens (future-proof for long threads) |
+| Fallback | None - single model reduces complexity |
+
+See PROJECT_OVERVIEW.md "Key Architectural Decisions" for full rationale.
+
 ## Analyzer Architecture
 
 ### Base Analyzer Interface
@@ -21,9 +34,10 @@ All analyzers implement this interface:
 // types/analyzer.ts
 interface AnalyzerConfig {
   enabled: boolean;
-  model: 'gpt-4o-mini' | 'gpt-4o' | 'claude-sonnet-4';
+  model: 'gpt-4.1-mini'; // Single model - no fallback complexity
   temperature: number;
   maxTokens: number;
+  maxBodyChars: number; // Truncate email body for cost efficiency (default: 16000)
 }
 
 interface AnalyzerResult {
@@ -122,29 +136,31 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 
 ### 1. Categorizer Analyzer
 
-**Purpose:** Classify email into primary category
+**Purpose:** Classify email into primary category based on **what action is needed**
+
+> **IMPORTANT:** "client" is NOT a category. Client relationship is tracked via `client_id` in the database.
+> This design allows a client email to be categorized as "action_required" rather than hidden in a "client" bucket.
 
 **Function Schema:**
 ```typescript
 {
   name: 'categorize_email',
-  description: 'Categorizes an email into one primary category',
+  description: 'Categorizes an email by what action (if any) is needed from the user',
   parameters: {
     type: 'object',
     properties: {
       category: {
         type: 'string',
         enum: [
-          'action_required',  // Needs response or action
-          'event',            // Invitation or event announcement
-          'client',           // Client correspondence
-          'newsletter',       // Newsletter or digest
-          'promo',            // Marketing/promotional
-          'admin',            // Receipts, confirmations, notifications
-          'personal',         // Personal correspondence
-          'noise',            // Low-value content
+          'action_required',  // Needs response, decision, or action from user
+          'event',            // Calendar-worthy: invitation, announcement with date/time
+          'newsletter',       // Informational content, digest, regular publication
+          'promo',            // Marketing, promotional, sales content
+          'admin',            // Receipts, confirmations, notifications, automated
+          'personal',         // Personal correspondence (friends, family)
+          'noise',            // Low-value, safe to ignore or bulk archive
         ],
-        description: 'Primary category for this email',
+        description: 'Primary category based on action needed (NOT who sent it)',
       },
       confidence: {
         type: 'number',
@@ -156,32 +172,39 @@ async analyze(email: Email): Promise<AnalyzerResult> {
         type: 'string',
         description: 'Brief explanation of why this category was chosen',
       },
-      subcategory: {
-        type: 'string',
-        description: 'Optional subcategory for finer granularity',
+      topics: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Key topics extracted from email: billing, meeting, feedback, etc.',
       },
     },
-    required: ['category', 'confidence'],
+    required: ['category', 'confidence', 'reasoning'],
   },
 }
 ```
 
 **System Prompt:**
 ```
-You are an email categorization specialist. Analyze the email and determine its primary category.
+You are an email categorization specialist. Categorize this email by WHAT ACTION IS NEEDED, not by who sent it.
 
-Consider:
-- Does it require a response or action from the user?
-- Is it announcing an event with date/time/location?
-- Is it from a known business client or partner?
-- Is it a newsletter, digest, or regular publication?
-- Is it promotional/marketing content?
-- Is it administrative (receipt, confirmation, notification)?
+IMPORTANT: Do NOT use "client" as a category. Client relationships are tracked separately.
+A client email asking for something should be "action_required", not hidden in a client bucket.
+
+Categories (choose ONE):
+- action_required: User needs to respond, decide, review, or do something
+- event: Contains a calendar-worthy event with date/time/location
+- newsletter: Informational content, digest, regular publication (no action needed)
+- promo: Marketing, promotional, sales content
+- admin: Receipts, confirmations, automated notifications
+- personal: Personal correspondence (friends, family, non-work)
+- noise: Low value, safe to ignore (spam-adjacent, irrelevant)
+
+Also extract 1-5 topic keywords that describe the email content (e.g., "billing", "meeting", "project-update").
 
 Be decisive but honest about confidence. If truly ambiguous, use confidence < 0.7.
 ```
 
-**Cost:** ~$0.0001 per email (GPT-4o-mini)
+**Cost:** ~$0.0001 per email (GPT-4.1-mini)
 
 ---
 
@@ -265,7 +288,7 @@ For urgency scoring:
 Estimate time realistically: simple reply = 5 min, complex task = 30+ min
 ```
 
-**Cost:** ~$0.0002 per email (GPT-4o-mini)
+**Cost:** ~$0.0002 per email (GPT-4.1-mini)
 
 ---
 
@@ -344,7 +367,7 @@ For relationship signals:
 - Learns from user corrections (if user manually assigns different client)
 - Suggests adding new clients when it detects potential new business
 
-**Cost:** ~$0.0002 per email
+**Cost:** ~$0.0002 per email (GPT-4.1-mini)
 
 ---
 
@@ -524,24 +547,55 @@ if (senderCache.has(email.sender_email)) {
 
 ## Error Handling & Resilience
 
-### Retry Logic
+### Failure Strategy: Mark as Unanalyzable (No Retry on Next Sync)
+
+When AI analysis fails, we **do not retry on subsequent syncs**. Instead, we mark the email
+with the error reason. This provides a clear audit trail and prevents wasted API costs on
+emails that consistently fail.
+
+```typescript
+// If analysis fails after retries within the same sync, mark as unanalyzable
+async function handleAnalysisFailure(emailId: string, error: Error): Promise<void> {
+  logger.error('Analysis failed permanently', {
+    emailId,
+    error: error.message,
+    // This email will NOT be retried on next sync
+  });
+
+  await supabase
+    .from('emails')
+    .update({
+      analysis_error: error.message,
+      analyzed_at: new Date().toISOString(), // Mark as "processed" even though failed
+    })
+    .eq('id', emailId);
+}
+```
+
+### Retry Logic (Within Same Sync Only)
+
+We retry API calls within the same sync operation, but once marked as failed, we don't
+retry on subsequent hourly syncs:
+
 ```typescript
 async analyzeWithRetry(email: Email, maxRetries = 3): Promise<AnalyzerResult> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await this.analyze(email);
     } catch (error) {
-      logger.warn('Analysis attempt failed', { 
-        attempt, 
-        maxRetries, 
-        error: error.message 
+      logger.warn('Analysis attempt failed', {
+        attempt,
+        maxRetries,
+        error: error.message
       });
-      
+
       if (attempt === maxRetries) {
-        throw error;
+        // Don't throw - mark as unanalyzable instead
+        await handleAnalysisFailure(email.id, error);
+        return { success: false, error: error.message };
       }
-      
-      // Exponential backoff
+
+      // Exponential backoff between retries
       await this.delay(1000 * Math.pow(2, attempt - 1));
     }
   }

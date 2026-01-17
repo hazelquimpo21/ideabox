@@ -14,10 +14,12 @@ IdeaBox transforms email overwhelm into organized intelligence. It's an AI-power
 
 ## Solution
 AI-powered email processing system with specialized analyzers that:
-- **Categorize intelligently**: clients, events, content, admin, noise
+- **Categorize by action needed**: action_required, event, newsletter, promo, admin, personal, noise
+- **Track client relationships**: Link emails to clients separately from categorization
 - **Extract actions**: Build dedicated to-do list from email content
-- **Save content**: URLs, tweet ideas, networking opportunities
-- **Detect events**: Auto-extract event details for calendar
+- **Save content**: URLs, tweet ideas, networking opportunities (Phase 2)
+- **Detect events**: Auto-extract event details for calendar (Phase 2)
+- **Sync to Gmail**: Create IdeaBox labels in Gmail for visibility
 - **Learn continuously**: User preferences, client names, communication patterns
 - **Provide intelligence**: Client health metrics, content trends, priority signals
 
@@ -143,3 +145,21 @@ AI-powered email processing system with specialized analyzers that:
 4. **Surface Don't Bury**: Intelligence visible, not hidden in algorithms
 5. **Privacy Conscious**: User owns their data, clear about what's stored
 6. **Cost Aware**: Efficient API usage, batch processing, smart caching
+
+## Key Architectural Decisions (January 2026)
+
+These decisions were made after careful analysis and should guide all implementation:
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **AI Model** | GPT-4.1-mini only | Best value (~$3-5/month), optimized for function calling, 1M context |
+| **No AI Fallback** | Single model | Fallback adds complexity without proportional benefit |
+| **Categories** | Action-focused, single primary | "client" removed as category; tracked via relationship instead |
+| **Client Tracking** | Via `client_id` + filtering | Cleaner than category; allows "action_required" emails from clients |
+| **Background Jobs** | Supabase pg_cron + Edge Functions | Already using Supabase; avoids Vercel Cron limitations |
+| **Gmail Labels** | Sync IdeaBox categories to Gmail | Users see categories in Gmail itself |
+| **Failed Analysis** | Mark unanalyzable with reason | No retry; clear audit trail |
+| **Body Truncation** | 16K characters | Balances comprehensiveness with cost |
+| **Timezone** | Auto-detect from browser | Better UX than manual selection |
+| **Log Retention** | 30-day cleanup | Prevents unbounded storage growth |
+| **OAuth** | External app (testing mode) | Allows non-Workspace users during development |
