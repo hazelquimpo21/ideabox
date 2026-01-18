@@ -29,6 +29,7 @@ import * as React from 'react';
 import { useAuth } from '@/lib/auth';
 import { ProtectedRoute } from '@/components/auth';
 import { Navbar, Sidebar } from '@/components/layout';
+import { useSidebarData } from '@/hooks';
 import { createLogger } from '@/lib/utils/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -55,6 +56,9 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const { user, signOut } = useAuth();
+
+  // Sidebar data (category counts and clients)
+  const { categoryCounts, clients } = useSidebarData();
 
   // Mobile sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
@@ -127,8 +131,8 @@ export default function AuthLayout({
           <Sidebar
             isOpen={isSidebarOpen}
             onClose={closeSidebar}
-            categoryCounts={{}}
-            clients={[]}
+            categoryCounts={categoryCounts}
+            clients={clients}
           />
 
           {/* Page Content */}

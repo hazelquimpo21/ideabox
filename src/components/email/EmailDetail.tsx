@@ -1,46 +1,18 @@
+/* eslint-disable max-lines */
 /**
  * Email Detail Component
  *
- * Displays the full content of a selected email with actions.
- * Used in a slide-out panel or modal from the email list.
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * FEATURES
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * - Full email header (sender, recipient, date, subject)
- * - Email body rendering (HTML or plain text)
- * - AI analysis display (category, action, client)
- * - Quick actions (star, archive, mark read/unread)
- * - Responsive design for different screen sizes
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * USAGE EXAMPLE
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * ```tsx
- * import { EmailDetail } from '@/components/email/EmailDetail';
- *
- * function EmailView({ email }: { email: Email }) {
- *   return (
- *     <EmailDetail
- *       email={email}
- *       onStar={(id) => console.log('Star', id)}
- *       onArchive={(id) => console.log('Archive', id)}
- *       onClose={() => console.log('Close')}
- *     />
- *   );
- * }
- * ```
+ * Displays the full content of a selected email with rich AI analysis.
+ * Used in a slide-out panel from the email list.
  *
  * @module components/email/EmailDetail
- * @version 1.0.0
  */
 
 'use client';
 
 import * as React from 'react';
-import { Button, Badge, Card, CardContent, CardHeader } from '@/components/ui';
+import { Button, Badge, Card, CardContent, CardHeader, Skeleton } from '@/components/ui';
+import { useEmailAnalysis } from '@/hooks';
 import {
   X,
   Star,
@@ -56,6 +28,17 @@ import {
   CheckCircle2,
   Building2,
   ExternalLink,
+  Brain,
+  Loader2,
+  Zap,
+  Target,
+  MessageSquare,
+  FileEdit,
+  CalendarClock,
+  HelpCircle,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from 'lucide-react';
 import type { Email, EmailCategory } from '@/types/database';
 
@@ -63,36 +46,21 @@ import type { Email, EmailCategory } from '@/types/database';
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Props for the EmailDetail component.
- */
 export interface EmailDetailProps {
-  /** Email to display */
   email: Email;
-
-  /** Callback when star is toggled */
   onStar?: (emailId: string) => void;
-
-  /** Callback when archive is clicked */
   onArchive?: (emailId: string) => void;
-
-  /** Callback when read status is toggled */
   onToggleRead?: (emailId: string) => void;
-
-  /** Callback when close is clicked */
+  onAnalyze?: (emailId: string) => void;
   onClose?: () => void;
-
-  /** Whether the component is loading */
   isLoading?: boolean;
+  isAnalyzing?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Format date for display.
- */
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {
@@ -105,9 +73,6 @@ function formatDate(dateStr: string): string {
   });
 }
 
-/**
- * Get category badge styling.
- */
 function getCategoryBadge(category: EmailCategory | null): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
   label: string;
@@ -115,70 +80,64 @@ function getCategoryBadge(category: EmailCategory | null): {
 } {
   switch (category) {
     case 'action_required':
-      return {
-        variant: 'destructive',
-        label: 'Action Required',
-        icon: <AlertCircle className="h-3 w-3" />,
-      };
+      return { variant: 'destructive', label: 'Action Required', icon: <AlertCircle className="h-3 w-3" /> };
     case 'event':
-      return {
-        variant: 'default',
-        label: 'Event',
-        icon: <Calendar className="h-3 w-3" />,
-      };
+      return { variant: 'default', label: 'Event', icon: <Calendar className="h-3 w-3" /> };
     case 'newsletter':
-      return {
-        variant: 'secondary',
-        label: 'Newsletter',
-        icon: <Newspaper className="h-3 w-3" />,
-      };
+      return { variant: 'secondary', label: 'Newsletter', icon: <Newspaper className="h-3 w-3" /> };
     case 'promo':
-      return {
-        variant: 'outline',
-        label: 'Promo',
-        icon: <Tag className="h-3 w-3" />,
-      };
+      return { variant: 'outline', label: 'Promo', icon: <Tag className="h-3 w-3" /> };
     case 'admin':
-      return {
-        variant: 'secondary',
-        label: 'Admin',
-        icon: <Mail className="h-3 w-3" />,
-      };
+      return { variant: 'secondary', label: 'Admin', icon: <Mail className="h-3 w-3" /> };
     case 'personal':
-      return {
-        variant: 'outline',
-        label: 'Personal',
-        icon: <User className="h-3 w-3" />,
-      };
+      return { variant: 'outline', label: 'Personal', icon: <User className="h-3 w-3" /> };
     case 'noise':
-      return {
-        variant: 'outline',
-        label: 'Noise',
-        icon: <Archive className="h-3 w-3" />,
-      };
+      return { variant: 'outline', label: 'Noise', icon: <Archive className="h-3 w-3" /> };
     default:
-      return {
-        variant: 'outline',
-        label: 'Uncategorized',
-        icon: <Mail className="h-3 w-3" />,
-      };
+      return { variant: 'outline', label: 'Uncategorized', icon: <Mail className="h-3 w-3" /> };
   }
+}
+
+function getActionTypeIcon(actionType: string) {
+  switch (actionType) {
+    case 'respond': return <MessageSquare className="h-4 w-4" />;
+    case 'review': return <FileEdit className="h-4 w-4" />;
+    case 'create': return <FileEdit className="h-4 w-4" />;
+    case 'schedule': return <CalendarClock className="h-4 w-4" />;
+    case 'decide': return <HelpCircle className="h-4 w-4" />;
+    default: return <Target className="h-4 w-4" />;
+  }
+}
+
+function getUrgencyColor(score: number): string {
+  if (score >= 8) return 'text-red-600 dark:text-red-400';
+  if (score >= 6) return 'text-orange-600 dark:text-orange-400';
+  if (score >= 4) return 'text-yellow-600 dark:text-yellow-400';
+  return 'text-green-600 dark:text-green-400';
+}
+
+function getRelationshipIcon(signal: string) {
+  switch (signal) {
+    case 'positive': return <TrendingUp className="h-4 w-4 text-green-500" />;
+    case 'negative': return <TrendingDown className="h-4 w-4 text-red-500" />;
+    default: return <Minus className="h-4 w-4 text-muted-foreground" />;
+  }
+}
+
+function sanitizeHtml(html: string): string {
+  let clean = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  clean = clean.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+  clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
+  clean = clean.replace(
+    /<a\s+([^>]*?)href\s*=\s*["']([^"']+)["']([^>]*)>/gi,
+    '<a $1href="$2" target="_blank" rel="noopener noreferrer"$3>'
+  );
+  return clean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SUB-COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Email header with sender info and actions.
- */
-interface EmailHeaderProps {
-  email: Email;
-  onStar?: (id: string) => void;
-  onArchive?: (id: string) => void;
-  onToggleRead?: (id: string) => void;
-  onClose?: () => void;
-}
 
 function EmailHeader({
   email,
@@ -186,78 +145,41 @@ function EmailHeader({
   onArchive,
   onToggleRead,
   onClose,
-}: EmailHeaderProps) {
+}: {
+  email: Email;
+  onStar?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  onToggleRead?: (id: string) => void;
+  onClose?: () => void;
+}) {
   return (
-    <div className="flex items-start justify-between gap-4 pb-4 border-b border-border">
-      {/* Left side: sender info */}
+    <div className="flex items-start justify-between gap-4 p-6 border-b border-border bg-muted/30">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          {/* Sender avatar placeholder */}
+        <div className="flex items-center gap-3 mb-1">
           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
             <span className="text-sm font-medium text-primary">
               {(email.sender_name || email.sender_email)?.[0]?.toUpperCase() || 'U'}
             </span>
           </div>
-
           <div className="min-w-0">
-            <p className="font-medium truncate">
-              {email.sender_name || email.sender_email}
-            </p>
-            <p className="text-sm text-muted-foreground truncate">
-              {email.sender_email}
-            </p>
+            <p className="font-medium truncate">{email.sender_name || email.sender_email}</p>
+            <p className="text-sm text-muted-foreground truncate">{email.sender_email}</p>
           </div>
         </div>
       </div>
-
-      {/* Right side: actions */}
       <div className="flex items-center gap-1">
-        {/* Star button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onStar?.(email.id)}
-          className={email.is_starred ? 'text-yellow-500' : 'text-muted-foreground'}
-          aria-label={email.is_starred ? 'Unstar' : 'Star'}
-        >
+        <Button variant="ghost" size="icon" onClick={() => onStar?.(email.id)}
+          className={email.is_starred ? 'text-yellow-500' : 'text-muted-foreground'}>
           <Star className="h-4 w-4" fill={email.is_starred ? 'currentColor' : 'none'} />
         </Button>
-
-        {/* Read/Unread toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onToggleRead?.(email.id)}
-          className="text-muted-foreground"
-          aria-label={email.is_read ? 'Mark as unread' : 'Mark as read'}
-        >
-          {email.is_read ? (
-            <MailOpen className="h-4 w-4" />
-          ) : (
-            <Mail className="h-4 w-4" />
-          )}
+        <Button variant="ghost" size="icon" onClick={() => onToggleRead?.(email.id)} className="text-muted-foreground">
+          {email.is_read ? <MailOpen className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
         </Button>
-
-        {/* Archive button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onArchive?.(email.id)}
-          className="text-muted-foreground"
-          aria-label="Archive"
-        >
+        <Button variant="ghost" size="icon" onClick={() => onArchive?.(email.id)} className="text-muted-foreground">
           <Archive className="h-4 w-4" />
         </Button>
-
-        {/* Close button */}
         {onClose && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="text-muted-foreground"
-            aria-label="Close"
-          >
+          <Button variant="ghost" size="icon" onClick={onClose} className="text-muted-foreground">
             <X className="h-4 w-4" />
           </Button>
         )}
@@ -266,34 +188,20 @@ function EmailHeader({
   );
 }
 
-/**
- * Email subject and metadata.
- */
 function EmailSubject({ email }: { email: Email }) {
   const categoryBadge = getCategoryBadge(email.category);
-
   return (
-    <div className="py-4 border-b border-border">
-      {/* Subject */}
-      <h1 className="text-xl font-semibold mb-2">
-        {email.subject || '(No subject)'}
-      </h1>
-
-      {/* Metadata row */}
+    <div className="px-6 py-4 border-b border-border">
+      <h1 className="text-xl font-semibold mb-2">{email.subject || '(No subject)'}</h1>
       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-        {/* Date */}
         <div className="flex items-center gap-1">
           <Clock className="h-3.5 w-3.5" />
           <span>{formatDate(email.date)}</span>
         </div>
-
-        {/* Category badge */}
         <Badge variant={categoryBadge.variant} className="gap-1">
           {categoryBadge.icon}
           {categoryBadge.label}
         </Badge>
-
-        {/* Read status */}
         {!email.is_read && (
           <Badge variant="outline" className="gap-1">
             <Mail className="h-3 w-3" />
@@ -305,175 +213,285 @@ function EmailSubject({ email }: { email: Email }) {
   );
 }
 
-/**
- * AI analysis summary section.
- */
-interface AnalysisSummaryProps {
+function AnalysisSummary({
+  email,
+  onAnalyze,
+  isAnalyzing,
+}: {
   email: Email;
-}
+  onAnalyze?: (emailId: string) => void;
+  isAnalyzing?: boolean;
+}) {
+  const { analysis, isLoading: isLoadingAnalysis } = useEmailAnalysis(email.id);
 
-function AnalysisSummary({ email }: AnalysisSummaryProps) {
-  // Only show if email has been analyzed
+  // Not analyzed yet
   if (!email.analyzed_at) {
-    return null;
-  }
-
-  // Note: Extended Email type would have action_type, client_name, etc.
-  // For now, we show what's available in the base Email type
-  const hasAction = email.category === 'action_required';
-
-  return (
-    <Card className="mb-4">
-      <CardHeader className="py-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
-          AI Analysis
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          {/* Category */}
-          <div>
-            <p className="text-muted-foreground mb-1">Category</p>
-            <p className="font-medium capitalize">
-              {email.category?.replace('_', ' ') || 'Uncategorized'}
-            </p>
-          </div>
-
-          {/* Action status */}
-          <div>
-            <p className="text-muted-foreground mb-1">Action</p>
-            <p className={`font-medium ${hasAction ? 'text-destructive' : ''}`}>
-              {hasAction ? 'Action Required' : 'No Action Needed'}
-            </p>
-          </div>
-
-          {/* Client (if linked) */}
-          <div>
-            <p className="text-muted-foreground mb-1">Client</p>
-            <p className="font-medium flex items-center gap-1">
-              {email.client_id ? (
+    return (
+      <Card className="mx-6 my-4 border-dashed">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                <Brain className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-medium text-sm">AI Analysis Pending</p>
+                <p className="text-xs text-muted-foreground">
+                  This email hasn&apos;t been analyzed yet
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onAnalyze?.(email.id)}
+              disabled={isAnalyzing}
+            >
+              {isAnalyzing ? (
                 <>
-                  <Building2 className="h-3.5 w-3.5" />
-                  Linked
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Analyzing...
                 </>
               ) : (
-                'Not Linked'
+                <>
+                  <Brain className="h-4 w-4 mr-2" />
+                  Analyze Now
+                </>
               )}
-            </p>
+            </Button>
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Loading analysis data
+  if (isLoadingAnalysis) {
+    return (
+      <Card className="mx-6 my-4">
+        <CardHeader className="py-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            Loading Analysis...
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Analysis failed
+  if (email.analysis_error) {
+    return (
+      <Card className="mx-6 my-4 border-destructive/50">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="font-medium text-sm text-destructive">Analysis Failed</p>
+                <p className="text-xs text-muted-foreground">{email.analysis_error}</p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onAnalyze?.(email.id)} disabled={isAnalyzing}>
+              Retry
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show rich analysis
+  return (
+    <Card className="mx-6 my-4">
+      <CardHeader className="py-3 border-b">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            AI Analysis
+          </div>
+          {analysis?.categorization?.confidence && (
+            <span className="text-xs text-muted-foreground">
+              {Math.round(analysis.categorization.confidence * 100)}% confident
+            </span>
+          )}
         </div>
+      </CardHeader>
+      <CardContent className="pt-4 space-y-4">
+        {/* Category & Reasoning */}
+        {analysis?.categorization && (
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-medium">Category:</span>
+              <Badge variant={getCategoryBadge(email.category).variant} className="gap-1">
+                {getCategoryBadge(email.category).icon}
+                {email.category?.replace('_', ' ')}
+              </Badge>
+            </div>
+            {analysis.categorization.reasoning && (
+              <p className="text-sm text-muted-foreground mt-1 border-l-2 border-muted pl-3">
+                {analysis.categorization.reasoning}
+              </p>
+            )}
+            {analysis.categorization.topics && analysis.categorization.topics.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {analysis.categorization.topics.map((topic, i) => (
+                  <Badge key={i} variant="outline" className="text-xs">{topic}</Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action Extraction */}
+        {analysis?.actionExtraction && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium">Action</span>
+            </div>
+            {analysis.actionExtraction.hasAction ? (
+              <div className="space-y-2 pl-6">
+                <div className="flex items-start gap-2">
+                  {getActionTypeIcon(analysis.actionExtraction.actionType)}
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">
+                      {analysis.actionExtraction.actionTitle || `${analysis.actionExtraction.actionType} required`}
+                    </p>
+                    {analysis.actionExtraction.actionDescription && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {analysis.actionExtraction.actionDescription}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-4 text-xs">
+                  {analysis.actionExtraction.urgencyScore && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-muted-foreground">Urgency:</span>
+                      <span className={`font-medium ${getUrgencyColor(analysis.actionExtraction.urgencyScore)}`}>
+                        {analysis.actionExtraction.urgencyScore}/10
+                      </span>
+                    </div>
+                  )}
+                  {analysis.actionExtraction.deadline && (
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3 text-muted-foreground" />
+                      <span>{new Date(analysis.actionExtraction.deadline).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                  {analysis.actionExtraction.estimatedMinutes && (
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                      <span>~{analysis.actionExtraction.estimatedMinutes} min</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground pl-6">No action required</p>
+            )}
+          </div>
+        )}
+
+        {/* Client Tagging */}
+        {analysis?.clientTagging && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <Building2 className="h-4 w-4 text-teal-500" />
+              <span className="text-sm font-medium">Client</span>
+            </div>
+            {analysis.clientTagging.clientMatch ? (
+              <div className="pl-6 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">{analysis.clientTagging.clientName || 'Matched Client'}</span>
+                  {analysis.clientTagging.relationshipSignal && (
+                    getRelationshipIcon(analysis.clientTagging.relationshipSignal)
+                  )}
+                </div>
+                {analysis.clientTagging.projectName && (
+                  <p className="text-xs text-muted-foreground">Project: {analysis.clientTagging.projectName}</p>
+                )}
+              </div>
+            ) : (
+              <div className="pl-6">
+                <p className="text-sm text-muted-foreground">Not linked to a client</p>
+                {analysis.clientTagging.newClientSuggestion && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Suggestion: {analysis.clientTagging.newClientSuggestion}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Meta info */}
+        {(analysis?.tokensUsed || analysis?.processingTimeMs) && (
+          <div className="pt-3 border-t flex items-center gap-4 text-xs text-muted-foreground">
+            {analysis.tokensUsed && <span>{analysis.tokensUsed} tokens</span>}
+            {analysis.processingTimeMs && <span>{analysis.processingTimeMs}ms</span>}
+            {analysis.analyzerVersion && <span>v{analysis.analyzerVersion}</span>}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-/**
- * Email body content display.
- */
-interface EmailBodyProps {
-  email: Email;
-}
-
-function EmailBody({ email }: EmailBodyProps) {
-  // Prefer HTML body for rich formatting, fall back to text
+function EmailBody({ email }: { email: Email }) {
   const hasHtml = email.body_html && email.body_html.trim().length > 0;
   const hasText = email.body_text && email.body_text.trim().length > 0;
 
   if (!hasHtml && !hasText) {
-    // No body content, show snippet
     return (
-      <div className="py-4">
-        <p className="text-muted-foreground italic">
-          {email.snippet || 'No content available'}
-        </p>
+      <div className="px-6 py-4">
+        <p className="text-muted-foreground italic">{email.snippet || 'No content available'}</p>
       </div>
     );
   }
 
   if (hasHtml) {
-    // Render HTML content in a sandboxed iframe or with sanitization
-    // For security, we use an iframe with sandbox
     return (
-      <div className="py-4">
+      <div className="px-6 py-4">
         <div
           className="prose prose-sm max-w-none dark:prose-invert"
-          dangerouslySetInnerHTML={{
-            __html: sanitizeHtml(email.body_html || ''),
-          }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(email.body_html || '') }}
         />
       </div>
     );
   }
 
-  // Render plain text with preserved whitespace
   return (
-    <div className="py-4">
-      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-        {email.body_text}
-      </pre>
+    <div className="px-6 py-4">
+      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{email.body_text}</pre>
     </div>
   );
-}
-
-/**
- * Basic HTML sanitization for email content.
- *
- * Note: In production, use a proper sanitization library like DOMPurify.
- * This is a basic implementation for demonstration.
- */
-function sanitizeHtml(html: string): string {
-  // Remove script tags
-  let clean = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-
-  // Remove on* event handlers
-  clean = clean.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
-
-  // Remove javascript: URLs
-  clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
-
-  // Add target="_blank" and rel="noopener" to links
-  clean = clean.replace(
-    /<a\s+([^>]*?)href\s*=\s*["']([^"']+)["']([^>]*)>/gi,
-    '<a $1href="$2" target="_blank" rel="noopener noreferrer"$3>'
-  );
-
-  return clean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * EmailDetail component displays the full content of an email.
- *
- * Features:
- * - Email header with sender info and quick actions
- * - Subject line with category badge and metadata
- * - AI analysis summary (if analyzed)
- * - Full email body (HTML or plain text)
- *
- * @example
- * ```tsx
- * <EmailDetail
- *   email={selectedEmail}
- *   onStar={handleStar}
- *   onArchive={handleArchive}
- *   onToggleRead={handleToggleRead}
- *   onClose={() => setSelectedEmail(null)}
- * />
- * ```
- */
 export function EmailDetail({
   email,
   onStar,
   onArchive,
   onToggleRead,
+  onAnalyze,
   onClose,
   isLoading = false,
+  isAnalyzing = false,
 }: EmailDetailProps) {
-  // Show loading state
   if (isLoading) {
     return (
       <div className="p-6 animate-pulse">
@@ -490,36 +508,20 @@ export function EmailDetail({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-6 pt-6">
-        <EmailHeader
-          email={email}
-          onStar={onStar}
-          onArchive={onArchive}
-          onToggleRead={onToggleRead}
-          onClose={onClose}
-        />
-      </div>
-
-      {/* Subject */}
-      <div className="px-6">
+    <div className="flex flex-col h-full overflow-hidden">
+      <EmailHeader
+        email={email}
+        onStar={onStar}
+        onArchive={onArchive}
+        onToggleRead={onToggleRead}
+        onClose={onClose}
+      />
+      <div className="flex-1 overflow-y-auto">
         <EmailSubject email={email} />
-      </div>
-
-      {/* Scrollable content area */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
-        {/* AI Analysis Summary */}
-        <div className="py-4">
-          <AnalysisSummary email={email} />
-        </div>
-
-        {/* Email Body */}
+        <AnalysisSummary email={email} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
         <EmailBody email={email} />
-
-        {/* Footer with Gmail link */}
         {email.gmail_id && (
-          <div className="pt-4 border-t border-border">
+          <div className="px-6 py-4 border-t border-border">
             <a
               href={`https://mail.google.com/mail/u/0/#inbox/${email.gmail_id}`}
               target="_blank"
@@ -535,9 +537,5 @@ export function EmailDetail({
     </div>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DEFAULT EXPORT
-// ═══════════════════════════════════════════════════════════════════════════════
 
 export default EmailDetail;

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
+/* eslint-disable @typescript-eslint/ban-ts-comment, max-lines */
 // @ts-nocheck - Supabase type generation issue
 /**
  * Sync Status Banner Component

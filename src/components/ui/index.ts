@@ -95,6 +95,45 @@ export {
 } from './dialog';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SHEET COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export {
+  Sheet,
+  SheetPortal,
+  SheetOverlay,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+} from './sheet';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DROPDOWN MENU COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuRadioItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuGroup,
+  DropdownMenuPortal,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuRadioGroup,
+} from './dropdown-menu';
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TOAST COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
