@@ -33,6 +33,16 @@ import { AuthProvider } from '@/lib/auth';
 import './globals.css';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ROUTE SEGMENT CONFIG
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Force dynamic rendering for all pages.
+ * Required because auth context needs to check session state at runtime.
+ */
+export const dynamic = 'force-dynamic';
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // FONTS
 // ═══════════════════════════════════════════════════════════════════════════════
 

@@ -45,7 +45,7 @@ import { cn } from '@/lib/utils/cn';
 /**
  * Skeleton component props.
  */
-export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type SkeletonProps = React.HTMLAttributes<HTMLDivElement>;
 
 /**
  * Skeleton loading placeholder component.

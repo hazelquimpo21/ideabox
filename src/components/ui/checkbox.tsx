@@ -56,8 +56,7 @@ import { cn } from '@/lib/utils/cn';
  * Checkbox component props.
  * Extends Radix Checkbox primitive props.
  */
-export interface CheckboxProps
-  extends React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> {}
+export type CheckboxProps = React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>;
 
 /**
  * Checkbox component built on Radix UI.
