@@ -5,22 +5,13 @@
  * category with filtering, sorting, and search capabilities.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * FEATURES (Planned)
+ * FEATURES
  * ═══════════════════════════════════════════════════════════════════════════════
  * - Email list with category badges
  * - Quick actions (archive, star, mark read)
- * - Category filtering
- * - Search integration
- * - Infinite scroll / pagination
- * - Email detail slide-over panel
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * CURRENT STATUS
- * ═══════════════════════════════════════════════════════════════════════════════
- * Placeholder implementation. Requires:
- * - useEmails hook for data fetching
- * - EmailList, EmailCard, EmailDetail components
- * - API routes for email operations
+ * - Real-time stats for unread, starred, and action required
+ * - Optimistic UI updates
+ * - Loading skeletons and empty states
  *
  * @module app/(auth)/inbox/page
  */
@@ -30,6 +21,7 @@
 import * as React from 'react';
 import { PageHeader } from '@/components/layout';
 import { Card, CardContent, Button, Badge, Skeleton } from '@/components/ui';
+import { useEmails, type Email, type EmailCategory } from '@/hooks';
 import {
   Mail,
   Inbox,
@@ -41,89 +33,9 @@ import {
   Star,
   MoreHorizontal,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TYPE DEFINITIONS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Mock email data structure.
- * Will be replaced with actual Email type from database.
- */
-interface MockEmail {
-  id: string;
-  subject: string;
-  senderName: string;
-  senderEmail: string;
-  snippet: string;
-  category: 'action_required' | 'event' | 'newsletter' | 'promo' | 'admin' | 'personal' | 'noise';
-  isRead: boolean;
-  isStarred: boolean;
-  date: Date;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MOCK DATA (Remove when hooks are implemented)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const MOCK_EMAILS: MockEmail[] = [
-  {
-    id: '1',
-    subject: 'Q4 Budget Review Required',
-    senderName: 'Sarah Chen',
-    senderEmail: 'sarah@acme.com',
-    snippet: 'Hi, please review the attached budget proposal for Q4. We need your approval by Friday...',
-    category: 'action_required',
-    isRead: false,
-    isStarred: true,
-    date: new Date(Date.now() - 1000 * 60 * 30), // 30 min ago
-  },
-  {
-    id: '2',
-    subject: 'Team Standup - Tomorrow 10am',
-    senderName: 'Calendar',
-    senderEmail: 'calendar@company.com',
-    snippet: 'You have been invited to: Team Standup. When: Tomorrow at 10:00 AM...',
-    category: 'event',
-    isRead: false,
-    isStarred: false,
-    date: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-  },
-  {
-    id: '3',
-    subject: 'Weekly Industry Digest',
-    senderName: 'TechCrunch',
-    senderEmail: 'digest@techcrunch.com',
-    snippet: 'This week in tech: AI breakthroughs, startup funding rounds, and more...',
-    category: 'newsletter',
-    isRead: true,
-    isStarred: false,
-    date: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
-  },
-  {
-    id: '4',
-    subject: 'Your AWS Bill for December',
-    senderName: 'AWS Billing',
-    senderEmail: 'billing@aws.amazon.com',
-    snippet: 'Your AWS bill for the billing period December 1-31 is now available...',
-    category: 'admin',
-    isRead: true,
-    isStarred: false,
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-  },
-  {
-    id: '5',
-    subject: 'Catch up soon?',
-    senderName: 'Mike Johnson',
-    senderEmail: 'mike@gmail.com',
-    snippet: 'Hey! It\'s been a while. Would love to grab coffee and catch up...',
-    category: 'personal',
-    isRead: true,
-    isStarred: false,
-    date: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
-  },
-];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -132,7 +44,8 @@ const MOCK_EMAILS: MockEmail[] = [
 /**
  * Format relative time (e.g., "5 min ago", "2 hours ago").
  */
-function formatRelativeTime(date: Date): string {
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / (1000 * 60));
@@ -153,7 +66,7 @@ function formatRelativeTime(date: Date): string {
 /**
  * Get category badge variant and label.
  */
-function getCategoryInfo(category: MockEmail['category']): {
+function getCategoryInfo(category: EmailCategory | null): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
   label: string;
   icon: React.ReactNode;
@@ -204,7 +117,7 @@ function getCategoryInfo(category: MockEmail['category']): {
     default:
       return {
         variant: 'outline',
-        label: 'Unknown',
+        label: 'Uncategorized',
         icon: <Mail className="h-3 w-3" />,
       };
   }
@@ -214,37 +127,55 @@ function getCategoryInfo(category: MockEmail['category']): {
 // SUB-COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+interface EmailListItemProps {
+  email: Email;
+  onToggleStar: (id: string) => void;
+  onMarkRead: (id: string) => void;
+}
+
 /**
  * Email list item component.
- * TODO: Extract to separate file when building EmailCard component.
+ * Displays a single email with star toggle and category badge.
  */
-function EmailListItem({ email }: { email: MockEmail }) {
+function EmailListItem({ email, onToggleStar, onMarkRead }: EmailListItemProps) {
   const categoryInfo = getCategoryInfo(email.category);
+
+  /** Handle click on email row to mark as read */
+  const handleClick = () => {
+    if (!email.is_read) {
+      onMarkRead(email.id);
+    }
+  };
 
   return (
     <div
+      onClick={handleClick}
       className={`
         flex items-start gap-4 p-4 border-b border-border/50
         hover:bg-muted/30 transition-colors cursor-pointer
-        ${!email.isRead ? 'bg-muted/10' : ''}
+        ${!email.is_read ? 'bg-muted/10' : ''}
       `}
     >
       {/* Star button */}
       <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleStar(email.id);
+        }}
         className={`
           mt-1 p-1 rounded hover:bg-muted transition-colors
-          ${email.isStarred ? 'text-yellow-500' : 'text-muted-foreground'}
+          ${email.is_starred ? 'text-yellow-500' : 'text-muted-foreground'}
         `}
-        aria-label={email.isStarred ? 'Unstar email' : 'Star email'}
+        aria-label={email.is_starred ? 'Unstar email' : 'Star email'}
       >
-        <Star className="h-4 w-4" fill={email.isStarred ? 'currentColor' : 'none'} />
+        <Star className="h-4 w-4" fill={email.is_starred ? 'currentColor' : 'none'} />
       </button>
 
       {/* Email content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <span className={`font-medium truncate ${!email.isRead ? 'text-foreground' : 'text-muted-foreground'}`}>
-            {email.senderName}
+          <span className={`font-medium truncate ${!email.is_read ? 'text-foreground' : 'text-muted-foreground'}`}>
+            {email.sender_name || email.sender_email}
           </span>
           <span className="text-xs text-muted-foreground whitespace-nowrap">
             {formatRelativeTime(email.date)}
@@ -252,13 +183,15 @@ function EmailListItem({ email }: { email: MockEmail }) {
         </div>
 
         <div className="flex items-center gap-2 mb-1">
-          <span className={`text-sm truncate ${!email.isRead ? 'font-medium' : ''}`}>
+          <span className={`text-sm truncate ${!email.is_read ? 'font-medium' : ''}`}>
             {email.subject}
           </span>
-          <Badge variant={categoryInfo.variant} className="gap-1 text-xs shrink-0">
-            {categoryInfo.icon}
-            {categoryInfo.label}
-          </Badge>
+          {categoryInfo && (
+            <Badge variant={categoryInfo.variant} className="gap-1 text-xs shrink-0">
+              {categoryInfo.icon}
+              {categoryInfo.label}
+            </Badge>
+          )}
         </div>
 
         <p className="text-sm text-muted-foreground truncate">
@@ -268,6 +201,7 @@ function EmailListItem({ email }: { email: MockEmail }) {
 
       {/* Actions */}
       <button
+        onClick={(e) => e.stopPropagation()}
         className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground"
         aria-label="More actions"
       >
@@ -328,24 +262,40 @@ function EmptyState() {
 /**
  * Inbox page component.
  *
- * Currently displays mock data. Will be connected to:
- * - useEmails hook for real data
- * - API routes for email operations
- * - Real-time updates via Supabase subscriptions
+ * Displays emails from Supabase with real-time stats and optimistic updates.
  */
 export default function InboxPage() {
-  // TODO: Replace with useEmails hook
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [emails, setEmails] = React.useState<MockEmail[]>([]);
+  const [isSyncing, setIsSyncing] = React.useState(false);
 
-  // Simulate loading
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setEmails(MOCK_EMAILS);
-      setIsLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+  // Fetch emails using the useEmails hook
+  const {
+    emails,
+    isLoading,
+    error,
+    refetch,
+    updateEmail,
+    stats,
+  } = useEmails({ limit: 50 });
+
+  /** Handle sync button click */
+  const handleSync = async () => {
+    setIsSyncing(true);
+    await refetch();
+    setIsSyncing(false);
+  };
+
+  /** Toggle email starred status */
+  const handleToggleStar = (id: string) => {
+    const email = emails.find((e) => e.id === id);
+    if (email) {
+      updateEmail(id, { is_starred: !email.is_starred });
+    }
+  };
+
+  /** Mark email as read */
+  const handleMarkRead = (id: string) => {
+    updateEmail(id, { is_read: true });
+  };
 
   // ───────────────────────────────────────────────────────────────────────────
   // Render
@@ -364,12 +314,33 @@ export default function InboxPage() {
           { label: 'Inbox' },
         ]}
         actions={
-          <Button variant="outline" size="sm" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Sync
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleSync}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            {isSyncing ? 'Syncing...' : 'Sync'}
           </Button>
         }
       />
+
+      {/* ─────────────────────────────────────────────────────────────────────
+          Error Banner
+          ───────────────────────────────────────────────────────────────────── */}
+      {error && (
+        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <p className="text-sm text-destructive">
+            <strong>Error:</strong> {error.message}
+          </p>
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────────
           Email Stats Banner
@@ -379,7 +350,7 @@ export default function InboxPage() {
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-destructive" />
-              <span className="text-2xl font-bold">3</span>
+              <span className="text-2xl font-bold">{stats.actionRequired}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">Action Required</p>
           </CardContent>
@@ -387,17 +358,17 @@ export default function InboxPage() {
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-primary" />
-              <span className="text-2xl font-bold">2</span>
+              <Mail className="h-4 w-4 text-primary" />
+              <span className="text-2xl font-bold">{stats.total}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Events Today</p>
+            <p className="text-xs text-muted-foreground mt-1">Total Emails</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-muted-foreground" />
-              <span className="text-2xl font-bold">28</span>
+              <span className="text-2xl font-bold">{stats.unread}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">Unread</p>
           </CardContent>
@@ -406,7 +377,7 @@ export default function InboxPage() {
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 text-yellow-500" />
-              <span className="text-2xl font-bold">5</span>
+              <span className="text-2xl font-bold">{stats.starred}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">Starred</p>
           </CardContent>
@@ -425,22 +396,17 @@ export default function InboxPage() {
           ) : (
             <div>
               {emails.map((email) => (
-                <EmailListItem key={email.id} email={email} />
+                <EmailListItem
+                  key={email.id}
+                  email={email}
+                  onToggleStar={handleToggleStar}
+                  onMarkRead={handleMarkRead}
+                />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          Developer Note
-          ───────────────────────────────────────────────────────────────────── */}
-      <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-        <p className="text-sm text-yellow-700 dark:text-yellow-400">
-          <strong>Developer Note:</strong> This page displays mock data.
-          Next steps: Create useEmails hook, EmailCard component, and API routes.
-        </p>
-      </div>
     </div>
   );
 }

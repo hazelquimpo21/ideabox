@@ -1,8 +1,8 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** January 18, 2026
-> **Current Phase:** Phase 2 - Core Features (UI Complete)
-> **Branch:** `claude/review-implementation-plan-Qb7XC`
+> **Current Phase:** Phase 2 - Core Features (Data Layer Complete)
+> **Branch:** `claude/review-implementation-plan-esNph`
 
 ## Overview
 
@@ -194,6 +194,44 @@ This document tracks the implementation progress of IdeaBox and provides guidanc
 - Danger zone (export data, delete account)
 - Loading skeleton
 
+#### 10. Data Layer (`src/hooks/`, `src/app/api/`, `src/lib/api/`) ✅ COMPLETE
+
+**Data Hooks** (`src/hooks/`):
+| Hook | File | Tests | Description |
+|------|------|-------|-------------|
+| useEmails | `useEmails.ts` | 12 tests | Fetch, filter, paginate, optimistic updates |
+| useActions | `useActions.ts` | 11 tests | CRUD, toggle complete, stats |
+| useClients | `useClients.ts` | 11 tests | CRUD, search, stats |
+| Index | `index.ts` | - | Barrel export + type re-exports |
+
+**API Routes** (`src/app/api/`):
+| Route | Methods | Description |
+|-------|---------|-------------|
+| `/api/emails` | GET | List with filtering, pagination |
+| `/api/emails/[id]` | GET, PATCH, DELETE | Single email operations |
+| `/api/actions` | GET, POST | List with filtering, create action |
+| `/api/actions/[id]` | GET, PATCH, DELETE | Single action operations |
+| `/api/clients` | GET, POST | List with filtering, create client |
+| `/api/clients/[id]` | GET, PATCH, DELETE | Single client operations |
+
+**API Utilities** (`src/lib/api/`):
+| File | Description |
+|------|-------------|
+| `utils.ts` | Response helpers, pagination (RFC 5988), auth, validation |
+| `schemas.ts` | Zod schemas for all entities |
+| `index.ts` | Barrel export |
+
+**Database Seed** (`scripts/seed.ts`):
+- 5 sample clients with realistic data
+- 15 emails across all categories
+- 8 action items (pending, in-progress, completed)
+- Run with `npm run seed`
+
+**Pages Connected to Real Data:**
+- ✅ Inbox page uses `useEmails` hook
+- ✅ Actions page uses `useActions` hook
+- ✅ Removed mock data and developer notes
+
 ---
 
 ### 🚧 In Progress
@@ -204,21 +242,13 @@ Nothing currently in progress.
 
 ### ❌ Not Started (Priority Order)
 
-#### Priority 1: Data Layer 👈 **START HERE**
-- [ ] **useEmails Hook** (`hooks/useEmails.ts`) - Fetch and cache emails
-- [ ] **useActions Hook** (`hooks/useActions.ts`) - Fetch and manage actions
-- [ ] **useClients Hook** (`hooks/useClients.ts`) - Fetch and manage clients
-- [ ] **Email API Routes** (`app/api/emails/`) - CRUD operations
-- [ ] **Actions API Routes** (`app/api/actions/`) - CRUD operations
-- [ ] **Clients API Routes** (`app/api/clients/`) - CRUD operations
-
-#### Priority 2: Gmail Integration
+#### Priority 1: Gmail Integration 👈 **START HERE**
 - [ ] **Gmail Service** (`lib/gmail/gmail-service.ts`) - API wrapper
 - [ ] **Token Management** (`lib/gmail/token-manager.ts`) - OAuth token refresh
 - [ ] **Email Sync API** (`app/api/emails/sync/route.ts`) - Trigger sync
 - [ ] **Webhook Handler** (`app/api/webhooks/gmail/route.ts`) - Push notifications
 
-#### Priority 3: AI Analyzers
+#### Priority 2: AI Analyzers
 - [ ] **BaseAnalyzer Class** (`services/analyzers/base-analyzer.ts`)
 - [ ] **Categorizer Analyzer** (`services/analyzers/categorizer.ts`)
 - [ ] **Action Extractor Analyzer** (`services/analyzers/action-extractor.ts`)
@@ -226,7 +256,7 @@ Nothing currently in progress.
 - [ ] **Email Processor** (`services/processors/email-processor.ts`)
 - [ ] **Batch Processor** (`services/processors/batch-processor.ts`)
 
-#### Priority 4: Additional Pages
+#### Priority 3: Additional Pages
 - [ ] **Email Detail View** (`components/email/EmailDetail.tsx`)
 - [ ] **Clients Page** (`app/(auth)/clients/page.tsx`)
 - [ ] **Archive Page** (`app/(auth)/archive/page.tsx`)
@@ -243,9 +273,21 @@ src/
 │   ├── page.tsx                 ✅ Landing page with Gmail sign-in
 │   ├── fonts/                   ✅ Geist fonts
 │   ├── api/
-│   │   └── auth/
-│   │       └── callback/
-│   │           └── route.ts     ✅ OAuth callback handler
+│   │   ├── auth/
+│   │   │   └── callback/
+│   │   │       └── route.ts     ✅ OAuth callback handler
+│   │   ├── emails/
+│   │   │   ├── route.ts         ✅ GET (list with pagination)
+│   │   │   └── [id]/
+│   │   │       └── route.ts     ✅ GET, PATCH, DELETE
+│   │   ├── actions/
+│   │   │   ├── route.ts         ✅ GET, POST
+│   │   │   └── [id]/
+│   │   │       └── route.ts     ✅ GET, PATCH, DELETE
+│   │   └── clients/
+│   │       ├── route.ts         ✅ GET, POST
+│   │       └── [id]/
+│   │           └── route.ts     ✅ GET, PATCH, DELETE
 │   ├── onboarding/
 │   │   ├── page.tsx             ✅ Onboarding container
 │   │   ├── layout.tsx           ✅ Minimal layout
@@ -258,9 +300,9 @@ src/
 │   └── (auth)/
 │       ├── layout.tsx           ✅ Auth layout with Navbar/Sidebar
 │       ├── inbox/
-│       │   └── page.tsx         ✅ Inbox page (mock data)
+│       │   └── page.tsx         ✅ Inbox page (useEmails hook)
 │       ├── actions/
-│       │   └── page.tsx         ✅ Actions page (mock data)
+│       │   └── page.tsx         ✅ Actions page (useActions hook)
 │       └── settings/
 │           └── page.tsx         ✅ Settings page (mock data)
 ├── components/
@@ -288,6 +330,15 @@ src/
 │       ├── use-toast.ts
 │       ├── skeleton.tsx
 │       └── spinner.tsx
+├── hooks/                       ✅ Data fetching hooks
+│   ├── index.ts                 ✅ Barrel export + type re-exports
+│   ├── useEmails.ts             ✅ Email fetching with filtering (12 tests)
+│   ├── useActions.ts            ✅ Action CRUD operations (11 tests)
+│   ├── useClients.ts            ✅ Client management (11 tests)
+│   └── __tests__/
+│       ├── useEmails.test.ts    ✅
+│       ├── useActions.test.ts   ✅
+│       └── useClients.test.ts   ✅
 ├── config/
 │   ├── app.ts                   ✅
 │   └── analyzers.ts             ✅
@@ -297,6 +348,10 @@ src/
 │   ├── auth/
 │   │   ├── index.ts             ✅ Barrel export
 │   │   └── auth-context.tsx     ✅ Full Supabase Auth
+│   ├── api/                     ✅ API utilities
+│   │   ├── index.ts             ✅ Barrel export
+│   │   ├── utils.ts             ✅ Response helpers, pagination, auth
+│   │   └── schemas.ts           ✅ Zod validation schemas
 │   ├── supabase/
 │   │   ├── client.ts            ✅
 │   │   ├── server.ts            ✅
@@ -304,66 +359,70 @@ src/
 │   └── utils/
 │       ├── logger.ts            ✅ Enhanced with emojis
 │       └── cn.ts                ✅ Class name utility
-└── types/
-    └── database.ts              ✅
+├── types/
+│   └── database.ts              ✅
+scripts/
+└── seed.ts                      ✅ Database seed (npm run seed)
 ```
 
 ---
 
 ## What to Build Next
 
-### 👉 Immediate Priority: Data Layer
+### 👉 Immediate Priority: Gmail Integration
 
-The UI is complete with mock data. Now connect it to real data.
+The data layer is complete. Now connect to Gmail to fetch real emails.
 
-#### Step 1: Create useEmails Hook
+#### Step 1: Create Gmail Service
 
 ```typescript
-// src/hooks/useEmails.ts
-import { createClient } from '@/lib/supabase/client';
+// src/lib/gmail/gmail-service.ts
+import { google } from 'googleapis';
 import { createLogger } from '@/lib/utils/logger';
 
-const logger = createLogger('useEmails');
+const logger = createLogger('GmailService');
 
-export function useEmails(options?: { category?: string; clientId?: string }) {
-  const [emails, setEmails] = useState<Email[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+export class GmailService {
+  private gmail;
 
-  useEffect(() => {
-    fetchEmails();
-  }, [options?.category, options?.clientId]);
+  constructor(accessToken: string) {
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+    this.gmail = google.gmail({ version: 'v1', auth });
+  }
 
-  const fetchEmails = async () => {
-    logger.start('Fetching emails');
-    // Implement Supabase query
-  };
+  async listMessages(maxResults = 50) {
+    logger.start('Fetching messages', { maxResults });
+    const response = await this.gmail.users.messages.list({
+      userId: 'me',
+      maxResults,
+    });
+    return response.data.messages || [];
+  }
 
-  return { emails, isLoading, error, refetch: fetchEmails };
+  async getMessage(id: string) {
+    const response = await this.gmail.users.messages.get({
+      userId: 'me',
+      id,
+      format: 'full',
+    });
+    return response.data;
+  }
 }
 ```
 
-#### Step 2: Create Email API Routes
+#### Step 2: Create Sync API Route
 
 ```
-app/api/emails/
-├── route.ts          # GET: List emails, POST: Sync new emails
-├── [id]/
-│   └── route.ts      # GET: Single email, PATCH: Update, DELETE: Archive
-└── sync/
-    └── route.ts      # POST: Trigger Gmail sync
+app/api/emails/sync/
+└── route.ts      # POST: Trigger Gmail sync
 ```
 
-#### Step 3: Connect Inbox Page to Real Data
-
-Replace mock data in `src/app/(auth)/inbox/page.tsx`:
+#### Step 3: Token Refresh Logic
 
 ```typescript
-// Replace this:
-const [emails, setEmails] = useState<MockEmail[]>([]);
-
-// With this:
-const { emails, isLoading, error } = useEmails();
+// src/lib/gmail/token-manager.ts
+// Handle OAuth token refresh when expired
 ```
 
 ---
@@ -493,7 +552,28 @@ toast({
 
 ## Recent Changes (January 18, 2026)
 
-### Session 2 (Current)
+### Session 3 (Current)
+- ✅ Created complete data hooks with tests (34 tests total)
+  - `useEmails` - email fetching with filtering, pagination, optimistic updates
+  - `useActions` - CRUD operations, toggle complete, stats
+  - `useClients` - client management with search and stats
+- ✅ Created REST API routes for emails, actions, clients
+  - GET/POST/PATCH/DELETE with Zod validation
+  - Pagination with RFC 5988 Link headers
+  - Proper auth and error handling
+- ✅ Created API utilities (`src/lib/api/`)
+  - Response helpers, pagination, validation
+  - Zod schemas for all entities
+- ✅ Created database seed script (`scripts/seed.ts`)
+  - 5 clients, 15 emails, 8 actions
+  - Run with `npm run seed`
+- ✅ Connected Inbox and Actions pages to real data
+  - Removed mock data and developer notes
+  - Added optimistic updates, error banners
+- ✅ Added Vitest testing infrastructure
+- ✅ Added tsx for TypeScript script execution
+
+### Session 2
 - ✅ Completed `AuthProvider` with full Supabase OAuth integration
 - ✅ Added `ProtectedRoute` component with HOC variant
 - ✅ Created OAuth callback API route
