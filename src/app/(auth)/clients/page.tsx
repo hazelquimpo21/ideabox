@@ -128,7 +128,7 @@ function EmptyState({ onAddClick }: { onAddClick: () => void }) {
 
 interface ClientFormData {
   name: string; company: string; email: string; status: ClientStatus;
-  priority: ClientPriority; email_domains: string[]; notes: string;
+  priority: ClientPriority; email_domains: string[]; keywords: string[]; notes: string;
 }
 
 function ClientDialog({ open, onOpenChange, onSubmit, initialData, isLoading }: {
@@ -136,15 +136,15 @@ function ClientDialog({ open, onOpenChange, onSubmit, initialData, isLoading }: 
   onSubmit: (data: ClientFormData) => void; initialData?: ClientWithStats | null; isLoading?: boolean;
 }) {
   const [formData, setFormData] = React.useState<ClientFormData>({
-    name: '', company: '', email: '', status: 'active', priority: 'medium', email_domains: [], notes: '',
+    name: '', company: '', email: '', status: 'active', priority: 'medium', email_domains: [], keywords: [], notes: '',
   });
 
   React.useEffect(() => {
     if (initialData) {
       setFormData({ name: initialData.name, company: initialData.company || '', email: initialData.email || '',
-        status: initialData.status, priority: initialData.priority, email_domains: initialData.email_domains || [], notes: initialData.notes || '' });
+        status: initialData.status, priority: initialData.priority, email_domains: initialData.email_domains || [], keywords: initialData.keywords || [], notes: initialData.notes || '' });
     } else {
-      setFormData({ name: '', company: '', email: '', status: 'active', priority: 'medium', email_domains: [], notes: '' });
+      setFormData({ name: '', company: '', email: '', status: 'active', priority: 'medium', email_domains: [], keywords: [], notes: '' });
     }
   }, [initialData]);
 

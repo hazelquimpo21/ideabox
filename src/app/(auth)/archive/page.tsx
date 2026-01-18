@@ -113,9 +113,14 @@ export default function ArchivePage() {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  const { emails, isLoading, error, refetch, deleteEmail, updateEmail } = useEmails({
+  const { emails, isLoading, error, refetch, updateEmail } = useEmails({
     limit: 100, category: categoryFilter !== 'all' ? (categoryFilter as EmailCategory) : undefined,
   });
+
+  // Archive/delete an email by setting is_archived flag
+  const archiveEmail = async (id: string) => {
+    await updateEmail(id, { is_archived: true });
+  };
 
   const archivedEmails = React.useMemo(() => {
     const archiveCategories = ['newsletter', 'promo', 'admin', 'noise'];
@@ -134,15 +139,15 @@ export default function ArchivePage() {
   const handleRefresh = async () => { setIsRefreshing(true); await refetch(); setIsRefreshing(false); };
   const handleUnarchive = async (id: string) => { await updateEmail(id, { category: 'personal' }); };
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to permanently delete this email?')) {
-      await deleteEmail(id);
+    if (confirm('Are you sure you want to archive this email?')) {
+      await archiveEmail(id);
       setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     }
   };
   const handleSelect = (id: string) => { setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
   const handleSelectAll = () => { if (selectedIds.size === archivedEmails.length) setSelectedIds(new Set()); else setSelectedIds(new Set(archivedEmails.map((e) => e.id))); };
   const handleBulkUnarchive = async () => { for (const id of selectedIds) await handleUnarchive(id); setSelectedIds(new Set()); };
-  const handleBulkDelete = async () => { if (confirm(`Delete ${selectedIds.size} emails permanently?`)) { for (const id of selectedIds) await deleteEmail(id); setSelectedIds(new Set()); } };
+  const handleBulkDelete = async () => { if (confirm(`Archive ${selectedIds.size} emails?`)) { for (const id of selectedIds) await archiveEmail(id); setSelectedIds(new Set()); } };
 
   const hasFilter = searchQuery !== '' || categoryFilter !== 'all';
 
