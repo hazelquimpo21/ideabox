@@ -1,448 +1,382 @@
 # IdeaBox - Initial Sync Strategy
 
+> **Status:** ✅ IMPLEMENTED
+> **See Also:** `docs/DISCOVERY_DASHBOARD_PLAN.md` for detailed implementation plan
+
 ## First-Run User Experience
 
 When a user first connects their Gmail account, they should see immediate value. Don't make them wait hours for the next scheduled sync - give them something to explore right away.
 
+## Implementation Summary
+
+The initial sync system has been fully implemented with the following features:
+
+### Token Optimization (20-30% savings)
+- **Pre-filtering**: Skip no-reply, notification emails before AI
+- **Auto-categorization**: Domain patterns (linkedin.com → newsletter)
+- **Subject patterns**: "[ACTION]" → action_required automatically
+- **Sender patterns**: Learn and reuse categorization from similar senders
+
+### Partial Success Handling
+- Continue processing even if some emails fail
+- Track and display failures separately
+- Allow retry from Discovery Dashboard
+
+### Discovery Dashboard
+After initial sync completes, users see a rich dashboard showing:
+- Category cards with counts and descriptions
+- Detected/suggested clients
+- Quick action buttons
+- Failed analysis summary (if any)
+
 ## Onboarding Flow with Initial Sync
 
-### Step-by-Step Flow
+### Step-by-Step Flow (IMPLEMENTED)
 
 ```
 1. User completes OAuth → Gmail connected ✓
 2. User adds clients (optional) ✓
-3. User clicks "Finish Setup" ✓
-4. → IMMEDIATELY trigger initial sync
-5. Show loading screen: "Analyzing your recent emails..."
-6. Fetch last 50 emails from Gmail
-7. Run AI analysis on all 50 emails
-8. Redirect to inbox with results ready
+3. User configures sync (email count, include read) ✓  ← NEW STEP
+4. User clicks "Finish Setup" ✓
+5. → IMMEDIATELY trigger initial sync
+6. Show loading screen with real-time progress
+7. Pre-filter emails (skip noise, auto-categorize)
+8. Run AI analysis on remaining emails
+9. Build Discovery Dashboard response
+10. Redirect to Discovery Dashboard ← NOT inbox!
+11. User explores categorized emails
 ```
 
-### Loading Screen Design
+### Loading Screen Design (IMPLEMENTED)
+
+The loading screen is now built into `src/app/onboarding/page.tsx`:
 
 ```tsx
-// app/onboarding/components/InitialSync.tsx
-export function InitialSyncScreen() {
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('Connecting to Gmail...');
-  
+// Sync in progress UI (from src/app/onboarding/page.tsx)
+if (isSyncing) {
   return (
-    <div className="initial-sync">
-      <Sparkles className="animate-pulse" size={64} />
-      
-      <h2>Setting up your inbox...</h2>
-      <p className="status">{status}</p>
-      
-      <Progress value={progress} max={100} />
-      
-      <div className="steps">
-        <SyncStep 
-          completed={progress > 25}
-          label="Fetching recent emails"
-        />
-        <SyncStep 
-          completed={progress > 50}
-          label="Analyzing with AI"
-        />
-        <SyncStep 
-          completed={progress > 75}
-          label="Creating action items"
-        />
-        <SyncStep 
-          completed={progress > 95}
-          label="Ready!"
-        />
-      </div>
-      
-      <p className="note">This usually takes 30-60 seconds</p>
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-lg">
+        <CardContent className="pt-6">
+          {/* Icon and Title */}
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+              <span className="text-3xl animate-pulse">✨</span>
+            </div>
+            <h2 className="text-2xl font-bold">Analyzing Your Emails</h2>
+            <p className="text-muted-foreground mt-2">{syncStep}</p>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-6">
+            <div className="flex justify-between text-sm text-muted-foreground mb-2">
+              <span>Progress</span>
+              <span>{syncProgress}%</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300 ease-out"
+                style={{ width: `${syncProgress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Real-time Discoveries */}
+          {(discoveries.actionItems > 0 || discoveries.events > 0) && (
+            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+              <p className="text-sm font-medium">Found so far:</p>
+              <div className="flex flex-wrap gap-2">
+                {discoveries.actionItems > 0 && (
+                  <Badge variant="secondary">
+                    {discoveries.actionItems} action items
+                  </Badge>
+                )}
+                {discoveries.events > 0 && (
+                  <Badge variant="secondary">
+                    {discoveries.events} events
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 ```
 
-## Initial Sync Implementation
+## Initial Sync Implementation (IMPLEMENTED)
 
-### API Route
+### API Routes
 
-```typescript
-// app/api/onboarding/initial-sync/route.ts
-import { emailSyncService } from '@/services/email-sync-service';
-import { emailProcessor } from '@/services/processors/email-processor';
+**POST /api/onboarding/initial-sync** (`src/app/api/onboarding/initial-sync/route.ts`)
+- Triggers initial email batch analysis
+- Returns `InitialSyncResponse` with categories, clients, failures, suggested actions
 
-export async function POST(request: Request) {
-  const logger = createLogger('InitialSync');
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  
-  logger.info('Starting initial sync for new user', { userId: user.id });
-  
-  try {
-    // Get user's Gmail accounts
-    const { data: gmailAccounts } = await supabase
-      .from('gmail_accounts')
-      .select('*')
-      .eq('user_id', user.id);
-    
-    if (!gmailAccounts || gmailAccounts.length === 0) {
-      throw new Error('No Gmail accounts connected');
-    }
-    
-    let totalEmailsFetched = 0;
-    let totalEmailsAnalyzed = 0;
-    
-    // For each connected Gmail account
-    for (const account of gmailAccounts) {
-      logger.info('Fetching initial emails', { 
-        accountId: account.id,
-        email: account.email,
-      });
-      
-      // Fetch last 50 emails (or configurable amount)
-      const emails = await emailSyncService.fetchInitialEmails(account, {
-        maxResults: 50,
-        includeRead: true,  // Include read emails for initial setup
-      });
-      
-      totalEmailsFetched += emails.length;
-      
-      logger.info('Processing initial emails', {
-        accountId: account.id,
-        emailCount: emails.length,
-      });
-      
-      // Process in batches with progress updates
-      const batchSize = 10;
-      for (let i = 0; i < emails.length; i += batchSize) {
-        const batch = emails.slice(i, i + batchSize);
-        
-        // Process batch
-        await emailProcessor.processBatch(batch, user.id);
-        
-        totalEmailsAnalyzed += batch.length;
-        
-        // Calculate progress
-        const progress = Math.round(
-          (totalEmailsAnalyzed / totalEmailsFetched) * 100
-        );
-        
-        // Send progress update (could use SSE or polling)
-        await updateSyncProgress(user.id, {
-          progress,
-          status: `Analyzed ${totalEmailsAnalyzed} of ${totalEmailsFetched} emails`,
-        });
-        
-        logger.debug('Batch processed', {
-          progress,
-          analyzed: totalEmailsAnalyzed,
-          total: totalEmailsFetched,
-        });
-      }
-    }
-    
-    // Mark onboarding as complete
-    await supabase
-      .from('user_profiles')
-      .update({ 
-        onboarding_completed: true,
-        initial_sync_completed_at: new Date().toISOString(),
-      })
-      .eq('id', user.id);
-    
-    logger.info('Initial sync complete', {
-      userId: user.id,
-      emailsFetched: totalEmailsFetched,
-      emailsAnalyzed: totalEmailsAnalyzed,
-    });
-    
-    return NextResponse.json({
-      success: true,
-      emailsFetched: totalEmailsFetched,
-      emailsAnalyzed: totalEmailsAnalyzed,
-    });
-    
-  } catch (error) {
-    logger.error('Initial sync failed', {
-      userId: user.id,
-      error: error.message,
-    });
-    
-    return NextResponse.json(
-      { error: 'Initial sync failed', details: error.message },
-      { status: 500 }
-    );
-  }
-}
+**GET /api/onboarding/sync-status** (`src/app/api/onboarding/sync-status/route.ts`)
+- Returns real-time progress for polling
+- Includes discoveries found so far
+
+### Sync Services Architecture
+
+```
+src/services/sync/
+├── initial-sync-orchestrator.ts  ← Main coordinator
+├── email-prefilter.ts            ← Token optimization
+├── sender-patterns.ts            ← Pattern learning
+├── action-suggester.ts           ← Quick action generation
+├── discovery-builder.ts          ← Response building
+└── index.ts                      ← Barrel export
 ```
 
-### Service Layer Updates
+### InitialSyncOrchestrator Flow
 
 ```typescript
-// services/email-sync-service.ts
-export class EmailSyncService {
-  private gmailSync: GmailSync;
-  private logger = createLogger('EmailSyncService');
-  
-  /**
-   * Fetch initial emails for new user onboarding
-   * Different from regular sync - fetches recent emails regardless of history ID
-   */
-  async fetchInitialEmails(
-    account: GmailAccount,
-    options: {
-      maxResults?: number;
-      includeRead?: boolean;
-    } = {}
-  ): Promise<Email[]> {
-    const maxResults = options.maxResults || 50;
-    const includeRead = options.includeRead ?? false;
-    
-    this.logger.info('Fetching initial emails for onboarding', {
-      accountId: account.id,
-      maxResults,
-      includeRead,
-    });
-    
-    try {
-      // Fetch recent emails from inbox
-      const query: string[] = ['in:inbox'];
-      
-      if (!includeRead) {
-        query.push('is:unread');
+// From src/services/sync/initial-sync-orchestrator.ts
+class InitialSyncOrchestrator {
+  async execute(): Promise<InitialSyncResponse> {
+    // 1. Update progress: "Fetching emails..."
+    await this.updateProgress(10, 'Fetching emails from Gmail...');
+
+    // 2. Fetch emails from database (already synced)
+    const emails = await this.fetchEmailsToAnalyze();
+
+    // 3. Pre-filter emails (saves 20-30% tokens)
+    const prefilterResults = this.prefilter.filterBatch(emails);
+
+    // 4. Auto-categorize what we can
+    for (const result of prefilterResults) {
+      if (result.autoCategoryReason) {
+        await this.updateEmailCategory(result.emailId, result.autoCategory!);
       }
-      
-      const response = await this.gmailSync.fetchMessages({
-        userId: 'me',
-        maxResults,
-        q: query.join(' '),
-        labelIds: ['INBOX'],
-      });
-      
-      const messageIds = response.messages?.map(m => m.id!) || [];
-      
-      this.logger.info('Found messages for initial sync', {
-        accountId: account.id,
-        count: messageIds.length,
-      });
-      
-      // Fetch full message details
-      const emails = await this.gmailSync.fetchMessageDetails(
-        messageIds,
-        account
-      );
-      
-      // Save to database
-      const savedEmails = await this.saveEmails(emails, account.user_id);
-      
-      // Update account's last_history_id so future syncs are incremental
-      if (response.historyId) {
-        await supabase
-          .from('gmail_accounts')
-          .update({ 
-            last_history_id: response.historyId,
-            last_sync_at: new Date().toISOString(),
-          })
-          .eq('id', account.id);
-      }
-      
-      return savedEmails;
-      
-    } catch (error) {
-      this.logger.error('Failed to fetch initial emails', {
-        accountId: account.id,
-        error: error.message,
-      });
-      throw error;
     }
+
+    // 5. Run AI analysis on remaining emails
+    const needsAI = prefilterResults.filter(r => r.needsAI);
+    for (const batch of batches) {
+      await this.processBatch(batch);
+      await this.updateProgress(progress, `Analyzing emails (${i}/${total})...`);
+    }
+
+    // 6. Build and return Discovery response
+    const discovery = await this.discoveryBuilder.build(this.userId);
+    return discovery;
   }
 }
-```
 
-## Progress Tracking Options
+## Progress Tracking (IMPLEMENTED)
 
-### Option 1: Server-Sent Events (SSE)
+We chose **Option 3: Database + Client Polling** for simplicity and reliability.
 
-Best for real-time updates:
+### Hook: useInitialSyncProgress
 
 ```typescript
-// app/api/onboarding/sync-progress/route.ts
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId');
-  
-  const stream = new TransformStream();
-  const writer = stream.writable.getWriter();
-  const encoder = new TextEncoder();
-  
-  // Poll for progress updates
-  const interval = setInterval(async () => {
-    const progress = await getSyncProgress(userId);
-    
-    if (progress) {
-      const data = `data: ${JSON.stringify(progress)}\n\n`;
-      await writer.write(encoder.encode(data));
-      
-      // Stop when complete
-      if (progress.progress >= 100) {
-        clearInterval(interval);
-        await writer.close();
-      }
-    }
-  }, 500);
-  
-  return new Response(stream.readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
+// From src/hooks/useInitialSyncProgress.ts
+export function useInitialSyncProgress(options: UseInitialSyncProgressOptions) {
+  const [status, setStatus] = useState<SyncStatus>('idle');
+  const [progress, setProgress] = useState(0);
+  const [currentStep, setCurrentStep] = useState('');
+  const [discoveries, setDiscoveries] = useState({
+    actionItems: 0,
+    events: 0,
+    clientsDetected: [],
   });
-}
-```
 
-### Option 2: Polling (Simpler)
-
-```typescript
-// Client-side polling
-const [progress, setProgress] = useState(0);
-
-useEffect(() => {
-  const pollProgress = async () => {
+  const pollProgress = useCallback(async () => {
     const response = await fetch('/api/onboarding/sync-status');
     const data = await response.json();
-    
-    setProgress(data.progress);
+
     setStatus(data.status);
-    
-    if (data.progress >= 100) {
-      // Redirect to inbox
-      router.push('/inbox');
+    setProgress(data.progress);
+    setCurrentStep(data.currentStep);
+    setDiscoveries(data.discoveries);
+
+    if (data.status === 'completed') {
+      stopPolling();
+      options.onComplete?.(data.result);
     }
-  };
-  
-  const interval = setInterval(pollProgress, 1000);
-  
-  return () => clearInterval(interval);
-}, []);
+  }, []);
+
+  // Polls every 1 second when active
+  const startPolling = () => { /* ... */ };
+  const stopPolling = () => { /* ... */ };
+
+  return { status, progress, currentStep, discoveries, startPolling, stopPolling };
+}
 ```
 
-### Option 3: Database + Client Polling
+### Database Schema
 
-Store progress in database, client polls periodically:
-
-```sql
--- Add to user_profiles table
-ALTER TABLE user_profiles ADD COLUMN sync_progress INTEGER DEFAULT 0;
-ALTER TABLE user_profiles ADD COLUMN sync_status TEXT;
-```
-
-## Configuration
-
-### How Many Emails to Fetch?
+Progress is stored in `user_profiles.sync_progress` as JSONB:
 
 ```typescript
-// config/sync.ts
+interface StoredSyncProgress {
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  progress: number;
+  currentStep: string;
+  discoveries: {
+    actionItems: number;
+    events: number;
+    clientsDetected: string[];
+  };
+  result?: InitialSyncResponse;
+  error?: string;
+}
+```
+
+## Configuration (IMPLEMENTED)
+
+### Config File: `src/config/initial-sync.ts`
+
+```typescript
 export const INITIAL_SYNC_CONFIG = {
   // Number of emails to fetch on first sync
-  maxResults: 50,  // Recommended: 50-100
-  
-  // Include read emails (true = better demo, false = focus on unread)
+  maxEmails: 50,
+
+  // Include read emails (true = better demo)
   includeRead: true,
-  
-  // Time limit for initial sync (prevent timeout)
-  timeoutMs: 60_000,  // 1 minute max
-  
-  // Batch size for processing
-  batchSize: 10,
-  
-  // Labels to include (empty = all from inbox)
-  includeLabels: ['INBOX'],
-  
-  // Labels to exclude
-  excludeLabels: ['SPAM', 'TRASH'],
+
+  // Batch size for AI processing
+  batchSize: 5,
+
+  // Poll interval in milliseconds
+  pollIntervalMs: 1000,
+
+  // Maximum sync duration before timeout
+  timeoutMs: 120_000,  // 2 minutes
+};
+
+// Skip these sender patterns (no AI needed)
+export const SKIP_SENDER_PATTERNS = [
+  /no-?reply@/i,
+  /noreply@/i,
+  /notifications?@/i,
+  /mailer-daemon/i,
+  /postmaster@/i,
+  /@bounce\./i,
+];
+
+// Auto-categorize by domain
+export const AUTO_CATEGORIZE_DOMAINS: Record<string, EmailCategory> = {
+  'linkedin.com': 'newsletter',
+  'twitter.com': 'newsletter',
+  'facebook.com': 'newsletter',
+  'github.com': 'admin',
+  'stripe.com': 'admin',
+  'aws.amazon.com': 'admin',
+};
+
+// Auto-categorize by subject prefix
+export const AUTO_CATEGORIZE_PREFIXES: Record<string, EmailCategory> = {
+  '[ACTION]': 'action_required',
+  '[URGENT]': 'action_required',
+  'Re:': null,  // Doesn't override
+  'Fwd:': null,
 };
 ```
 
-### Adjustable by User (Advanced)
+### User Configuration (SyncConfigStep)
+
+Users can configure initial sync in the onboarding wizard:
 
 ```tsx
-// Optional: Let power users choose
-<OnboardingStep step={2}>
-  <h2>How many recent emails should we analyze?</h2>
-  
-  <RadioGroup value={emailCount} onChange={setEmailCount}>
-    <Radio value={25}>
-      Just the last 25 (quick preview)
-    </Radio>
-    <Radio value={50}>
-      Last 50 emails (recommended)
-    </Radio>
-    <Radio value={100}>
-      Last 100 emails (comprehensive)
-    </Radio>
-  </RadioGroup>
-  
-  <Checkbox checked={includeRead} onChange={setIncludeRead}>
-    Include emails I've already read
-  </Checkbox>
-</OnboardingStep>
+// From src/app/onboarding/components/SyncConfigStep.tsx
+<div className="space-y-6">
+  <div>
+    <Label>How many recent emails should we analyze?</Label>
+    <RadioGroup value={emailCount} onValueChange={setEmailCount}>
+      <RadioGroupItem value="25">Quick preview (25 emails)</RadioGroupItem>
+      <RadioGroupItem value="50">Recommended (50 emails)</RadioGroupItem>
+      <RadioGroupItem value="100">Comprehensive (100 emails)</RadioGroupItem>
+    </RadioGroup>
+  </div>
+
+  <div className="flex items-center space-x-2">
+    <Switch checked={includeRead} onCheckedChange={setIncludeRead} />
+    <Label>Include emails I've already read</Label>
+  </div>
+</div>
 ```
 
-## Error Handling
+## Error Handling (IMPLEMENTED)
 
-### Graceful Degradation
+### Partial Success Pattern
+
+The sync continues even if some emails fail. Failures are tracked and displayed:
 
 ```typescript
-try {
-  await performInitialSync(account);
-} catch (error) {
-  logger.error('Initial sync failed', { error });
-  
-  // Show partial results if any
-  if (partialEmails.length > 0) {
-    await savePartialResults(partialEmails);
-    
-    return {
-      success: false,
-      partial: true,
-      emailsAnalyzed: partialEmails.length,
-      error: 'Sync incomplete - showing partial results',
-    };
+// From src/services/sync/initial-sync-orchestrator.ts
+for (const email of batch) {
+  try {
+    await this.analyzeEmail(email);
+    successCount++;
+  } catch (error) {
+    // Log failure but continue processing
+    this.failures.push({
+      emailId: email.id,
+      subject: email.subject,
+      sender: email.from_email,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
   }
-  
-  // Complete failure - offer retry
-  return {
-    success: false,
-    error: error.message,
-    retry: true,
-  };
 }
 ```
 
-### Retry UI
+### Error UI (onboarding/page.tsx)
 
 ```tsx
-{syncFailed && (
-  <div className="sync-failed">
-    <AlertCircle size={48} className="text-red-500" />
-    <h3>Initial sync failed</h3>
-    <p>{error.message}</p>
-    
-    {error.retry && (
-      <Button onClick={retrySync}>
-        Try Again
-      </Button>
-    )}
-    
-    <Button variant="ghost" onClick={skipToInbox}>
-      Skip for now (sync in background)
-    </Button>
-  </div>
-)}
+if (syncError) {
+  return (
+    <Card className="w-full max-w-lg">
+      <CardContent className="pt-6">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+            <span className="text-3xl">😕</span>
+          </div>
+          <h2 className="text-2xl font-bold">Analysis Failed</h2>
+          <p className="text-muted-foreground mt-2">{syncError}</p>
+        </div>
+
+        <div className="flex gap-3 justify-center">
+          <Button onClick={handleRetrySync}>Try Again</Button>
+          <Button variant="outline" onClick={handleSkipSync}>
+            Skip for Now
+          </Button>
+        </div>
+
+        <p className="text-center text-sm text-muted-foreground mt-4">
+          You can always run the analysis later from Settings
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+### FailureSummary Component
+
+After successful sync with some failures:
+
+```tsx
+// From src/components/discover/FailureSummary.tsx
+<Collapsible>
+  <CollapsibleTrigger className="flex items-center gap-2">
+    <AlertTriangle className="w-4 h-4 text-amber-500" />
+    <span>{failures.length} emails couldn't be analyzed</span>
+    <ChevronDown />
+  </CollapsibleTrigger>
+  <CollapsibleContent>
+    {failures.map(failure => (
+      <div key={failure.emailId} className="p-3 border-b">
+        <p className="font-medium">{failure.subject}</p>
+        <p className="text-sm text-muted-foreground">{failure.sender}</p>
+        <p className="text-sm text-red-600">{failure.error}</p>
+      </div>
+    ))}
+  </CollapsibleContent>
+</Collapsible>
 ```
 
 ## Background Sync After Initial
@@ -581,31 +515,51 @@ if (emails.length < 5) {
 }
 ```
 
-## Updated Onboarding Flow Diagram
+## Updated Onboarding Flow Diagram (IMPLEMENTED)
 
 ```
-┌─────────────────────────────────────────┐
-│ 1. User connects Gmail                  │
-│    ↓                                     │
-│ 2. User adds clients (optional)         │
-│    ↓                                     │
-│ 3. User clicks "Finish Setup"           │
-│    ↓                                     │
-│ 4. Loading screen appears                │
-│    ↓                                     │
-│ 5. Backend: Fetch last 50 emails        │  ← NEW!
-│    ↓                                     │
-│ 6. Backend: AI analyzes all emails      │  ← NEW!
-│    ↓  (shows progress: 0%→100%)         │
-│ 7. Redirect to inbox                    │
-│    ↓                                     │
-│ 8. User sees categorized emails!        │  🎉
-│    ↓                                     │
-│ 9. Background: Schedule hourly sync     │
-└─────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ 1. User connects Gmail                                 │
+│    ↓                                                   │
+│ 2. User adds clients (optional)                        │
+│    ↓                                                   │
+│ 3. User configures sync (email count, include read)    │  ← NEW STEP!
+│    ↓                                                   │
+│ 4. User clicks "Finish Setup"                          │
+│    ↓                                                   │
+│ 5. Loading screen with real-time progress              │
+│    ↓  (shows progress: 0%→100%)                        │
+│ 6. Backend: Pre-filter emails (skip noise)             │  ← TOKEN SAVER!
+│    ↓                                                   │
+│ 7. Backend: Auto-categorize by domain/pattern          │  ← TOKEN SAVER!
+│    ↓                                                   │
+│ 8. Backend: AI analyzes remaining emails               │
+│    ↓  (real-time discoveries shown)                    │
+│ 9. Build Discovery Dashboard response                  │
+│    ↓                                                   │
+│ 10. Redirect to Discovery Dashboard                    │  ← NOT inbox!
+│    ↓                                                   │
+│ 11. User sees category cards, client insights!         │  🎉
+│    ↓                                                   │
+│ 12. User clicks "Go to Inbox" to continue              │
+│    ↓                                                   │
+│ 13. Background: Schedule hourly sync                   │
+└────────────────────────────────────────────────────────┘
 ```
 
-## Key Takeaway
+## Discovery Dashboard
+
+After initial sync, users land on the Discovery Dashboard (`/discover`) which shows:
+
+1. **Hero Section** - Welcome message with stats (emails analyzed, action items found)
+2. **Category Cards** - Grid showing each category with count and top emails
+3. **Client Insights** - Detected and suggested clients to add
+4. **Quick Actions** - Suggested next steps (archive newsletters, view urgent, etc.)
+5. **Failure Summary** - Collapsible list of any failed analyses
+
+This is a much better first impression than just dumping users into an inbox.
+
+## Key Takeaways
 
 **Don't make users wait!** Fetch and analyze a reasonable number of recent emails (50-100) during onboarding so they can:
 - See the system in action immediately
@@ -613,4 +567,27 @@ if (emails.length < 5) {
 - Find action items from real emails
 - Understand the value before committing
 
+**Save tokens intelligently!** Pre-filter and auto-categorize to reduce AI calls by 20-30%:
+- Skip no-reply, notification emails
+- Auto-categorize by domain (linkedin.com → newsletter)
+- Learn sender patterns for future emails
+
+**Handle failures gracefully!** Partial success is better than complete failure:
+- Continue processing even when some emails fail
+- Track and display failures separately
+- Allow retry from Discovery Dashboard
+
 This dramatically improves conversion and user satisfaction compared to "check back in an hour."
+
+## Related Files
+
+| File | Purpose |
+|------|---------|
+| `src/types/discovery.ts` | Type definitions |
+| `src/config/initial-sync.ts` | Configuration |
+| `src/services/sync/*.ts` | Sync services |
+| `src/hooks/useInitialSyncProgress.ts` | Progress hook |
+| `src/components/discover/*.tsx` | Dashboard components |
+| `src/app/(auth)/discover/page.tsx` | Dashboard page |
+| `src/app/onboarding/page.tsx` | Onboarding with sync |
+| `docs/DISCOVERY_DASHBOARD_PLAN.md` | Full implementation plan |

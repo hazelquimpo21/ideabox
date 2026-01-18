@@ -59,6 +59,8 @@ ideabox/
 │   │   ├── inbox/                # Main inbox view
 │   │   │   ├── page.tsx
 │   │   │   └── components/       # Inbox-specific components
+│   │   ├── discover/             # Discovery Dashboard (post-onboarding)
+│   │   │   └── page.tsx
 │   │   ├── clients/              # Client hub
 │   │   │   ├── page.tsx
 │   │   │   ├── [clientId]/
@@ -76,8 +78,13 @@ ideabox/
 │   │   ├── actions/              # Action item operations
 │   │   ├── clients/              # Client CRUD
 │   │   ├── analyzers/            # Trigger analysis jobs
+│   │   ├── onboarding/           # Initial sync endpoints
+│   │   │   ├── initial-sync/     # POST: Trigger initial sync
+│   │   │   └── sync-status/      # GET: Poll sync progress
 │   │   └── webhooks/             # Future: Gmail push notifications
 │   ├── onboarding/               # Initial setup flow
+│   │   ├── page.tsx              # Wizard + sync progress UI
+│   │   └── components/           # Wizard steps including SyncConfigStep
 │   ├── layout.tsx
 │   └── page.tsx                  # Landing/login
 │
@@ -115,6 +122,13 @@ ideabox/
 │   │   ├── email-processor.ts    # Orchestrates all analyzers
 │   │   ├── batch-processor.ts    # Handles email batches
 │   │   └── priority-scorer.ts    # Scores email urgency
+│   ├── sync/                     # Initial sync & discovery services
+│   │   ├── index.ts              # Barrel export
+│   │   ├── email-prefilter.ts    # Pre-filter emails before AI
+│   │   ├── sender-patterns.ts    # Learn sender→category patterns
+│   │   ├── action-suggester.ts   # Generate quick actions
+│   │   ├── discovery-builder.ts  # Build Discovery response
+│   │   └── initial-sync-orchestrator.ts # Main sync coordinator
 │   └── jobs/
 │       ├── email-sync-job.ts     # Scheduled email fetching
 │       └── daily-summary-job.ts  # Phase 3: Summary generation
@@ -132,6 +146,14 @@ ideabox/
 │   ├── clients/
 │   │   ├── ClientCard.tsx
 │   │   └── ClientSelector.tsx
+│   ├── discover/                 # Discovery Dashboard components
+│   │   ├── index.ts              # Barrel export
+│   │   ├── CategoryCard.tsx      # Single category summary
+│   │   ├── CategoryCardGrid.tsx  # Responsive category grid
+│   │   ├── ClientInsights.tsx    # Detected/suggested clients
+│   │   ├── QuickActions.tsx      # Suggested action buttons
+│   │   ├── FailureSummary.tsx    # Failed analysis display
+│   │   └── DiscoveryHero.tsx     # Hero section with stats
 │   └── layout/
 │       ├── Navbar.tsx
 │       ├── Sidebar.tsx
@@ -141,10 +163,12 @@ ideabox/
 │   ├── useEmails.ts
 │   ├── useActions.ts
 │   ├── useClients.ts
+│   ├── useInitialSyncProgress.ts # Poll sync progress during onboarding
 │   └── useSupabase.ts
 │
 ├── types/                        # TypeScript type definitions
 │   ├── database.ts               # Supabase generated types
+│   ├── discovery.ts              # Discovery Dashboard types
 │   ├── email.ts
 │   ├── action.ts
 │   ├── client.ts
