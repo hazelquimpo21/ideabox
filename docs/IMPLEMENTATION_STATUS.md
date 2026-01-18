@@ -1,7 +1,8 @@
 # IdeaBox - Implementation Status
 
-> **Last Updated:** January 2026
+> **Last Updated:** January 18, 2026
 > **Current Phase:** Phase 1 - Foundation
+> **Branch:** `claude/add-logging-documentation-uV3P1`
 
 ## Overview
 
@@ -76,6 +77,61 @@ This document tracks the implementation progress of IdeaBox and provides guidanc
 **Utility:**
 - [x] `cn()` utility (`src/lib/utils/cn.ts`) - clsx + tailwind-merge
 
+#### 4. Layout Components (`src/components/layout/`) ✨ NEW
+
+| Component | File | Lines | Description |
+|-----------|------|-------|-------------|
+| Navbar | `Navbar.tsx` | ~340 | Top navigation with logo, search (⌘K), sync indicator, user menu dropdown |
+| Sidebar | `Sidebar.tsx` | ~310 | Navigation sidebar with main nav, category filters, client quick-access list |
+| PageHeader | `PageHeader.tsx` | ~190 | Page header with breadcrumbs, title, description, action button slots |
+| Index | `index.ts` | ~55 | Barrel export for clean imports |
+
+**Navbar Features:**
+- 🔍 Global search with keyboard shortcut (⌘K / Ctrl+K)
+- 🔄 Sync status indicator with relative time display
+- 👤 User dropdown menu (profile, settings, logout)
+- 📱 Mobile responsive with hamburger toggle
+
+**Sidebar Features:**
+- 📑 Main navigation (Inbox, Actions, Clients, Archive)
+- 🏷️ Category quick filters with badge counts
+- 🏢 Client quick-access (shows top 5 with "view all" link)
+- ↔️ Collapsible sections
+- 📱 Mobile overlay mode
+
+**PageHeader Features:**
+- 🏠 Breadcrumb navigation with home icon
+- 📝 Title + description + badge support
+- ⚡ Right-aligned action button slot
+
+#### 5. Authentication Context (`src/lib/auth/`) ✨ NEW
+
+| File | Description |
+|------|-------------|
+| `auth-context.tsx` | AuthProvider with useAuth hook, logging integration |
+| `index.ts` | Barrel export |
+
+**Current State:** Stub implementation with:
+- User state management structure
+- signInWithGmail, signOut, refreshSession method signatures
+- Proper logging throughout (uses createLogger)
+- Ready for Supabase integration
+
+**TODO for full implementation:**
+```typescript
+// Replace stub code with actual Supabase calls:
+const { data: { session } } = await supabase.auth.getSession();
+await supabase.auth.signInWithOAuth({ provider: 'google', ... });
+```
+
+#### 6. Root Layout (`src/app/layout.tsx`) ✨ UPDATED
+
+- [x] AuthProvider wrapper for global auth state
+- [x] Toaster component for toast notifications
+- [x] Proper metadata (title, description, Open Graph, Twitter)
+- [x] Viewport configuration
+- [x] Font configuration (Geist Sans & Mono)
+
 ---
 
 ### 🚧 In Progress
@@ -86,19 +142,18 @@ Nothing currently in progress.
 
 ### ❌ Not Started (Priority Order)
 
-#### Priority 1: Layout & Navigation
-- [ ] **Navbar Component** (`components/layout/Navbar.tsx`)
-- [ ] **Sidebar Component** (`components/layout/Sidebar.tsx`)
-- [ ] **PageHeader Component** (`components/layout/PageHeader.tsx`)
-- [ ] **Root Layout Update** with auth provider
+#### Priority 1: ~~Layout & Navigation~~ ✅ COMPLETED
+- [x] **Navbar Component** - Done
+- [x] **Sidebar Component** - Done
+- [x] **PageHeader Component** - Done
+- [x] **Root Layout Update** - Done
 
-#### Priority 2: Authentication & Onboarding
-- [ ] **Auth Context Provider**
-- [ ] **useAuth Hook**
-- [ ] **Protected Route Wrapper**
+#### Priority 2: Authentication & Onboarding 👈 **START HERE**
+- [ ] **Complete AuthProvider** - Connect to Supabase Auth
+- [ ] **Protected Route Wrapper** (`components/auth/ProtectedRoute.tsx`)
 - [ ] **Landing Page** (`app/page.tsx`) - Replace Next.js boilerplate
+- [ ] **Gmail OAuth Routes** (`app/api/auth/gmail/route.ts`, `callback/route.ts`)
 - [ ] **Onboarding Flow** (`app/onboarding/`)
-- [ ] **Gmail OAuth Routes** (`app/api/auth/`)
 
 #### Priority 3: Core Pages
 - [ ] **Inbox Page** (`app/(auth)/inbox/`)
@@ -133,11 +188,16 @@ Nothing currently in progress.
 ```
 src/
 ├── app/
-│   ├── globals.css          ✅ Updated with CSS variables
-│   ├── layout.tsx           ⚠️ Needs auth provider, toaster
-│   ├── page.tsx             ❌ Still Next.js boilerplate
+│   ├── globals.css          ✅ CSS variables for theming
+│   ├── layout.tsx           ✅ Updated with AuthProvider + Toaster
+│   ├── page.tsx             ❌ Still Next.js boilerplate (Priority 2)
 │   └── fonts/               ✅ Geist fonts
 ├── components/
+│   ├── layout/              ✅ NEW - Layout components
+│   │   ├── index.ts         ✅ Barrel export
+│   │   ├── Navbar.tsx       ✅ Top navigation
+│   │   ├── Sidebar.tsx      ✅ Side navigation
+│   │   └── PageHeader.tsx   ✅ Page headers
 │   └── ui/                  ✅ Complete UI component library
 │       ├── index.ts         ✅ Barrel export
 │       ├── button.tsx       ✅
@@ -160,6 +220,9 @@ src/
 ├── lib/
 │   ├── ai/
 │   │   └── openai-client.ts ✅
+│   ├── auth/                ✅ NEW - Auth context
+│   │   ├── index.ts         ✅ Barrel export
+│   │   └── auth-context.tsx ✅ AuthProvider + useAuth (stub)
 │   ├── supabase/
 │   │   ├── client.ts        ✅
 │   │   ├── server.ts        ✅
@@ -175,59 +238,69 @@ src/
 
 ## What to Build Next
 
-### Immediate Next Steps (Recommended Order)
+### 👉 Immediate Priority: Authentication & Onboarding
 
-#### Step 1: Update Root Layout
-Add the Toaster component to enable toast notifications:
+The layout components are ready. Now build the auth flow:
 
-```tsx
-// app/layout.tsx
-import { Toaster } from '@/components/ui';
+#### Step 1: Complete AuthProvider Integration
+Update `src/lib/auth/auth-context.tsx` to connect to Supabase:
 
-export default function RootLayout({ children }) {
-  return (
-    <html lang="en">
-      <body>
-        {children}
-        <Toaster />
-      </body>
-    </html>
-  );
+```typescript
+// In initializeAuth():
+const { data: { session } } = await supabase.auth.getSession();
+if (session?.user) {
+  setUser(mapSupabaseUser(session.user));
 }
+
+// Subscribe to auth changes:
+const { data: { subscription } } = supabase.auth.onAuthStateChange(
+  (event, session) => { ... }
+);
 ```
 
-#### Step 2: Create Layout Components
-Build the shared layout components that all pages will use:
-
-1. **Navbar** - Logo, search, user menu
-2. **Sidebar** - Navigation, client list
-3. **PageHeader** - Title, breadcrumbs, actions
-
-Reference `docs/PHASE_1_IMPLEMENTATION.md` for layout wireframes.
-
-#### Step 3: Replace Landing Page
-Replace `app/page.tsx` with the actual IdeaBox landing page:
+#### Step 2: Create Landing Page
+Replace `app/page.tsx` with:
 - Hero section with value proposition
-- "Connect with Gmail" button
+- "Connect with Gmail" button (calls `signInWithGmail`)
 - Feature highlights grid
 - Redirect authenticated users to `/inbox`
 
-#### Step 4: Implement Auth Flow
-1. Create auth context and provider
-2. Implement Gmail OAuth routes
-3. Build onboarding wizard (3 steps)
+#### Step 3: Create Gmail OAuth Routes
+```
+app/api/auth/
+├── gmail/route.ts      # POST: Initiate OAuth flow
+└── callback/route.ts   # GET: Handle OAuth callback
+```
 
-#### Step 5: Build Inbox View
-1. Create email list with filters
-2. Build email card component
-3. Implement email detail modal/page
-4. Connect to API routes
+#### Step 4: Build Onboarding Wizard
+```
+app/onboarding/
+├── page.tsx            # Main onboarding component
+└── components/
+    ├── OnboardingSteps.tsx
+    ├── WelcomeStep.tsx
+    ├── AccountsStep.tsx
+    └── ClientsStep.tsx
+```
+
+#### Step 5: Create Protected Route Wrapper
+```typescript
+// components/auth/ProtectedRoute.tsx
+export function ProtectedRoute({ children }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) return <FullPageLoader />;
+  if (!user) redirect('/');
+
+  return children;
+}
+```
 
 ---
 
 ## Code Quality Requirements
 
-### Logging
+### Logging Pattern (REQUIRED)
 Every service, component with side effects, and API route should use the logger:
 
 ```typescript
@@ -249,6 +322,8 @@ Every component should have a JSDoc header explaining:
 - Usage examples
 - Props interface
 
+See `Navbar.tsx`, `Sidebar.tsx`, `PageHeader.tsx` for examples.
+
 ### Testing
 When adding features, include tests for:
 - Services: 80%+ coverage
@@ -257,30 +332,13 @@ When adding features, include tests for:
 
 ---
 
-## Dependencies Installed
-
-```json
-{
-  "dependencies": {
-    "@radix-ui/react-checkbox": "^1.x",
-    "@radix-ui/react-dialog": "^1.x",
-    "@radix-ui/react-label": "^1.x",
-    "@radix-ui/react-select": "^1.x",
-    "@radix-ui/react-slot": "^1.x",
-    "@radix-ui/react-switch": "^1.x",
-    "@radix-ui/react-toast": "^1.x",
-    "class-variance-authority": "^0.7.x",
-    "clsx": "^2.x",
-    "lucide-react": "^0.x",
-    "tailwind-merge": "^2.x",
-    "tailwindcss-animate": "^1.x"
-  }
-}
-```
-
----
-
 ## Quick Reference
+
+### Import Layout Components
+```tsx
+import { Navbar, Sidebar, PageHeader } from '@/components/layout';
+import type { NavbarUser, SidebarClient, BreadcrumbItem } from '@/components/layout';
+```
 
 ### Import UI Components
 ```tsx
@@ -294,6 +352,25 @@ import {
   Dialog,
   useToast,
 } from '@/components/ui';
+```
+
+### Import Auth
+```tsx
+import { AuthProvider, useAuth } from '@/lib/auth';
+import type { AuthUser } from '@/lib/auth';
+```
+
+### Use Logger
+```tsx
+import { createLogger, logEmail, logAI } from '@/lib/utils/logger';
+
+// Module logger
+const logger = createLogger('MyService');
+logger.info('Hello', { key: 'value' });
+
+// Domain-specific logging
+logEmail.fetchStart({ accountId: '123' });
+logAI.callComplete({ model: 'gpt-4.1-mini', tokensUsed: 500 });
 ```
 
 ### Show Toast
@@ -312,25 +389,28 @@ toast({
 });
 ```
 
-### Use Logger
-```tsx
-import { createLogger, logEmail, logAI } from '@/lib/utils/logger';
+---
 
-// Module logger
-const logger = createLogger('MyService');
-logger.info('Hello', { key: 'value' });
+## Documentation Index
 
-// Domain-specific logging
-logEmail.fetchStart({ accountId: '123' });
-logAI.callComplete({ model: 'gpt-4.1-mini', tokensUsed: 500 });
-```
+| Document | Purpose |
+|----------|---------|
+| `docs/PROJECT_OVERVIEW.md` | Vision, user stories, success metrics |
+| `docs/ARCHITECTURE.md` | Tech stack, folder structure, data flow |
+| `docs/PHASE_1_IMPLEMENTATION.md` | Detailed component specs, wireframes |
+| `docs/CODING_STANDARDS.md` | Code style, logging, testing requirements |
+| `docs/AI_ANALYZER_SYSTEM.md` | AI analyzer patterns, function schemas |
+| `docs/DATABASE_SCHEMA.md` | Supabase table definitions |
+| `docs/NEXT_DEVELOPER_GUIDE.md` | Handoff notes, quick start |
 
 ---
 
-## Questions?
+## Recent Changes (January 18, 2026)
 
-Refer to these documents:
-- `docs/ARCHITECTURE.md` - System design
-- `docs/PHASE_1_IMPLEMENTATION.md` - Detailed component specs
-- `docs/CODING_STANDARDS.md` - Code style guide
-- `docs/AI_ANALYZER_SYSTEM.md` - AI analyzer patterns
+- ✅ Added `Navbar` component with search, sync indicator, user menu
+- ✅ Added `Sidebar` component with navigation, categories, clients
+- ✅ Added `PageHeader` component with breadcrumbs, actions
+- ✅ Added `AuthProvider` context (stub for Supabase integration)
+- ✅ Updated root layout with AuthProvider, Toaster, metadata
+- ✅ Fixed TypeScript errors in `toast.tsx`, `openai-client.ts`
+- ✅ All components follow 400-line limit and include comprehensive JSDoc

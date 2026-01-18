@@ -1,6 +1,7 @@
 # IdeaBox - Phase 1 Implementation Guide
 
 > **📊 Implementation Status:** See `docs/IMPLEMENTATION_STATUS.md` for current progress
+> **Last Updated:** January 18, 2026
 
 ## Phase 1 Goal
 Prove the concept: Emails in → Smart categorization out → Basic actions
@@ -12,6 +13,12 @@ Prove the concept: Emails in → Smart categorization out → Basic actions
 ## What's Already Built ✅
 
 Before implementing the pages below, these foundational pieces are complete:
+
+### Layout Components (`src/components/layout/`) ✨ NEW
+All layout components are ready via `import { ... } from '@/components/layout'`:
+- **Navbar** - Top navigation with search (⌘K), sync indicator, user dropdown
+- **Sidebar** - Navigation, category filters, client quick-access
+- **PageHeader** - Breadcrumbs, title, description, action buttons
 
 ### UI Component Library (`src/components/ui/`)
 All components are ready to use via `import { ... } from '@/components/ui'`:
@@ -27,6 +34,15 @@ All components are ready to use via `import { ... } from '@/components/ui'`:
 - **Toast/Toaster** - Toast notifications with `useToast()` hook
 - **Skeleton** - Loading placeholders (EmailCardSkeleton, ActionItemSkeleton)
 - **Spinner** - Loading indicators (Spinner, LoadingState, FullPageLoader)
+
+### Authentication (`src/lib/auth/`) ✨ NEW
+- **AuthProvider** - React context for auth state (stub for Supabase)
+- **useAuth** - Hook to access auth state and methods
+
+### Root Layout (`src/app/layout.tsx`) ✨ UPDATED
+- Wrapped with AuthProvider for global auth state
+- Includes Toaster for toast notifications
+- Proper metadata for SEO
 
 ### Utilities
 - **Logger** (`@/lib/utils/logger`) - Enhanced logging with emoji prefixes
