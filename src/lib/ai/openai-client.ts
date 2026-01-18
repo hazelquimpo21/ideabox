@@ -230,7 +230,7 @@ export async function analyzeWithFunction<T>(
       tokensInput,
       tokensOutput,
       tokensTotal,
-      estimatedCost: estimatedCost.toFixed(6),
+      estimatedCost,
       durationMs,
     });
 
