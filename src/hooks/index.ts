@@ -52,3 +52,11 @@ export type {
   ClientWithStats,
   ClientStats,
 } from './useClients';
+
+export { useSyncStatus, default as useSyncStatusDefault } from './useSyncStatus';
+export type {
+  SyncStatus,
+  SyncResult,
+  SyncStatusInfo,
+  UseSyncStatusReturn,
+} from './useSyncStatus';

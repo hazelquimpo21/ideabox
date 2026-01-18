@@ -21,7 +21,9 @@
 import * as React from 'react';
 import { PageHeader } from '@/components/layout';
 import { Card, CardContent, Button, Badge, Skeleton } from '@/components/ui';
+import { SyncStatusBanner } from '@/components/email';
 import { useEmails, type Email, type EmailCategory } from '@/hooks';
+import { createLogger } from '@/lib/utils/logger';
 import {
   Mail,
   Inbox,
@@ -34,7 +36,14 @@ import {
   MoreHorizontal,
   RefreshCw,
   Loader2,
+  CheckCircle2,
 } from 'lucide-react';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('InboxPage');
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -235,22 +244,24 @@ function EmailListSkeleton() {
 }
 
 /**
- * Empty state when no emails match filters.
+ * Empty state with sync status - shown when no emails exist yet.
  */
-function EmptyState() {
+interface EmptyStateProps {
+  onSyncComplete: () => void;
+}
+
+function EmptyState({ onSyncComplete }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
+    <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
       <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
         <Inbox className="h-8 w-8 text-muted-foreground" />
       </div>
-      <h3 className="text-lg font-medium mb-2">No emails yet</h3>
-      <p className="text-muted-foreground max-w-sm">
-        Your inbox is empty. Emails will appear here once they&apos;re synced from your Gmail account.
+      <h3 className="text-lg font-medium mb-2">Welcome to your inbox!</h3>
+      <p className="text-muted-foreground max-w-sm mb-6">
+        Let&apos;s sync your Gmail emails to get started. IdeaBox will automatically
+        categorize them and extract action items.
       </p>
-      <Button variant="outline" className="mt-4 gap-2">
-        <RefreshCw className="h-4 w-4" />
-        Sync Now
-      </Button>
+      <SyncStatusBanner onSyncComplete={onSyncComplete} className="max-w-md w-full" />
     </div>
   );
 }
@@ -263,9 +274,11 @@ function EmptyState() {
  * Inbox page component.
  *
  * Displays emails from Supabase with real-time stats and optimistic updates.
+ * Includes sync status feedback for first-time users.
  */
 export default function InboxPage() {
   const [isSyncing, setIsSyncing] = React.useState(false);
+  const [syncSuccess, setSyncSuccess] = React.useState(false);
 
   // Fetch emails using the useEmails hook
   const {
@@ -277,12 +290,50 @@ export default function InboxPage() {
     stats,
   } = useEmails({ limit: 50 });
 
-  /** Handle sync button click */
-  const handleSync = async () => {
+  /** Handle sync button click - actually triggers the sync API */
+  const handleSync = React.useCallback(async () => {
     setIsSyncing(true);
-    await refetch();
-    setIsSyncing(false);
-  };
+    setSyncSuccess(false);
+
+    logger.start('Manual sync triggered from inbox');
+
+    try {
+      const response = await fetch('/api/emails/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Sync failed');
+      }
+
+      logger.success('Manual sync completed', {
+        totalCreated: result.totals?.totalCreated,
+        totalFetched: result.totals?.totalFetched,
+      });
+
+      // Refetch emails to show new ones
+      await refetch();
+      setSyncSuccess(true);
+
+      // Clear success indicator after 3 seconds
+      setTimeout(() => setSyncSuccess(false), 3000);
+    } catch (err) {
+      logger.error('Manual sync failed', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [refetch]);
+
+  /** Handle sync completion from SyncStatusBanner */
+  const handleSyncComplete = React.useCallback(() => {
+    logger.info('Sync completed, refreshing email list');
+    refetch();
+  }, [refetch]);
 
   /** Toggle email starred status */
   const handleToggleStar = (id: string) => {
@@ -315,18 +366,20 @@ export default function InboxPage() {
         ]}
         actions={
           <Button
-            variant="outline"
+            variant={syncSuccess ? 'default' : 'outline'}
             size="sm"
-            className="gap-2"
+            className={`gap-2 transition-colors ${syncSuccess ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
             onClick={handleSync}
             disabled={isSyncing}
           >
             {isSyncing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
+            ) : syncSuccess ? (
+              <CheckCircle2 className="h-4 w-4" />
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}
-            {isSyncing ? 'Syncing...' : 'Sync'}
+            {isSyncing ? 'Syncing...' : syncSuccess ? 'Synced!' : 'Sync'}
           </Button>
         }
       />
@@ -385,6 +438,15 @@ export default function InboxPage() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────
+          Sync Status Banner (for returning users)
+          ───────────────────────────────────────────────────────────────────── */}
+      {!isLoading && emails.length > 0 && (
+        <div className="mb-6">
+          <SyncStatusBanner onSyncComplete={handleSyncComplete} compact />
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────
           Email List
           ───────────────────────────────────────────────────────────────────── */}
       <Card>
@@ -392,7 +454,7 @@ export default function InboxPage() {
           {isLoading ? (
             <EmailListSkeleton />
           ) : emails.length === 0 ? (
-            <EmptyState />
+            <EmptyState onSyncComplete={handleSyncComplete} />
           ) : (
             <div>
               {emails.map((email) => (
