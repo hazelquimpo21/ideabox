@@ -1,8 +1,8 @@
 # IdeaBox - Next Developer Guide
 
 > **Handoff Date:** January 18, 2026
-> **Branch:** `claude/review-implementation-plan-Qb7XC`
-> **Status:** UI Complete, Ready for Data Layer
+> **Branch:** `claude/review-implementation-plan-esNph`
+> **Status:** Data Layer Complete, Ready for Gmail Integration
 
 Welcome! This guide gets you up to speed quickly on the IdeaBox codebase and tells you exactly what to build next.
 
@@ -62,198 +62,155 @@ npm run build
 | Accounts Step | ✅ | `src/app/onboarding/components/AccountsStep.tsx` |
 | Clients Step | ✅ | `src/app/onboarding/components/ClientsStep.tsx` |
 
-### ✅ Core Pages (Complete - Mock Data)
+### ✅ Core Pages (Connected to Real Data)
 | Page | Status | Key Files |
 |------|--------|-----------|
 | Auth Layout | ✅ | `src/app/(auth)/layout.tsx` |
-| Inbox | ✅ | `src/app/(auth)/inbox/page.tsx` |
-| Actions | ✅ | `src/app/(auth)/actions/page.tsx` |
-| Settings | ✅ | `src/app/(auth)/settings/page.tsx` |
+| Inbox | ✅ | `src/app/(auth)/inbox/page.tsx` (uses useEmails) |
+| Actions | ✅ | `src/app/(auth)/actions/page.tsx` (uses useActions) |
+| Settings | ✅ | `src/app/(auth)/settings/page.tsx` (mock data) |
+
+### ✅ Data Layer (Complete)
+| Area | Status | Key Files |
+|------|--------|-----------|
+| Data Hooks | ✅ | `src/hooks/useEmails.ts`, `useActions.ts`, `useClients.ts` |
+| API Routes | ✅ | `src/app/api/emails/`, `actions/`, `clients/` |
+| API Utilities | ✅ | `src/lib/api/utils.ts`, `schemas.ts` |
+| Database Seed | ✅ | `scripts/seed.ts` (npm run seed) |
+| Tests | ✅ | 34 tests passing (`npm run test`) |
 
 ### ❌ Not Yet Built (Your Task)
 | Priority | Area | Description |
 |----------|------|-------------|
-| **1** | Data Layer | Hooks and API routes to replace mock data |
-| **2** | Gmail Integration | Fetch emails from Gmail API |
-| **3** | AI Analyzers | Email categorization and action extraction |
-| **4** | Additional Pages | Clients, Archive, Email Detail |
+| **1** | Gmail Integration | Fetch emails from Gmail API |
+| **2** | AI Analyzers | Email categorization and action extraction |
+| **3** | Additional Pages | Clients, Archive, Email Detail |
 
 ---
 
-## Your Next Task: Data Layer
+## Your Next Task: Gmail Integration
 
-The UI is complete with mock data. Your job is to connect it to real data.
+The data layer is complete. Your job is to fetch real emails from Gmail.
 
-### Step 1: Create Data Hooks (2-3 hours)
-
-Create hooks in `src/hooks/` to fetch data from Supabase:
-
-**File:** `src/hooks/useEmails.ts`
+### Step 1: Create Gmail Service
 
 ```typescript
-'use client';
-
-import * as React from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { createLogger } from '@/lib/utils/logger';
-import type { TableRow } from '@/types/database';
-
-const logger = createLogger('useEmails');
-
-type Email = TableRow<'emails'>;
-
-interface UseEmailsOptions {
-  category?: string;
-  clientId?: string;
-  limit?: number;
-}
-
-export function useEmails(options: UseEmailsOptions = {}) {
-  const supabase = React.useMemo(() => createClient(), []);
-  const [emails, setEmails] = React.useState<Email[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<Error | null>(null);
-
-  const fetchEmails = React.useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    logger.start('Fetching emails', options);
-
-    try {
-      let query = supabase
-        .from('emails')
-        .select('*')
-        .order('received_at', { ascending: false })
-        .limit(options.limit || 50);
-
-      if (options.category) {
-        query = query.eq('category', options.category);
-      }
-
-      if (options.clientId) {
-        query = query.eq('client_id', options.clientId);
-      }
-
-      const { data, error: queryError } = await query;
-
-      if (queryError) throw queryError;
-
-      setEmails(data || []);
-      logger.success('Emails fetched', { count: data?.length || 0 });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      logger.error('Failed to fetch emails', { error: message });
-      setError(err instanceof Error ? err : new Error(message));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [supabase, options.category, options.clientId, options.limit]);
-
-  React.useEffect(() => {
-    fetchEmails();
-  }, [fetchEmails]);
-
-  return { emails, isLoading, error, refetch: fetchEmails };
-}
-```
-
-Create similar hooks:
-- `src/hooks/useActions.ts` - Fetch action items
-- `src/hooks/useClients.ts` - Fetch clients
-- `src/hooks/index.ts` - Barrel export
-
-### Step 2: Create API Routes (2-3 hours)
-
-Create CRUD API routes in `src/app/api/`:
-
-```
-app/api/
-├── emails/
-│   ├── route.ts          # GET: List, POST: Create
-│   ├── [id]/
-│   │   └── route.ts      # GET: Single, PATCH: Update, DELETE: Archive
-│   └── sync/
-│       └── route.ts      # POST: Trigger Gmail sync
-├── actions/
-│   ├── route.ts          # GET: List, POST: Create
-│   └── [id]/
-│       └── route.ts      # GET, PATCH, DELETE
-└── clients/
-    ├── route.ts          # GET: List, POST: Create
-    └── [id]/
-        └── route.ts      # GET, PATCH, DELETE
-```
-
-**Example API Route:** `src/app/api/emails/route.ts`
-
-```typescript
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+// src/lib/gmail/gmail-service.ts
+import { google } from 'googleapis';
 import { createLogger } from '@/lib/utils/logger';
 
-const logger = createLogger('EmailsAPI');
+const logger = createLogger('GmailService');
 
-export async function GET(request: Request) {
-  logger.start('GET /api/emails');
+export class GmailService {
+  private gmail;
 
-  try {
-    const supabase = createClient();
-    const { searchParams } = new URL(request.url);
+  constructor(accessToken: string) {
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+    this.gmail = google.gmail({ version: 'v1', auth });
+  }
 
-    const category = searchParams.get('category');
-    const limit = parseInt(searchParams.get('limit') || '50');
+  async listMessages(maxResults = 50) {
+    logger.start('Fetching messages', { maxResults });
+    const response = await this.gmail.users.messages.list({
+      userId: 'me',
+      maxResults,
+    });
+    return response.data.messages || [];
+  }
 
-    let query = supabase
-      .from('emails')
-      .select('*')
-      .order('received_at', { ascending: false })
-      .limit(limit);
+  async getMessage(id: string) {
+    const response = await this.gmail.users.messages.get({
+      userId: 'me',
+      id,
+      format: 'full',
+    });
+    return response.data;
+  }
 
-    if (category) {
-      query = query.eq('category', category);
-    }
+  parseEmail(message: gmail_v1.Schema$Message) {
+    const headers = message.payload?.headers || [];
+    const getHeader = (name: string) =>
+      headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value;
 
-    const { data, error } = await query;
-
-    if (error) {
-      logger.error('Query failed', { error: error.message });
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    logger.success('Emails fetched', { count: data.length });
-    return NextResponse.json({ data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Unexpected error', { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return {
+      subject: getHeader('subject'),
+      sender_email: getHeader('from'),
+      date: getHeader('date'),
+      snippet: message.snippet,
+      // ... parse more fields
+    };
   }
 }
 ```
 
-### Step 3: Connect Pages to Real Data (1-2 hours)
-
-Update each page to use the hooks instead of mock data:
-
-**Inbox Page:** `src/app/(auth)/inbox/page.tsx`
+### Step 2: Create Token Manager
 
 ```typescript
-// Replace this:
-const [emails, setEmails] = React.useState<MockEmail[]>([]);
-React.useEffect(() => {
-  setTimeout(() => setEmails(MOCK_EMAILS), 800);
-}, []);
+// src/lib/gmail/token-manager.ts
+import { google } from 'googleapis';
+import { createServerClient } from '@/lib/supabase/server';
 
-// With this:
+export class TokenManager {
+  async getValidToken(gmailAccountId: string): Promise<string> {
+    const supabase = await createServerClient();
+
+    // Fetch current token from database
+    const { data: account } = await supabase
+      .from('gmail_accounts')
+      .select('access_token, refresh_token, token_expiry')
+      .eq('id', gmailAccountId)
+      .single();
+
+    // Check if token is expired
+    if (new Date(account.token_expiry) < new Date()) {
+      // Refresh the token
+      return this.refreshToken(gmailAccountId, account.refresh_token);
+    }
+
+    return account.access_token;
+  }
+
+  private async refreshToken(accountId: string, refreshToken: string) {
+    // Use googleapis to refresh
+    // Update database with new token
+    // Return new access token
+  }
+}
+```
+
+### Step 3: Create Sync API Route
+
+```typescript
+// src/app/api/emails/sync/route.ts
+import { NextResponse } from 'next/server';
+import { GmailService } from '@/lib/gmail/gmail-service';
+import { TokenManager } from '@/lib/gmail/token-manager';
+import { createServerClient } from '@/lib/supabase/server';
+
+export async function POST(request: Request) {
+  const supabase = await createServerClient();
+  const tokenManager = new TokenManager();
+
+  // 1. Get user's Gmail accounts
+  // 2. For each account, get valid token
+  // 3. Fetch messages from Gmail
+  // 4. Parse and store in Supabase
+  // 5. Return sync results
+}
+```
+
+### Existing Hooks Are Ready
+
+The hooks and pages are already set up to display emails:
+
+```typescript
+// Already implemented - just needs real data
 import { useEmails } from '@/hooks';
 const { emails, isLoading, error, refetch } = useEmails();
 ```
 
-**Actions Page:** `src/app/(auth)/actions/page.tsx`
-
-```typescript
-import { useActions } from '@/hooks';
-const { actions, isLoading, error } = useActions();
-```
+Once Gmail sync stores emails in Supabase, they'll automatically appear!
 
 ---
 
@@ -379,8 +336,9 @@ import { Button, Card, Badge, useToast } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import type { AuthUser } from '@/lib/auth';
 
-// Hooks (after you create them)
+// Data Hooks (already created!)
 import { useEmails, useActions, useClients } from '@/hooks';
+import type { Email, Action, Client, EmailCategory, ActionType } from '@/hooks';
 ```
 
 ---
@@ -398,6 +356,14 @@ import { useEmails, useActions, useClients } from '@/hooks';
 | Supabase server | `src/lib/supabase/server.ts` |
 | Auth context | `src/lib/auth/auth-context.tsx` |
 | Protected route | `src/components/auth/ProtectedRoute.tsx` |
+| **Data Hooks** | `src/hooks/index.ts` |
+| useEmails | `src/hooks/useEmails.ts` |
+| useActions | `src/hooks/useActions.ts` |
+| useClients | `src/hooks/useClients.ts` |
+| **API Utilities** | `src/lib/api/index.ts` |
+| API helpers | `src/lib/api/utils.ts` |
+| Zod schemas | `src/lib/api/schemas.ts` |
+| **Seed script** | `scripts/seed.ts` |
 
 ---
 
@@ -482,25 +448,36 @@ See `docs/DATABASE_SCHEMA.md` for full schema.
 
 ## Summary of Your Tasks
 
-1. **Create hooks** in `src/hooks/`:
-   - `useEmails.ts`
-   - `useActions.ts`
-   - `useClients.ts`
-   - `index.ts` (barrel export)
+1. **Create Gmail service** in `src/lib/gmail/`:
+   - `gmail-service.ts` - Gmail API wrapper
+   - `token-manager.ts` - OAuth token refresh logic
+   - `email-parser.ts` - Parse Gmail messages to our Email type
 
-2. **Create API routes** in `src/app/api/`:
-   - `/emails` (list, create, sync)
-   - `/actions` (list, create, update, delete)
-   - `/clients` (list, create, update, delete)
+2. **Create sync API route**:
+   - `src/app/api/emails/sync/route.ts` - Trigger Gmail sync
 
-3. **Connect pages** to real data:
-   - Update Inbox page to use `useEmails`
-   - Update Actions page to use `useActions`
-   - Update Settings page to use actual save logic
+3. **Wire up the Sync button**:
+   - The Inbox page already has a Sync button
+   - Connect it to call the sync API
 
-4. **Future phases:**
-   - Gmail integration (fetch from Gmail API)
+4. **Test with real Gmail data**:
+   - Seed script creates test data: `npm run seed`
+   - But real emails come from Gmail sync
+
+5. **Future phases:**
    - AI analyzers (categorize, extract actions)
    - Additional pages (Clients, Archive, Email Detail)
+   - Real-time updates with Supabase subscriptions
+
+## Available Commands
+
+```bash
+npm run dev          # Start development server
+npm run build        # Production build
+npm run test         # Run tests (34 passing)
+npm run test:run     # Run tests once
+npm run lint         # ESLint check
+npm run seed         # Seed database with test data
+```
 
 Good luck! 🚀
