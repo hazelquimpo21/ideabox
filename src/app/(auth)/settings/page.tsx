@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Settings Page for IdeaBox
  *

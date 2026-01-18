@@ -392,6 +392,48 @@ export const logAI = {
       { context: 'AI', ...meta },
       `${LOG_EMOJIS.AI}${LOG_EMOJIS.COST} API cost logged`
     ),
+
+  batchStart: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'AI', ...meta },
+      `${LOG_EMOJIS.AI}${LOG_EMOJIS.START} Starting batch AI analysis`
+    ),
+
+  batchComplete: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'AI', ...meta },
+      `${LOG_EMOJIS.AI}${LOG_EMOJIS.COMPLETE} Batch AI analysis complete`
+    ),
+
+  batchError: (meta: LogMetadata) =>
+    baseLogger.error(
+      { context: 'AI', ...meta },
+      `${LOG_EMOJIS.AI}${LOG_EMOJIS.ERROR} Batch AI analysis failed`
+    ),
+
+  analyzeProgress: (meta: LogMetadata) =>
+    baseLogger.debug(
+      { context: 'AI', ...meta },
+      `${LOG_EMOJIS.AI}${LOG_EMOJIS.PENDING} Analysis progress update`
+    ),
+
+  categoryAssigned: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'AI', ...meta },
+      `${LOG_EMOJIS.AI}${LOG_EMOJIS.SUCCESS} Category assigned`
+    ),
+
+  actionExtracted: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'AI', ...meta },
+      `${LOG_EMOJIS.ACTION}${LOG_EMOJIS.SUCCESS} Action extracted from email`
+    ),
+
+  clientMatched: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'AI', ...meta },
+      `${LOG_EMOJIS.CLIENT}${LOG_EMOJIS.SUCCESS} Client matched`
+    ),
 };
 
 /**
