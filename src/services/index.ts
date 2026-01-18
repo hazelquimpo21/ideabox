@@ -59,3 +59,10 @@ export * from './analyzers';
 
 // Re-export all processor classes, instances, and types
 export * from './processors';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SYNC SERVICES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Re-export all sync services for initial batch analysis and discovery
+export * from './sync';

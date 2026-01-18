@@ -84,3 +84,13 @@ export type {
   CategoryCounts,
   SidebarClient,
 } from './useSidebarData';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ONBOARDING & DISCOVERY HOOKS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useInitialSyncProgress, default as useInitialSyncProgressDefault } from './useInitialSyncProgress';
+export type {
+  UseInitialSyncProgressOptions,
+  UseInitialSyncProgressReturn,
+} from './useInitialSyncProgress';

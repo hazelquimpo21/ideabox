@@ -1,8 +1,8 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** January 18, 2026
-> **Current Phase:** Phase 1 - Core Features Complete (Gmail + AI + Pages)
-> **Branch:** `claude/review-implementation-plan-r4eCG`
+> **Current Phase:** Phase 1 - Core Features Complete (Gmail + AI + Pages + Discovery Dashboard)
+> **Branch:** `claude/email-analysis-design-9RSlm`
 
 ## Overview
 
@@ -242,6 +242,81 @@ Nothing currently in progress.
 
 ### ✅ Recently Completed
 
+#### Discovery Dashboard & Initial Sync ✅ COMPLETE (NEW!)
+
+A comprehensive initial sync system with a Discovery Dashboard for new users.
+
+**Types** (`src/types/discovery.ts`):
+- [x] `EmailCategory` - 7 action-focused categories
+- [x] `InitialSyncResponse` - Full sync result structure
+- [x] `CategorySummary` - Summary stats per category
+- [x] `ClientInsight` - Detected/suggested clients
+- [x] `SuggestedAction` - Quick action recommendations
+- [x] `PreFilterResult` - Email pre-filter outcomes
+- [x] `SenderPattern` - Learned sender patterns
+- [x] `SyncProgressResponse` - Real-time progress updates
+
+**Config** (`src/config/initial-sync.ts`):
+- [x] `INITIAL_SYNC_CONFIG` - Sync settings (maxEmails, batchSize, timeouts)
+- [x] `SKIP_SENDER_PATTERNS` - Auto-skip patterns (no-reply, newsletter services)
+- [x] `AUTO_CATEGORIZE_DOMAINS` - Domain-to-category mapping
+- [x] `AUTO_CATEGORIZE_PREFIXES` - Subject prefix categorization
+
+**Sync Services** (`src/services/sync/`):
+| File | Description |
+|------|-------------|
+| `email-prefilter.ts` | Pre-filters emails before AI (saves 20-30% tokens) |
+| `sender-patterns.ts` | Learns sender→category patterns over time |
+| `action-suggester.ts` | Generates suggested quick actions |
+| `discovery-builder.ts` | Builds InitialSyncResponse from analyzed emails |
+| `initial-sync-orchestrator.ts` | Main coordinator for initial sync |
+| `index.ts` | Barrel export |
+
+**API Routes** (`src/app/api/onboarding/`):
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/onboarding/initial-sync` | POST | Triggers initial email batch analysis |
+| `/api/onboarding/sync-status` | GET | Returns real-time sync progress |
+
+**Hooks** (`src/hooks/`):
+| Hook | Description |
+|------|-------------|
+| `useInitialSyncProgress` | Polls sync status, tracks discoveries, handles completion |
+
+**Discovery Components** (`src/components/discover/`):
+| Component | Description |
+|-----------|-------------|
+| `CategoryCard.tsx` | Single category summary card with count and description |
+| `CategoryCardGrid.tsx` | Responsive grid of category cards |
+| `ClientInsights.tsx` | Shows detected/suggested clients with add button |
+| `QuickActions.tsx` | Suggested action buttons (archive, view urgent, etc.) |
+| `FailureSummary.tsx` | Collapsible list of failed email analyses |
+| `DiscoveryHero.tsx` | Hero section with stats and animated welcome |
+| `index.ts` | Barrel export |
+
+**Pages:**
+| Page | File | Description |
+|------|------|-------------|
+| Discovery Dashboard | `src/app/(auth)/discover/page.tsx` | Shows analysis results after initial sync |
+
+**Updated Files:**
+- [x] `src/app/onboarding/page.tsx` - Triggers initial sync, shows progress UI
+- [x] `src/services/index.ts` - Added sync services export
+- [x] `src/hooks/index.ts` - Added useInitialSyncProgress export
+- [x] `src/app/onboarding/components/OnboardingWizard.tsx` - Added SyncConfigStep
+- [x] `src/app/onboarding/components/SyncConfigStep.tsx` - User configures initial sync
+
+**Key Features:**
+- ✅ Pre-filter emails to save AI tokens (20-30% savings)
+- ✅ Auto-categorize by domain/subject patterns
+- ✅ Learn sender patterns for future categorization
+- ✅ Real-time progress updates during sync
+- ✅ Partial success handling (graceful degradation)
+- ✅ Discovery Dashboard with category cards
+- ✅ Client detection and suggestions
+- ✅ Quick action recommendations
+- ✅ Error state with retry/skip options
+
 #### Gmail Integration ✅ COMPLETE
 - [x] **Gmail Service** (`lib/gmail/gmail-service.ts`) - Full API wrapper with message fetching, parsing, archive/star/read operations
 - [x] **Gmail Types** (`lib/gmail/types.ts`) - Type definitions for Gmail API responses
@@ -328,12 +403,22 @@ src/
 │       │   └── page.tsx         ✅ Clients page (useClients hook)
 │       ├── archive/
 │       │   └── page.tsx         ✅ Archive page (useEmails hook)
+│       ├── discover/
+│       │   └── page.tsx         ✅ Discovery Dashboard (NEW!)
 │       └── settings/
 │           └── page.tsx         ✅ Settings page
 ├── components/
 │   ├── auth/
 │   │   ├── index.ts             ✅ Barrel export
 │   │   └── ProtectedRoute.tsx   ✅ Route protection
+│   ├── discover/                ✅ Discovery Dashboard components (NEW!)
+│   │   ├── index.ts             ✅ Barrel export
+│   │   ├── CategoryCard.tsx     ✅ Single category card
+│   │   ├── CategoryCardGrid.tsx ✅ Responsive grid
+│   │   ├── ClientInsights.tsx   ✅ Detected clients
+│   │   ├── QuickActions.tsx     ✅ Suggested actions
+│   │   ├── FailureSummary.tsx   ✅ Failed analyses
+│   │   └── DiscoveryHero.tsx    ✅ Hero with stats
 │   ├── email/                   ✅ Email components
 │   │   ├── index.ts             ✅ Barrel export
 │   │   └── EmailDetail.tsx      ✅ Full email view with AI analysis
@@ -363,6 +448,11 @@ src/
 │   ├── useEmails.ts             ✅ Email fetching with filtering (12 tests)
 │   ├── useActions.ts            ✅ Action CRUD operations (11 tests)
 │   ├── useClients.ts            ✅ Client management (11 tests)
+│   ├── useInitialSyncProgress.ts ✅ Sync progress polling (NEW!)
+│   ├── useEmailAnalysis.ts      ✅ Single email AI analysis
+│   ├── useSyncStatus.ts         ✅ Sync status tracking
+│   ├── useSettings.ts           ✅ User settings
+│   ├── useSidebarData.ts        ✅ Sidebar category counts
 │   └── __tests__/
 │       ├── useEmails.test.ts    ✅
 │       ├── useActions.test.ts   ✅
@@ -380,11 +470,18 @@ src/
 │   │   ├── index.ts             ✅ Barrel export
 │   │   ├── email-processor.ts   ✅ Single email orchestration
 │   │   └── batch-processor.ts   ✅ Batch processing
-│   └── sync/                    ✅ Sync services
-│       └── email-sync-service.ts ✅ Gmail sync orchestration
+│   └── sync/                    ✅ Sync services (ENHANCED!)
+│       ├── index.ts             ✅ Barrel export
+│       ├── email-sync-service.ts ✅ Gmail sync orchestration
+│       ├── email-prefilter.ts   ✅ Pre-filter before AI (saves tokens)
+│       ├── sender-patterns.ts   ✅ Learn sender→category patterns
+│       ├── action-suggester.ts  ✅ Generate quick actions
+│       ├── discovery-builder.ts ✅ Build sync response
+│       └── initial-sync-orchestrator.ts ✅ Main coordinator
 ├── config/
 │   ├── app.ts                   ✅
-│   └── analyzers.ts             ✅
+│   ├── analyzers.ts             ✅
+│   └── initial-sync.ts          ✅ Initial sync config (NEW!)
 ├── lib/
 │   ├── ai/
 │   │   └── openai-client.ts     ✅
@@ -409,7 +506,8 @@ src/
 │       ├── logger.ts            ✅ Enhanced with emojis
 │       └── cn.ts                ✅ Class name utility
 ├── types/
-│   └── database.ts              ✅
+│   ├── database.ts              ✅
+│   └── discovery.ts             ✅ Discovery types (NEW!)
 scripts/
 └── seed.ts                      ✅ Database seed (npm run seed)
 ```
@@ -418,61 +516,28 @@ scripts/
 
 ## What to Build Next
 
-### 👉 Immediate Priority: Gmail Integration
+### 👉 Immediate Priority: Polish & Testing
 
-The data layer is complete. Now connect to Gmail to fetch real emails.
+With the core features complete, focus on polish and reliability:
 
-#### Step 1: Create Gmail Service
+#### 1. E2E Testing for Onboarding Flow
+- Test complete onboarding wizard
+- Test initial sync with mock emails
+- Test Discovery Dashboard rendering
 
-```typescript
-// src/lib/gmail/gmail-service.ts
-import { google } from 'googleapis';
-import { createLogger } from '@/lib/utils/logger';
+#### 2. Error Recovery Improvements
+- Add "Retry" mechanism for individual failed emails
+- Implement background re-analysis job
 
-const logger = createLogger('GmailService');
+#### 3. Analytics & Metrics
+- Track sync duration, email counts
+- Track category distribution
+- Dashboard for admin monitoring
 
-export class GmailService {
-  private gmail;
-
-  constructor(accessToken: string) {
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: accessToken });
-    this.gmail = google.gmail({ version: 'v1', auth });
-  }
-
-  async listMessages(maxResults = 50) {
-    logger.start('Fetching messages', { maxResults });
-    const response = await this.gmail.users.messages.list({
-      userId: 'me',
-      maxResults,
-    });
-    return response.data.messages || [];
-  }
-
-  async getMessage(id: string) {
-    const response = await this.gmail.users.messages.get({
-      userId: 'me',
-      id,
-      format: 'full',
-    });
-    return response.data;
-  }
-}
-```
-
-#### Step 2: Create Sync API Route
-
-```
-app/api/emails/sync/
-└── route.ts      # POST: Trigger Gmail sync
-```
-
-#### Step 3: Token Refresh Logic
-
-```typescript
-// src/lib/gmail/token-manager.ts
-// Handle OAuth token refresh when expired
-```
+#### 4. Performance Optimization
+- Implement email body caching
+- Add client-side filtering optimization
+- Profile and optimize slow queries
 
 ---
 
@@ -596,12 +661,45 @@ toast({
 | `docs/AI_ANALYZER_SYSTEM.md` | AI analyzer patterns, function schemas |
 | `docs/DATABASE_SCHEMA.md` | Supabase table definitions |
 | `docs/NEXT_DEVELOPER_GUIDE.md` | Handoff notes, quick start |
+| `docs/INITIAL_SYNC_STRATEGY.md` | Initial sync and Discovery Dashboard strategy |
+| `docs/DISCOVERY_DASHBOARD_PLAN.md` | Detailed implementation plan for Discovery Dashboard |
 
 ---
 
 ## Recent Changes (January 18, 2026)
 
-### Session 5 (Current)
+### Session 6 (Current) - Discovery Dashboard
+- ✅ Implemented Discovery Dashboard feature
+  - Created `src/types/discovery.ts` with all discovery types
+  - Created `src/config/initial-sync.ts` with sync configuration
+  - Created `src/services/sync/` with 6 new service files:
+    - `email-prefilter.ts` - Pre-filters emails before AI analysis (20-30% token savings)
+    - `sender-patterns.ts` - Learns sender→category patterns
+    - `action-suggester.ts` - Generates suggested quick actions
+    - `discovery-builder.ts` - Builds InitialSyncResponse
+    - `initial-sync-orchestrator.ts` - Main coordinator
+    - `index.ts` - Barrel export
+  - Created `src/app/api/onboarding/initial-sync/route.ts` - POST endpoint
+  - Created `src/app/api/onboarding/sync-status/route.ts` - GET endpoint
+  - Created `src/hooks/useInitialSyncProgress.ts` - Progress polling hook
+  - Created `src/components/discover/` with 7 component files:
+    - `CategoryCard.tsx` - Single category card
+    - `CategoryCardGrid.tsx` - Responsive grid layout
+    - `ClientInsights.tsx` - Detected/suggested clients
+    - `QuickActions.tsx` - Suggested action buttons
+    - `FailureSummary.tsx` - Failed analysis display
+    - `DiscoveryHero.tsx` - Hero section with stats
+    - `index.ts` - Barrel export
+  - Created `src/app/(auth)/discover/page.tsx` - Discovery Dashboard page
+  - Updated `src/app/onboarding/page.tsx` with sync progress UI
+  - Updated `src/app/onboarding/components/` with SyncConfigStep
+  - Updated all barrel exports
+- ✅ Updated documentation
+  - `docs/IMPLEMENTATION_STATUS.md` (this file)
+  - `docs/INITIAL_SYNC_STRATEGY.md`
+  - `docs/ARCHITECTURE.md`
+
+### Session 5
 - ✅ Completed Pages phase
   - `EmailDetail` component with full email display, AI analysis summary, HTML sanitization
   - `Clients` page with CRUD operations, status/priority filtering, stats cards
