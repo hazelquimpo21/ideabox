@@ -1,10 +1,43 @@
 # IdeaBox - Phase 1 Implementation Guide
 
+> **📊 Implementation Status:** See `docs/IMPLEMENTATION_STATUS.md` for current progress
+
 ## Phase 1 Goal
 Prove the concept: Emails in → Smart categorization out → Basic actions
 
-**Timeline:** 2-3 weeks  
 **Success Metric:** Process a day's emails with intelligent sorting and 3-5 action items surfaced
+
+---
+
+## What's Already Built ✅
+
+Before implementing the pages below, these foundational pieces are complete:
+
+### UI Component Library (`src/components/ui/`)
+All components are ready to use via `import { ... } from '@/components/ui'`:
+- **Button** - Variants: default, secondary, destructive, outline, ghost, link
+- **Input** - Text inputs with consistent styling
+- **Label** - Accessible form labels
+- **Card** - Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter
+- **Badge** - Standard + email category variants (actionRequired, event, newsletter, etc.)
+- **Checkbox** - Accessible checkbox
+- **Switch** - Toggle for boolean settings
+- **Select** - Dropdown select with groups
+- **Dialog** - Modal dialogs
+- **Toast/Toaster** - Toast notifications with `useToast()` hook
+- **Skeleton** - Loading placeholders (EmailCardSkeleton, ActionItemSkeleton)
+- **Spinner** - Loading indicators (Spinner, LoadingState, FullPageLoader)
+
+### Utilities
+- **Logger** (`@/lib/utils/logger`) - Enhanced logging with emoji prefixes
+- **cn()** (`@/lib/utils/cn`) - Tailwind class merging utility
+
+### Configuration
+- **App Config** (`@/config/app`) - Centralized settings
+- **Analyzer Config** (`@/config/analyzers`) - AI model settings
+- **Database Types** (`@/types/database`) - Full type definitions
+
+---
 
 ## Features Overview
 
