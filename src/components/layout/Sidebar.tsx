@@ -49,6 +49,7 @@ import {
   Newspaper,
   Tag,
   Building2,
+  Sparkles,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -123,6 +124,11 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
+  {
+    label: 'Discover',
+    href: '/discover',
+    icon: Sparkles,
+  },
   {
     label: 'Inbox',
     href: '/inbox',
