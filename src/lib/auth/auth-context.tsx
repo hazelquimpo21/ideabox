@@ -194,26 +194,50 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 
   /**
-   * Fetches user profile from the database.
-   * Creates a profile if one doesn't exist (for new users).
+   * Fetches user profile from the database with timeout.
+   * Returns null if profile doesn't exist or fetch fails/times out.
    */
   const fetchUserProfile = React.useCallback(
     async (userId: string): Promise<UserProfile | null> => {
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // Add timeout to prevent hanging if database is unavailable
+      const timeoutMs = 5000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        // PGRST116 = row not found, which is expected for new users
-        logger.warn('Failed to fetch user profile', {
-          userId,
-          error: profileError.message
-        });
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', userId)
+          .single()
+          .abortSignal(controller.signal);
+
+        clearTimeout(timeoutId);
+
+        if (profileError && profileError.code !== 'PGRST116') {
+          // PGRST116 = row not found, which is expected for new users
+          // 42P01 = relation does not exist (table not created yet)
+          if (profileError.code === '42P01') {
+            logger.warn('user_profiles table does not exist - run migrations', { userId });
+          } else {
+            logger.warn('Failed to fetch user profile', {
+              userId,
+              error: profileError.message,
+              code: profileError.code
+            });
+          }
+        }
+
+        return profile;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof Error && err.name === 'AbortError') {
+          logger.warn('Profile fetch timed out', { userId, timeoutMs });
+        } else {
+          logger.warn('Profile fetch failed', { userId, error: String(err) });
+        }
+        return null;
       }
-
-      return profile;
     },
     [supabase]
   );
