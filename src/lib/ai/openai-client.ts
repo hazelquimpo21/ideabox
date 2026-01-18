@@ -68,19 +68,65 @@ export interface OpenAICallOptions {
 }
 
 /**
- * Validates that the OpenAI API key is configured.
- * Throws a descriptive error if not set.
+ * Masks an API key for safe logging.
+ * Shows first 7 chars and last 4 chars: "sk-proj...xyzA"
+ */
+function maskApiKey(key: string): string {
+  if (key.length <= 12) {
+    return `${key.substring(0, 3)}...`;
+  }
+  return `${key.substring(0, 7)}...${key.substring(key.length - 4)}`;
+}
+
+/**
+ * Validates that the OpenAI API key is configured and has valid format.
+ * Throws a descriptive error if not set or invalid.
  */
 function validateApiKey(): string {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    logger.error('OpenAI API key not configured');
+    logger.error('OpenAI API key not configured', {
+      hint: 'Set OPENAI_API_KEY in your .env.local file',
+    });
     throw new Error(
       'OPENAI_API_KEY environment variable is not set. ' +
       'Get your API key from https://platform.openai.com/api-keys'
     );
   }
+
+  // Validate key format
+  if (!apiKey.startsWith('sk-')) {
+    logger.error('Invalid OpenAI API key format', {
+      keyPreview: maskApiKey(apiKey),
+      hint: 'API key should start with "sk-"',
+    });
+    throw new Error(
+      `Invalid OPENAI_API_KEY format: key should start with "sk-". ` +
+      `Got: "${maskApiKey(apiKey)}". ` +
+      'Get a valid key from https://platform.openai.com/api-keys'
+    );
+  }
+
+  // Check minimum length (valid keys are 51+ chars)
+  if (apiKey.length < 20) {
+    logger.error('OpenAI API key appears truncated', {
+      keyLength: apiKey.length,
+      keyPreview: maskApiKey(apiKey),
+      hint: 'Valid API keys are 51+ characters. Check your .env.local file.',
+    });
+    throw new Error(
+      `OPENAI_API_KEY appears truncated (${apiKey.length} chars). ` +
+      `Valid keys are 51+ characters. Got: "${maskApiKey(apiKey)}". ` +
+      'Check your .env.local file for the full key.'
+    );
+  }
+
+  // Log successful validation with masked key for debugging
+  logger.debug('OpenAI API key validated', {
+    keyPreview: maskApiKey(apiKey),
+    keyLength: apiKey.length,
+  });
 
   return apiKey;
 }
@@ -249,13 +295,32 @@ export async function analyzeWithFunction<T>(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const errorName = error instanceof Error ? error.name : 'UnknownError';
 
-    logger.error('OpenAI call failed', {
-      model,
-      functionName: functionSchema.name,
-      error: errorMessage,
-      errorType: errorName,
-      durationMs,
-    });
+    // Check for authentication errors (401)
+    const isAuthError =
+      errorMessage.includes('401') ||
+      errorMessage.toLowerCase().includes('incorrect api key') ||
+      errorMessage.toLowerCase().includes('invalid api key') ||
+      errorMessage.toLowerCase().includes('authentication');
+
+    if (isAuthError) {
+      const apiKey = process.env.OPENAI_API_KEY || '';
+      logger.error('OpenAI authentication failed - API key is invalid', {
+        model,
+        functionName: functionSchema.name,
+        keyPreview: maskApiKey(apiKey),
+        keyLength: apiKey.length,
+        hint: 'Your API key may be expired, revoked, or incorrect. Get a new key from https://platform.openai.com/api-keys',
+        durationMs,
+      });
+    } else {
+      logger.error('OpenAI call failed', {
+        model,
+        functionName: functionSchema.name,
+        error: errorMessage,
+        errorType: errorName,
+        durationMs,
+      });
+    }
 
     throw error;
   }
