@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-http-header-size=32768' next dev",
+    "dev": "rm -rf .next && NODE_OPTIONS='--max-http-header-size=32768' next dev",
+    "dev:clean": "rm -rf .next && node -e \"console.log('\\n⚠️  Remember to clear browser cookies for localhost:3000\\n')\" && NODE_OPTIONS='--max-http-header-size=32768' next dev",
     "build": "next build",
     "start": "NODE_OPTIONS='--max-http-header-size=32768' next start",
     "lint": "next lint",
