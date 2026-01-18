@@ -1,36 +1,160 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📬 IdeaBox
 
-## Getting Started
+> AI-powered email intelligence for busy professionals
 
-First, run the development server:
+IdeaBox automatically categorizes your emails, extracts action items, and helps you focus on what matters. Built for professionals managing 200-300+ emails/day across multiple Gmail accounts.
+
+---
+
+## 🚀 Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Copy environment variables
+cp .env.local.example .env.local
+# Edit .env.local with your API keys
+
+# Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📚 Documentation
 
-## Learn More
+| Document | Description |
+|----------|-------------|
+| [Implementation Status](docs/IMPLEMENTATION_STATUS.md) | **Start here** - Current progress and what to build next |
+| [Project Overview](docs/PROJECT_OVERVIEW.md) | Vision, goals, and roadmap |
+| [Architecture](docs/ARCHITECTURE.md) | Tech stack and system design |
+| [Phase 1 Implementation](docs/PHASE_1_IMPLEMENTATION.md) | Detailed page/component specs |
+| [Coding Standards](docs/CODING_STANDARDS.md) | Code style and conventions |
+| [AI Analyzer System](docs/AI_ANALYZER_SYSTEM.md) | How AI analyzers work |
+| [Database Schema](docs/DATABASE_SCHEMA.md) | Supabase/PostgreSQL schema |
+| [Decisions](docs/DECISIONS.md) | Architectural decision log |
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🏗️ Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Framework:** Next.js 14 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS
+- **UI Components:** Custom shadcn-style components
+- **Database:** Supabase (PostgreSQL)
+- **Auth:** Supabase Auth + Gmail OAuth
+- **AI:** OpenAI GPT-4.1-mini
+- **Email:** Gmail API
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📁 Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/                    # Next.js App Router pages
+├── components/
+│   └── ui/                # ✅ UI component library (complete)
+├── config/                # ✅ App & analyzer configuration
+├── lib/
+│   ├── ai/               # ✅ OpenAI client
+│   ├── supabase/         # ✅ Database clients
+│   └── utils/            # ✅ Logger, utilities
+├── types/                 # ✅ TypeScript definitions
+├── hooks/                 # ❌ React hooks (not started)
+└── services/              # ❌ Business logic (not started)
+```
+
+---
+
+## ✅ What's Built
+
+### UI Component Library
+All components ready to use via `import { ... } from '@/components/ui'`:
+
+- Button, Input, Label, Card, Badge
+- Checkbox, Switch, Select
+- Dialog, Toast, Skeleton, Spinner
+
+### Infrastructure
+- Enhanced logger with emoji prefixes
+- OpenAI client with function calling
+- Supabase clients (browser + server)
+- Centralized configuration
+
+---
+
+## ❌ What's Next
+
+See [Implementation Status](docs/IMPLEMENTATION_STATUS.md) for the full checklist.
+
+**Priority order:**
+1. Layout components (Navbar, Sidebar)
+2. Landing page with Gmail OAuth
+3. Onboarding flow
+4. Inbox view
+5. API routes
+6. AI analyzers
+
+---
+
+## 🔧 Development
+
+### Commands
+
+```bash
+npm run dev      # Start dev server
+npm run build    # Build for production
+npm run lint     # Run ESLint
+npm run start    # Start production server
+```
+
+### Environment Variables
+
+Copy `.env.local.example` to `.env.local` and fill in:
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
+SUPABASE_SERVICE_ROLE_KEY=xxx
+
+# Gmail OAuth
+GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxx
+
+# OpenAI
+OPENAI_API_KEY=sk-xxx
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+---
+
+## 📝 Code Quality
+
+- **Max 400 lines per file** (see CODING_STANDARDS.md)
+- **Emoji logging throughout** (see logger.ts)
+- **Type everything** (strict TypeScript)
+- **Document with JSDoc** (usage examples in every component)
+
+---
+
+## 🤝 Contributing
+
+1. Read [Coding Standards](docs/CODING_STANDARDS.md)
+2. Check [Implementation Status](docs/IMPLEMENTATION_STATUS.md)
+3. Pick a task and implement
+4. Test thoroughly
+5. Submit PR
+
+---
+
+## 📄 License
+
+Private project for Hazel Quimpo.

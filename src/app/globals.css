@@ -1,27 +1,223 @@
+/**
+ * 🎨 Global Styles for IdeaBox
+ *
+ * This file defines:
+ * 1. Tailwind base/components/utilities
+ * 2. CSS variables for theming (light/dark mode)
+ * 3. Base layer styles
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * COLOR SYSTEM
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * Colors use HSL values without the hsl() wrapper for Tailwind compatibility.
+ * Example: --primary: 222.2 47.4% 11.2%
+ * Usage in Tailwind: bg-primary -> hsl(var(--primary))
+ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BASE LAYER - CSS Variables
+   ═══════════════════════════════════════════════════════════════════════════════ */
 
-@media (prefers-color-scheme: dark) {
+@layer base {
+  /* ─────────────────────────────────────────────────────────────────────────────
+     LIGHT MODE (Default)
+     ───────────────────────────────────────────────────────────────────────────── */
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Base colors */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    /* Card surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    /* Popover/dropdown surfaces */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* Primary - Main brand color (blue) */
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Secondary - Less prominent elements */
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    /* Muted - Subtle backgrounds, disabled states */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    /* Accent - Hover states, highlights */
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    /* Destructive - Errors, delete actions */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Border and input colors */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
+    /* Focus ring */
+    --ring: 222.2 84% 4.9%;
+
+    /* Border radius */
+    --radius: 0.5rem;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     DARK MODE
+     ───────────────────────────────────────────────────────────────────────────── */
+  .dark {
+    /* Base colors */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    /* Card surfaces */
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    /* Popover/dropdown surfaces */
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Primary - Main brand color */
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    /* Secondary */
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    /* Muted */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    /* Accent */
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    /* Destructive */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Border and input */
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+
+    /* Focus ring */
+    --ring: 212.7 26.8% 83.9%;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BASE ELEMENT STYLES
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  /* Apply border color to all elements */
+  * {
+    @apply border-border;
+  }
+
+  /* Body defaults */
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   UTILITY CLASSES
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
 @layer utilities {
+  /* Text wrapping for headings */
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CUSTOM SCROLLBAR (Optional - uncomment to enable)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/*
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground));
+    border-radius: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--foreground) / 0.5);
+  }
+}
+*/
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   EMAIL CATEGORY COLORS
+   ═══════════════════════════════════════════════════════════════════════════════
+   Custom CSS variables for email category badges.
+   These complement the badge variants defined in badge.tsx
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  :root {
+    /* Action Required - Red */
+    --category-action: 0 84% 60%;
+
+    /* Event - Purple */
+    --category-event: 270 70% 60%;
+
+    /* Newsletter - Blue */
+    --category-newsletter: 210 70% 55%;
+
+    /* Promo - Orange */
+    --category-promo: 30 90% 55%;
+
+    /* Admin - Gray */
+    --category-admin: 220 10% 50%;
+
+    /* Personal - Green */
+    --category-personal: 140 60% 45%;
+
+    /* Noise - Light Gray */
+    --category-noise: 220 10% 70%;
+
+    /* Client - Teal */
+    --category-client: 175 60% 45%;
+  }
+
+  .dark {
+    /* Darker variants for dark mode */
+    --category-action: 0 70% 50%;
+    --category-event: 270 60% 50%;
+    --category-newsletter: 210 60% 50%;
+    --category-promo: 30 80% 50%;
+    --category-admin: 220 10% 40%;
+    --category-personal: 140 50% 40%;
+    --category-noise: 220 10% 40%;
+    --category-client: 175 50% 40%;
   }
 }
