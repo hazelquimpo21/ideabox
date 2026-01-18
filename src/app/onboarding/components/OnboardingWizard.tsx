@@ -1,5 +1,5 @@
 /**
- * 🧙 Onboarding Wizard Component
+ * Onboarding Wizard Component
  *
  * Multi-step wizard for new user setup. Manages step state,
  * navigation, and collects user data across steps.
@@ -8,12 +8,13 @@
  * STEP FLOW
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * 1. Welcome → 2. Accounts → 3. Clients → Complete
+ * 1. Welcome → 2. Accounts → 3. Sync Config → 4. Clients → Complete
  *
  * Users can:
  * - Navigate forward with "Next"/"Continue"
  * - Navigate back with "Back"
  * - Skip optional steps (Clients)
+ * - Configure initial sync settings (email count, read/unread)
  *
  * @module app/onboarding/components/OnboardingWizard
  */
@@ -27,6 +28,7 @@ import type { AuthUser } from '@/lib/auth';
 import { WelcomeStep } from './WelcomeStep';
 import { AccountsStep } from './AccountsStep';
 import { ClientsStep } from './ClientsStep';
+import { SyncConfigStep, type SyncConfig } from './SyncConfigStep';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -45,13 +47,13 @@ export interface OnboardingWizardProps {
   /** Current authenticated user */
   user: AuthUser;
   /** Callback when wizard is completed */
-  onComplete: () => void;
+  onComplete: (syncConfig?: SyncConfig) => void;
 }
 
 /**
  * Wizard step identifiers.
  */
-type WizardStep = 'welcome' | 'accounts' | 'clients';
+type WizardStep = 'welcome' | 'accounts' | 'sync-config' | 'clients';
 
 /**
  * Step configuration.
@@ -81,6 +83,11 @@ const STEPS: StepConfig[] = [
     description: 'Connect your Gmail accounts',
   },
   {
+    id: 'sync-config',
+    title: 'Analysis',
+    description: 'Configure initial email analysis',
+  },
+  {
     id: 'clients',
     title: 'Clients',
     description: 'Add your main clients (optional)',
@@ -98,6 +105,12 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
   // Current step index (0-based)
   const [currentStepIndex, setCurrentStepIndex] = React.useState(0);
 
+  // Sync configuration chosen by user
+  const [syncConfig, setSyncConfig] = React.useState<SyncConfig>({
+    initialEmailCount: 50,
+    includeReadEmails: true,
+  });
+
   // Get current step configuration
   const currentStep = STEPS[currentStepIndex];
   const totalSteps = STEPS.length;
@@ -110,8 +123,8 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
 
   const goToNextStep = React.useCallback(() => {
     if (isLastStep) {
-      logger.info('Wizard complete, triggering onComplete');
-      onComplete();
+      logger.info('Wizard complete, triggering onComplete', { syncConfig });
+      onComplete(syncConfig);
     } else {
       logger.info('Moving to next step', {
         from: currentStep?.id,
@@ -119,7 +132,7 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
       });
       setCurrentStepIndex((prev) => prev + 1);
     }
-  }, [isLastStep, currentStepIndex, currentStep?.id, onComplete]);
+  }, [isLastStep, currentStepIndex, currentStep?.id, onComplete, syncConfig]);
 
   const goToPreviousStep = React.useCallback(() => {
     if (!isFirstStep) {
@@ -130,6 +143,12 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
       setCurrentStepIndex((prev) => prev - 1);
     }
   }, [isFirstStep, currentStepIndex, currentStep?.id]);
+
+  // Handler for sync config updates
+  const handleSyncConfigUpdate = React.useCallback((config: SyncConfig) => {
+    logger.debug('Sync config updated', config);
+    setSyncConfig(config);
+  }, []);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Render step indicator
@@ -163,7 +182,7 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
             {index < totalSteps - 1 && (
               <div
                 className={`
-                  w-12 h-0.5 transition-colors duration-200
+                  w-8 h-0.5 transition-colors duration-200
                   ${index < currentStepIndex ? 'bg-primary/50' : 'bg-muted'}
                 `}
               />
@@ -194,6 +213,15 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
 
       case 'accounts':
         return <AccountsStep user={user} {...commonProps} />;
+
+      case 'sync-config':
+        return (
+          <SyncConfigStep
+            user={user}
+            {...commonProps}
+            onConfigUpdate={handleSyncConfigUpdate}
+          />
+        );
 
       case 'clients':
         return <ClientsStep user={user} {...commonProps} />;

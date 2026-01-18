@@ -25,6 +25,8 @@ export type {
   Client,
   ClientStatus,
   ClientPriority,
+  UserSettings,
+  CostUsageSummary,
 } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -60,3 +62,9 @@ export type {
   SyncStatusInfo,
   UseSyncStatusReturn,
 } from './useSyncStatus';
+
+export { useSettings, default as useSettingsDefault } from './useSettings';
+export type {
+  UsageData,
+  UseSettingsReturn,
+} from './useSettings';

@@ -489,6 +489,82 @@ export interface Database {
           created_at?: string;
         };
       };
+      user_settings: {
+        Row: {
+          id: string;
+          user_id: string;
+          // AI Analysis Settings
+          auto_analyze: boolean;
+          extract_actions: boolean;
+          categorize_emails: boolean;
+          detect_clients: boolean;
+          // Analysis limits
+          initial_sync_email_count: number;
+          max_emails_per_sync: number;
+          max_analysis_per_sync: number;
+          // Cost Control Settings
+          daily_cost_limit: number;
+          monthly_cost_limit: number;
+          cost_alert_threshold: number;
+          pause_on_limit_reached: boolean;
+          // Notification Settings
+          email_digest_enabled: boolean;
+          email_digest_frequency: 'daily' | 'weekly' | 'never';
+          action_reminders: boolean;
+          new_client_alerts: boolean;
+          sync_error_alerts: boolean;
+          cost_limit_alerts: boolean;
+          // Metadata
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          auto_analyze?: boolean;
+          extract_actions?: boolean;
+          categorize_emails?: boolean;
+          detect_clients?: boolean;
+          initial_sync_email_count?: number;
+          max_emails_per_sync?: number;
+          max_analysis_per_sync?: number;
+          daily_cost_limit?: number;
+          monthly_cost_limit?: number;
+          cost_alert_threshold?: number;
+          pause_on_limit_reached?: boolean;
+          email_digest_enabled?: boolean;
+          email_digest_frequency?: 'daily' | 'weekly' | 'never';
+          action_reminders?: boolean;
+          new_client_alerts?: boolean;
+          sync_error_alerts?: boolean;
+          cost_limit_alerts?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          auto_analyze?: boolean;
+          extract_actions?: boolean;
+          categorize_emails?: boolean;
+          detect_clients?: boolean;
+          initial_sync_email_count?: number;
+          max_emails_per_sync?: number;
+          max_analysis_per_sync?: number;
+          daily_cost_limit?: number;
+          monthly_cost_limit?: number;
+          cost_alert_threshold?: number;
+          pause_on_limit_reached?: boolean;
+          email_digest_enabled?: boolean;
+          email_digest_frequency?: 'daily' | 'weekly' | 'never';
+          action_reminders?: boolean;
+          new_client_alerts?: boolean;
+          sync_error_alerts?: boolean;
+          cost_limit_alerts?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -499,6 +575,26 @@ export interface Database {
       get_monthly_api_cost: {
         Args: { p_user_id: string; p_month?: string };
         Returns: number;
+      };
+      is_within_daily_limit: {
+        Args: { p_user_id: string };
+        Returns: boolean;
+      };
+      is_within_monthly_limit: {
+        Args: { p_user_id: string };
+        Returns: boolean;
+      };
+      get_cost_usage_summary: {
+        Args: { p_user_id: string };
+        Returns: {
+          daily_cost: number;
+          daily_limit: number;
+          daily_percent: number;
+          monthly_cost: number;
+          monthly_limit: number;
+          monthly_percent: number;
+          is_paused: boolean;
+        };
       };
     };
     Enums: Record<string, never>;
@@ -534,3 +630,17 @@ export type UserProfile = TableRow<'user_profiles'>;
 export type EmailAnalysis = TableRow<'email_analyses'>;
 export type SyncLog = TableRow<'sync_logs'>;
 export type ApiUsageLog = TableRow<'api_usage_logs'>;
+export type UserSettings = TableRow<'user_settings'>;
+
+/**
+ * Cost usage summary from database function.
+ */
+export interface CostUsageSummary {
+  daily_cost: number;
+  daily_limit: number;
+  daily_percent: number;
+  monthly_cost: number;
+  monthly_limit: number;
+  monthly_percent: number;
+  is_paused: boolean;
+}
