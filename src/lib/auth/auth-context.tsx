@@ -285,66 +285,53 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   /**
    * Initialize auth state on mount.
-   * Checks for existing Supabase session and sets up state change listener.
+   * Uses onAuthStateChange for reliable session detection.
    */
   React.useEffect(() => {
     let mounted = true;
+    let initialized = false;
 
-    const initializeAuth = async () => {
-      logger.start('Initializing auth state');
+    logger.start('Initializing auth state');
 
-      try {
-        // Check for existing session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          throw sessionError;
-        }
-
-        if (mounted) {
-          if (session?.user) {
-            await updateUserState(session.user);
-            logger.success('Auth initialized with existing session', {
-              userId: session.user.id
-            });
-          } else {
-            setUser(null);
-            logger.success('Auth initialized (no session)');
-          }
-        }
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error('Auth initialization failed');
-        logger.error('Auth initialization failed', { error: error.message });
-        if (mounted) {
-          setError(error);
-          setUser(null);
-        }
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    initializeAuth();
-
-    // Subscribe to auth state changes (login, logout, token refresh)
+    // Subscribe to auth state changes - this is the primary way to get session
+    // Using INITIAL_SESSION event instead of getSession() to avoid lock issues
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         logger.info('Auth state changed', { event, hasSession: !!session });
 
         if (!mounted) return;
 
+        // Mark as initialized on first event
+        if (!initialized) {
+          initialized = true;
+        }
+
         switch (event) {
+          case 'INITIAL_SESSION':
+            // This fires on page load with current session state
+            if (session?.user) {
+              await updateUserState(session.user);
+              logger.success('Auth initialized with existing session', {
+                userId: session.user.id
+              });
+            } else {
+              setUser(null);
+              logger.success('Auth initialized (no session)');
+            }
+            setIsLoading(false);
+            break;
+
           case 'SIGNED_IN':
           case 'TOKEN_REFRESHED':
             if (session?.user) {
               await updateUserState(session.user);
             }
+            setIsLoading(false);
             break;
 
           case 'SIGNED_OUT':
             setUser(null);
+            setIsLoading(false);
             logAuth.logoutSuccess({});
             break;
 
@@ -355,17 +342,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
             break;
 
           default:
-            // Handle other events (INITIAL_SESSION, PASSWORD_RECOVERY, etc.)
+            // Handle other events
             if (session?.user) {
               await updateUserState(session.user);
             }
+            setIsLoading(false);
         }
       }
     );
 
-    // Cleanup subscription on unmount
+    // Safety timeout - if no auth event fires within 5 seconds, stop loading
+    const safetyTimeout = setTimeout(() => {
+      if (mounted && !initialized) {
+        logger.warn('Auth initialization timeout - no event received');
+        setIsLoading(false);
+      }
+    }, 5000);
+
+    // Cleanup on unmount
     return () => {
       mounted = false;
+      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, [supabase, updateUserState]);

@@ -67,5 +67,14 @@ export function createClient() {
     );
   }
 
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      // Disable lock to prevent "signal is aborted" errors with React StrictMode
+      // This is safe because we handle session state in our own context
+      lock: async (name, acquireTimeout, fn) => {
+        // Just run the function without locking
+        return await fn();
+      },
+    },
+  });
 }
