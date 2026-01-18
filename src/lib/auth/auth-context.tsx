@@ -8,8 +8,9 @@
  * FEATURES
  * ═══════════════════════════════════════════════════════════════════════════════
  * - User authentication state management
- * - Login/logout functionality
+ * - Gmail OAuth sign-in with required scopes
  * - Session persistence across page refreshes
+ * - User profile data from Supabase
  * - Loading states for async operations
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -52,7 +53,10 @@
 'use client';
 
 import * as React from 'react';
-import { createLogger } from '@/lib/utils/logger';
+import { createClient } from '@/lib/supabase/client';
+import { createLogger, logAuth } from '@/lib/utils/logger';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+import type { UserProfile } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -61,25 +65,43 @@ import { createLogger } from '@/lib/utils/logger';
 const logger = createLogger('AuthContext');
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Gmail OAuth scopes required for IdeaBox functionality.
+ * - email: Basic email address access
+ * - profile: User profile information (name, avatar)
+ * - gmail.readonly: Read emails (required for sync)
+ * - gmail.modify: Modify labels (for category syncing to Gmail)
+ */
+const GMAIL_OAUTH_SCOPES = [
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.modify',
+].join(' ');
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * User profile information.
- * Extended from Supabase user with app-specific fields.
+ * Combines Supabase auth user with app-specific profile data.
  */
 export interface AuthUser {
   /** Unique user identifier (from Supabase) */
   id: string;
   /** User's email address */
   email: string;
-  /** User's display name */
+  /** User's display name (from Google profile or user_profiles) */
   name?: string | null;
-  /** URL to user's avatar image */
+  /** URL to user's avatar image (from Google profile) */
   avatarUrl?: string | null;
-  /** Whether user has completed onboarding */
-  onboardingCompleted?: boolean;
-  /** User's preferred timezone */
+  /** Whether user has completed onboarding flow */
+  onboardingCompleted: boolean;
+  /** User's preferred timezone (auto-detected or manually set) */
   timezone?: string | null;
   /** When the user was created */
   createdAt?: string;
@@ -147,119 +169,282 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
 
+  // Create Supabase client once (stable reference)
+  const supabase = React.useMemo(() => createClient(), []);
+
+  /**
+   * Maps a Supabase user and optional profile to our AuthUser type.
+   * Combines auth data with app-specific profile data.
+   */
+  const mapToAuthUser = React.useCallback(
+    (supabaseUser: SupabaseUser, profile?: UserProfile | null): AuthUser => {
+      return {
+        id: supabaseUser.id,
+        email: supabaseUser.email ?? '',
+        // Prefer profile name, fall back to Google metadata
+        name: profile?.full_name ?? supabaseUser.user_metadata?.full_name ?? null,
+        avatarUrl: supabaseUser.user_metadata?.avatar_url ?? null,
+        // Default to false if no profile exists yet (new users)
+        onboardingCompleted: profile?.onboarding_completed ?? false,
+        timezone: profile?.timezone ?? null,
+        createdAt: supabaseUser.created_at,
+      };
+    },
+    []
+  );
+
+  /**
+   * Fetches user profile from the database.
+   * Creates a profile if one doesn't exist (for new users).
+   */
+  const fetchUserProfile = React.useCallback(
+    async (userId: string): Promise<UserProfile | null> => {
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        // PGRST116 = row not found, which is expected for new users
+        logger.warn('Failed to fetch user profile', {
+          userId,
+          error: profileError.message
+        });
+      }
+
+      return profile;
+    },
+    [supabase]
+  );
+
+  /**
+   * Updates user state with fresh session and profile data.
+   * Called on initial load and auth state changes.
+   */
+  const updateUserState = React.useCallback(
+    async (supabaseUser: SupabaseUser | null) => {
+      if (!supabaseUser) {
+        setUser(null);
+        return;
+      }
+
+      try {
+        const profile = await fetchUserProfile(supabaseUser.id);
+        const authUser = mapToAuthUser(supabaseUser, profile);
+        setUser(authUser);
+
+        logAuth.loginSuccess({
+          userId: authUser.id,
+          onboardingCompleted: authUser.onboardingCompleted
+        });
+      } catch {
+        // Still set user even if profile fetch fails (graceful degradation)
+        const authUser = mapToAuthUser(supabaseUser, null);
+        setUser(authUser);
+        logger.warn('Using auth user without profile', { userId: supabaseUser.id });
+      }
+    },
+    [fetchUserProfile, mapToAuthUser]
+  );
+
   /**
    * Initialize auth state on mount.
-   * Checks for existing Supabase session.
+   * Checks for existing Supabase session and sets up state change listener.
    */
   React.useEffect(() => {
+    let mounted = true;
+
     const initializeAuth = async () => {
       logger.start('Initializing auth state');
 
       try {
-        // TODO: Implement actual Supabase session check
-        // const { data: { session } } = await supabase.auth.getSession();
-        // if (session?.user) {
-        //   setUser(mapSupabaseUser(session.user));
-        // }
+        // Check for existing session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        // For now, simulate checking auth (stub implementation)
-        await new Promise(resolve => setTimeout(resolve, 100));
+        if (sessionError) {
+          throw sessionError;
+        }
 
-        logger.success('Auth state initialized', { hasUser: false });
+        if (mounted) {
+          if (session?.user) {
+            await updateUserState(session.user);
+            logger.success('Auth initialized with existing session', {
+              userId: session.user.id
+            });
+          } else {
+            setUser(null);
+            logger.success('Auth initialized (no session)');
+          }
+        }
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Auth initialization failed');
         logger.error('Auth initialization failed', { error: error.message });
-        setError(error);
+        if (mounted) {
+          setError(error);
+          setUser(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     initializeAuth();
 
-    // TODO: Subscribe to auth state changes
-    // const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    //   (event, session) => {
-    //     if (session?.user) {
-    //       setUser(mapSupabaseUser(session.user));
-    //     } else {
-    //       setUser(null);
-    //     }
-    //   }
-    // );
-    //
-    // return () => subscription.unsubscribe();
-  }, []);
+    // Subscribe to auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        logger.info('Auth state changed', { event, hasSession: !!session });
+
+        if (!mounted) return;
+
+        switch (event) {
+          case 'SIGNED_IN':
+          case 'TOKEN_REFRESHED':
+            if (session?.user) {
+              await updateUserState(session.user);
+            }
+            break;
+
+          case 'SIGNED_OUT':
+            setUser(null);
+            logAuth.logoutSuccess({});
+            break;
+
+          case 'USER_UPDATED':
+            if (session?.user) {
+              await updateUserState(session.user);
+            }
+            break;
+
+          default:
+            // Handle other events (INITIAL_SESSION, PASSWORD_RECOVERY, etc.)
+            if (session?.user) {
+              await updateUserState(session.user);
+            }
+        }
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase, updateUserState]);
 
   /**
    * Initiate Gmail OAuth sign-in flow.
+   *
+   * Redirects user to Google OAuth consent screen with required Gmail scopes.
+   * After consent, user is redirected to /api/auth/callback which exchanges
+   * the code for a session.
    */
   const signInWithGmail = React.useCallback(async () => {
-    logger.start('Initiating Gmail sign-in');
+    logAuth.loginStart({ provider: 'google' });
     setError(null);
 
     try {
-      // TODO: Implement actual Supabase OAuth
-      // await supabase.auth.signInWithOAuth({
-      //   provider: 'google',
-      //   options: {
-      //     scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify',
-      //     redirectTo: `${window.location.origin}/api/auth/callback`,
-      //   },
-      // });
+      // Get the callback URL based on current environment
+      const redirectTo = `${window.location.origin}/api/auth/callback`;
 
-      logger.info('Gmail sign-in initiated - redirect pending');
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: GMAIL_OAUTH_SCOPES,
+          redirectTo,
+          // Request offline access for refresh tokens (needed for background sync)
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent', // Force consent to ensure we get refresh token
+          },
+        },
+      });
+
+      if (oauthError) {
+        throw oauthError;
+      }
+
+      logger.info('Gmail OAuth initiated', {
+        redirectUrl: data.url ? 'generated' : 'missing'
+      });
+
+      // Note: The actual redirect happens automatically
+      // User will be redirected to Google, then back to our callback URL
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Sign-in failed');
-      logger.error('Gmail sign-in failed', { error: error.message });
+      logAuth.loginError({ error: error.message, provider: 'google' });
       setError(error);
       throw error;
     }
-  }, []);
+  }, [supabase]);
 
   /**
    * Sign out the current user.
+   *
+   * Clears the Supabase session and resets local state.
+   * Note: Does NOT revoke Google OAuth tokens (user keeps Gmail permissions).
    */
   const signOut = React.useCallback(async () => {
-    logger.start('Signing out user');
+    logger.start('Signing out user', { userId: user?.id });
     setError(null);
 
     try {
-      // TODO: Implement actual Supabase sign out
-      // await supabase.auth.signOut();
+      const { error: signOutError } = await supabase.auth.signOut();
 
+      if (signOutError) {
+        throw signOutError;
+      }
+
+      // State will be cleared by onAuthStateChange listener
+      // but we also clear it here for immediate UI update
       setUser(null);
-      logger.success('User signed out');
+      logAuth.logoutSuccess({});
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Sign-out failed');
       logger.error('Sign-out failed', { error: error.message });
       setError(error);
       throw error;
     }
-  }, []);
+  }, [supabase, user?.id]);
 
   /**
-   * Refresh the current session.
-   * Useful for updating user data after profile changes.
+   * Refresh the current session and user profile.
+   *
+   * Useful after:
+   * - User completes onboarding
+   * - User updates their profile
+   * - Session needs token refresh
    */
   const refreshSession = React.useCallback(async () => {
     logger.start('Refreshing session');
 
     try {
-      // TODO: Implement actual session refresh
-      // const { data: { session } } = await supabase.auth.refreshSession();
-      // if (session?.user) {
-      //   setUser(mapSupabaseUser(session.user));
-      // }
+      // First refresh the Supabase session (gets new tokens if needed)
+      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
 
-      logger.success('Session refreshed');
+      if (refreshError) {
+        throw refreshError;
+      }
+
+      if (session?.user) {
+        // Re-fetch profile to get latest data (e.g., onboarding status)
+        await updateUserState(session.user);
+        logger.success('Session refreshed', { userId: session.user.id });
+      } else {
+        // Session expired or invalid
+        setUser(null);
+        logger.warn('Session refresh returned no user');
+      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Session refresh failed');
       logger.error('Session refresh failed', { error: error.message });
       setError(error);
       throw error;
     }
-  }, []);
+  }, [supabase, updateUserState]);
 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = React.useMemo<AuthContextValue>(

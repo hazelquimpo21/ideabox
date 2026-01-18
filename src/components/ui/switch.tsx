@@ -60,8 +60,7 @@ import { cn } from '@/lib/utils/cn';
  * Switch component props.
  * Extends Radix Switch primitive props.
  */
-export interface SwitchProps
-  extends React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> {}
+export type SwitchProps = React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>;
 
 /**
  * Switch toggle component built on Radix UI.
