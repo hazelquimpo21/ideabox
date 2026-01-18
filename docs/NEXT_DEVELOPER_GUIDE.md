@@ -1,7 +1,8 @@
 # IdeaBox - Next Developer Guide
 
 > **Handoff Date:** January 18, 2026
-> **Branch:** `claude/add-logging-documentation-uV3P1`
+> **Branch:** `claude/review-implementation-plan-Qb7XC`
+> **Status:** UI Complete, Ready for Data Layer
 
 Welcome! This guide gets you up to speed quickly on the IdeaBox codebase and tells you exactly what to build next.
 
@@ -24,6 +25,9 @@ npm run dev
 
 # 4. Verify TypeScript compiles
 npx tsc --noEmit
+
+# 5. Run build to verify everything works
+npm run build
 ```
 
 ---
@@ -37,216 +41,276 @@ npx tsc --noEmit
 | Layout Components | ✅ | `src/components/layout/` (Navbar, Sidebar, PageHeader) |
 | Logger | ✅ | `src/lib/utils/logger.ts` |
 | OpenAI Client | ✅ | `src/lib/ai/openai-client.ts` |
-| Auth Context (stub) | ✅ | `src/lib/auth/auth-context.tsx` |
 | Supabase Clients | ✅ | `src/lib/supabase/` |
 | Database Types | ✅ | `src/types/database.ts` |
 | Config | ✅ | `src/config/app.ts`, `analyzers.ts` |
 | Root Layout | ✅ | `src/app/layout.tsx` |
 
+### ✅ Authentication (Complete)
+| Area | Status | Key Files |
+|------|--------|-----------|
+| AuthProvider | ✅ | `src/lib/auth/auth-context.tsx` |
+| ProtectedRoute | ✅ | `src/components/auth/ProtectedRoute.tsx` |
+| OAuth Callback | ✅ | `src/app/api/auth/callback/route.ts` |
+| Landing Page | ✅ | `src/app/page.tsx` |
+
+### ✅ Onboarding (Complete)
+| Area | Status | Key Files |
+|------|--------|-----------|
+| Wizard Container | ✅ | `src/app/onboarding/page.tsx` |
+| Welcome Step | ✅ | `src/app/onboarding/components/WelcomeStep.tsx` |
+| Accounts Step | ✅ | `src/app/onboarding/components/AccountsStep.tsx` |
+| Clients Step | ✅ | `src/app/onboarding/components/ClientsStep.tsx` |
+
+### ✅ Core Pages (Complete - Mock Data)
+| Page | Status | Key Files |
+|------|--------|-----------|
+| Auth Layout | ✅ | `src/app/(auth)/layout.tsx` |
+| Inbox | ✅ | `src/app/(auth)/inbox/page.tsx` |
+| Actions | ✅ | `src/app/(auth)/actions/page.tsx` |
+| Settings | ✅ | `src/app/(auth)/settings/page.tsx` |
+
 ### ❌ Not Yet Built (Your Task)
-| Priority | Area | Estimated Effort |
-|----------|------|------------------|
-| **1** | Auth + Onboarding | Medium |
-| **2** | Core Pages (Inbox, Actions, Settings) | Large |
-| **3** | Data Layer (hooks, API routes) | Medium |
-| **4** | Services + AI Analyzers | Large |
+| Priority | Area | Description |
+|----------|------|-------------|
+| **1** | Data Layer | Hooks and API routes to replace mock data |
+| **2** | Gmail Integration | Fetch emails from Gmail API |
+| **3** | AI Analyzers | Email categorization and action extraction |
+| **4** | Additional Pages | Clients, Archive, Email Detail |
 
 ---
 
-## Your Next Task: Authentication & Onboarding
+## Your Next Task: Data Layer
 
-The layout components are ready. Your job is to build the auth flow.
+The UI is complete with mock data. Your job is to connect it to real data.
 
-### Step 1: Complete AuthProvider (30 min)
+### Step 1: Create Data Hooks (2-3 hours)
 
-The auth context exists but is a stub. Wire it to Supabase.
+Create hooks in `src/hooks/` to fetch data from Supabase:
 
-**File:** `src/lib/auth/auth-context.tsx`
+**File:** `src/hooks/useEmails.ts`
 
 ```typescript
-// Replace the stub in initializeAuth() with:
-import { createBrowserClient } from '@/lib/supabase/client';
-
-const supabase = createBrowserClient();
-
-// Check existing session
-const { data: { session } } = await supabase.auth.getSession();
-if (session?.user) {
-  setUser({
-    id: session.user.id,
-    email: session.user.email!,
-    name: session.user.user_metadata?.full_name,
-    avatarUrl: session.user.user_metadata?.avatar_url,
-  });
-}
-
-// Subscribe to auth changes
-const { data: { subscription } } = supabase.auth.onAuthStateChange(
-  (event, session) => {
-    logger.info('Auth state changed', { event });
-    if (session?.user) {
-      setUser({ /* map session.user */ });
-    } else {
-      setUser(null);
-    }
-  }
-);
-
-return () => subscription.unsubscribe();
-```
-
-### Step 2: Create Landing Page (1 hour)
-
-Replace the boilerplate in `src/app/page.tsx`.
-
-**Requirements:**
-- Hero section with tagline: "Take control of your inbox with AI"
-- "Connect with Gmail" button using `signInWithGmail()` from `useAuth`
-- 3-4 feature highlight cards
-- Redirect authenticated users to `/inbox`
-
-**Example structure:**
-```tsx
 'use client';
 
-import { useAuth } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { Button, Card } from '@/components/ui';
-import { Mail, CheckSquare, Users, Sparkles } from 'lucide-react';
+import * as React from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { createLogger } from '@/lib/utils/logger';
+import type { TableRow } from '@/types/database';
 
-export default function LandingPage() {
-  const { user, isLoading, signInWithGmail } = useAuth();
-  const router = useRouter();
+const logger = createLogger('useEmails');
 
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (user && !isLoading) {
-      router.push('/inbox');
+type Email = TableRow<'emails'>;
+
+interface UseEmailsOptions {
+  category?: string;
+  clientId?: string;
+  limit?: number;
+}
+
+export function useEmails(options: UseEmailsOptions = {}) {
+  const supabase = React.useMemo(() => createClient(), []);
+  const [emails, setEmails] = React.useState<Email[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<Error | null>(null);
+
+  const fetchEmails = React.useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    logger.start('Fetching emails', options);
+
+    try {
+      let query = supabase
+        .from('emails')
+        .select('*')
+        .order('received_at', { ascending: false })
+        .limit(options.limit || 50);
+
+      if (options.category) {
+        query = query.eq('category', options.category);
+      }
+
+      if (options.clientId) {
+        query = query.eq('client_id', options.clientId);
+      }
+
+      const { data, error: queryError } = await query;
+
+      if (queryError) throw queryError;
+
+      setEmails(data || []);
+      logger.success('Emails fetched', { count: data?.length || 0 });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      logger.error('Failed to fetch emails', { error: message });
+      setError(err instanceof Error ? err : new Error(message));
+    } finally {
+      setIsLoading(false);
     }
-  }, [user, isLoading, router]);
+  }, [supabase, options.category, options.clientId, options.limit]);
 
-  if (isLoading) return <FullPageLoader />;
+  React.useEffect(() => {
+    fetchEmails();
+  }, [fetchEmails]);
 
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      {/* Hero */}
-      <h1 className="text-4xl font-bold text-center mb-4">
-        Take control of your inbox with AI
-      </h1>
-      <p className="text-lg text-muted-foreground text-center max-w-xl mb-8">
-        IdeaBox automatically categorizes emails, extracts action items,
-        and helps you focus on what matters.
-      </p>
-
-      <Button size="lg" onClick={signInWithGmail}>
-        <Mail className="mr-2 h-5 w-5" />
-        Connect Gmail Account
-      </Button>
-
-      {/* Features */}
-      <div className="grid md:grid-cols-3 gap-6 mt-16 max-w-4xl">
-        {/* Feature cards */}
-      </div>
-    </main>
-  );
+  return { emails, isLoading, error, refetch: fetchEmails };
 }
 ```
 
-### Step 3: Create OAuth API Routes (1 hour)
+Create similar hooks:
+- `src/hooks/useActions.ts` - Fetch action items
+- `src/hooks/useClients.ts` - Fetch clients
+- `src/hooks/index.ts` - Barrel export
 
-**Create:** `src/app/api/auth/callback/route.ts`
+### Step 2: Create API Routes (2-3 hours)
+
+Create CRUD API routes in `src/app/api/`:
+
+```
+app/api/
+├── emails/
+│   ├── route.ts          # GET: List, POST: Create
+│   ├── [id]/
+│   │   └── route.ts      # GET: Single, PATCH: Update, DELETE: Archive
+│   └── sync/
+│       └── route.ts      # POST: Trigger Gmail sync
+├── actions/
+│   ├── route.ts          # GET: List, POST: Create
+│   └── [id]/
+│       └── route.ts      # GET, PATCH, DELETE
+└── clients/
+    ├── route.ts          # GET: List, POST: Create
+    └── [id]/
+        └── route.ts      # GET, PATCH, DELETE
+```
+
+**Example API Route:** `src/app/api/emails/route.ts`
 
 ```typescript
-import { createServerClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { createLogger } from '@/lib/utils/logger';
 
-const logger = createLogger('AuthCallback');
+const logger = createLogger('EmailsAPI');
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/onboarding';
+  logger.start('GET /api/emails');
 
-  if (code) {
-    logger.start('Processing OAuth callback');
+  try {
+    const supabase = createClient();
+    const { searchParams } = new URL(request.url);
 
-    const supabase = createServerClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const category = searchParams.get('category');
+    const limit = parseInt(searchParams.get('limit') || '50');
 
-    if (!error) {
-      logger.success('OAuth callback successful');
-      return NextResponse.redirect(`${origin}${next}`);
+    let query = supabase
+      .from('emails')
+      .select('*')
+      .order('received_at', { ascending: false })
+      .limit(limit);
+
+    if (category) {
+      query = query.eq('category', category);
     }
 
-    logger.error('OAuth callback failed', { error: error.message });
-  }
+    const { data, error } = await query;
 
-  return NextResponse.redirect(`${origin}/?error=auth_error`);
+    if (error) {
+      logger.error('Query failed', { error: error.message });
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    logger.success('Emails fetched', { count: data.length });
+    return NextResponse.json({ data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Unexpected error', { error: message });
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 ```
 
-### Step 4: Build Onboarding Wizard (2-3 hours)
+### Step 3: Connect Pages to Real Data (1-2 hours)
 
-**Create directory:** `src/app/onboarding/`
+Update each page to use the hooks instead of mock data:
 
-**Files to create:**
-```
-app/onboarding/
-├── page.tsx              # Main wizard component
-├── layout.tsx            # Minimal layout (no sidebar)
-└── components/
-    ├── OnboardingWizard.tsx
-    ├── WelcomeStep.tsx
-    ├── AccountsStep.tsx
-    └── ClientsStep.tsx
-```
-
-**Wizard steps:**
-1. **Welcome** - Brief intro, "Get Started" button
-2. **Connect Accounts** - Show connected Gmail, option to add more
-3. **Add Clients** - Optional: pre-populate client names
-
-**Important:** After completing onboarding:
-```typescript
-// Set onboarding_completed = true in user_profiles
-await supabase
-  .from('user_profiles')
-  .update({ onboarding_completed: true })
-  .eq('user_id', user.id);
-
-// Trigger initial email sync
-await fetch('/api/emails/sync', { method: 'POST' });
-
-// Redirect to inbox
-router.push('/inbox');
-```
-
-### Step 5: Create Protected Route Wrapper (30 min)
-
-**Create:** `src/components/auth/ProtectedRoute.tsx`
+**Inbox Page:** `src/app/(auth)/inbox/page.tsx`
 
 ```typescript
-'use client';
+// Replace this:
+const [emails, setEmails] = React.useState<MockEmail[]>([]);
+React.useEffect(() => {
+  setTimeout(() => setEmails(MOCK_EMAILS), 800);
+}, []);
 
-import { useAuth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
-import { FullPageLoader } from '@/components/ui';
+// With this:
+import { useEmails } from '@/hooks';
+const { emails, isLoading, error, refetch } = useEmails();
+```
 
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
+**Actions Page:** `src/app/(auth)/actions/page.tsx`
 
-  if (isLoading) {
-    return <FullPageLoader message="Loading..." />;
-  }
+```typescript
+import { useActions } from '@/hooks';
+const { actions, isLoading, error } = useActions();
+```
 
-  if (!user) {
-    redirect('/');
-  }
+---
 
-  return <>{children}</>;
+## Important Technical Notes
+
+### TypeScript + Supabase Pattern
+
+The Supabase client has type inference limitations. When you encounter `never` type errors, use this pattern:
+
+```typescript
+// For queries with type issues, use explicit cast
+const { data, error } = await (supabase as any)
+  .from('table_name')
+  .select('*');
+
+// Or type the result explicitly
+interface QueryResult {
+  data: TableRow<'emails'>[] | null;
+  error: { message: string } | null;
 }
+
+const result = await supabase
+  .from('emails')
+  .select('*') as unknown as QueryResult;
+```
+
+### Build Configuration
+
+The app uses dynamic rendering due to auth state. This is configured in `src/app/layout.tsx`:
+
+```typescript
+export const dynamic = 'force-dynamic';
+```
+
+### Mock Data Pattern
+
+Each page has mock data clearly marked for replacement:
+
+```typescript
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOCK DATA (Remove when hooks are implemented)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const MOCK_EMAILS: MockEmail[] = [
+  // ...
+];
+```
+
+And a developer note at the bottom of each page:
+
+```tsx
+<div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+  <p className="text-sm text-yellow-700 dark:text-yellow-400">
+    <strong>Developer Note:</strong> This page displays mock data.
+    Next steps: Create useEmails hook and API routes.
+  </p>
+</div>
 ```
 
 ---
@@ -267,7 +331,7 @@ logger.start('Starting operation', { userId });
 logger.success('Operation completed', { count: 10 });
 logger.error('Operation failed', { error: err.message });
 
-// Domain-specific (for common operations)
+// Domain-specific
 import { logEmail, logAI, logAuth, logDB } from '@/lib/utils/logger';
 logAuth.loginSuccess({ userId: '123' });
 logEmail.fetchStart({ accountId: '456' });
@@ -313,6 +377,10 @@ import { Button, Card, Badge, useToast } from '@/components/ui';
 
 // Auth
 import { useAuth } from '@/lib/auth';
+import type { AuthUser } from '@/lib/auth';
+
+// Hooks (after you create them)
+import { useEmails, useActions, useClients } from '@/hooks';
 ```
 
 ---
@@ -329,6 +397,7 @@ import { useAuth } from '@/lib/auth';
 | Supabase browser | `src/lib/supabase/client.ts` |
 | Supabase server | `src/lib/supabase/server.ts` |
 | Auth context | `src/lib/auth/auth-context.tsx` |
+| Protected route | `src/components/auth/ProtectedRoute.tsx` |
 
 ---
 
@@ -371,6 +440,23 @@ LOG_LEVEL=debug
 
 ---
 
+## Database Schema Reference
+
+Key tables you'll work with:
+
+| Table | Purpose |
+|-------|---------|
+| `user_profiles` | User data, onboarding status |
+| `gmail_accounts` | Connected Gmail accounts with tokens |
+| `emails` | Synced emails with metadata |
+| `action_items` | Extracted tasks from emails |
+| `clients` | Client/contact management |
+| `email_analyses` | AI analysis results |
+
+See `docs/DATABASE_SCHEMA.md` for full schema.
+
+---
+
 ## Questions?
 
 1. **Architecture decisions:** See `docs/DECISIONS.md`
@@ -378,6 +464,7 @@ LOG_LEVEL=debug
 3. **Code style:** See `docs/CODING_STANDARDS.md`
 4. **AI analyzers:** See `docs/AI_ANALYZER_SYSTEM.md`
 5. **Database schema:** See `docs/DATABASE_SCHEMA.md`
+6. **Implementation status:** See `docs/IMPLEMENTATION_STATUS.md`
 
 ---
 
@@ -387,7 +474,33 @@ LOG_LEVEL=debug
 - [ ] Supabase project created with schema applied
 - [ ] Google Cloud OAuth credentials set up
 - [ ] `npm install` completed
-- [ ] `npm run dev` works
+- [ ] `npm run dev` works (http://localhost:3000)
 - [ ] `npx tsc --noEmit` passes
+- [ ] `npm run build` succeeds
+
+---
+
+## Summary of Your Tasks
+
+1. **Create hooks** in `src/hooks/`:
+   - `useEmails.ts`
+   - `useActions.ts`
+   - `useClients.ts`
+   - `index.ts` (barrel export)
+
+2. **Create API routes** in `src/app/api/`:
+   - `/emails` (list, create, sync)
+   - `/actions` (list, create, update, delete)
+   - `/clients` (list, create, update, delete)
+
+3. **Connect pages** to real data:
+   - Update Inbox page to use `useEmails`
+   - Update Actions page to use `useActions`
+   - Update Settings page to use actual save logic
+
+4. **Future phases:**
+   - Gmail integration (fetch from Gmail API)
+   - AI analyzers (categorize, extract actions)
+   - Additional pages (Clients, Archive, Email Detail)
 
 Good luck! 🚀

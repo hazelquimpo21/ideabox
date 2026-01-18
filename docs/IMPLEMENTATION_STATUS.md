@@ -1,8 +1,8 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** January 18, 2026
-> **Current Phase:** Phase 1 - Foundation
-> **Branch:** `claude/add-logging-documentation-uV3P1`
+> **Current Phase:** Phase 2 - Core Features (UI Complete)
+> **Branch:** `claude/review-implementation-plan-Qb7XC`
 
 ## Overview
 
@@ -77,7 +77,7 @@ This document tracks the implementation progress of IdeaBox and provides guidanc
 **Utility:**
 - [x] `cn()` utility (`src/lib/utils/cn.ts`) - clsx + tailwind-merge
 
-#### 4. Layout Components (`src/components/layout/`) ✨ NEW
+#### 4. Layout Components (`src/components/layout/`)
 
 | Component | File | Lines | Description |
 |-----------|------|-------|-------------|
@@ -104,33 +104,95 @@ This document tracks the implementation progress of IdeaBox and provides guidanc
 - 📝 Title + description + badge support
 - ⚡ Right-aligned action button slot
 
-#### 5. Authentication Context (`src/lib/auth/`) ✨ NEW
+#### 5. Authentication System (`src/lib/auth/`, `src/components/auth/`) ✅ COMPLETE
 
 | File | Description |
 |------|-------------|
-| `auth-context.tsx` | AuthProvider with useAuth hook, logging integration |
-| `index.ts` | Barrel export |
+| `auth-context.tsx` | Full AuthProvider with Supabase integration |
+| `index.ts` | Barrel export with AuthUser type |
+| `ProtectedRoute.tsx` | Route protection with onboarding detection |
 
-**Current State:** Stub implementation with:
-- User state management structure
-- signInWithGmail, signOut, refreshSession method signatures
-- Proper logging throughout (uses createLogger)
-- Ready for Supabase integration
+**Features:**
+- ✅ Supabase Auth with Google OAuth
+- ✅ Gmail API scopes (read, modify)
+- ✅ User profile management
+- ✅ Session persistence
+- ✅ Auth state change listeners
+- ✅ Protected route wrapper with HOC variant
+- ✅ Onboarding redirect logic
 
-**TODO for full implementation:**
-```typescript
-// Replace stub code with actual Supabase calls:
-const { data: { session } } = await supabase.auth.getSession();
-await supabase.auth.signInWithOAuth({ provider: 'google', ... });
-```
+#### 6. OAuth Callback (`src/app/api/auth/callback/route.ts`) ✅ NEW
 
-#### 6. Root Layout (`src/app/layout.tsx`) ✨ UPDATED
+- [x] OAuth code exchange
+- [x] Session creation
+- [x] User profile creation for new users
+- [x] Error handling with redirect
+- [x] Logging throughout
 
-- [x] AuthProvider wrapper for global auth state
-- [x] Toaster component for toast notifications
-- [x] Proper metadata (title, description, Open Graph, Twitter)
-- [x] Viewport configuration
-- [x] Font configuration (Geist Sans & Mono)
+#### 7. Landing Page (`src/app/page.tsx`) ✅ NEW
+
+- [x] Hero section with value proposition
+- [x] "Connect with Gmail" button
+- [x] Feature highlights (6 features)
+- [x] Authenticated user redirect
+- [x] OAuth error display via toast
+- [x] Header and footer
+- [x] Mobile responsive
+
+#### 8. Onboarding Flow (`src/app/onboarding/`) ✅ NEW
+
+| File | Description |
+|------|-------------|
+| `page.tsx` | Main onboarding container with completion logic |
+| `layout.tsx` | Minimal layout (no sidebar) |
+| `components/OnboardingWizard.tsx` | Multi-step wizard with progress indicator |
+| `components/WelcomeStep.tsx` | Step 1: Introduction and get started |
+| `components/AccountsStep.tsx` | Step 2: Connected Gmail accounts display |
+| `components/ClientsStep.tsx` | Step 3: Optional client setup |
+| `components/index.ts` | Barrel exports |
+
+**Features:**
+- ✅ 3-step wizard with progress indicator
+- ✅ Step navigation (next/back)
+- ✅ Client form with add/remove
+- ✅ Skip option for clients step
+- ✅ Saves to Supabase on completion
+- ✅ Redirects to inbox when done
+
+#### 9. Core Pages (`src/app/(auth)/`) ✅ NEW
+
+| Page | File | Status | Description |
+|------|------|--------|-------------|
+| Layout | `layout.tsx` | ✅ | Auth layout with Navbar, Sidebar, ProtectedRoute |
+| Inbox | `inbox/page.tsx` | ✅ | Email list with category badges, stats, mock data |
+| Actions | `actions/page.tsx` | ✅ | Action items with priority/status filters, mock data |
+| Settings | `settings/page.tsx` | ✅ | User settings: Profile, Accounts, Notifications, AI, Danger Zone |
+
+**Inbox Page Features:**
+- Stats cards (total, unread, actions, AI analyzed)
+- Email list with category badges
+- Sender, subject, snippet display
+- Time formatting
+- Loading skeleton
+- Empty state
+- Developer note for next steps
+
+**Actions Page Features:**
+- Stats cards (pending, in progress, completed, overdue)
+- Action list with priority badges
+- Status filtering (all, pending, completed)
+- Deadline highlighting with urgency
+- Action type icons (respond, review, create, schedule, decide)
+- Loading skeleton
+- Empty state
+
+**Settings Page Features:**
+- Profile section (display name)
+- Connected accounts management
+- Notification preferences (4 toggle switches)
+- AI analysis settings (4 toggle switches)
+- Danger zone (export data, delete account)
+- Loading skeleton
 
 ---
 
@@ -142,44 +204,32 @@ Nothing currently in progress.
 
 ### ❌ Not Started (Priority Order)
 
-#### Priority 1: ~~Layout & Navigation~~ ✅ COMPLETED
-- [x] **Navbar Component** - Done
-- [x] **Sidebar Component** - Done
-- [x] **PageHeader Component** - Done
-- [x] **Root Layout Update** - Done
+#### Priority 1: Data Layer 👈 **START HERE**
+- [ ] **useEmails Hook** (`hooks/useEmails.ts`) - Fetch and cache emails
+- [ ] **useActions Hook** (`hooks/useActions.ts`) - Fetch and manage actions
+- [ ] **useClients Hook** (`hooks/useClients.ts`) - Fetch and manage clients
+- [ ] **Email API Routes** (`app/api/emails/`) - CRUD operations
+- [ ] **Actions API Routes** (`app/api/actions/`) - CRUD operations
+- [ ] **Clients API Routes** (`app/api/clients/`) - CRUD operations
 
-#### Priority 2: Authentication & Onboarding 👈 **START HERE**
-- [ ] **Complete AuthProvider** - Connect to Supabase Auth
-- [ ] **Protected Route Wrapper** (`components/auth/ProtectedRoute.tsx`)
-- [ ] **Landing Page** (`app/page.tsx`) - Replace Next.js boilerplate
-- [ ] **Gmail OAuth Routes** (`app/api/auth/gmail/route.ts`, `callback/route.ts`)
-- [ ] **Onboarding Flow** (`app/onboarding/`)
+#### Priority 2: Gmail Integration
+- [ ] **Gmail Service** (`lib/gmail/gmail-service.ts`) - API wrapper
+- [ ] **Token Management** (`lib/gmail/token-manager.ts`) - OAuth token refresh
+- [ ] **Email Sync API** (`app/api/emails/sync/route.ts`) - Trigger sync
+- [ ] **Webhook Handler** (`app/api/webhooks/gmail/route.ts`) - Push notifications
 
-#### Priority 3: Core Pages
-- [ ] **Inbox Page** (`app/(auth)/inbox/`)
-- [ ] **Email List Component** (`components/email/EmailList.tsx`)
-- [ ] **Email Card Component** (`components/email/EmailCard.tsx`)
-- [ ] **Email Detail View** (`components/email/EmailDetail.tsx`)
-- [ ] **Category Badge Component** (`components/email/CategoryBadge.tsx`)
-- [ ] **Actions Page** (`app/(auth)/actions/`)
-- [ ] **Settings Page** (`app/(auth)/settings/`)
-
-#### Priority 4: Data Layer
-- [ ] **useEmails Hook** (`hooks/useEmails.ts`)
-- [ ] **useActions Hook** (`hooks/useActions.ts`)
-- [ ] **useClients Hook** (`hooks/useClients.ts`)
-- [ ] **Email API Routes** (`app/api/emails/`)
-- [ ] **Actions API Routes** (`app/api/actions/`)
-- [ ] **Clients API Routes** (`app/api/clients/`)
-
-#### Priority 5: Services & AI
-- [ ] **Gmail Service** (`lib/gmail/`)
+#### Priority 3: AI Analyzers
 - [ ] **BaseAnalyzer Class** (`services/analyzers/base-analyzer.ts`)
 - [ ] **Categorizer Analyzer** (`services/analyzers/categorizer.ts`)
 - [ ] **Action Extractor Analyzer** (`services/analyzers/action-extractor.ts`)
 - [ ] **Client Tagger Analyzer** (`services/analyzers/client-tagger.ts`)
 - [ ] **Email Processor** (`services/processors/email-processor.ts`)
 - [ ] **Batch Processor** (`services/processors/batch-processor.ts`)
+
+#### Priority 4: Additional Pages
+- [ ] **Email Detail View** (`components/email/EmailDetail.tsx`)
+- [ ] **Clients Page** (`app/(auth)/clients/page.tsx`)
+- [ ] **Archive Page** (`app/(auth)/archive/page.tsx`)
 
 ---
 
@@ -188,112 +238,132 @@ Nothing currently in progress.
 ```
 src/
 ├── app/
-│   ├── globals.css          ✅ CSS variables for theming
-│   ├── layout.tsx           ✅ Updated with AuthProvider + Toaster
-│   ├── page.tsx             ❌ Still Next.js boilerplate (Priority 2)
-│   └── fonts/               ✅ Geist fonts
+│   ├── globals.css              ✅ CSS variables for theming
+│   ├── layout.tsx               ✅ Root layout with AuthProvider + Toaster
+│   ├── page.tsx                 ✅ Landing page with Gmail sign-in
+│   ├── fonts/                   ✅ Geist fonts
+│   ├── api/
+│   │   └── auth/
+│   │       └── callback/
+│   │           └── route.ts     ✅ OAuth callback handler
+│   ├── onboarding/
+│   │   ├── page.tsx             ✅ Onboarding container
+│   │   ├── layout.tsx           ✅ Minimal layout
+│   │   └── components/
+│   │       ├── index.ts         ✅ Barrel export
+│   │       ├── OnboardingWizard.tsx ✅ Multi-step wizard
+│   │       ├── WelcomeStep.tsx  ✅ Step 1
+│   │       ├── AccountsStep.tsx ✅ Step 2
+│   │       └── ClientsStep.tsx  ✅ Step 3
+│   └── (auth)/
+│       ├── layout.tsx           ✅ Auth layout with Navbar/Sidebar
+│       ├── inbox/
+│       │   └── page.tsx         ✅ Inbox page (mock data)
+│       ├── actions/
+│       │   └── page.tsx         ✅ Actions page (mock data)
+│       └── settings/
+│           └── page.tsx         ✅ Settings page (mock data)
 ├── components/
-│   ├── layout/              ✅ NEW - Layout components
-│   │   ├── index.ts         ✅ Barrel export
-│   │   ├── Navbar.tsx       ✅ Top navigation
-│   │   ├── Sidebar.tsx      ✅ Side navigation
-│   │   └── PageHeader.tsx   ✅ Page headers
-│   └── ui/                  ✅ Complete UI component library
-│       ├── index.ts         ✅ Barrel export
-│       ├── button.tsx       ✅
-│       ├── input.tsx        ✅
-│       ├── label.tsx        ✅
-│       ├── card.tsx         ✅
-│       ├── badge.tsx        ✅
-│       ├── checkbox.tsx     ✅
-│       ├── switch.tsx       ✅
-│       ├── select.tsx       ✅
-│       ├── dialog.tsx       ✅
-│       ├── toast.tsx        ✅
-│       ├── toaster.tsx      ✅
-│       ├── use-toast.ts     ✅
-│       ├── skeleton.tsx     ✅
-│       └── spinner.tsx      ✅
+│   ├── auth/
+│   │   ├── index.ts             ✅ Barrel export
+│   │   └── ProtectedRoute.tsx   ✅ Route protection
+│   ├── layout/                  ✅ Layout components
+│   │   ├── index.ts
+│   │   ├── Navbar.tsx
+│   │   ├── Sidebar.tsx
+│   │   └── PageHeader.tsx
+│   └── ui/                      ✅ Complete UI component library
+│       ├── index.ts
+│       ├── button.tsx
+│       ├── input.tsx
+│       ├── label.tsx
+│       ├── card.tsx
+│       ├── badge.tsx
+│       ├── checkbox.tsx
+│       ├── switch.tsx
+│       ├── select.tsx
+│       ├── dialog.tsx
+│       ├── toast.tsx
+│       ├── toaster.tsx
+│       ├── use-toast.ts
+│       ├── skeleton.tsx
+│       └── spinner.tsx
 ├── config/
-│   ├── app.ts               ✅
-│   └── analyzers.ts         ✅
+│   ├── app.ts                   ✅
+│   └── analyzers.ts             ✅
 ├── lib/
 │   ├── ai/
-│   │   └── openai-client.ts ✅
-│   ├── auth/                ✅ NEW - Auth context
-│   │   ├── index.ts         ✅ Barrel export
-│   │   └── auth-context.tsx ✅ AuthProvider + useAuth (stub)
+│   │   └── openai-client.ts     ✅
+│   ├── auth/
+│   │   ├── index.ts             ✅ Barrel export
+│   │   └── auth-context.tsx     ✅ Full Supabase Auth
 │   ├── supabase/
-│   │   ├── client.ts        ✅
-│   │   ├── server.ts        ✅
-│   │   └── types.ts         ✅
+│   │   ├── client.ts            ✅
+│   │   ├── server.ts            ✅
+│   │   └── types.ts             ✅
 │   └── utils/
-│       ├── logger.ts        ✅ Enhanced with emojis
-│       └── cn.ts            ✅ Class name utility
+│       ├── logger.ts            ✅ Enhanced with emojis
+│       └── cn.ts                ✅ Class name utility
 └── types/
-    └── database.ts          ✅
+    └── database.ts              ✅
 ```
 
 ---
 
 ## What to Build Next
 
-### 👉 Immediate Priority: Authentication & Onboarding
+### 👉 Immediate Priority: Data Layer
 
-The layout components are ready. Now build the auth flow:
+The UI is complete with mock data. Now connect it to real data.
 
-#### Step 1: Complete AuthProvider Integration
-Update `src/lib/auth/auth-context.tsx` to connect to Supabase:
+#### Step 1: Create useEmails Hook
 
 ```typescript
-// In initializeAuth():
-const { data: { session } } = await supabase.auth.getSession();
-if (session?.user) {
-  setUser(mapSupabaseUser(session.user));
+// src/hooks/useEmails.ts
+import { createClient } from '@/lib/supabase/client';
+import { createLogger } from '@/lib/utils/logger';
+
+const logger = createLogger('useEmails');
+
+export function useEmails(options?: { category?: string; clientId?: string }) {
+  const [emails, setEmails] = useState<Email[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    fetchEmails();
+  }, [options?.category, options?.clientId]);
+
+  const fetchEmails = async () => {
+    logger.start('Fetching emails');
+    // Implement Supabase query
+  };
+
+  return { emails, isLoading, error, refetch: fetchEmails };
 }
-
-// Subscribe to auth changes:
-const { data: { subscription } } = supabase.auth.onAuthStateChange(
-  (event, session) => { ... }
-);
 ```
 
-#### Step 2: Create Landing Page
-Replace `app/page.tsx` with:
-- Hero section with value proposition
-- "Connect with Gmail" button (calls `signInWithGmail`)
-- Feature highlights grid
-- Redirect authenticated users to `/inbox`
+#### Step 2: Create Email API Routes
 
-#### Step 3: Create Gmail OAuth Routes
 ```
-app/api/auth/
-├── gmail/route.ts      # POST: Initiate OAuth flow
-└── callback/route.ts   # GET: Handle OAuth callback
+app/api/emails/
+├── route.ts          # GET: List emails, POST: Sync new emails
+├── [id]/
+│   └── route.ts      # GET: Single email, PATCH: Update, DELETE: Archive
+└── sync/
+    └── route.ts      # POST: Trigger Gmail sync
 ```
 
-#### Step 4: Build Onboarding Wizard
-```
-app/onboarding/
-├── page.tsx            # Main onboarding component
-└── components/
-    ├── OnboardingSteps.tsx
-    ├── WelcomeStep.tsx
-    ├── AccountsStep.tsx
-    └── ClientsStep.tsx
-```
+#### Step 3: Connect Inbox Page to Real Data
 
-#### Step 5: Create Protected Route Wrapper
+Replace mock data in `src/app/(auth)/inbox/page.tsx`:
+
 ```typescript
-// components/auth/ProtectedRoute.tsx
-export function ProtectedRoute({ children }) {
-  const { user, isLoading } = useAuth();
+// Replace this:
+const [emails, setEmails] = useState<MockEmail[]>([]);
 
-  if (isLoading) return <FullPageLoader />;
-  if (!user) redirect('/');
-
-  return children;
-}
+// With this:
+const { emails, isLoading, error } = useEmails();
 ```
 
 ---
@@ -322,7 +392,23 @@ Every component should have a JSDoc header explaining:
 - Usage examples
 - Props interface
 
-See `Navbar.tsx`, `Sidebar.tsx`, `PageHeader.tsx` for examples.
+See existing pages for examples with comprehensive JSDoc headers.
+
+### TypeScript Patterns
+
+For Supabase queries with type inference issues, use explicit casts:
+
+```typescript
+// Pattern for insert/update/select with type issues
+const { error } = await (supabase as any)
+  .from('table_name')
+  .insert(data);
+
+// Or use type assertion for results
+const result = await supabase
+  .from('emails')
+  .select('*') as unknown as { data: Email[]; error: Error | null };
+```
 
 ### Testing
 When adding features, include tests for:
@@ -407,6 +493,20 @@ toast({
 
 ## Recent Changes (January 18, 2026)
 
+### Session 2 (Current)
+- ✅ Completed `AuthProvider` with full Supabase OAuth integration
+- ✅ Added `ProtectedRoute` component with HOC variant
+- ✅ Created OAuth callback API route
+- ✅ Built Landing Page with Gmail sign-in and features
+- ✅ Built complete Onboarding Wizard (3 steps)
+- ✅ Created `(auth)` route group with layout
+- ✅ Built Inbox page with mock data
+- ✅ Built Actions page with mock data
+- ✅ Built Settings page with mock data
+- ✅ Fixed all TypeScript and ESLint errors
+- ✅ Successful build verification
+
+### Session 1
 - ✅ Added `Navbar` component with search, sync indicator, user menu
 - ✅ Added `Sidebar` component with navigation, categories, clients
 - ✅ Added `PageHeader` component with breadcrumbs, actions
