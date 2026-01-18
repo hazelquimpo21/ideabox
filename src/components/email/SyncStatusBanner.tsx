@@ -10,7 +10,7 @@
  * STATES
  * ═══════════════════════════════════════════════════════════════════════════════
  * - idle: No sync in progress, shows last sync time
- * - syncing: Active sync, shows progress
+ * - syncing: Active sync, shows animated progress
  * - success: Sync completed successfully
  * - error: Sync failed with error details
  * - never_synced: Account never synced (first-time user)
@@ -21,7 +21,7 @@
 'use client';
 
 import * as React from 'react';
-import { Button } from '@/components/ui';
+import { Button, Badge } from '@/components/ui';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
 import {
@@ -34,6 +34,9 @@ import {
   Clock,
   Sparkles,
   Zap,
+  Brain,
+  FileSearch,
+  Tags,
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -74,15 +77,34 @@ export interface SyncStatusBannerProps {
   compact?: boolean;
   /** Custom class name */
   className?: string;
+  /** Initial sync email count (from user settings) */
+  initialSyncCount?: number;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SYNC PHASES - For progress indicator
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface SyncPhase {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  duration: number; // estimated ms
+}
+
+const SYNC_PHASES: SyncPhase[] = [
+  { id: 'fetch', label: 'Fetching emails', icon: <Mail className="h-3 w-3" />, duration: 5000 },
+  { id: 'categorize', label: 'Categorizing', icon: <Tags className="h-3 w-3" />, duration: 15000 },
+  { id: 'extract', label: 'Extracting actions', icon: <FileSearch className="h-3 w-3" />, duration: 10000 },
+  { id: 'analyze', label: 'AI analysis', icon: <Brain className="h-3 w-3" />, duration: 10000 },
+];
+
+const TOTAL_ESTIMATED_DURATION = SYNC_PHASES.reduce((sum, p) => sum + p.duration, 0);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Format relative time for last sync display.
- */
 function formatLastSync(dateStr: string | null): string {
   if (!dateStr) return 'Never synced';
 
@@ -99,29 +121,98 @@ function formatLastSync(dateStr: string | null): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// COMPONENT
+// PROGRESS INDICATOR COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Sync Status Banner - Shows email sync status with real-time feedback.
- *
- * Features:
- * - Shows current sync status (syncing, success, error, never_synced)
- * - Displays last sync time and email count
- * - Provides manual sync trigger button
- * - Auto-refreshes status periodically
- *
- * @example
- * ```tsx
- * <SyncStatusBanner
- *   onSyncComplete={() => refetchEmails()}
- * />
- * ```
- */
+function SyncProgressIndicator({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = React.useState(0);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(Date.now() - startTime);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  // Calculate progress (0-100) with easing
+  const linearProgress = Math.min(100, (elapsed / TOTAL_ESTIMATED_DURATION) * 100);
+  // Use easing to slow down as we approach 100% (never quite reach it until done)
+  const easedProgress = Math.min(95, linearProgress * (1 - Math.pow(linearProgress / 100, 2) * 0.3));
+
+  // Determine current phase
+  let cumulativeDuration = 0;
+  let currentPhaseIndex = 0;
+  for (let i = 0; i < SYNC_PHASES.length; i++) {
+    cumulativeDuration += SYNC_PHASES[i].duration;
+    if (elapsed < cumulativeDuration) {
+      currentPhaseIndex = i;
+      break;
+    }
+    currentPhaseIndex = i;
+  }
+  const currentPhase = SYNC_PHASES[currentPhaseIndex];
+
+  return (
+    <div className="space-y-3">
+      {/* Progress bar */}
+      <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+        <div
+          className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+          style={{ width: `${easedProgress}%` }}
+        />
+      </div>
+
+      {/* Phase indicator */}
+      <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 text-primary font-medium">
+            {currentPhase.icon}
+            <span>{currentPhase.label}...</span>
+          </div>
+        </div>
+        <span className="text-muted-foreground">
+          {Math.round(easedProgress)}% complete
+        </span>
+      </div>
+
+      {/* Phase dots */}
+      <div className="flex justify-center gap-2">
+        {SYNC_PHASES.map((phase, index) => (
+          <div
+            key={phase.id}
+            className={`
+              flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-all
+              ${index < currentPhaseIndex
+                ? 'bg-primary/20 text-primary'
+                : index === currentPhaseIndex
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground'}
+            `}
+          >
+            {index < currentPhaseIndex ? (
+              <CheckCircle2 className="h-3 w-3" />
+            ) : index === currentPhaseIndex ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              phase.icon
+            )}
+            <span className="hidden sm:inline">{phase.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export function SyncStatusBanner({
   onSyncComplete,
   compact = false,
   className = '',
+  initialSyncCount = 50,
 }: SyncStatusBannerProps) {
   // ───────────────────────────────────────────────────────────────────────────
   // State
@@ -133,6 +224,12 @@ export function SyncStatusBanner({
     emailsCount: 0,
   });
   const [isSyncing, setIsSyncing] = React.useState(false);
+  const [syncStartTime, setSyncStartTime] = React.useState<number | null>(null);
+  const [lastSyncResult, setLastSyncResult] = React.useState<{
+    emailsFetched: number;
+    emailsAnalyzed: number;
+    actionsCreated: number;
+  } | null>(null);
 
   const supabase = React.useMemo(() => createClient(), []);
 
@@ -144,14 +241,12 @@ export function SyncStatusBanner({
     logger.debug('Fetching sync status');
 
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         logger.warn('No user found when fetching sync status');
         return;
       }
 
-      // Get Gmail account with latest sync info
       const { data: account, error: accountError } = await supabase
         .from('gmail_accounts')
         .select('email, last_sync_at, sync_enabled')
@@ -166,13 +261,11 @@ export function SyncStatusBanner({
         throw accountError;
       }
 
-      // Get email count
       const { count: emailsCount } = await supabase
         .from('emails')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
 
-      // Get latest sync log for error detection
       const { data: syncLog } = await supabase
         .from('sync_logs')
         .select('status, error_message, completed_at, emails_fetched')
@@ -181,21 +274,18 @@ export function SyncStatusBanner({
         .limit(1)
         .single();
 
-      // Get analyzed email count
       const { count: analyzedCount } = await supabase
         .from('emails')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .not('analyzed_at', 'is', null);
 
-      // Get pending actions count
       const { count: pendingActions } = await supabase
         .from('actions')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('status', 'pending');
 
-      // Determine status
       let status: SyncStatus = 'idle';
       let errorMessage: string | undefined;
 
@@ -208,7 +298,6 @@ export function SyncStatusBanner({
         status = 'syncing';
       }
 
-      // Build analysis info
       const unanalyzedCount = (emailsCount || 0) - (analyzedCount || 0);
       let analysisStatus: AnalysisStatus = 'complete';
       if (unanalyzedCount > 0 && (analyzedCount || 0) === 0) {
@@ -252,7 +341,9 @@ export function SyncStatusBanner({
 
   const handleSync = async () => {
     setIsSyncing(true);
+    setSyncStartTime(Date.now());
     setSyncInfo((prev) => ({ ...prev, status: 'syncing' }));
+    setLastSyncResult(null);
 
     logger.start('Manual sync triggered');
 
@@ -260,6 +351,10 @@ export function SyncStatusBanner({
       const response = await fetch('/api/emails/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          maxResults: initialSyncCount,
+          analysisMaxEmails: initialSyncCount,
+        }),
       });
 
       const result = await response.json();
@@ -268,12 +363,18 @@ export function SyncStatusBanner({
         throw new Error(result.error || 'Sync failed');
       }
 
-      // Log sync and analysis results
       const analysisResult = result.analysis;
       logger.success('Manual sync completed', {
         totalCreated: result.totals?.totalCreated,
         totalFetched: result.totals?.totalFetched,
         analyzed: analysisResult?.successCount || 0,
+        actionsCreated: analysisResult?.actionsCreated || 0,
+      });
+
+      // Store last sync result for display
+      setLastSyncResult({
+        emailsFetched: result.totals?.totalCreated || 0,
+        emailsAnalyzed: analysisResult?.successCount || 0,
         actionsCreated: analysisResult?.actionsCreated || 0,
       });
 
@@ -291,13 +392,12 @@ export function SyncStatusBanner({
         } : prev.analysis,
       }));
 
-      // Notify parent component
       onSyncComplete?.();
 
-      // Reset to idle after showing success
       setTimeout(() => {
         setSyncInfo((prev) => ({ ...prev, status: 'idle' }));
-      }, 3000);
+        setLastSyncResult(null);
+      }, 5000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Sync failed';
       logger.error('Manual sync failed', { error: errorMessage });
@@ -309,6 +409,7 @@ export function SyncStatusBanner({
       }));
     } finally {
       setIsSyncing(false);
+      setSyncStartTime(null);
     }
   };
 
@@ -316,12 +417,10 @@ export function SyncStatusBanner({
   // Effects
   // ───────────────────────────────────────────────────────────────────────────
 
-  // Fetch status on mount
   React.useEffect(() => {
     fetchSyncStatus();
   }, [fetchSyncStatus]);
 
-  // Auto-refresh status periodically (every 30 seconds)
   React.useEffect(() => {
     const interval = setInterval(fetchSyncStatus, 30000);
     return () => clearInterval(interval);
@@ -351,8 +450,18 @@ export function SyncStatusBanner({
       case 'syncing':
         return 'Syncing and analyzing your emails...';
       case 'success':
-        if (syncInfo.analysis?.analyzedCount) {
-          return `Sync complete! ${syncInfo.analysis.analyzedCount} emails analyzed with AI.`;
+        if (lastSyncResult) {
+          const parts = [];
+          if (lastSyncResult.emailsFetched > 0) {
+            parts.push(`${lastSyncResult.emailsFetched} new emails`);
+          }
+          if (lastSyncResult.emailsAnalyzed > 0) {
+            parts.push(`${lastSyncResult.emailsAnalyzed} analyzed`);
+          }
+          if (lastSyncResult.actionsCreated > 0) {
+            parts.push(`${lastSyncResult.actionsCreated} action${lastSyncResult.actionsCreated !== 1 ? 's' : ''} found`);
+          }
+          return parts.length > 0 ? `Sync complete! ${parts.join(', ')}.` : 'Sync complete!';
         }
         return 'Sync complete!';
       case 'error':
@@ -436,7 +545,7 @@ export function SyncStatusBanner({
                 <span>Last sync: {formatLastSync(syncInfo.lastSyncAt)}</span>
                 {syncInfo.accountEmail && (
                   <>
-                    <span>•</span>
+                    <span>-</span>
                     <span className="truncate">{syncInfo.accountEmail}</span>
                   </>
                 )}
@@ -445,38 +554,38 @@ export function SyncStatusBanner({
           </div>
         </div>
 
-        {/* Sync button */}
-        <Button
-          variant={syncInfo.status === 'never_synced' ? 'default' : 'outline'}
-          size="sm"
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="shrink-0"
-        >
-          {isSyncing ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Syncing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Sync Now
-            </>
-          )}
-        </Button>
+        {/* Sync button - hide during syncing */}
+        {!isSyncing && (
+          <Button
+            variant={syncInfo.status === 'never_synced' ? 'default' : 'outline'}
+            size="sm"
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="shrink-0"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Sync Now
+          </Button>
+        )}
       </div>
+
+      {/* Progress indicator during sync */}
+      {syncInfo.status === 'syncing' && syncStartTime && (
+        <div className="mt-4 pt-4 border-t border-current/10">
+          <SyncProgressIndicator startTime={syncStartTime} />
+        </div>
+      )}
 
       {/* First-time user guidance */}
       {syncInfo.status === 'never_synced' && (
         <p className="text-xs mt-3 opacity-75">
           IdeaBox will fetch your recent emails and start categorizing them automatically.
-          This usually takes less than a minute.
+          This usually takes 30-60 seconds.
         </p>
       )}
 
       {/* AI Analysis status bar - show for returning users with analysis data */}
-      {syncInfo.status !== 'never_synced' && syncInfo.analysis && syncInfo.analysis.analyzedCount > 0 && (
+      {syncInfo.status !== 'never_synced' && syncInfo.status !== 'syncing' && syncInfo.analysis && syncInfo.analysis.analyzedCount > 0 && (
         <div className="mt-3 pt-3 border-t border-current/10">
           <div className="flex items-center gap-4 text-xs">
             <div className="flex items-center gap-1.5">
@@ -501,14 +610,28 @@ export function SyncStatusBanner({
         </div>
       )}
 
-      {/* Success state with analysis results */}
-      {syncInfo.status === 'success' && syncInfo.analysis && (
+      {/* Success state with detailed results */}
+      {syncInfo.status === 'success' && lastSyncResult && (
         <div className="mt-3 pt-3 border-t border-current/10">
-          <div className="flex items-center gap-2 text-xs">
-            <Sparkles className="h-3.5 w-3.5 text-green-600" />
-            <span className="text-green-700 dark:text-green-300 font-medium">
-              AI categorized your emails and found {syncInfo.analysis.pendingActions} action item{syncInfo.analysis.pendingActions !== 1 ? 's' : ''}
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {lastSyncResult.emailsFetched > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                <Mail className="h-3 w-3 mr-1" />
+                {lastSyncResult.emailsFetched} new
+              </Badge>
+            )}
+            {lastSyncResult.emailsAnalyzed > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                <Sparkles className="h-3 w-3 mr-1" />
+                {lastSyncResult.emailsAnalyzed} analyzed
+              </Badge>
+            )}
+            {lastSyncResult.actionsCreated > 0 && (
+              <Badge variant="default" className="text-xs">
+                <Zap className="h-3 w-3 mr-1" />
+                {lastSyncResult.actionsCreated} action{lastSyncResult.actionsCreated !== 1 ? 's' : ''} found
+              </Badge>
+            )}
           </div>
         </div>
       )}
