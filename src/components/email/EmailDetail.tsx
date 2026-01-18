@@ -51,7 +51,7 @@ export interface EmailDetailProps {
   onStar?: (emailId: string) => void;
   onArchive?: (emailId: string) => void;
   onToggleRead?: (emailId: string) => void;
-  onAnalyze?: (emailId: string) => void;
+  onAnalyze?: (emailId: string) => Promise<void>;
   onClose?: () => void;
   isLoading?: boolean;
   isAnalyzing?: boolean;
@@ -219,10 +219,19 @@ function AnalysisSummary({
   isAnalyzing,
 }: {
   email: Email;
-  onAnalyze?: (emailId: string) => void;
+  onAnalyze?: (emailId: string) => Promise<void>;
   isAnalyzing?: boolean;
 }) {
-  const { analysis, isLoading: isLoadingAnalysis } = useEmailAnalysis(email.id);
+  const { analysis, isLoading: isLoadingAnalysis, refetch } = useEmailAnalysis(email.id);
+
+  // Handle analyze button click - await analysis then refetch
+  const handleAnalyze = React.useCallback(async () => {
+    if (onAnalyze) {
+      await onAnalyze(email.id);
+      // Refetch analysis data after it completes
+      await refetch();
+    }
+  }, [onAnalyze, email.id, refetch]);
 
   // Not analyzed yet
   if (!email.analyzed_at) {
@@ -244,7 +253,7 @@ function AnalysisSummary({
             <Button
               variant="default"
               size="sm"
-              onClick={() => onAnalyze?.(email.id)}
+              onClick={handleAnalyze}
               disabled={isAnalyzing}
             >
               {isAnalyzing ? (
@@ -301,7 +310,7 @@ function AnalysisSummary({
                 <p className="text-xs text-muted-foreground">{email.analysis_error}</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => onAnalyze?.(email.id)} disabled={isAnalyzing}>
+            <Button variant="outline" size="sm" onClick={handleAnalyze} disabled={isAnalyzing}>
               Retry
             </Button>
           </div>
