@@ -4,25 +4,28 @@
  * Displays the results of initial email batch analysis.
  * Shows category cards, client insights, and quick actions.
  *
- * This page is shown after the user completes onboarding and their
- * emails have been analyzed for the first time.
+ * This page handles multiple states:
+ * - No sync yet: Shows "Start Analysis" UI to trigger a quick scan
+ * - Sync in progress: Shows progress UI with real-time updates
+ * - Sync completed: Shows full Discovery Dashboard with results
+ * - Sync failed: Shows error with retry option
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * DATA FLOW
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * 1. User completes onboarding → triggers initial sync
- * 2. Sync completes → result stored in user_profiles.sync_progress
- * 3. User redirected to /discover
- * 4. Page fetches result from sync_progress or API
- * 5. Displays DiscoveryHero, CategoryCards, ClientInsights, QuickActions
+ * 1. User visits /discover
+ * 2. If no sync data → show "Start Analysis" UI
+ * 3. User clicks "Start Analysis" → triggers sync with chosen email count
+ * 4. Shows progress UI while syncing
+ * 5. Sync completes → shows Discovery Dashboard
  *
  * @module app/(auth)/discover/page
  */
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -35,6 +38,8 @@ import {
   FailureSummary,
 } from '@/components/discover';
 import { useToast } from '@/components/ui/use-toast';
+import { useInitialSyncProgress } from '@/hooks/useInitialSyncProgress';
+import { StartAnalysisCard, SyncProgressCard } from './components';
 import type { InitialSyncResponse } from '@/types/discovery';
 
 // =============================================================================
@@ -49,10 +54,35 @@ export default function DiscoverPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // State
+  // State for initial fetch
   const [result, setResult] = useState<InitialSyncResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsSync, setNeedsSync] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isStartingSync, setIsStartingSync] = useState(false);
+
+  // Progress tracking for sync
+  const {
+    progress: syncProgress,
+    currentStep: syncStep,
+    discoveries,
+    startPolling,
+    stopPolling,
+  } = useInitialSyncProgress({
+    onComplete: (completedResult) => {
+      setResult(completedResult);
+      setIsSyncing(false);
+      toast({
+        title: 'Analysis complete!',
+        description: `Analyzed ${completedResult.stats.analyzed} emails`,
+      });
+    },
+    onError: (errorMsg) => {
+      setError(errorMsg);
+      setIsSyncing(false);
+    },
+  });
 
   // ───────────────────────────────────────────────────────────────────────────
   // Fetch Result on Mount
@@ -61,13 +91,14 @@ export default function DiscoverPage() {
   useEffect(() => {
     async function fetchResult() {
       try {
-        // Try to get result from sync-status (stored in user_profiles)
         const response = await fetch('/api/onboarding/sync-status', {
           credentials: 'include',
         });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch sync status');
+          // If the API fails, show the "start analysis" UI instead of error
+          setNeedsSync(true);
+          return;
         }
 
         const data = await response.json();
@@ -75,26 +106,74 @@ export default function DiscoverPage() {
         if (data.status === 'completed' && data.result) {
           setResult(data.result);
         } else if (data.status === 'failed') {
-          setError(data.error || 'Sync failed');
+          setError(data.error || 'Previous sync failed');
+          setNeedsSync(true); // Allow retry
         } else if (data.status === 'in_progress') {
-          // Sync still running, redirect back to onboarding
-          router.replace('/onboarding');
-          return;
+          // Sync still running, show progress UI
+          setIsSyncing(true);
+          startPolling();
         } else {
-          // No sync data, redirect to onboarding
-          router.replace('/onboarding');
-          return;
+          // No sync data yet - show "Start Analysis" UI
+          setNeedsSync(true);
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load results';
-        setError(message);
+      } catch {
+        // On error, show "Start Analysis" UI
+        setNeedsSync(true);
       } finally {
         setIsLoading(false);
       }
     }
 
     fetchResult();
-  }, [router]);
+
+    return () => stopPolling();
+  }, [startPolling, stopPolling]);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Start Analysis Handler
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const handleStartAnalysis = useCallback(async (emailCount: number) => {
+    setIsStartingSync(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/onboarding/initial-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          maxEmails: emailCount,
+          includeRead: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to start analysis');
+      }
+
+      // Sync started, switch to progress UI
+      setNeedsSync(false);
+      setIsSyncing(true);
+      startPolling();
+
+      toast({
+        title: 'Analyzing your emails...',
+        description: `Scanning your last ${emailCount} emails`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start';
+      setError(message);
+      toast({
+        variant: 'destructive',
+        title: 'Failed to start analysis',
+        description: message,
+      });
+    } finally {
+      setIsStartingSync(false);
+    }
+  }, [startPolling, toast]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Handlers
@@ -187,17 +266,46 @@ export default function DiscoverPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <Spinner size="lg" />
-          <p className="mt-4 text-muted-foreground">Loading your results...</p>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Error State
+  // Needs Sync State - Show "Start Analysis" UI
   // ───────────────────────────────────────────────────────────────────────────
 
-  if (error || !result) {
+  if (needsSync && !isSyncing) {
+    return (
+      <StartAnalysisCard
+        error={error}
+        isStartingSync={isStartingSync}
+        onStartAnalysis={handleStartAnalysis}
+        onSkip={handleGoToInbox}
+      />
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Syncing State - Show Progress UI
+  // ───────────────────────────────────────────────────────────────────────────
+
+  if (isSyncing) {
+    return (
+      <SyncProgressCard
+        progress={syncProgress}
+        currentStep={syncStep}
+        discoveries={discoveries}
+      />
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Error State (only if not needsSync - otherwise handled above)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  if (!result) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center max-w-md">
@@ -209,7 +317,7 @@ export default function DiscoverPage() {
             {error || 'We couldn\'t load your analysis results.'}
           </p>
           <div className="flex gap-3 justify-center">
-            <Button variant="outline" onClick={() => router.push('/onboarding')}>
+            <Button variant="outline" onClick={() => setNeedsSync(true)}>
               Try Again
             </Button>
             <Button onClick={() => router.push('/inbox')}>
