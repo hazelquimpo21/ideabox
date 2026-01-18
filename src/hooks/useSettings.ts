@@ -24,6 +24,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { UserSettings, CostUsageSummary } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -70,6 +71,7 @@ export interface UseSettingsReturn {
 // DEFAULT VALUES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const DEFAULT_SETTINGS: Partial<UserSettings> = {
   auto_analyze: true,
   extract_actions: true,

@@ -68,3 +68,19 @@ export type {
   UsageData,
   UseSettingsReturn,
 } from './useSettings';
+
+export { useEmailAnalysis, default as useEmailAnalysisDefault } from './useEmailAnalysis';
+export type {
+  UseEmailAnalysisReturn,
+  NormalizedAnalysis,
+  CategorizationResult,
+  ActionExtractionResult,
+  ClientTaggingResult,
+} from './useEmailAnalysis';
+
+export { useSidebarData, default as useSidebarDataDefault } from './useSidebarData';
+export type {
+  UseSidebarDataReturn,
+  CategoryCounts,
+  SidebarClient,
+} from './useSidebarData';

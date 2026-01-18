@@ -162,7 +162,7 @@ export async function runAIAnalysis(
     failureCount: batchResult.failureCount,
     actionsCreated,
     tokensUsed: batchResult.totalTokensUsed,
-    estimatedCost: `$${batchResult.estimatedCost.toFixed(4)}`,
+    cost: batchResult.estimatedCost,
   });
 
   return {
