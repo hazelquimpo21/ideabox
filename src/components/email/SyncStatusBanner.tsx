@@ -230,6 +230,11 @@ export function SyncStatusBanner({
     emailsAnalyzed: number;
     actionsCreated: number;
   } | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+  const [lastAnalysisResult, setLastAnalysisResult] = React.useState<{
+    analyzed: number;
+    actionsCreated: number;
+  } | null>(null);
 
   const supabase = React.useMemo(() => createClient(), []);
 
@@ -414,6 +419,75 @@ export function SyncStatusBanner({
   };
 
   // ───────────────────────────────────────────────────────────────────────────
+  // Trigger AI analysis for unanalyzed emails
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+    setLastAnalysisResult(null);
+
+    logger.start('Manual analysis triggered');
+
+    try {
+      const response = await fetch('/api/emails/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          maxEmails: 50,
+          batchSize: 10,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Analysis failed');
+      }
+
+      logger.success('Manual analysis completed', {
+        analyzed: result.analyzed,
+        actionsCreated: result.results?.actionsCreated || 0,
+      });
+
+      // Store result for display
+      setLastAnalysisResult({
+        analyzed: result.analyzed || 0,
+        actionsCreated: result.results?.actionsCreated || 0,
+      });
+
+      // Update analysis info
+      setSyncInfo((prev) => ({
+        ...prev,
+        analysis: prev.analysis ? {
+          ...prev.analysis,
+          status: 'complete',
+          analyzedCount: (prev.analysis.analyzedCount || 0) + (result.analyzed || 0),
+          unanalyzedCount: Math.max(0, (prev.analysis.unanalyzedCount || 0) - (result.analyzed || 0)),
+          pendingActions: (prev.analysis.pendingActions || 0) + (result.results?.actionsCreated || 0),
+        } : prev.analysis,
+      }));
+
+      onSyncComplete?.();
+
+      // Clear result after delay
+      setTimeout(() => {
+        setLastAnalysisResult(null);
+      }, 5000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Analysis failed';
+      logger.error('Manual analysis failed', { error: errorMessage });
+
+      setSyncInfo((prev) => ({
+        ...prev,
+        status: 'error',
+        errorMessage,
+      }));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // ───────────────────────────────────────────────────────────────────────────
   // Effects
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -584,29 +658,60 @@ export function SyncStatusBanner({
         </p>
       )}
 
-      {/* AI Analysis status bar - show for returning users with analysis data */}
-      {syncInfo.status !== 'never_synced' && syncInfo.status !== 'syncing' && syncInfo.analysis && syncInfo.analysis.analyzedCount > 0 && (
+      {/* AI Analysis status bar - show for returning users */}
+      {syncInfo.status !== 'never_synced' && syncInfo.status !== 'syncing' && syncInfo.analysis && (
         <div className="mt-3 pt-3 border-t border-current/10">
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="h-3 w-3" />
-              <span className="font-medium">AI Analysis:</span>
+          <div className="flex items-center justify-between gap-4 text-xs">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="h-3 w-3" />
+                <span className="font-medium">AI Analysis:</span>
+              </div>
+              <div className="flex items-center gap-3 opacity-75">
+                <span>{syncInfo.analysis.analyzedCount} analyzed</span>
+                {syncInfo.analysis.pendingActions > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Zap className="h-3 w-3" />
+                    {syncInfo.analysis.pendingActions} action{syncInfo.analysis.pendingActions !== 1 ? 's' : ''} pending
+                  </span>
+                )}
+                {syncInfo.analysis.unanalyzedCount > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400">
+                    {syncInfo.analysis.unanalyzedCount} awaiting analysis
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-3 text-xs opacity-75">
-              <span>{syncInfo.analysis.analyzedCount} analyzed</span>
-              {syncInfo.analysis.pendingActions > 0 && (
-                <span className="flex items-center gap-1">
-                  <Zap className="h-3 w-3" />
-                  {syncInfo.analysis.pendingActions} action{syncInfo.analysis.pendingActions !== 1 ? 's' : ''} pending
-                </span>
-              )}
-              {syncInfo.analysis.unanalyzedCount > 0 && (
-                <span className="text-amber-600 dark:text-amber-400">
-                  {syncInfo.analysis.unanalyzedCount} pending analysis
-                </span>
-              )}
-            </div>
+            {/* Analyze button - show when there are unanalyzed emails */}
+            {syncInfo.analysis.unanalyzedCount > 0 && !isAnalyzing && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAnalyze}
+                disabled={isAnalyzing || isSyncing}
+                className="h-7 text-xs"
+              >
+                <Brain className="h-3 w-3 mr-1.5" />
+                Analyze Now
+              </Button>
+            )}
+            {isAnalyzing && (
+              <div className="flex items-center gap-2 text-primary">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Analyzing...</span>
+              </div>
+            )}
           </div>
+          {/* Analysis result feedback */}
+          {lastAnalysisResult && (
+            <div className="flex items-center gap-2 mt-2 text-xs text-green-600 dark:text-green-400">
+              <CheckCircle2 className="h-3 w-3" />
+              <span>
+                Analyzed {lastAnalysisResult.analyzed} email{lastAnalysisResult.analyzed !== 1 ? 's' : ''}
+                {lastAnalysisResult.actionsCreated > 0 && `, found ${lastAnalysisResult.actionsCreated} action${lastAnalysisResult.actionsCreated !== 1 ? 's' : ''}`}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
