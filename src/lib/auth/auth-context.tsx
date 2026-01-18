@@ -199,45 +199,50 @@ export function AuthProvider({ children }: AuthProviderProps) {
    */
   const fetchUserProfile = React.useCallback(
     async (userId: string): Promise<UserProfile | null> => {
-      // Add timeout to prevent hanging if database is unavailable
+      logger.info('Fetching user profile', { userId });
+
+      // Use Promise.race for reliable timeout
       const timeoutMs = 5000;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      try {
-        const { data: profile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', userId)
-          .single()
-          .abortSignal(controller.signal);
-
-        clearTimeout(timeoutId);
-
-        if (profileError && profileError.code !== 'PGRST116') {
-          // PGRST116 = row not found, which is expected for new users
-          // 42P01 = relation does not exist (table not created yet)
-          if (profileError.code === '42P01') {
-            logger.warn('user_profiles table does not exist - run migrations', { userId });
-          } else {
-            logger.warn('Failed to fetch user profile', {
-              userId,
-              error: profileError.message,
-              code: profileError.code
-            });
-          }
-        }
-
-        return profile;
-      } catch (err) {
-        clearTimeout(timeoutId);
-        if (err instanceof Error && err.name === 'AbortError') {
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
           logger.warn('Profile fetch timed out', { userId, timeoutMs });
-        } else {
-          logger.warn('Profile fetch failed', { userId, error: String(err) });
+          resolve(null);
+        }, timeoutMs);
+      });
+
+      const fetchPromise = (async () => {
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+          if (profileError) {
+            // PGRST116 = row not found, which is expected for new users
+            if (profileError.code === 'PGRST116') {
+              logger.info('No profile found (new user)', { userId });
+            } else if (profileError.code === '42P01') {
+              logger.warn('user_profiles table does not exist - run migrations', { userId });
+            } else {
+              logger.warn('Failed to fetch user profile', {
+                userId,
+                error: profileError.message,
+                code: profileError.code
+              });
+            }
+            return null;
+          }
+
+          logger.info('Profile fetched successfully', { userId });
+          return profile;
+        } catch (err) {
+          logger.warn('Profile fetch exception', { userId, error: String(err) });
+          return null;
         }
-        return null;
-      }
+      })();
+
+      return Promise.race([fetchPromise, timeoutPromise]);
     },
     [supabase]
   );
@@ -248,6 +253,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
    */
   const updateUserState = React.useCallback(
     async (supabaseUser: SupabaseUser | null) => {
+      logger.info('Updating user state', { userId: supabaseUser?.id ?? 'null' });
+
       if (!supabaseUser) {
         setUser(null);
         return;
@@ -258,15 +265,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const authUser = mapToAuthUser(supabaseUser, profile);
         setUser(authUser);
 
-        logAuth.loginSuccess({
+        logger.success('User state updated', {
           userId: authUser.id,
+          hasProfile: !!profile,
           onboardingCompleted: authUser.onboardingCompleted
         });
-      } catch {
+      } catch (err) {
         // Still set user even if profile fetch fails (graceful degradation)
         const authUser = mapToAuthUser(supabaseUser, null);
         setUser(authUser);
-        logger.warn('Using auth user without profile', { userId: supabaseUser.id });
+        logger.warn('Using auth user without profile', {
+          userId: supabaseUser.id,
+          error: String(err)
+        });
       }
     },
     [fetchUserProfile, mapToAuthUser]
