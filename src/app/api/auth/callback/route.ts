@@ -27,9 +27,10 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { createLogger, logAuth } from '@/lib/utils/logger';
-import type { TableInsert } from '@/types/database';
+import type { Database, TableInsert } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -105,10 +106,34 @@ export async function GET(request: Request) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 2: Exchange code for session
+  // Step 2: Exchange code for session (with proper cookie handling)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const supabase = await createServerClient();
+  const cookieStore = await cookies();
+
+  // Track cookies that need to be set on the response
+  const cookiesToSet: Array<{
+    name: string;
+    value: string;
+    options: Record<string, unknown>;
+  }> = [];
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+  const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookies) {
+        // Collect all cookies to set on the response later
+        cookies.forEach((cookie) => {
+          cookiesToSet.push(cookie);
+        });
+      },
+    },
+  });
 
   const { data: sessionData, error: exchangeError } = await supabase.auth
     .exchangeCodeForSession(code);
@@ -219,8 +244,16 @@ export async function GET(request: Request) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 5: Redirect to destination
+  // Step 5: Redirect to destination with cookies
   // ─────────────────────────────────────────────────────────────────────────────
 
-  return NextResponse.redirect(`${origin}${redirectPath}`);
+  // Create redirect response and set all collected cookies
+  const response = NextResponse.redirect(`${origin}${redirectPath}`);
+
+  // Set cookies on response (this enables proper cookie chunking by @supabase/ssr)
+  for (const { name, value, options } of cookiesToSet) {
+    response.cookies.set(name, value, options);
+  }
+
+  return response;
 }
