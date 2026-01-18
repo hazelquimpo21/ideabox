@@ -41,7 +41,13 @@ export type ActionType =
   | 'create'
   | 'schedule'
   | 'decide'
+  | 'follow_up'
   | 'none';
+
+/**
+ * Action priority levels.
+ */
+export type ActionPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 /**
  * Action status tracking.

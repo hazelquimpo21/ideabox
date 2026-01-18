@@ -291,7 +291,7 @@ export function useActions(options: UseActionsOptions = {}): UseActionsReturn {
         }
 
         // Recalculate stats
-        setStats((prev) => {
+        setStats(() => {
           const updatedActions = actions.map((a) =>
             a.id === id ? { ...a, status: newStatus, completed_at: completedAt } : a
           );
@@ -380,7 +380,7 @@ export function useActions(options: UseActionsOptions = {}): UseActionsReturn {
         // Add to local state
         if (data) {
           setActions((prev) => [data, ...prev]);
-          setStats((prev) => calculateStats([data, ...actions]));
+          setStats(() => calculateStats([data, ...actions]));
         }
 
         logger.success('Action created', { id: data?.id });

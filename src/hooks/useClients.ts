@@ -316,7 +316,7 @@ export function useClients(options: UseClientsOptions = {}): UseClientsReturn {
             }
             return updated;
           });
-          setStats((prev) => calculateStats([...clients, data]));
+          setStats(() => calculateStats([...clients, data]));
         }
 
         logger.success('Client created', { id: data?.id, name: data?.name });

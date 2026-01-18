@@ -12,6 +12,22 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// DATABASE TYPES (Re-exported for convenience)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type {
+  Email,
+  EmailCategory,
+  Action,
+  ActionType,
+  ActionPriority,
+  ActionStatus,
+  Client,
+  ClientStatus,
+  ClientPriority,
+} from '@/types/database';
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DATA HOOKS
 // ═══════════════════════════════════════════════════════════════════════════════
 

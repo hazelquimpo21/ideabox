@@ -5,22 +5,14 @@
  * Actions are automatically extracted by the AI analyzer system.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * FEATURES (Planned)
+ * FEATURES
  * ═══════════════════════════════════════════════════════════════════════════════
  * - Action list with status indicators
  * - Filter by status (pending, in progress, completed)
- * - Sort by priority, deadline, or date created
- * - Quick status toggle
+ * - Quick status toggle with optimistic updates
  * - Link back to source email
- * - Deadline highlighting
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * CURRENT STATUS
- * ═══════════════════════════════════════════════════════════════════════════════
- * Placeholder implementation. Requires:
- * - useActions hook for data fetching
- * - ActionCard component
- * - API routes for action CRUD operations
+ * - Deadline highlighting with urgency indicators
+ * - Real-time stats
  *
  * @module app/(auth)/actions/page
  */
@@ -39,6 +31,7 @@ import {
   Checkbox,
   Skeleton,
 } from '@/components/ui';
+import { useActions, type Action, type ActionType, type ActionPriority } from '@/hooks';
 import {
   CheckSquare,
   Circle,
@@ -48,96 +41,9 @@ import {
   Calendar,
   Plus,
   Filter,
+  Loader2,
 } from 'lucide-react';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TYPE DEFINITIONS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Mock action data structure.
- * Will be replaced with actual Action type from database.
- */
-interface MockAction {
-  id: string;
-  title: string;
-  description?: string;
-  actionType: 'respond' | 'review' | 'create' | 'schedule' | 'decide';
-  priority: 'low' | 'medium' | 'high';
-  status: 'pending' | 'in_progress' | 'completed';
-  deadline?: Date;
-  emailSubject?: string;
-  emailId?: string;
-  clientName?: string;
-  createdAt: Date;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MOCK DATA (Remove when hooks are implemented)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const MOCK_ACTIONS: MockAction[] = [
-  {
-    id: '1',
-    title: 'Review Q4 budget proposal',
-    description: 'Need to approve or provide feedback on the attached budget',
-    actionType: 'review',
-    priority: 'high',
-    status: 'pending',
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2), // 2 days
-    emailSubject: 'Q4 Budget Review Required',
-    emailId: 'email-1',
-    clientName: 'Acme Corp',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60),
-  },
-  {
-    id: '2',
-    title: 'Respond to partnership inquiry',
-    description: 'Reply to Mike regarding potential collaboration',
-    actionType: 'respond',
-    priority: 'medium',
-    status: 'pending',
-    emailSubject: 'Partnership Opportunity',
-    emailId: 'email-2',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3),
-  },
-  {
-    id: '3',
-    title: 'Schedule team retrospective',
-    description: 'Set up meeting for sprint review',
-    actionType: 'schedule',
-    priority: 'medium',
-    status: 'in_progress',
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 5), // 5 days
-    emailSubject: 'Sprint Planning',
-    emailId: 'email-3',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
-  },
-  {
-    id: '4',
-    title: 'Decide on vendor selection',
-    description: 'Choose between AWS and GCP proposals',
-    actionType: 'decide',
-    priority: 'high',
-    status: 'pending',
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 24), // 1 day
-    emailSubject: 'Cloud Provider Proposals',
-    emailId: 'email-4',
-    clientName: 'Internal',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
-  },
-  {
-    id: '5',
-    title: 'Create project timeline document',
-    description: 'Draft timeline for Q1 deliverables',
-    actionType: 'create',
-    priority: 'low',
-    status: 'completed',
-    emailSubject: 'Q1 Planning',
-    emailId: 'email-5',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72),
-  },
-];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -146,11 +52,13 @@ const MOCK_ACTIONS: MockAction[] = [
 /**
  * Get priority badge variant and color.
  */
-function getPriorityInfo(priority: MockAction['priority']): {
+function getPriorityInfo(priority: ActionPriority | null): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
   label: string;
 } {
   switch (priority) {
+    case 'urgent':
+      return { variant: 'destructive', label: 'Urgent' };
     case 'high':
       return { variant: 'destructive', label: 'High' };
     case 'medium':
@@ -158,14 +66,14 @@ function getPriorityInfo(priority: MockAction['priority']): {
     case 'low':
       return { variant: 'secondary', label: 'Low' };
     default:
-      return { variant: 'outline', label: 'Unknown' };
+      return { variant: 'outline', label: 'Normal' };
   }
 }
 
 /**
  * Get action type icon.
  */
-function getActionTypeIcon(type: MockAction['actionType']): React.ReactNode {
+function getActionTypeIcon(type: ActionType | null): React.ReactNode {
   switch (type) {
     case 'respond':
       return <Mail className="h-4 w-4" />;
@@ -177,6 +85,8 @@ function getActionTypeIcon(type: MockAction['actionType']): React.ReactNode {
       return <Calendar className="h-4 w-4" />;
     case 'decide':
       return <AlertTriangle className="h-4 w-4" />;
+    case 'follow_up':
+      return <Clock className="h-4 w-4" />;
     default:
       return <Circle className="h-4 w-4" />;
   }
@@ -185,9 +95,10 @@ function getActionTypeIcon(type: MockAction['actionType']): React.ReactNode {
 /**
  * Format deadline with urgency indicator.
  */
-function formatDeadline(deadline?: Date): { text: string; isUrgent: boolean } | null {
-  if (!deadline) return null;
+function formatDeadline(deadlineStr?: string | null): { text: string; isUrgent: boolean } | null {
+  if (!deadlineStr) return null;
 
+  const deadline = new Date(deadlineStr);
   const now = new Date();
   const diffMs = deadline.getTime() - now.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
@@ -209,11 +120,17 @@ function formatDeadline(deadline?: Date): { text: string; isUrgent: boolean } | 
 // SUB-COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+interface ActionListItemProps {
+  action: Action;
+  onToggleComplete: (id: string) => void;
+}
+
 /**
  * Action list item component.
+ * Displays a single action with completion toggle and priority badge.
  */
-function ActionListItem({ action }: { action: MockAction }) {
-  const priorityInfo = getPriorityInfo(action.priority);
+function ActionListItem({ action, onToggleComplete }: ActionListItemProps) {
+  const priorityInfo = getPriorityInfo(action.priority as ActionPriority | null);
   const deadlineInfo = formatDeadline(action.deadline);
 
   return (
@@ -227,6 +144,7 @@ function ActionListItem({ action }: { action: MockAction }) {
       {/* Checkbox */}
       <Checkbox
         checked={action.status === 'completed'}
+        onCheckedChange={() => onToggleComplete(action.id)}
         className="mt-1"
         aria-label={`Mark "${action.title}" as ${action.status === 'completed' ? 'incomplete' : 'complete'}`}
       />
@@ -235,7 +153,7 @@ function ActionListItem({ action }: { action: MockAction }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-muted-foreground">
-            {getActionTypeIcon(action.actionType)}
+            {getActionTypeIcon(action.action_type)}
           </span>
           <span className={`font-medium ${action.status === 'completed' ? 'line-through' : ''}`}>
             {action.title}
@@ -252,22 +170,28 @@ function ActionListItem({ action }: { action: MockAction }) {
         )}
 
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          {action.emailSubject && (
+          {action.email_id && (
             <span className="flex items-center gap-1">
               <Mail className="h-3 w-3" />
-              {action.emailSubject}
+              From email
             </span>
           )}
-          {action.clientName && (
+          {action.client_id && (
             <span className="flex items-center gap-1">
               <Circle className="h-3 w-3" />
-              {action.clientName}
+              Client linked
             </span>
           )}
           {deadlineInfo && (
             <span className={`flex items-center gap-1 ${deadlineInfo.isUrgent ? 'text-destructive font-medium' : ''}`}>
               <Clock className="h-3 w-3" />
               {deadlineInfo.text}
+            </span>
+          )}
+          {action.estimated_minutes && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              ~{action.estimated_minutes} min
             </span>
           )}
         </div>
@@ -320,43 +244,42 @@ function EmptyState() {
 /**
  * Actions page component.
  *
- * Currently displays mock data. Will be connected to:
- * - useActions hook for real data
- * - API routes for action operations
+ * Displays actions from Supabase with filtering and optimistic updates.
  */
 export default function ActionsPage() {
-  // TODO: Replace with useActions hook
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [actions, setActions] = React.useState<MockAction[]>([]);
   const [filter, setFilter] = React.useState<'all' | 'pending' | 'completed'>('all');
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  // Simulate loading
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setActions(MOCK_ACTIONS);
-      setIsLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []);
+  // Fetch actions using the useActions hook
+  const {
+    actions,
+    isLoading,
+    error,
+    refetch,
+    toggleComplete,
+    stats,
+  } = useActions({ limit: 100 });
 
-  // Filter actions
+  /** Handle refresh */
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+  };
+
+  /** Calculate overdue count */
+  const overdueCount = actions.filter((a) => {
+    if (!a.deadline || a.status === 'completed') return false;
+    return new Date(a.deadline) < new Date();
+  }).length;
+
+  // Filter actions based on current filter
   const filteredActions = actions.filter((action) => {
     if (filter === 'all') return true;
     if (filter === 'pending') return action.status !== 'completed';
     if (filter === 'completed') return action.status === 'completed';
     return true;
   });
-
-  // Count stats
-  const stats = {
-    pending: actions.filter((a) => a.status === 'pending').length,
-    inProgress: actions.filter((a) => a.status === 'in_progress').length,
-    completed: actions.filter((a) => a.status === 'completed').length,
-    overdue: actions.filter((a) => {
-      if (!a.deadline || a.status === 'completed') return false;
-      return a.deadline < new Date();
-    }).length,
-  };
 
   // ───────────────────────────────────────────────────────────────────────────
   // Render
@@ -375,12 +298,33 @@ export default function ActionsPage() {
           { label: 'Actions' },
         ]}
         actions={
-          <Button variant="outline" size="sm" className="gap-2">
-            <Filter className="h-4 w-4" />
-            Filter
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Filter className="h-4 w-4" />
+            )}
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
         }
       />
+
+      {/* ─────────────────────────────────────────────────────────────────────
+          Error Banner
+          ───────────────────────────────────────────────────────────────────── */}
+      {error && (
+        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <p className="text-sm text-destructive">
+            <strong>Error:</strong> {error.message}
+          </p>
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────────
           Stats Cards
@@ -423,7 +367,7 @@ export default function ActionsPage() {
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-destructive" />
-              <span className="text-2xl font-bold">{stats.overdue}</span>
+              <span className="text-2xl font-bold">{overdueCount}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">Overdue</p>
           </CardContent>
@@ -447,22 +391,16 @@ export default function ActionsPage() {
           ) : (
             <div>
               {filteredActions.map((action) => (
-                <ActionListItem key={action.id} action={action} />
+                <ActionListItem
+                  key={action.id}
+                  action={action}
+                  onToggleComplete={toggleComplete}
+                />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          Developer Note
-          ───────────────────────────────────────────────────────────────────── */}
-      <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-        <p className="text-sm text-yellow-700 dark:text-yellow-400">
-          <strong>Developer Note:</strong> This page displays mock data.
-          Next steps: Create useActions hook, ActionCard component, and API routes.
-        </p>
-      </div>
     </div>
   );
 }
