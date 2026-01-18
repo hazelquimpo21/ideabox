@@ -223,7 +223,7 @@ export function useSyncStatus(): UseSyncStatusReturn {
         .from('sync_logs')
         .select('status, error_message, completed_at, emails_fetched, emails_analyzed')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .order('started_at', { ascending: false })
         .limit(1)
         .single();
 

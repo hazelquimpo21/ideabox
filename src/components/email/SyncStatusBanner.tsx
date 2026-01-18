@@ -162,7 +162,7 @@ export function SyncStatusBanner({
         .from('sync_logs')
         .select('status, error_message, completed_at, emails_fetched')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .order('started_at', { ascending: false })
         .limit(1)
         .single();
 

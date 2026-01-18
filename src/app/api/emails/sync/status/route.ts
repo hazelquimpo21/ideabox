@@ -79,9 +79,9 @@ export async function GET() {
     // Get latest sync log
     const { data: lastSyncLog } = await supabase
       .from('sync_logs')
-      .select('status, emails_fetched, emails_analyzed, errors_count, duration_ms, error_message, completed_at, created_at')
+      .select('status, emails_fetched, emails_analyzed, errors_count, duration_ms, error_message, completed_at, started_at')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('started_at', { ascending: false })
       .limit(1)
       .single();
 
@@ -132,7 +132,7 @@ export async function GET() {
         durationMs: lastSyncLog.duration_ms,
         errorMessage: lastSyncLog.error_message,
         completedAt: lastSyncLog.completed_at,
-        startedAt: lastSyncLog.created_at,
+        startedAt: lastSyncLog.started_at,
       } : null,
       totalEmails: totalEmails || 0,
     });
