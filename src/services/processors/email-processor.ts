@@ -510,29 +510,45 @@ export class EmailProcessor {
   ): Promise<void> {
     const supabase = await createServerClient();
 
-    // Build the analysis record
+    // Build the analysis record matching the database schema
+    // The DB uses JSONB columns for analyzer outputs (see migration 004)
     const record = {
       email_id: emailId,
       user_id: userId,
 
-      // Categorization
-      category: analysis.categorization?.category ?? null,
-      category_confidence: analysis.categorization?.confidence ?? null,
-      topics: analysis.categorization?.topics ?? null,
+      // Analyzer outputs as JSONB objects
+      categorization: analysis.categorization
+        ? {
+            category: analysis.categorization.category,
+            confidence: analysis.categorization.confidence,
+            reasoning: analysis.categorization.reasoning,
+            topics: analysis.categorization.topics,
+          }
+        : null,
 
-      // Action
-      has_action: analysis.actionExtraction?.hasAction ?? false,
-      action_type: analysis.actionExtraction?.actionType ?? null,
-      action_title: analysis.actionExtraction?.actionTitle ?? null,
-      urgency_score: analysis.actionExtraction?.urgencyScore ?? null,
+      action_extraction: analysis.actionExtraction
+        ? {
+            has_action: analysis.actionExtraction.hasAction,
+            action_type: analysis.actionExtraction.actionType,
+            title: analysis.actionExtraction.actionTitle,
+            description: analysis.actionExtraction.actionDescription,
+            urgency_score: analysis.actionExtraction.urgencyScore,
+            deadline: analysis.actionExtraction.deadline,
+          }
+        : null,
 
-      // Client
-      client_id: analysis.clientTagging?.clientId ?? null,
-      client_confidence: analysis.clientTagging?.matchConfidence ?? null,
-      relationship_signal: analysis.clientTagging?.relationshipSignal ?? null,
+      client_tagging: analysis.clientTagging
+        ? {
+            client_match: analysis.clientTagging.clientMatch,
+            client_id: analysis.clientTagging.clientId,
+            client_name: analysis.clientTagging.clientName,
+            confidence: analysis.clientTagging.matchConfidence,
+            relationship_signal: analysis.clientTagging.relationshipSignal,
+          }
+        : null,
 
-      // Metadata
-      total_tokens: analysis.totalTokensUsed,
+      // Metadata columns
+      tokens_used: analysis.totalTokensUsed,
       processing_time_ms: analysis.totalProcessingTimeMs,
       analyzer_version: analysis.analyzerVersion,
     };
