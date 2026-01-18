@@ -160,7 +160,47 @@ export async function GET(request: Request) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 3: Check if user profile exists, create if needed
+  // Step 3: Store Google OAuth tokens in database (reduces cookie size)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const providerToken = sessionData.session?.provider_token;
+  const providerRefreshToken = sessionData.session?.provider_refresh_token;
+
+  if (providerToken && user.email) {
+    logger.info('Storing Gmail OAuth tokens', { userId: user.id });
+
+    // Calculate token expiry (Google tokens typically expire in 1 hour)
+    const tokenExpiry = new Date(Date.now() + 3600 * 1000).toISOString();
+
+    // Check if gmail_account exists, upsert if needed
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: gmailError } = await (supabase as any)
+      .from('gmail_accounts')
+      .upsert(
+        {
+          user_id: user.id,
+          email: user.email,
+          display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+          access_token: providerToken,
+          refresh_token: providerRefreshToken ?? '',
+          token_expiry: tokenExpiry,
+          sync_enabled: true,
+        },
+        { onConflict: 'user_id,email' }
+      );
+
+    if (gmailError) {
+      logger.warn('Failed to store Gmail tokens', {
+        userId: user.id,
+        error: gmailError.message,
+      });
+    } else {
+      logger.success('Stored Gmail OAuth tokens', { userId: user.id });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Step 4: Check if user profile exists, create if needed
   // ─────────────────────────────────────────────────────────────────────────────
 
   // Type assertion for Supabase query result
@@ -215,7 +255,7 @@ export async function GET(request: Request) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 4: Determine redirect destination
+  // Step 5: Determine redirect destination
   // ─────────────────────────────────────────────────────────────────────────────
 
   let redirectPath: string;
@@ -244,7 +284,7 @@ export async function GET(request: Request) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 5: Redirect to destination with cookies
+  // Step 6: Redirect to destination with cookies
   // ─────────────────────────────────────────────────────────────────────────────
 
   // Create redirect response and set all collected cookies
