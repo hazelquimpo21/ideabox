@@ -16,7 +16,7 @@
  * ├──────────────┬──────────────────────────────────────────────────┤
  * │              │                                                  │
  * │   Sidebar    │              Page Content                        │
- * │   (240px)    │              (flex-1)                            │
+ * │   (w-64)     │              (flex-1)                            │
  * │              │                                                  │
  * └──────────────┴──────────────────────────────────────────────────┘
  *
@@ -136,7 +136,7 @@ export default function AuthLayout({
           />
 
           {/* Page Content */}
-          <main className="flex-1 min-h-[calc(100vh-64px)] lg:ml-60">
+          <main className="flex-1 min-h-[calc(100vh-64px)]">
             <div className="container py-6 px-4 md:px-6 lg:px-8 max-w-7xl">
               {children}
             </div>
