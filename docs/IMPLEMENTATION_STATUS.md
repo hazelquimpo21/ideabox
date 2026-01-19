@@ -1,8 +1,8 @@
 # IdeaBox - Implementation Status
 
-> **Last Updated:** January 18, 2026
-> **Current Phase:** Phase 1 - Core Features Complete (Gmail + AI + Pages + Discovery Dashboard)
-> **Branch:** `claude/email-analysis-design-9RSlm`
+> **Last Updated:** January 19, 2026
+> **Current Phase:** Phase 1 - Core Features Complete (Enhanced Analyzers + Event Detection + Priority Jobs)
+> **Branch:** `claude/analyze-polling-events-lPsoz`
 
 ## Overview
 
@@ -326,15 +326,32 @@ A comprehensive initial sync system with a Discovery Dashboard for new users.
 - [x] **Email Sync API** (`app/api/emails/sync/route.ts`) - Trigger sync endpoint
 - [x] **Barrel Export** (`lib/gmail/index.ts`) - Clean imports
 
-#### AI Analyzers ✅ COMPLETE
+#### AI Analyzers ✅ COMPLETE (ENHANCED Jan 2026)
 - [x] **Analyzer Types** (`services/analyzers/types.ts`) - Shared types for all analyzers
+  - NEW: `QuickAction` type for inbox triage suggestions
+  - NEW: `EventDetectionData` type for rich event extraction
+  - NEW: `EventLocationType` type (in_person, virtual, hybrid, unknown)
 - [x] **BaseAnalyzer Class** (`services/analyzers/base-analyzer.ts`) - Abstract base with OpenAI function calling
 - [x] **Categorizer Analyzer** (`services/analyzers/categorizer.ts`) - 7 action-focused email categories
+  - ENHANCED: Now also generates `summary` (one-sentence assistant-style overview)
+  - ENHANCED: Now also generates `quickAction` for inbox triage
 - [x] **Action Extractor Analyzer** (`services/analyzers/action-extractor.ts`) - Action type, urgency, deadline extraction
 - [x] **Client Tagger Analyzer** (`services/analyzers/client-tagger.ts`) - Client matching with fuzzy lookup
+- [x] **Event Detector Analyzer** (`services/analyzers/event-detector.ts`) - NEW! Rich event extraction
+  - Extracts: eventDate, eventTime, locationType, location, registrationDeadline, rsvpRequired, organizer, cost
+  - Only runs when category === 'event' (conditional execution saves tokens)
 - [x] **Email Processor** (`services/processors/email-processor.ts`) - Single email orchestration
+  - ENHANCED: Two-phase execution (core analyzers in parallel, then conditional EventDetector)
 - [x] **Batch Processor** (`services/processors/batch-processor.ts`) - Rate-limited parallel processing
 - [x] **Barrel Exports** (`services/index.ts`, `services/analyzers/index.ts`, `services/processors/index.ts`)
+
+#### Background Jobs ✅ NEW (Jan 2026)
+- [x] **Priority Reassessment Service** (`services/jobs/priority-reassessment.ts`)
+  - Reassesses priorities based on: deadline proximity, client importance, item staleness
+  - Formula: `final_priority = base * deadline_factor * client_factor * staleness_factor`
+  - Designed to run 2-3x daily via cron
+  - Exports: `reassessPrioritiesForUser`, `reassessPrioritiesForAllUsers`
+- [x] **Jobs Index** (`services/jobs/index.ts`) - Barrel export
 
 #### Additional Pages ✅ COMPLETE
 - [x] **Email Detail View** (`components/email/EmailDetail.tsx`) - Full email display with header, body, AI analysis
@@ -459,18 +476,22 @@ src/
 │       └── useClients.test.ts   ✅
 ├── services/                    ✅ Business logic services
 │   ├── index.ts                 ✅ Barrel export
-│   ├── analyzers/               ✅ AI analyzers
+│   ├── analyzers/               ✅ AI analyzers (ENHANCED Jan 2026)
 │   │   ├── index.ts             ✅ Barrel export
-│   │   ├── types.ts             ✅ Shared analyzer types
+│   │   ├── types.ts             ✅ Shared analyzer types (+QuickAction, EventDetection)
 │   │   ├── base-analyzer.ts     ✅ Abstract base class
-│   │   ├── categorizer.ts       ✅ Email categorization
+│   │   ├── categorizer.ts       ✅ Email categorization (+summary, +quickAction)
 │   │   ├── action-extractor.ts  ✅ Action extraction
-│   │   └── client-tagger.ts     ✅ Client matching
-│   ├── processors/              ✅ Email processors
+│   │   ├── client-tagger.ts     ✅ Client matching
+│   │   └── event-detector.ts    ✅ Event extraction (NEW!)
+│   ├── processors/              ✅ Email processors (ENHANCED)
 │   │   ├── index.ts             ✅ Barrel export
-│   │   ├── email-processor.ts   ✅ Single email orchestration
+│   │   ├── email-processor.ts   ✅ Single email orchestration (+2-phase execution)
 │   │   └── batch-processor.ts   ✅ Batch processing
-│   └── sync/                    ✅ Sync services (ENHANCED!)
+│   ├── jobs/                    ✅ Background jobs (NEW!)
+│   │   ├── index.ts             ✅ Barrel export
+│   │   └── priority-reassessment.ts ✅ Priority recalculation
+│   └── sync/                    ✅ Sync services
 │       ├── index.ts             ✅ Barrel export
 │       ├── email-sync-service.ts ✅ Gmail sync orchestration
 │       ├── email-prefilter.ts   ✅ Pre-filter before AI (saves tokens)
@@ -666,9 +687,48 @@ toast({
 
 ---
 
-## Recent Changes (January 18, 2026)
+## Recent Changes (January 19, 2026)
 
-### Session 6 (Current) - Discovery Dashboard
+### Session 7 (Current) - Enhanced Analyzers + Event Detection + Priority Jobs
+
+- ✅ **Enhanced Categorizer Analyzer**
+  - Added `summary` field: One-sentence assistant-style overview
+  - Added `quickAction` field: Suggested quick action for inbox triage
+  - Updated prompt with detailed guidance for summary and quick action generation
+  - Example: "Sarah from Acme wants you to review the proposal by Friday" + `review`
+
+- ✅ **New Event Detector Analyzer** (`src/services/analyzers/event-detector.ts`)
+  - Extracts rich event details for calendar integration
+  - Fields: eventDate, eventTime, eventEndTime, locationType, location, registrationDeadline, rsvpRequired, rsvpUrl, organizer, cost, additionalDetails
+  - Runs ONLY when category === 'event' (saves tokens on non-events)
+  - ~300 lines with comprehensive documentation
+
+- ✅ **Updated Email Processor** (`src/services/processors/email-processor.ts`)
+  - Two-phase execution model:
+    1. Core analyzers run in parallel (Categorizer, ActionExtractor, ClientTagger)
+    2. Conditional analyzers run after (EventDetector when category='event')
+  - Enhanced logging with summary, quickAction, and event info
+  - Updated saveAnalysis to include new fields in JSONB columns
+
+- ✅ **New Priority Reassessment Service** (`src/services/jobs/priority-reassessment.ts`)
+  - Recalculates priorities based on: deadline proximity, client importance, staleness
+  - Configurable thresholds and multipliers
+  - `reassessPrioritiesForUser(userId)` - single user
+  - `reassessPrioritiesForAllUsers()` - batch for cron job
+  - Designed to run 2-3x daily
+
+- ✅ **Updated Types and Config**
+  - `src/services/analyzers/types.ts` - Added QuickAction, EventDetectionData, EventLocationType
+  - `src/config/analyzers.ts` - Added eventDetector config, increased categorizer maxTokens
+  - `src/types/database.ts` - Added JSONB structure types (CategorizationJsonb, EventDetectionJsonb, etc.)
+
+- ✅ **Updated Documentation**
+  - `docs/AI_ANALYZER_SYSTEM.md` - Added EventDetector, updated Categorizer, added execution flow diagram
+  - `docs/IMPLEMENTATION_STATUS.md` - This file
+
+---
+
+### Session 6 - Discovery Dashboard
 - ✅ Implemented Discovery Dashboard feature
   - Created `src/types/discovery.ts` with all discovery types
   - Created `src/config/initial-sync.ts` with sync configuration

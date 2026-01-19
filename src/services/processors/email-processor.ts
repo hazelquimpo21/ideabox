@@ -63,6 +63,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { CategorizerAnalyzer } from '@/services/analyzers/categorizer';
 import { ActionExtractorAnalyzer } from '@/services/analyzers/action-extractor';
 import { ClientTaggerAnalyzer } from '@/services/analyzers/client-tagger';
+import { EventDetectorAnalyzer } from '@/services/analyzers/event-detector';
 import { ANALYZER_VERSION } from '@/services/analyzers/base-analyzer';
 import { toEmailInput } from '@/services/analyzers/types';
 import type { Email } from '@/types/database';
@@ -72,6 +73,7 @@ import type {
   CategorizationResult,
   ActionExtractionResult,
   ClientTaggingResult,
+  EventDetectionResult,
   AggregatedAnalysis,
   EmailProcessingResult,
 } from '@/services/analyzers/types';
@@ -155,21 +157,30 @@ export class EmailProcessor {
   /** Client tagger analyzer instance */
   private clientTagger: ClientTaggerAnalyzer;
 
+  /** Event detector analyzer instance (runs conditionally for events) */
+  private eventDetector: EventDetectorAnalyzer;
+
   /**
    * Creates a new EmailProcessor instance.
    *
    * Initializes all analyzers. Each analyzer checks its own
    * enabled status from config when running.
+   *
+   * ANALYZER EXECUTION FLOW:
+   * 1. Categorizer, ActionExtractor, ClientTagger run in PARALLEL (always)
+   * 2. EventDetector runs AFTER categorizer IF category === 'event'
    */
   constructor() {
     this.categorizer = new CategorizerAnalyzer();
     this.actionExtractor = new ActionExtractorAnalyzer();
     this.clientTagger = new ClientTaggerAnalyzer();
+    this.eventDetector = new EventDetectorAnalyzer();
 
     logger.debug('EmailProcessor initialized', {
       categorizerEnabled: this.categorizer.isEnabled(),
       actionExtractorEnabled: this.actionExtractor.isEnabled(),
       clientTaggerEnabled: this.clientTagger.isEnabled(),
+      eventDetectorEnabled: this.eventDetector.isEnabled(),
     });
   }
 
@@ -225,25 +236,50 @@ export class EmailProcessor {
       return this.createSkippedResult(emailInput.id);
     }
 
-    // Run all analyzers in parallel
+    // ═══════════════════════════════════════════════════════════════════════
+    // PHASE 1: Run core analyzers in parallel
+    // ═══════════════════════════════════════════════════════════════════════
     const [categorizationResult, actionResult, clientResult] =
-      await this.runAnalyzers(emailInput, context);
+      await this.runCoreAnalyzers(emailInput, context);
 
-    // Aggregate results
+    // ═══════════════════════════════════════════════════════════════════════
+    // PHASE 2: Run conditional analyzers based on categorization
+    // ═══════════════════════════════════════════════════════════════════════
+    let eventResult: EventDetectionResult | undefined;
+
+    // Run EventDetector ONLY if category is 'event'
+    // This saves tokens by not running expensive event extraction on non-events
+    if (
+      categorizationResult.success &&
+      categorizationResult.data.category === 'event' &&
+      this.eventDetector.isEnabled()
+    ) {
+      logger.debug('Running conditional EventDetector (category is event)', {
+        emailId: emailInput.id,
+      });
+
+      eventResult = await this.runEventDetector(emailInput, context);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PHASE 3: Aggregate results from all analyzers
+    // ═══════════════════════════════════════════════════════════════════════
     const aggregatedAnalysis = this.aggregateResults(
       categorizationResult,
       actionResult,
-      clientResult
+      clientResult,
+      eventResult
     );
 
-    // Collect errors
+    // Collect errors from all analyzers
     const errors = this.collectErrors(
       categorizationResult,
       actionResult,
-      clientResult
+      clientResult,
+      eventResult
     );
 
-    // Determine success (at least one analyzer succeeded)
+    // Determine success (at least one core analyzer succeeded)
     const success =
       categorizationResult.success ||
       actionResult.success ||
@@ -257,6 +293,7 @@ export class EmailProcessor {
         categorization: categorizationResult,
         actionExtraction: actionResult,
         clientTagging: clientResult,
+        eventDetection: eventResult,
       },
       errors,
     };
@@ -319,8 +356,12 @@ export class EmailProcessor {
       emailId: emailInput.id,
       success,
       category: aggregatedAnalysis.categorization?.category,
+      summary: aggregatedAnalysis.categorization?.summary?.substring(0, 50),
+      quickAction: aggregatedAnalysis.categorization?.quickAction,
       hasAction: aggregatedAnalysis.actionExtraction?.hasAction,
       clientMatch: aggregatedAnalysis.clientTagging?.clientMatch,
+      hasEvent: aggregatedAnalysis.eventDetection?.hasEvent ?? false,
+      eventTitle: aggregatedAnalysis.eventDetection?.eventTitle?.substring(0, 30),
       tokensUsed: aggregatedAnalysis.totalTokensUsed,
       totalTimeMs: totalTime,
     });
@@ -333,20 +374,29 @@ export class EmailProcessor {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * Runs all enabled analyzers in parallel.
+   * Runs all core analyzers in parallel.
    *
-   * Uses Promise.allSettled to ensure all analyzers run
-   * even if some fail. Returns results for all analyzers.
+   * These analyzers run on EVERY email:
+   * - Categorizer: Determines category, summary, quickAction
+   * - ActionExtractor: Extracts detailed action info
+   * - ClientTagger: Links to known clients
+   *
+   * Uses Promise.allSettled to ensure all analyzers run even if some fail.
    *
    * @param email - Email to analyze
    * @param context - User context
    * @returns Tuple of [categorization, action, client] results
    */
-  private async runAnalyzers(
+  private async runCoreAnalyzers(
     email: EmailInput,
     context: UserContext
   ): Promise<[CategorizationResult, ActionExtractionResult, ClientTaggingResult]> {
-    // Run all analyzers in parallel
+    logger.debug('Running core analyzers in parallel', {
+      emailId: email.id,
+      analyzers: ['Categorizer', 'ActionExtractor', 'ClientTagger'],
+    });
+
+    // Run all core analyzers in parallel
     // Note: Each analyzer handles its own enabled check
     const results = await Promise.allSettled([
       this.categorizer.analyze(email, context),
@@ -369,6 +419,48 @@ export class EmailProcessor {
     );
 
     return [categorizationResult, actionResult, clientResult];
+  }
+
+  /**
+   * Runs the EventDetector analyzer.
+   *
+   * This is a CONDITIONAL analyzer - it only runs when:
+   * 1. Categorizer returns category === 'event'
+   * 2. EventDetector is enabled in config
+   *
+   * Running conditionally saves tokens since events are ~5-10% of emails.
+   *
+   * @param email - Email to analyze
+   * @param context - User context
+   * @returns Event detection result
+   */
+  private async runEventDetector(
+    email: EmailInput,
+    context: UserContext
+  ): Promise<EventDetectionResult> {
+    logger.debug('Running EventDetector (conditional analyzer)', {
+      emailId: email.id,
+    });
+
+    try {
+      return await this.eventDetector.analyze(email, context);
+    } catch (error) {
+      // If EventDetector throws (shouldn't happen, but be safe), return failed result
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('EventDetector threw exception', {
+        emailId: email.id,
+        error: errorMessage,
+      });
+
+      return {
+        success: false,
+        data: {} as EventDetectionResult['data'],
+        confidence: 0,
+        tokensUsed: 0,
+        processingTimeMs: 0,
+        error: errorMessage,
+      };
+    }
   }
 
   /**
@@ -417,27 +509,36 @@ export class EmailProcessor {
    * @param categorization - Categorization result
    * @param action - Action extraction result
    * @param client - Client tagging result
+   * @param event - Event detection result (optional, only present for event emails)
    * @returns Aggregated analysis
    */
   private aggregateResults(
     categorization: CategorizationResult,
     action: ActionExtractionResult,
-    client: ClientTaggingResult
+    client: ClientTaggingResult,
+    event?: EventDetectionResult
   ): AggregatedAnalysis {
-    // Calculate totals
+    // Calculate totals (include event tokens if present)
     const totalTokensUsed =
-      categorization.tokensUsed + action.tokensUsed + client.tokensUsed;
+      categorization.tokensUsed +
+      action.tokensUsed +
+      client.tokensUsed +
+      (event?.tokensUsed ?? 0);
 
     const totalProcessingTimeMs =
       categorization.processingTimeMs +
       action.processingTimeMs +
-      client.processingTimeMs;
+      client.processingTimeMs +
+      (event?.processingTimeMs ?? 0);
 
     return {
       // Include data from successful analyzers only
       categorization: categorization.success ? categorization.data : undefined,
       actionExtraction: action.success ? action.data : undefined,
       clientTagging: client.success ? client.data : undefined,
+
+      // Event detection (only present when category === 'event')
+      eventDetection: event?.success ? event.data : undefined,
 
       // Totals
       totalTokensUsed,
@@ -452,12 +553,14 @@ export class EmailProcessor {
    * @param categorization - Categorization result
    * @param action - Action extraction result
    * @param client - Client tagging result
+   * @param event - Event detection result (optional)
    * @returns Array of errors
    */
   private collectErrors(
     categorization: CategorizationResult,
     action: ActionExtractionResult,
-    client: ClientTaggingResult
+    client: ClientTaggingResult,
+    event?: EventDetectionResult
   ): Array<{ analyzer: string; error: string }> {
     const errors: Array<{ analyzer: string; error: string }> = [];
 
@@ -469,6 +572,10 @@ export class EmailProcessor {
     }
     if (!client.success && client.error) {
       errors.push({ analyzer: 'ClientTagger', error: client.error });
+    }
+    // Event detector errors (only present if it ran)
+    if (event && !event.success && event.error) {
+      errors.push({ analyzer: 'EventDetector', error: event.error });
     }
 
     return errors;
@@ -518,16 +625,24 @@ export class EmailProcessor {
       email_id: emailId,
       user_id: userId,
 
+      // ═══════════════════════════════════════════════════════════════════════
       // Analyzer outputs as JSONB objects
+      // ═══════════════════════════════════════════════════════════════════════
+
+      // Categorization (ENHANCED: now includes summary and quick_action)
       categorization: analysis.categorization
         ? {
             category: analysis.categorization.category,
             confidence: analysis.categorization.confidence,
             reasoning: analysis.categorization.reasoning,
             topics: analysis.categorization.topics,
+            // NEW FIELDS (Jan 2026)
+            summary: analysis.categorization.summary,
+            quick_action: analysis.categorization.quickAction,
           }
         : null,
 
+      // Action extraction
       action_extraction: analysis.actionExtraction
         ? {
             has_action: analysis.actionExtraction.hasAction,
@@ -539,6 +654,7 @@ export class EmailProcessor {
           }
         : null,
 
+      // Client tagging
       client_tagging: analysis.clientTagging
         ? {
             client_match: analysis.clientTagging.clientMatch,
@@ -549,7 +665,29 @@ export class EmailProcessor {
           }
         : null,
 
+      // Event detection (NEW: only present when category === 'event')
+      event_detection: analysis.eventDetection
+        ? {
+            has_event: analysis.eventDetection.hasEvent,
+            event_title: analysis.eventDetection.eventTitle,
+            event_date: analysis.eventDetection.eventDate,
+            event_time: analysis.eventDetection.eventTime,
+            event_end_time: analysis.eventDetection.eventEndTime,
+            location_type: analysis.eventDetection.locationType,
+            location: analysis.eventDetection.location,
+            registration_deadline: analysis.eventDetection.registrationDeadline,
+            rsvp_required: analysis.eventDetection.rsvpRequired,
+            rsvp_url: analysis.eventDetection.rsvpUrl,
+            organizer: analysis.eventDetection.organizer,
+            cost: analysis.eventDetection.cost,
+            additional_details: analysis.eventDetection.additionalDetails,
+            confidence: analysis.eventDetection.confidence,
+          }
+        : null,
+
+      // ═══════════════════════════════════════════════════════════════════════
       // Metadata columns
+      // ═══════════════════════════════════════════════════════════════════════
       tokens_used: analysis.totalTokensUsed,
       processing_time_ms: analysis.totalProcessingTimeMs,
       analyzer_version: analysis.analyzerVersion,
