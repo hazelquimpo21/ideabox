@@ -30,6 +30,7 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createLogger, logAuth } from '@/lib/utils/logger';
+import { gmailWatchService } from '@/lib/gmail/watch-service';
 import type { Database, TableInsert } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -196,6 +197,47 @@ export async function GET(request: Request) {
       });
     } else {
       logger.success('Stored Gmail OAuth tokens', { userId: user.id });
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Start Gmail watch for push notifications (if enabled)
+      // ─────────────────────────────────────────────────────────────────────────
+      // This enables real-time email sync via Google Cloud Pub/Sub.
+      // If watch setup fails, we fall back to polling (scheduled sync).
+      if (gmailWatchService.isPushEnabled()) {
+        try {
+          // Get the account ID we just created/updated
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: gmailAccount } = await (supabase as any)
+            .from('gmail_accounts')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('email', user.email)
+            .single();
+
+          if (gmailAccount?.id) {
+            const watch = await gmailWatchService.startWatch(
+              providerToken,
+              gmailAccount.id
+            );
+            logger.success('Started Gmail push notifications', {
+              userId: user.id,
+              historyId: watch.historyId,
+              expiresAt: new Date(parseInt(watch.expiration)).toISOString(),
+            });
+          }
+        } catch (watchError) {
+          // Don't fail the auth flow if watch setup fails
+          // We'll fall back to polling via scheduled sync
+          logger.warn('Failed to start Gmail push notifications (will use polling)', {
+            userId: user.id,
+            error: watchError instanceof Error ? watchError.message : 'Unknown error',
+          });
+        }
+      } else {
+        logger.debug('Gmail push notifications not enabled (missing GOOGLE_CLOUD_PROJECT)', {
+          userId: user.id,
+        });
+      }
     }
   }
 

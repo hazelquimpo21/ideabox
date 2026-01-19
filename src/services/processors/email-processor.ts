@@ -841,27 +841,75 @@ export class EmailProcessor {
     name: string | null,
     emailDate: string
   ): Promise<ContactForEnrichment | null> {
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Input validation
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (!email || !email.includes('@')) {
+      logger.debug('Skipping contact upsert: invalid email', {
+        email: email?.substring(0, 30),
+      });
+      return null;
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
     try {
       const supabase = await createServerClient();
 
-      // Use the database function for atomic upsert
+      // ─────────────────────────────────────────────────────────────────────────────
+      // Call the database function for atomic upsert
+      // This function (upsert_contact_from_email) is defined in migration 012
+      // and uses SECURITY DEFINER to bypass RLS
+      // ─────────────────────────────────────────────────────────────────────────────
+      logger.debug('Upserting contact', {
+        userId: userId.substring(0, 8) + '...',
+        email: normalizedEmail.substring(0, 30),
+        hasName: !!name,
+      });
+
       const { data, error } = await supabase.rpc('upsert_contact_from_email', {
         p_user_id: userId,
-        p_email: email.toLowerCase(),
+        p_email: normalizedEmail,
         p_name: name,
         p_email_date: emailDate,
         p_is_sent: false, // This is a received email
       });
 
       if (error) {
-        logger.warn('Failed to upsert contact', {
-          email: email.substring(0, 20),
-          error: error.message,
+        // Enhanced error logging for debugging
+        logger.warn('Failed to upsert contact via RPC', {
+          email: normalizedEmail.substring(0, 30),
+          errorCode: error.code,
+          errorMessage: error.message,
+          errorHint: error.hint,
+          errorDetails: error.details,
+          // Common error codes:
+          // PGRST202: Function not found (migration not run)
+          // 23503: Foreign key violation (user doesn't exist)
+          // 42501: RLS policy violation (shouldn't happen with SECURITY DEFINER)
+        });
+
+        // If the function doesn't exist, log a critical error
+        if (error.code === 'PGRST202' || error.message?.includes('function')) {
+          logger.error('CRITICAL: upsert_contact_from_email function not found. Run migration 012_contacts.sql', {
+            errorCode: error.code,
+          });
+        }
+
+        return null;
+      }
+
+      // data should be the contact UUID returned by the function
+      if (!data) {
+        logger.warn('Contact upsert returned null data', {
+          email: normalizedEmail.substring(0, 30),
         });
         return null;
       }
 
+      // ─────────────────────────────────────────────────────────────────────────────
       // Fetch the contact for enrichment check
+      // ─────────────────────────────────────────────────────────────────────────────
       const { data: contact, error: fetchError } = await supabase
         .from('contacts')
         .select('id, email, email_count, extraction_confidence, last_extracted_at')
@@ -871,15 +919,31 @@ export class EmailProcessor {
       if (fetchError) {
         logger.warn('Failed to fetch upserted contact', {
           contactId: data,
-          error: fetchError.message,
+          errorCode: fetchError.code,
+          errorMessage: fetchError.message,
         });
         return null;
       }
 
+      logger.debug('Contact upserted successfully', {
+        contactId: contact.id,
+        email: contact.email.substring(0, 30),
+        emailCount: contact.email_count,
+      });
+
       return contact as ContactForEnrichment;
+
     } catch (error) {
+      // Catch any unexpected errors (network issues, etc.)
       const message = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('Unexpected error upserting contact', { error: message });
+      const stack = error instanceof Error ? error.stack : undefined;
+
+      logger.error('Unexpected error upserting contact', {
+        email: normalizedEmail.substring(0, 30),
+        error: message,
+        stack: stack?.substring(0, 200),
+      });
+
       return null;
     }
   }
