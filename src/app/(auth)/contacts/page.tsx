@@ -274,7 +274,7 @@ function ContactCard({
   onToggleVip: (id: string) => void;
   onToggleMuted: (id: string) => void;
 }) {
-  const relationshipConfig = RELATIONSHIP_CONFIG[contact.relationship_type];
+  const relationshipConfig = RELATIONSHIP_CONFIG[contact.relationship_type] || RELATIONSHIP_CONFIG.unknown;
 
   return (
     <Card className="hover:bg-muted/50 transition-colors">
