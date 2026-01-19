@@ -50,6 +50,7 @@ import {
   Tag,
   Building2,
   Sparkles,
+  Target,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -124,6 +125,11 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
+  {
+    label: 'Hub',
+    href: '/hub',
+    icon: Target,
+  },
   {
     label: 'Discover',
     href: '/discover',

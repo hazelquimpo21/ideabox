@@ -94,3 +94,13 @@ export type {
   UseInitialSyncProgressOptions,
   UseInitialSyncProgressReturn,
 } from './useInitialSyncProgress';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HUB HOOKS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useHubPriorities, default as useHubPrioritiesDefault } from './useHubPriorities';
+export type {
+  UseHubPrioritiesOptions,
+  UseHubPrioritiesReturn,
+} from './useHubPriorities';
