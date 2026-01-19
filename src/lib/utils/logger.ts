@@ -598,6 +598,24 @@ export const logSync = {
       { context: 'Sync', ...meta },
       `${LOG_EMOJIS.SYNC}${LOG_EMOJIS.SUCCESS} Batch processing complete`
     ),
+
+  syncStart: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'Sync', ...meta },
+      `${LOG_EMOJIS.SYNC}${LOG_EMOJIS.START} Sync started`
+    ),
+
+  syncComplete: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'Sync', ...meta },
+      `${LOG_EMOJIS.SYNC}${LOG_EMOJIS.SUCCESS} Sync complete`
+    ),
+
+  syncError: (meta: LogMetadata) =>
+    baseLogger.error(
+      { context: 'Sync', ...meta },
+      `${LOG_EMOJIS.SYNC}${LOG_EMOJIS.ERROR} Sync failed`
+    ),
 };
 
 /**
