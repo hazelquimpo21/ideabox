@@ -134,12 +134,16 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 
 ## Phase 1 Analyzers
 
-### 1. Categorizer Analyzer
+### 1. Categorizer Analyzer (ENHANCED Jan 2026)
 
-**Purpose:** Classify email into primary category based on **what action is needed**
+**Purpose:** Classify email + generate assistant-style summary + suggest quick action
 
 > **IMPORTANT:** "client" is NOT a category. Client relationship is tracked via `client_id` in the database.
 > This design allows a client email to be categorized as "action_required" rather than hidden in a "client" bucket.
+
+**ENHANCED (Jan 2026):** Now also generates:
+- `summary`: One-sentence assistant-style overview (e.g., "Sarah from Acme wants you to review the proposal by Friday")
+- `quick_action`: Suggested quick action for ALL emails (respond, review, archive, save, calendar, unsubscribe, follow_up, none)
 
 **Function Schema:**
 ```typescript
@@ -177,34 +181,33 @@ async analyze(email: Email): Promise<AnalyzerResult> {
         items: { type: 'string' },
         description: 'Key topics extracted from email: billing, meeting, feedback, etc.',
       },
+      // NEW FIELDS (Jan 2026)
+      summary: {
+        type: 'string',
+        description: 'One-sentence assistant-style summary. Example: "Sarah from Acme wants you to review the proposal by Friday"',
+      },
+      quick_action: {
+        type: 'string',
+        enum: ['respond', 'review', 'archive', 'save', 'calendar', 'unsubscribe', 'follow_up', 'none'],
+        description: 'Suggested quick action for inbox triage',
+      },
     },
-    required: ['category', 'confidence', 'reasoning'],
+    required: ['category', 'confidence', 'reasoning', 'summary', 'quick_action'],
   },
 }
 ```
 
-**System Prompt:**
-```
-You are an email categorization specialist. Categorize this email by WHAT ACTION IS NEEDED, not by who sent it.
+**Output Examples:**
 
-IMPORTANT: Do NOT use "client" as a category. Client relationships are tracked separately.
-A client email asking for something should be "action_required", not hidden in a client bucket.
+| Email Type | Summary | Quick Action |
+|------------|---------|--------------|
+| Client request | "Sarah from Acme wants you to review the Q1 proposal by Friday" | respond |
+| AWS bill | "Your AWS bill for January is $142.67 - payment processed" | archive |
+| LinkedIn digest | "LinkedIn: 5 people viewed your profile this week" | review |
+| Event invite | "Milwaukee Tech Meetup on Jan 25 at 6pm - RSVP requested" | calendar |
+| Spam-ish newsletter | "Marketing email from SaaS tool you signed up for once" | unsubscribe |
 
-Categories (choose ONE):
-- action_required: User needs to respond, decide, review, or do something
-- event: Contains a calendar-worthy event with date/time/location
-- newsletter: Informational content, digest, regular publication (no action needed)
-- promo: Marketing, promotional, sales content
-- admin: Receipts, confirmations, automated notifications
-- personal: Personal correspondence (friends, family, non-work)
-- noise: Low value, safe to ignore (spam-adjacent, irrelevant)
-
-Also extract 1-5 topic keywords that describe the email content (e.g., "billing", "meeting", "project-update").
-
-Be decisive but honest about confidence. If truly ambiguous, use confidence < 0.7.
-```
-
-**Cost:** ~$0.0001 per email (GPT-4.1-mini)
+**Cost:** ~$0.00015 per email (GPT-4.1-mini, increased tokens for summary)
 
 ---
 
@@ -700,13 +703,143 @@ this.log('error', 'API call failed', {
 });
 ```
 
+### 4. Event Detector Analyzer (NEW Jan 2026)
+
+**Purpose:** Extract rich event details for calendar integration
+
+**When It Runs:** ONLY when Categorizer returns `category === 'event'` (conditional execution saves tokens)
+
+**Function Schema:**
+```typescript
+{
+  name: 'detect_event',
+  description: 'Extracts detailed event information from an email for calendar integration',
+  parameters: {
+    type: 'object',
+    properties: {
+      has_event: { type: 'boolean' },
+      event_title: { type: 'string', description: 'Name of the event' },
+      event_date: { type: 'string', description: 'ISO date (YYYY-MM-DD)' },
+      event_time: { type: 'string', description: '24-hour time (HH:MM)' },
+      event_end_time: { type: 'string', description: 'End time if known' },
+      location_type: {
+        type: 'string',
+        enum: ['in_person', 'virtual', 'hybrid', 'unknown'],
+      },
+      location: { type: 'string', description: 'Physical address or video link' },
+      registration_deadline: { type: 'string', description: 'RSVP deadline (ISO date)' },
+      rsvp_required: { type: 'boolean' },
+      rsvp_url: { type: 'string', description: 'Registration URL' },
+      organizer: { type: 'string', description: 'Who is hosting' },
+      cost: { type: 'string', description: 'Price info (e.g., "Free", "$25")' },
+      additional_details: { type: 'string', description: 'Parking, dress code, etc.' },
+      confidence: { type: 'number', minimum: 0, maximum: 1 },
+    },
+    required: ['has_event', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence'],
+  },
+}
+```
+
+**Output Example:**
+```json
+{
+  "has_event": true,
+  "event_title": "Milwaukee Tech Meetup: AI in Production",
+  "event_date": "2026-01-25",
+  "event_time": "18:00",
+  "event_end_time": "20:00",
+  "location_type": "in_person",
+  "location": "123 Main St, Milwaukee, WI 53211",
+  "registration_deadline": "2026-01-23",
+  "rsvp_required": true,
+  "rsvp_url": "https://mketech.org/rsvp",
+  "organizer": "MKE Tech Community",
+  "cost": "Free",
+  "confidence": 0.95
+}
+```
+
+**Cost:** ~$0.0002 per event email (only runs on ~5-10% of emails)
+
+---
+
+## Background Jobs
+
+### Priority Reassessment Job (NEW Jan 2026)
+
+**Purpose:** Periodically recalculate priorities based on evolving factors
+
+**Schedule:** Runs 2-3 times daily (recommended: 6 AM, 12 PM, 5 PM)
+
+**Factors Applied:**
+
+| Factor | Description | Multiplier Range |
+|--------|-------------|------------------|
+| Deadline Proximity | Items with approaching deadlines get boosted | 1.0x - 2.0x |
+| Client Importance | VIP clients get higher baseline priority | 1.0x - 1.5x |
+| Staleness | Old unactioned items surface for attention | 1.0x - 1.3x |
+
+**Formula:** `final_priority = base_urgency * deadline_factor * client_factor * staleness_factor`
+
+**Usage:**
+```typescript
+import { reassessPrioritiesForAllUsers } from '@/services/jobs';
+
+// In cron job
+await reassessPrioritiesForAllUsers();
+```
+
+---
+
 ## Phase 2+ Analyzer Additions
 
 Future analyzers to add (same pattern):
-- **EventDetectorAnalyzer**: Extract event details (date, time, location, RSVP)
 - **URLExtractorAnalyzer**: Find and categorize URLs in email
 - **ContentOpportunityAnalyzer**: Detect tweet ideas, networking chances
 - **UnsubscribeAnalyzer**: Suggest newsletters to unsubscribe from
 - **SentimentAnalyzer**: Detect client relationship health
 
 All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify independently.
+
+---
+
+## Analyzer Execution Flow (Jan 2026)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    EMAIL PROCESSING PIPELINE                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐           │
+│  │ Categorizer │   │   Action    │   │   Client    │           │
+│  │             │   │  Extractor  │   │   Tagger    │           │
+│  │ + summary   │   │             │   │             │           │
+│  │ + quickAct  │   │             │   │             │           │
+│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘           │
+│         │                 │                 │                   │
+│         └────────────┬────┴────────────────┘                   │
+│                      │                                          │
+│                      ▼                                          │
+│              ┌───────────────┐                                  │
+│              │  Is category  │                                  │
+│              │   = 'event'?  │                                  │
+│              └───────┬───────┘                                  │
+│                      │                                          │
+│           ┌─────────┴─────────┐                                │
+│           │ YES               │ NO                              │
+│           ▼                   ▼                                 │
+│    ┌─────────────┐     ┌───────────┐                           │
+│    │    Event    │     │   Skip    │                           │
+│    │  Detector   │     │  (save $) │                           │
+│    └──────┬──────┘     └─────┬─────┘                           │
+│           │                  │                                  │
+│           └────────┬─────────┘                                  │
+│                    │                                            │
+│                    ▼                                            │
+│           ┌───────────────┐                                     │
+│           │  Save to DB   │                                     │
+│           │email_analyses │                                     │
+│           └───────────────┘                                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```

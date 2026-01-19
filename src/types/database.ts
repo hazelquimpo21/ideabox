@@ -644,3 +644,136 @@ export interface CostUsageSummary {
   monthly_percent: number;
   is_paused: boolean;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// JSONB STRUCTURE TYPES FOR EMAIL ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// These types define the structure of JSONB columns in email_analyses table.
+// Use these when reading analysis data back from the database.
+//
+// IMPORTANT: These must stay in sync with what EmailProcessor writes.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Quick action type for inbox triage.
+ * Stored in categorization JSONB as quick_action.
+ */
+export type QuickActionDb =
+  | 'respond'
+  | 'review'
+  | 'archive'
+  | 'save'
+  | 'calendar'
+  | 'unsubscribe'
+  | 'follow_up'
+  | 'none';
+
+/**
+ * Event location type.
+ * Stored in event_detection JSONB as location_type.
+ */
+export type EventLocationTypeDb = 'in_person' | 'virtual' | 'hybrid' | 'unknown';
+
+/**
+ * Categorization JSONB structure.
+ * ENHANCED (Jan 2026): Added summary and quick_action fields.
+ */
+export interface CategorizationJsonb {
+  category: EmailCategory;
+  confidence: number;
+  reasoning: string;
+  topics: string[];
+  /** One-sentence assistant-style summary of the email */
+  summary: string;
+  /** Suggested quick action for inbox triage */
+  quick_action: QuickActionDb;
+}
+
+/**
+ * Action extraction JSONB structure.
+ */
+export interface ActionExtractionJsonb {
+  has_action: boolean;
+  action_type: ActionType;
+  title?: string;
+  description?: string;
+  urgency_score: number;
+  deadline?: string;
+  estimated_minutes?: number;
+}
+
+/**
+ * Client tagging JSONB structure.
+ */
+export interface ClientTaggingJsonb {
+  client_match: boolean;
+  client_id?: string | null;
+  client_name?: string | null;
+  confidence: number;
+  project_name?: string;
+  relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown';
+}
+
+/**
+ * Event detection JSONB structure.
+ * Only present when category === 'event'.
+ * Added Jan 2026 for calendar integration.
+ */
+export interface EventDetectionJsonb {
+  has_event: boolean;
+  event_title: string;
+  event_date: string;
+  event_time?: string;
+  event_end_time?: string;
+  location_type: EventLocationTypeDb;
+  location?: string;
+  registration_deadline?: string;
+  rsvp_required: boolean;
+  rsvp_url?: string;
+  organizer?: string;
+  cost?: string;
+  additional_details?: string;
+  confidence: number;
+}
+
+/**
+ * Typed email analysis with properly typed JSONB columns.
+ * Use this instead of EmailAnalysis when you need type-safe access to analysis data.
+ */
+export interface TypedEmailAnalysis {
+  id: string;
+  email_id: string;
+  user_id: string;
+  categorization: CategorizationJsonb | null;
+  action_extraction: ActionExtractionJsonb | null;
+  client_tagging: ClientTaggingJsonb | null;
+  event_detection: EventDetectionJsonb | null;
+  url_extraction: Record<string, unknown> | null; // Future: URLExtractionJsonb
+  content_opportunity: Record<string, unknown> | null; // Future: ContentOpportunityJsonb
+  analyzer_version: string;
+  tokens_used: number | null;
+  processing_time_ms: number | null;
+  created_at: string;
+}
+
+/**
+ * Helper function to cast EmailAnalysis to TypedEmailAnalysis.
+ * Use this when reading from the database to get proper typing.
+ *
+ * @example
+ * ```typescript
+ * const analysis = await supabase
+ *   .from('email_analyses')
+ *   .select('*')
+ *   .eq('email_id', emailId)
+ *   .single();
+ *
+ * const typed = toTypedAnalysis(analysis.data);
+ * console.log(typed.categorization?.summary);
+ * console.log(typed.event_detection?.event_date);
+ * ```
+ */
+export function toTypedAnalysis(analysis: EmailAnalysis): TypedEmailAnalysis {
+  return analysis as TypedEmailAnalysis;
+}

@@ -114,11 +114,37 @@ export interface UserContext {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// QUICK ACTION TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Quick action suggestions for ALL emails.
+ *
+ * Unlike detailed actions (from ActionExtractor), these are lightweight
+ * interaction hints that help users quickly triage their inbox.
+ *
+ * Every email gets a quickAction, even if it's just "archive" or "none".
+ */
+export type QuickAction =
+  | 'respond'      // Reply needed - someone is waiting for an answer
+  | 'review'       // Worth reading carefully - contains important info
+  | 'archive'      // Can be dismissed - low value or already handled
+  | 'save'         // Interesting content to save for later reference
+  | 'calendar'     // Add to calendar - contains event/date info
+  | 'unsubscribe'  // Suggest unsubscribing - newsletter user rarely reads
+  | 'follow_up'    // Need to follow up on something you initiated
+  | 'none';        // Truly nothing to do - purely informational
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // CATEGORIZER TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Result data from the categorizer analyzer.
+ *
+ * ENHANCED (Jan 2026): Added `summary` and `quickAction` fields.
+ * - summary: One-sentence assistant-style overview of the email
+ * - quickAction: Suggested quick interaction for ALL emails
  */
 export interface CategorizationData {
   /**
@@ -143,6 +169,29 @@ export interface CategorizationData {
    * Examples: 'billing', 'meeting', 'project-update', 'feedback'
    */
   topics: string[];
+
+  /**
+   * One-sentence assistant-style summary of the email.
+   * Written as if a personal assistant is briefing the user.
+   *
+   * Examples:
+   * - "Sarah from Acme Corp wants you to review the Q1 proposal by Friday"
+   * - "Your AWS bill for January is $142.67 - no action needed"
+   * - "LinkedIn: 5 people viewed your profile this week"
+   * - "Mom sent photos from the weekend trip"
+   *
+   * This makes emails scannable without opening them.
+   */
+  summary: string;
+
+  /**
+   * Suggested quick interaction for this email.
+   * Unlike detailed actions, this is a lightweight triage hint.
+   *
+   * EVERY email gets a quickAction, even low-priority ones.
+   * This helps users quickly process their inbox.
+   */
+  quickAction: QuickAction;
 }
 
 /**
@@ -269,22 +318,155 @@ export interface ClientTaggingData {
 export type ClientTaggingResult = AnalyzerResult<ClientTaggingData>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EVENT DETECTOR TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Event location type.
+ * Helps users understand if travel is required.
+ */
+export type EventLocationType = 'in_person' | 'virtual' | 'hybrid' | 'unknown';
+
+/**
+ * Result data from the event detector analyzer.
+ *
+ * This analyzer ONLY runs when category === 'event'.
+ * It extracts rich details needed for calendar integration.
+ *
+ * DESIGN DECISION: Separate analyzer instead of extending categorizer.
+ * - Keeps categorizer fast and focused
+ * - Only incurs cost for actual events (~5-10% of emails)
+ * - Easier to tune independently
+ * - Can be disabled without affecting categorization
+ */
+export interface EventDetectionData {
+  /**
+   * Whether this email contains a detectable event.
+   * Should always be true if this analyzer ran (pre-filtered).
+   */
+  hasEvent: boolean;
+
+  /**
+   * Title/name of the event.
+   * Example: "Milwaukee Tech Meetup", "Q1 Planning Call"
+   */
+  eventTitle: string;
+
+  /**
+   * Event date in ISO 8601 format (YYYY-MM-DD).
+   * Example: "2026-01-25"
+   */
+  eventDate: string;
+
+  /**
+   * Event start time in HH:MM format (24-hour).
+   * Example: "18:00"
+   * May be null if time not specified.
+   */
+  eventTime?: string;
+
+  /**
+   * Event end time in HH:MM format (24-hour).
+   * Example: "20:00"
+   * May be null if not specified or unknown.
+   */
+  eventEndTime?: string;
+
+  /**
+   * Type of location: in-person, virtual, hybrid, or unknown.
+   * Helps users understand if travel is required.
+   */
+  locationType: EventLocationType;
+
+  /**
+   * Physical address or virtual meeting link.
+   * Examples:
+   * - "123 Main St, Milwaukee, WI 53211"
+   * - "https://zoom.us/j/123456789"
+   * - "Google Meet link in calendar invite"
+   */
+  location?: string;
+
+  /**
+   * Registration or RSVP deadline if mentioned.
+   * ISO 8601 format.
+   */
+  registrationDeadline?: string;
+
+  /**
+   * Whether RSVP or registration is required.
+   */
+  rsvpRequired: boolean;
+
+  /**
+   * URL to register or RSVP if provided.
+   */
+  rsvpUrl?: string;
+
+  /**
+   * Who is organizing/hosting the event.
+   * Example: "MKE Tech Community", "Sarah Johnson"
+   */
+  organizer?: string;
+
+  /**
+   * Cost information if mentioned.
+   * Examples: "Free", "$25", "Members free, $10 for guests"
+   */
+  cost?: string;
+
+  /**
+   * Additional relevant details about the event.
+   * Free-form text for anything not captured above.
+   * Example: "Parking available in attached garage"
+   */
+  additionalDetails?: string;
+
+  /**
+   * Confidence in the event extraction (0-1).
+   */
+  confidence: number;
+}
+
+/**
+ * Full result from the event detector analyzer.
+ */
+export type EventDetectionResult = AnalyzerResult<EventDetectionData>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // AGGREGATED ANALYSIS TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Combined analysis data from all analyzers.
  * This is stored in the email_analyses table.
+ *
+ * STRUCTURE:
+ * - categorization: Always runs (core classification + summary)
+ * - actionExtraction: Always runs (detailed action info)
+ * - clientTagging: Always runs (client linking)
+ * - eventDetection: Only runs when category === 'event'
+ *
+ * Future analyzers (Phase 2+):
+ * - urlExtraction: Extract and categorize URLs
+ * - contentOpportunity: Tweet ideas, networking opportunities
  */
 export interface AggregatedAnalysis {
-  /** Categorization results */
+  /** Categorization results (always present if analysis succeeded) */
   categorization?: CategorizationData;
 
-  /** Action extraction results */
+  /** Action extraction results (always present if analysis succeeded) */
   actionExtraction?: ActionExtractionData;
 
-  /** Client tagging results */
+  /** Client tagging results (always present if analysis succeeded) */
   clientTagging?: ClientTaggingData;
+
+  /**
+   * Event detection results.
+   * Only present when category === 'event'.
+   * Contains rich event details for calendar integration.
+   */
+  eventDetection?: EventDetectionData;
 
   /** Total tokens used across all analyzers */
   totalTokensUsed: number;
@@ -298,19 +480,26 @@ export interface AggregatedAnalysis {
 
 /**
  * Result from processing a single email through all analyzers.
+ *
+ * Contains both the aggregated analysis (for storage) and individual
+ * analyzer results (for debugging and detailed inspection).
  */
 export interface EmailProcessingResult {
   /** Whether all analyzers completed (some may have failed) */
   success: boolean;
 
-  /** Aggregated analysis data */
+  /** Aggregated analysis data (stored in email_analyses table) */
   analysis: AggregatedAnalysis;
 
-  /** Individual analyzer results for debugging */
+  /**
+   * Individual analyzer results for debugging.
+   * Each result contains success status, raw data, confidence, and timing.
+   */
   results: {
     categorization?: CategorizationResult;
     actionExtraction?: ActionExtractionResult;
     clientTagging?: ClientTaggingResult;
+    eventDetection?: EventDetectionResult;
   };
 
   /** Errors from any failed analyzers */

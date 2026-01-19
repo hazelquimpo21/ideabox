@@ -83,17 +83,28 @@ export type ActionType = typeof ACTION_TYPES[number];
 /**
  * Analyzer configurations.
  * Each analyzer has its own tuned settings.
+ *
+ * ARCHITECTURE:
+ * - categorizer: Always runs first (determines category + summary + quickAction)
+ * - actionExtractor: Always runs (detailed action info)
+ * - clientTagger: Always runs (client linking)
+ * - eventDetector: Conditionally runs when category === 'event'
+ *
+ * Future analyzers (Phase 2+):
+ * - urlExtractor: Extract and categorize URLs
+ * - contentOpportunity: Tweet ideas, networking opportunities
  */
 export const analyzerConfig = {
   /**
    * Categorizer: Classifies emails by action needed.
+   * ENHANCED (Jan 2026): Now also generates summary and quickAction.
    * Low temperature for consistent classification.
    */
   categorizer: {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for deterministic classification
-    maxTokens: 300,   // Category + reasoning + topics doesn't need much
+    maxTokens: 500,   // Increased: category + reasoning + topics + summary + quickAction
   } satisfies AnalyzerConfig,
 
   /**
@@ -116,6 +127,20 @@ export const analyzerConfig = {
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for accurate matching
     maxTokens: 300,   // Client name + project + confidence
+  } satisfies AnalyzerConfig,
+
+  /**
+   * Event Detector: Extracts rich event details.
+   * ONLY runs when categorizer returns category === 'event'.
+   * This saves tokens by not running on non-event emails.
+   *
+   * Added Jan 2026 for calendar integration.
+   */
+  eventDetector: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.2, // Low for accurate date/time extraction
+    maxTokens: 600,   // Needs room for all event fields
   } satisfies AnalyzerConfig,
 } as const;
 
