@@ -150,18 +150,18 @@ export class GmailService implements IGmailService {
    *
    * @example
    * ```typescript
-   * // List recent inbox messages
+   * // List recent messages from All Mail (default behavior)
    * const response = await service.listMessages({
    *   maxResults: 50,
-   *   labelIds: ['INBOX'],
    * });
    *
    * console.log(`Found ${response.messages?.length} messages`);
    *
-   * // Fetch next page
-   * if (response.nextPageToken) {
-   *   // Use pageToken in next request
-   * }
+   * // To filter to only INBOX messages:
+   * const inboxOnly = await service.listMessages({
+   *   maxResults: 50,
+   *   labelIds: ['INBOX'],
+   * });
    * ```
    */
   public async listMessages(
@@ -169,8 +169,8 @@ export class GmailService implements IGmailService {
   ): Promise<GmailMessagesListResponse> {
     const {
       maxResults = 100,
-      query = '',
-      labelIds = ['INBOX'],
+      query = '-in:spam -in:trash -in:draft',
+      labelIds = [],
     } = config;
 
     logEmail.fetchStart({
@@ -184,6 +184,7 @@ export class GmailService implements IGmailService {
           userId: 'me',
           maxResults,
           q: query || undefined,
+          // Empty labelIds means "All Mail" - no label filter
           labelIds: labelIds.length > 0 ? labelIds : undefined,
         });
       });

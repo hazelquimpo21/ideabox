@@ -29,7 +29,14 @@ export const INITIAL_SYNC_CONFIG: InitialSyncConfig = {
   /** Include already-read emails (true gives better demo experience) */
   includeRead: true,
 
-  /** Gmail labels to exclude from fetch */
+  /**
+   * Gmail query to exclude unwanted mail.
+   * By not specifying labelIds, we fetch from "All Mail" instead of just INBOX.
+   * This query excludes spam, trash, and drafts.
+   */
+  excludeQuery: '-in:spam -in:trash -in:draft',
+
+  /** Gmail labels to exclude from fetch (legacy - now using excludeQuery) */
   excludeLabels: ['SPAM', 'TRASH', 'DRAFT'],
 
   // ─────────────────────────────────────────────────────────────────────────

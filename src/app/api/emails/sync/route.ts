@@ -400,13 +400,13 @@ async function syncAccount(
     // Step 2: Create Gmail service
     const gmailService = new GmailService(accessToken, account.id);
 
-    // Step 3: Fetch message list
-    // For incremental sync, we could use history API, but for simplicity
-    // we'll fetch the most recent messages and skip duplicates
+    // Step 3: Fetch message list from All Mail
+    // We use an empty labelIds to get all mail (not just inbox)
+    // The default query excludes spam, trash, and drafts
     const listResponse = await gmailService.listMessages({
       maxResults: config.maxResults,
       query: config.query,
-      labelIds: ['INBOX'],
+      // Empty labelIds = All Mail (default behavior)
     });
 
     const messageIds = listResponse.messages?.map((m) => m.id) || [];

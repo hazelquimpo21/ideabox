@@ -243,7 +243,8 @@ export interface SyncConfig {
 
   /**
    * Label IDs to filter by.
-   * @default ['INBOX']
+   * Empty array means "All Mail" (no label filter).
+   * @default []
    */
   labelIds?: string[];
 
@@ -263,12 +264,15 @@ export interface SyncConfig {
 
 /**
  * Default sync configuration values.
+ *
+ * Note: labelIds is empty by default to sync from "All Mail" instead of just INBOX.
+ * We exclude SPAM, TRASH, and DRAFT via the query parameter instead.
  */
 export const DEFAULT_SYNC_CONFIG: Required<SyncConfig> = {
   maxResults: 100,
   fullSync: false,
-  query: '',
-  labelIds: ['INBOX'],
+  query: '-in:spam -in:trash -in:draft',
+  labelIds: [],
   maxBodyChars: 16000,
   skipExisting: true,
 };

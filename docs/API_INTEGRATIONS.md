@@ -181,26 +181,29 @@ export class GmailSync {
   
   private async initialSync(account: GmailAccount): Promise<Email[]> {
     this.logger.info('Performing initial sync', { accountId: account.id });
-    
-    // Fetch last 500 emails from inbox
+
+    // Fetch last 500 emails from All Mail (not just inbox)
+    // By not specifying labelIds, we get all mail
+    // We use query to exclude spam, trash, and drafts
     const response = await this.gmail.users.messages.list({
       userId: 'me',
       maxResults: 500,
-      labelIds: ['INBOX', 'UNREAD'],
+      q: '-in:spam -in:trash -in:draft', // Exclude unwanted mail
+      // Note: No labelIds = All Mail (includes sent, archived, etc.)
     });
-    
+
     const messageIds = response.data.messages?.map(m => m.id!) || [];
-    
+
     this.logger.info('Found messages for initial sync', {
       accountId: account.id,
       count: messageIds.length,
     });
-    
+
     const emails = await this.fetchMessageDetails(messageIds);
-    
+
     // Save current history ID for future incremental syncs
     await this.updateLastHistoryId(account.id, response.data.historyId!);
-    
+
     return emails;
   }
   

@@ -368,7 +368,9 @@ export interface InitialSyncConfig {
   maxEmails: number;
   /** Include read emails */
   includeRead: boolean;
-  /** Gmail labels to exclude */
+  /** Gmail query to exclude unwanted mail (syncs from "All Mail" by default) */
+  excludeQuery: string;
+  /** Gmail labels to exclude (legacy - now using excludeQuery) */
   excludeLabels: string[];
   /** Batch size for AI processing */
   batchSize: number;
@@ -386,11 +388,14 @@ export interface InitialSyncConfig {
 
 /**
  * Default configuration values.
+ * Note: By default, we sync from "All Mail" (no labelIds filter)
+ * and use excludeQuery to filter out spam, trash, and drafts.
  */
 export const DEFAULT_INITIAL_SYNC_CONFIG: InitialSyncConfig = {
   maxEmails: 50,
   includeRead: true,
-  excludeLabels: ['SPAM', 'TRASH'],
+  excludeQuery: '-in:spam -in:trash -in:draft',
+  excludeLabels: ['SPAM', 'TRASH', 'DRAFT'],
   batchSize: 10,
   maxRetries: 2,
   timeoutMs: 120000, // 2 minutes
