@@ -237,6 +237,9 @@ export const INITIAL_SYNC_CONFIG = {
   // Include read emails (true = better demo)
   includeRead: true,
 
+  // Gmail query to exclude unwanted mail (syncs from All Mail, not just INBOX)
+  excludeQuery: '-in:spam -in:trash -in:draft',
+
   // Batch size for AI processing
   batchSize: 5,
 
