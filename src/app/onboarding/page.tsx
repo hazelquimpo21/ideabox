@@ -64,11 +64,21 @@ export default function OnboardingPage() {
     startPolling,
     stopPolling,
   } = useInitialSyncProgress({
-    onComplete: (result) => {
+    onComplete: async (result) => {
       logger.success('Initial sync completed', {
         stats: result.stats,
         categoryCount: result.categories.length,
       });
+      // Refresh session to update onboardingCompleted flag in client state
+      // This is critical - the orchestrator sets onboarding_completed=true in DB,
+      // but the auth context needs to be refreshed to pick up the change
+      try {
+        await refreshSession();
+      } catch (err) {
+        logger.warn('Failed to refresh session after sync, redirecting anyway', {
+          error: err instanceof Error ? err.message : 'Unknown error'
+        });
+      }
       // Redirect to discover page
       router.replace('/discover');
     },
