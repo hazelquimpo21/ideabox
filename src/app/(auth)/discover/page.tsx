@@ -89,11 +89,15 @@ export default function DiscoverPage() {
   // ───────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchResult() {
       try {
         const response = await fetch('/api/onboarding/sync-status', {
           credentials: 'include',
         });
+
+        if (!isMounted) return;
 
         if (!response.ok) {
           // If the API fails, show the "start analysis" UI instead of error
@@ -102,6 +106,8 @@ export default function DiscoverPage() {
         }
 
         const data = await response.json();
+
+        if (!isMounted) return;
 
         if (data.status === 'completed' && data.result) {
           setResult(data.result);
@@ -117,17 +123,25 @@ export default function DiscoverPage() {
           setNeedsSync(true);
         }
       } catch {
+        if (!isMounted) return;
         // On error, show "Start Analysis" UI
         setNeedsSync(true);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
     fetchResult();
 
-    return () => stopPolling();
-  }, [startPolling, stopPolling]);
+    return () => {
+      isMounted = false;
+      stopPolling();
+    };
+    // Only run on mount - startPolling/stopPolling are stable refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Start Analysis Handler

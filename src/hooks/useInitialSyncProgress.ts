@@ -56,7 +56,7 @@
 
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type {
   SyncStatus,
   SyncProgressResponse,
@@ -140,8 +140,18 @@ const DEFAULT_DISCOVERIES: SyncDiscoveries = {
 export function useInitialSyncProgress(
   options: UseInitialSyncProgressOptions = {}
 ): UseInitialSyncProgressReturn {
-  // Merge options with defaults
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  // Use refs for callbacks to avoid recreating fetchProgress on every render
+  const onCompleteRef = useRef(options.onComplete);
+  const onErrorRef = useRef(options.onError);
+
+  // Keep refs updated with latest callbacks
+  useEffect(() => {
+    onCompleteRef.current = options.onComplete;
+    onErrorRef.current = options.onError;
+  });
+
+  // Memoize pollInterval to avoid recreating functions when it hasn't changed
+  const pollInterval = options.pollInterval ?? DEFAULT_OPTIONS.pollInterval;
 
   // ───────────────────────────────────────────────────────────────────────────
   // State
@@ -196,7 +206,7 @@ export function useInitialSyncProgress(
       // Handle completion
       if (data.status === 'completed' && data.result) {
         setResult(data.result);
-        opts.onComplete(data.result);
+        onCompleteRef.current?.(data.result);
         // Stop polling on completion
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -209,7 +219,7 @@ export function useInitialSyncProgress(
       if (data.status === 'failed') {
         const errorMsg = data.error || 'Sync failed';
         setError(errorMsg);
-        opts.onError(errorMsg);
+        onErrorRef.current?.(errorMsg);
         // Stop polling on failure
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -230,7 +240,7 @@ export function useInitialSyncProgress(
         setIsLoading(false);
       }
     }
-  }, [opts]);
+  }, []); // No dependencies - uses refs for callbacks
 
   // ───────────────────────────────────────────────────────────────────────────
   // Polling Control
@@ -251,8 +261,8 @@ export function useInitialSyncProgress(
     fetchProgress();
 
     // Then poll at interval
-    intervalRef.current = setInterval(fetchProgress, opts.pollInterval);
-  }, [fetchProgress, opts.pollInterval, status]);
+    intervalRef.current = setInterval(fetchProgress, pollInterval);
+  }, [fetchProgress, pollInterval, status]);
 
   /**
    * Stop polling.
@@ -278,7 +288,7 @@ export function useInitialSyncProgress(
 
   // Auto-start if configured
   useEffect(() => {
-    if (opts.autoStart) {
+    if (options.autoStart) {
       startPolling();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
