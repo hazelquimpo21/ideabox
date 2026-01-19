@@ -112,11 +112,22 @@ const MAX_BODY_CHARS = parseInt(process.env.MAX_BODY_CHARS || '16000', 10);
  * Handles POST requests to trigger email sync.
  *
  * This endpoint:
- * 1. Authenticates the user
+ * 1. Authenticates the user (or validates service key for cron/webhook calls)
  * 2. Gets connected Gmail accounts
  * 3. For each account, fetches new messages from Gmail
  * 4. Parses and stores messages in the database
  * 5. Returns sync results
+ *
+ * AUTHENTICATION MODES:
+ * - Normal users: Uses Supabase session authentication
+ * - Service calls: Uses X-Service-Key header (for Edge Functions, cron jobs)
+ *
+ * SERVICE CALL FORMAT:
+ * ```
+ * POST /api/emails/sync
+ * Headers: { "X-Service-Key": "your-internal-service-key" }
+ * Body: { "accountId": "uuid-of-specific-account" }
+ * ```
  */
 export async function POST(request: Request) {
   const timer = logPerformance('EmailSync.POST');
@@ -125,13 +136,81 @@ export async function POST(request: Request) {
     // Initialize Supabase client
     const supabase = await createServerClient();
 
-    // Require authentication
-    const user = await requireAuth(supabase);
-    if (user instanceof Response) return user;
+    // ─────────────────────────────────────────────────────────────────────────────
+    // AUTHENTICATION: Support both user session and service key
+    // ─────────────────────────────────────────────────────────────────────────────
+    const serviceKey = request.headers.get('X-Service-Key');
+    const expectedServiceKey = process.env.INTERNAL_SERVICE_KEY;
 
-    logger.start('Email sync triggered', { userId: user.id });
+    let userId: string;
+    let isServiceCall = false;
+    let preloadedBody: Record<string, unknown> | null = null;
 
-    // Validate request body (optional - empty body means sync all accounts)
+    if (serviceKey && expectedServiceKey && serviceKey === expectedServiceKey) {
+      // ─────────────────────────────────────────────────────────────────────────
+      // Service-to-service call (from Edge Function or cron job)
+      // ─────────────────────────────────────────────────────────────────────────
+      isServiceCall = true;
+
+      // For service calls, we need to get the accountId from the request body
+      // Clone the request so we can read the body twice
+      const clonedRequest = request.clone();
+
+      try {
+        const contentType = clonedRequest.headers.get('content-type');
+        if (contentType?.includes('application/json')) {
+          preloadedBody = await clonedRequest.json();
+        }
+      } catch {
+        // Empty body - will fail validation below
+      }
+
+      const accountId = preloadedBody?.accountId as string | undefined;
+
+      if (!accountId) {
+        logger.warn('Service call missing accountId in request body');
+        return apiError('accountId is required for service calls', 400);
+      }
+
+      // Fetch the account to get the user_id (service role bypasses RLS)
+      const { data: account, error: accountError } = await supabase
+        .from('gmail_accounts')
+        .select('user_id, email')
+        .eq('id', accountId)
+        .single();
+
+      if (accountError || !account) {
+        logger.warn('Account not found for service call', {
+          accountId,
+          error: accountError?.message,
+        });
+        return apiError('Account not found', 404);
+      }
+
+      userId = account.user_id;
+      logger.start('Email sync triggered (service call)', {
+        userId: userId.substring(0, 8) + '...',
+        accountId,
+        email: account.email,
+      });
+
+    } else {
+      // ─────────────────────────────────────────────────────────────────────────
+      // Normal user authentication via Supabase session
+      // ─────────────────────────────────────────────────────────────────────────
+      const authResult = await requireAuth(supabase);
+      if (authResult instanceof Response) return authResult;
+
+      userId = authResult.id;
+      logger.start('Email sync triggered', { userId });
+    }
+
+    // Create a user object for backwards compatibility with existing code
+    const user = { id: userId };
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PARSE REQUEST BODY
+    // ─────────────────────────────────────────────────────────────────────────────
     let syncConfig: SyncRequest = {
       fullSync: false,
       maxResults: 100,
@@ -140,11 +219,15 @@ export async function POST(request: Request) {
     };
 
     try {
-      // Only try to parse body if there's content
-      const contentType = request.headers.get('content-type');
-      if (contentType?.includes('application/json')) {
-        const body = await request.json();
-        syncConfig = syncRequestSchema.parse(body);
+      // Use preloaded body if available (service call), otherwise parse fresh
+      if (preloadedBody) {
+        syncConfig = syncRequestSchema.parse(preloadedBody);
+      } else {
+        const contentType = request.headers.get('content-type');
+        if (contentType?.includes('application/json')) {
+          const body = await request.json();
+          syncConfig = syncRequestSchema.parse(body);
+        }
       }
     } catch (parseError: unknown) {
       // If body parsing fails, continue with defaults
@@ -159,6 +242,15 @@ export async function POST(request: Request) {
         return apiError('Invalid request body', 400, fieldErrors);
       }
       // For non-Zod errors, continue with defaults (likely JSON parse error)
+    }
+
+    // Log if this is a service call for monitoring
+    if (isServiceCall) {
+      logger.debug('Service call sync config', {
+        accountId: syncConfig.accountId,
+        maxResults: syncConfig.maxResults,
+        runAnalysis: syncConfig.runAnalysis,
+      });
     }
 
     // Get Gmail accounts for this user

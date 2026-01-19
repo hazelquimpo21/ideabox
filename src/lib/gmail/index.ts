@@ -69,6 +69,12 @@ export {
   parseGmailMessage,
   parseGmailMessages,
 } from './email-parser';
+export {
+  GmailWatchService,
+  gmailWatchService,
+  type WatchResponse,
+  type WatchOperationResult,
+} from './watch-service';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ERRORS
