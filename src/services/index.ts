@@ -66,3 +66,10 @@ export * from './processors';
 
 // Re-export all sync services for initial batch analysis and discovery
 export * from './sync';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HUB SERVICES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Re-export Hub priority scoring services
+export * from './hub';
