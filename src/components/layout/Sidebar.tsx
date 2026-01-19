@@ -51,6 +51,9 @@ import {
   Building2,
   Sparkles,
   Target,
+  // ─── Email Intelligence P6 icons ───────────────────────────────────────────
+  BookUser,      // Contacts page - represents address book / contact management
+  CalendarDays,  // Timeline page - represents date-based timeline view
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -152,6 +155,22 @@ const mainNavItems: NavItem[] = [
     href: '/clients',
     icon: Users,
   },
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Email Intelligence P6: Contact & Timeline Navigation
+  // Added: January 2026
+  // These pages surface the contact intelligence and extracted dates features.
+  // ─────────────────────────────────────────────────────────────────────────────
+  {
+    label: 'Contacts',
+    href: '/contacts',
+    icon: BookUser,
+  },
+  {
+    label: 'Timeline',
+    href: '/timeline',
+    icon: CalendarDays,
+  },
+  // ─────────────────────────────────────────────────────────────────────────────
   {
     label: 'Archive',
     href: '/archive',

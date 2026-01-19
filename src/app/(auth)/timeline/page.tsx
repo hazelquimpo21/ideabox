@@ -3,17 +3,19 @@
  *
  * Displays extracted dates from emails organized chronologically.
  * Includes deadlines, birthdays, payment dues, appointments, and more.
- * Dates are grouped by time period (overdue, today, tomorrow, this week, etc.)
+ * Supports two view modes: grouped list and calendar.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * FEATURES
  * ═══════════════════════════════════════════════════════════════════════════════
+ * - Two view modes: List (grouped) and Calendar (monthly)
  * - Chronological view of all extracted dates
  * - Grouped by time period (overdue, today, tomorrow, etc.)
  * - Filter by date type (deadline, birthday, payment, etc.)
  * - Actions: acknowledge, snooze, hide
  * - Links to source emails
  * - Urgency indicators for overdue items
+ * - Calendar view with color-coded date types (P6 Enhancement)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE
@@ -22,8 +24,8 @@
  * Protected: Yes (requires authentication)
  *
  * @module app/(auth)/timeline/page
- * @version 1.0.0
- * @since January 2026
+ * @version 1.1.0
+ * @since January 2026 (P6 Enhancement: Calendar View)
  */
 
 'use client';
@@ -69,8 +71,14 @@ import {
   Filter,
   ChevronDown,
   ChevronRight,
+  // ─── P6 Enhancement: View Mode Icons ─────────────────────────────────────────
+  List,         // For list view toggle button
+  CalendarDays, // For calendar view toggle button
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
+
+// ─── P6 Enhancement: Calendar View Component ─────────────────────────────────────
+import { CalendarView } from '@/components/timeline';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -649,6 +657,11 @@ export default function TimelinePage() {
   const [typeFilter, setTypeFilter] = React.useState<DateType | 'all'>('all');
   const [showAcknowledged, setShowAcknowledged] = React.useState(false);
 
+  // ─── P6 Enhancement: View Mode State ─────────────────────────────────────────
+  // 'list' = grouped chronological list (default)
+  // 'calendar' = monthly calendar grid
+  const [viewMode, setViewMode] = React.useState<'list' | 'calendar'>('list');
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Build filter options
   // ─────────────────────────────────────────────────────────────────────────────
@@ -735,24 +748,52 @@ export default function TimelinePage() {
       {/* Stats Banner */}
       {!isLoading && <StatsBanner stats={stats} />}
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 mb-6">
-        <TypeFilter value={typeFilter} onChange={setTypeFilter} />
+      {/* Filters and View Toggle */}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        {/* Left side: Type filter and Show Done */}
+        <div className="flex items-center gap-4">
+          <TypeFilter value={typeFilter} onChange={setTypeFilter} />
 
-        <Button
-          variant={showAcknowledged ? 'secondary' : 'outline'}
-          size="sm"
-          onClick={() => setShowAcknowledged(!showAcknowledged)}
-          className="gap-2"
-        >
-          <Check className="h-3 w-3" />
-          {showAcknowledged ? 'Hide Done' : 'Show Done'}
-        </Button>
+          <Button
+            variant={showAcknowledged ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setShowAcknowledged(!showAcknowledged)}
+            className="gap-2"
+          >
+            <Check className="h-3 w-3" />
+            {showAcknowledged ? 'Hide Done' : 'Show Done'}
+          </Button>
+        </div>
+
+        {/* ─── P6 Enhancement: View Mode Toggle ─────────────────────────────── */}
+        {/* Right side: View mode toggle (List / Calendar) */}
+        <div className="flex items-center border rounded-lg overflow-hidden">
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+            className="rounded-none gap-1.5"
+          >
+            <List className="h-4 w-4" />
+            <span className="hidden sm:inline">List</span>
+          </Button>
+          <Button
+            variant={viewMode === 'calendar' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('calendar')}
+            className="rounded-none gap-1.5"
+          >
+            <CalendarDays className="h-4 w-4" />
+            <span className="hidden sm:inline">Calendar</span>
+          </Button>
+        </div>
       </div>
 
-      {/* Date Groups */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* Main Content Area - List or Calendar View */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
       {isLoading ? (
-        // Loading skeletons
+        // ─── Loading Skeletons ─────────────────────────────────────────────────
         <div className="space-y-6">
           <div>
             <Skeleton className="h-10 w-full rounded-lg mb-3" />
@@ -766,10 +807,19 @@ export default function TimelinePage() {
           </div>
         </div>
       ) : !hasAnyDates ? (
-        // Empty state
+        // ─── Empty State ───────────────────────────────────────────────────────
         <EmptyState />
+      ) : viewMode === 'calendar' ? (
+        // ─── P6 Enhancement: Calendar View ─────────────────────────────────────
+        // Monthly calendar grid with color-coded date indicators
+        <CalendarView
+          dates={dates}
+          onAcknowledge={handleAcknowledge}
+          onSnooze={handleSnooze}
+          onHide={handleHide}
+        />
       ) : (
-        // Date groups
+        // ─── List View (Default): Grouped Date Cards ───────────────────────────
         <>
           {/* Overdue - always show first with urgency styling */}
           <DateGroup
@@ -826,7 +876,7 @@ export default function TimelinePage() {
             onHide={handleHide}
           />
 
-          {/* Load More */}
+          {/* Load More (only in list view) */}
           {hasMore && (
             <div className="flex justify-center pt-4">
               <Button variant="outline" onClick={loadMore} className="gap-2">
