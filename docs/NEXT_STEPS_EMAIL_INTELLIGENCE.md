@@ -3,6 +3,8 @@
 > **Last Updated:** January 19, 2026
 >
 > **Status:** P1-P4 Complete - P5 (UI Pages) Remaining
+>
+> **Next Action:** See [P5_UI_IMPLEMENTATION_PLAN.md](./P5_UI_IMPLEMENTATION_PLAN.md) for detailed implementation plan
 
 This document tracks the remaining implementation work for the Enhanced Email Intelligence feature.
 
