@@ -66,6 +66,23 @@ export const EMAIL_CATEGORIES = [
 export type EmailCategory = typeof EMAIL_CATEGORIES[number];
 
 /**
+ * Secondary labels available for multi-label classification.
+ * Note: Full list with descriptions is in services/analyzers/types.ts
+ * See docs/ENHANCED_EMAIL_INTELLIGENCE.md for complete taxonomy.
+ */
+export const EMAIL_LABELS_SUMMARY = {
+  action: ['needs_reply', 'needs_decision', 'needs_review', 'needs_approval'],
+  urgency: ['urgent', 'has_deadline', 'time_sensitive'],
+  relationship: ['from_vip', 'new_contact', 'networking_opportunity'],
+  content: ['has_attachment', 'has_link', 'has_question'],
+  location: ['local_event'],
+  personal: ['family_related', 'community'],
+  financial: ['invoice', 'receipt', 'payment_due'],
+  calendar: ['meeting_request', 'rsvp_needed', 'appointment'],
+  learning: ['educational', 'industry_news', 'job_opportunity'],
+} as const;
+
+/**
  * Action types that the action extractor can identify.
  * These describe WHAT KIND of action is needed.
  */
@@ -141,6 +158,41 @@ export const analyzerConfig = {
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for accurate date/time extraction
     maxTokens: 600,   // Needs room for all event fields
+  } satisfies AnalyzerConfig,
+
+  /**
+   * Date Extractor: Extracts timeline-relevant dates from emails.
+   * Always runs to power the Hub "upcoming things" view.
+   *
+   * Extracts: deadlines, payment dues, expirations, birthdays, follow-ups, etc.
+   *
+   * Added Jan 2026 for timeline intelligence.
+   */
+  dateExtractor: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.2, // Low for accurate date parsing
+    maxTokens: 500,   // Multiple dates possible per email
+  } satisfies AnalyzerConfig,
+
+  /**
+   * Contact Enricher: Extracts contact metadata from email signatures/content.
+   * SELECTIVE: Only runs when contact needs enrichment.
+   *
+   * Criteria for running:
+   * - Contact has extraction_confidence IS NULL or < 0.5
+   * - OR last_extracted_at > 30 days ago
+   * - AND contact has 3+ emails (worth the token cost)
+   *
+   * Extracts: company, job title, phone, LinkedIn, relationship type, birthday.
+   *
+   * Added Jan 2026 for contact intelligence.
+   */
+  contactEnricher: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.2, // Low for accurate extraction
+    maxTokens: 400,   // Contact fields are compact
   } satisfies AnalyzerConfig,
 } as const;
 

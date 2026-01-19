@@ -21,6 +21,121 @@ import type { Email, Client, EmailCategory, ActionType } from '@/types/database'
 import type { AnalyzerConfig as BaseAnalyzerConfig } from '@/config/analyzers';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL LABELS (Multi-Label Taxonomy)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Secondary labels that can be applied to any email.
+ * These provide flexible, multi-dimensional classification beyond the primary category.
+ *
+ * Labels are organized by concern:
+ * - Action: What type of action is needed
+ * - Urgency: Time sensitivity
+ * - Relationship: Who the email involves
+ * - Content: What the email contains
+ * - Location: Geographic relevance
+ * - Personal: Personal/family context
+ * - Financial: Money-related
+ * - Calendar: Time-based events
+ * - Learning: Educational/career content
+ */
+export const EMAIL_LABELS = [
+  // Action-related
+  'needs_reply',           // Someone is waiting for a response
+  'needs_decision',        // User must choose between options
+  'needs_review',          // Content requires user's review
+  'needs_approval',        // Approval/sign-off requested
+
+  // Urgency
+  'urgent',                // Marked urgent or ASAP
+  'has_deadline',          // Specific deadline mentioned
+  'time_sensitive',        // Time-limited offer/opportunity
+
+  // Relationship
+  'from_vip',              // Sender is on VIP list
+  'new_contact',           // First email from this sender
+  'networking_opportunity', // Potential valuable connection
+
+  // Content
+  'has_attachment',        // Email has attachments
+  'has_link',              // Contains important links
+  'has_question',          // Direct question asked
+
+  // Location
+  'local_event',           // Event in user's metro area
+
+  // Personal
+  'family_related',        // Involves family members
+  'community',             // Local community related
+
+  // Financial
+  'invoice',               // Invoice or bill
+  'receipt',               // Purchase confirmation
+  'payment_due',           // Payment deadline
+
+  // Calendar
+  'meeting_request',       // Meeting invitation
+  'rsvp_needed',           // RSVP required
+  'appointment',           // Scheduled appointment
+
+  // Learning/Career
+  'educational',           // Learning content
+  'industry_news',         // Industry updates
+  'job_opportunity',       // Job/career related
+] as const;
+
+export type EmailLabel = typeof EMAIL_LABELS[number];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATE TYPES (for DateExtractor)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Types of dates that can be extracted from emails.
+ */
+export const DATE_TYPES = [
+  'deadline',       // Task/response deadlines
+  'event',          // Calendar events
+  'appointment',    // Scheduled appointments
+  'payment_due',    // Invoice/bill due dates
+  'expiration',     // Subscription/offer expirations
+  'follow_up',      // Suggested follow-up times
+  'birthday',       // Birthday mentions
+  'anniversary',    // Work/personal anniversaries
+  'recurring',      // Recurring events/meetings
+  'reminder',       // General reminders
+  'other',          // Other date-related items
+] as const;
+
+export type DateType = typeof DATE_TYPES[number];
+
+/**
+ * Recurrence patterns for recurring dates.
+ */
+export type RecurrencePattern = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | null;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTACT RELATIONSHIP TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Types of relationships with contacts.
+ */
+export const RELATIONSHIP_TYPES = [
+  'client',         // Paying client
+  'colleague',      // Coworker
+  'vendor',         // Service provider
+  'friend',         // Personal friend
+  'family',         // Family member
+  'recruiter',      // Job recruiter
+  'service',        // Service/support (e.g., bank, utility)
+  'networking',     // Professional contact
+  'unknown',        // Unknown relationship
+] as const;
+
+export type ContactRelationshipType = typeof RELATIONSHIP_TYPES[number];
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // BASE ANALYZER TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -100,7 +215,12 @@ export interface EmailInput {
 
 /**
  * User context passed to analyzers that need it.
- * For example, client tagger needs the list of known clients.
+ * This includes foundational info from onboarding that personalizes AI analysis.
+ *
+ * For example:
+ * - Client tagger needs the list of known clients
+ * - Categorizer uses VIP list for 'from_vip' label
+ * - Event detector uses location for 'local_event' label
  */
 export interface UserContext {
   /** User ID */
@@ -111,6 +231,54 @@ export interface UserContext {
 
   /** User's timezone (for deadline interpretation) */
   timezone?: string;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NEW: Foundational info from onboarding (user_context table)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** User's role (e.g., "Developer", "Entrepreneur") */
+  role?: string;
+
+  /** User's company */
+  company?: string;
+
+  /** User's location city */
+  locationCity?: string;
+
+  /** User's metro area (for local event detection) */
+  locationMetro?: string;
+
+  /** User's priorities in order of importance */
+  priorities?: string[];
+
+  /** User's active projects */
+  projects?: string[];
+
+  /** VIP email addresses */
+  vipEmails?: string[];
+
+  /** VIP email domains (e.g., "@importantclient.com") */
+  vipDomains?: string[];
+
+  /** User's interests for content relevance */
+  interests?: string[];
+
+  /** Family context for personal categorization */
+  familyContext?: {
+    spouseName?: string;
+    kidsCount?: number;
+    familyNames?: string[];
+  };
+
+  /** Work schedule for time-aware analysis */
+  workHours?: {
+    start: string; // "09:00"
+    end: string;   // "17:00"
+    days: number[]; // [1,2,3,4,5] for Mon-Fri
+  };
+
+  /** Whether onboarding is complete */
+  onboardingCompleted?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -145,6 +313,9 @@ export type QuickAction =
  * ENHANCED (Jan 2026): Added `summary` and `quickAction` fields.
  * - summary: One-sentence assistant-style overview of the email
  * - quickAction: Suggested quick interaction for ALL emails
+ *
+ * ENHANCED (Jan 2026): Added `labels` for multi-label classification.
+ * - labels: Secondary labels for flexible filtering (0-5 labels per email)
  */
 export interface CategorizationData {
   /**
@@ -152,6 +323,19 @@ export interface CategorizationData {
    * This is action-focused: what does the user need to DO?
    */
   category: EmailCategory;
+
+  /**
+   * Secondary labels for multi-dimensional classification.
+   * Allows flexible filtering beyond the primary category.
+   *
+   * Examples:
+   * - ['needs_reply', 'has_deadline', 'from_vip']
+   * - ['local_event', 'rsvp_needed']
+   * - ['invoice', 'payment_due']
+   *
+   * Maximum 5 labels per email.
+   */
+  labels: EmailLabel[];
 
   /**
    * Confidence in the categorization (0-1).
@@ -434,6 +618,176 @@ export interface EventDetectionData {
 export type EventDetectionResult = AnalyzerResult<EventDetectionData>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// DATE EXTRACTOR TYPES (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * A single extracted date from an email.
+ */
+export interface ExtractedDate {
+  /**
+   * Type of date extracted.
+   */
+  dateType: DateType;
+
+  /**
+   * The date in ISO format (YYYY-MM-DD).
+   */
+  date: string;
+
+  /**
+   * Time if known (HH:MM, 24-hour format).
+   */
+  time?: string;
+
+  /**
+   * End date for ranges (YYYY-MM-DD).
+   */
+  endDate?: string;
+
+  /**
+   * End time for ranges (HH:MM).
+   */
+  endTime?: string;
+
+  /**
+   * Short title describing this date.
+   * Example: "Invoice #1234 due", "Project deadline"
+   */
+  title: string;
+
+  /**
+   * Additional context about this date.
+   */
+  description?: string;
+
+  /**
+   * Original text snippet that contained this date.
+   */
+  sourceSnippet?: string;
+
+  /**
+   * Related entity (person, company, project).
+   */
+  relatedEntity?: string;
+
+  /**
+   * Whether this is a recurring date.
+   */
+  isRecurring: boolean;
+
+  /**
+   * Recurrence pattern if applicable.
+   */
+  recurrencePattern?: RecurrencePattern;
+
+  /**
+   * Confidence in this date extraction (0-1).
+   */
+  confidence: number;
+}
+
+/**
+ * Result data from the date extractor analyzer.
+ *
+ * This analyzer extracts timeline-relevant dates for the Hub view.
+ * It runs on all emails and extracts deadlines, payment dates, birthdays, etc.
+ */
+export interface DateExtractionData {
+  /**
+   * Whether any dates were found.
+   */
+  hasDates: boolean;
+
+  /**
+   * List of extracted dates (0-10 per email).
+   */
+  dates: ExtractedDate[];
+
+  /**
+   * Overall confidence in the extraction (0-1).
+   */
+  confidence: number;
+}
+
+/**
+ * Full result from the date extractor analyzer.
+ */
+export type DateExtractionResult = AnalyzerResult<DateExtractionData>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTACT ENRICHER TYPES (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Result data from the contact enricher analyzer.
+ *
+ * This analyzer extracts contact metadata from email content and signatures.
+ * It runs selectively on emails from contacts that need enrichment.
+ *
+ * SELECTIVE EXECUTION:
+ * - Only runs when contact has extraction_confidence IS NULL or < 0.5
+ * - Or last_extracted_at > 30 days ago
+ * - And contact has 3+ emails (worth the token cost)
+ */
+export interface ContactEnrichmentData {
+  /**
+   * Whether enrichment data was found.
+   */
+  hasEnrichment: boolean;
+
+  /**
+   * Company name extracted from signature or email body.
+   */
+  company?: string;
+
+  /**
+   * Job title or role.
+   */
+  jobTitle?: string;
+
+  /**
+   * Phone number if found in signature.
+   */
+  phone?: string;
+
+  /**
+   * LinkedIn URL if found.
+   */
+  linkedinUrl?: string;
+
+  /**
+   * Inferred relationship type.
+   */
+  relationshipType?: ContactRelationshipType;
+
+  /**
+   * Birthday if mentioned (MM-DD format, year optional).
+   */
+  birthday?: string;
+
+  /**
+   * Work anniversary if mentioned.
+   */
+  workAnniversary?: string;
+
+  /**
+   * Source of the enrichment data.
+   */
+  source: 'signature' | 'email_body' | 'both';
+
+  /**
+   * Confidence in the extracted data (0-1).
+   */
+  confidence: number;
+}
+
+/**
+ * Full result from the contact enricher analyzer.
+ */
+export type ContactEnrichmentResult = AnalyzerResult<ContactEnrichmentData>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // AGGREGATED ANALYSIS TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -442,10 +796,12 @@ export type EventDetectionResult = AnalyzerResult<EventDetectionData>;
  * This is stored in the email_analyses table.
  *
  * STRUCTURE:
- * - categorization: Always runs (core classification + summary)
+ * - categorization: Always runs (core classification + summary + labels)
  * - actionExtraction: Always runs (detailed action info)
  * - clientTagging: Always runs (client linking)
+ * - dateExtraction: Always runs (timeline intelligence) [NEW Jan 2026]
  * - eventDetection: Only runs when category === 'event'
+ * - contactEnrichment: Selective (only for contacts needing enrichment) [NEW Jan 2026]
  *
  * Future analyzers (Phase 2+):
  * - urlExtraction: Extract and categorize URLs
@@ -462,11 +818,24 @@ export interface AggregatedAnalysis {
   clientTagging?: ClientTaggingData;
 
   /**
+   * Date extraction results (NEW Jan 2026).
+   * Always runs. Extracts deadlines, payments, birthdays, etc. for Hub timeline.
+   */
+  dateExtraction?: DateExtractionData;
+
+  /**
    * Event detection results.
    * Only present when category === 'event'.
    * Contains rich event details for calendar integration.
    */
   eventDetection?: EventDetectionData;
+
+  /**
+   * Contact enrichment results (NEW Jan 2026).
+   * Only present when contact needs enrichment.
+   * Contains extracted company, job title, birthday, etc.
+   */
+  contactEnrichment?: ContactEnrichmentData;
 
   /** Total tokens used across all analyzers */
   totalTokensUsed: number;
@@ -499,7 +868,9 @@ export interface EmailProcessingResult {
     categorization?: CategorizationResult;
     actionExtraction?: ActionExtractionResult;
     clientTagging?: ClientTaggingResult;
+    dateExtraction?: DateExtractionResult;
     eventDetection?: EventDetectionResult;
+    contactEnrichment?: ContactEnrichmentResult;
   };
 
   /** Errors from any failed analyzers */
