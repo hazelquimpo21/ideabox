@@ -236,7 +236,33 @@ This document tracks the implementation progress of IdeaBox and provides guidanc
 
 ### 🚧 In Progress
 
-Nothing currently in progress.
+#### Enhanced Email Intelligence (NEW - Jan 2026)
+
+A comprehensive enhancement to email analysis with multi-label taxonomy, date extraction, contact intelligence, and user context for personalized AI.
+
+**Documentation:**
+- [x] `docs/ENHANCED_EMAIL_INTELLIGENCE.md` - Full implementation spec
+- [x] `docs/NEXT_STEPS_EMAIL_INTELLIGENCE.md` - Developer handoff guide
+
+**Database Migrations:**
+- [x] `011_user_context.sql` - User foundational info for personalized AI
+- [x] `012_contacts.sql` - Auto-populated contact intelligence
+- [x] `013_extracted_dates.sql` - Timeline dates for Hub
+
+**Analyzer Updates:**
+- [x] `types.ts` - EmailLabel, DateType, ContactRelationshipType, ExtractedDate, etc.
+- [x] `categorizer.ts` - Multi-label support (0-5 labels per email), user context injection
+- [x] `date-extractor.ts` - NEW: Extracts deadlines, payments, birthdays, expirations
+- [x] `contact-enricher.ts` - NEW: Extracts company, job title, relationship from signatures
+- [x] `analyzers.ts` config - Added dateExtractor, contactEnricher configs
+
+**Still TODO (see NEXT_STEPS_EMAIL_INTELLIGENCE.md):**
+- [ ] User context service (fetch/cache user context for prompts)
+- [ ] Update email processor to use new analyzers
+- [ ] Update Hub priority service with date extraction
+- [ ] Onboarding wizard UI (7 steps)
+- [ ] Contacts API endpoints
+- [ ] Extracted dates API endpoints
 
 ---
 
@@ -684,6 +710,8 @@ toast({
 | `docs/NEXT_DEVELOPER_GUIDE.md` | Handoff notes, quick start |
 | `docs/INITIAL_SYNC_STRATEGY.md` | Initial sync and Discovery Dashboard strategy |
 | `docs/DISCOVERY_DASHBOARD_PLAN.md` | Detailed implementation plan for Discovery Dashboard |
+| `docs/ENHANCED_EMAIL_INTELLIGENCE.md` | Multi-label taxonomy, date extraction, contact intelligence |
+| `docs/NEXT_STEPS_EMAIL_INTELLIGENCE.md` | Developer handoff for email intelligence feature |
 
 ---
 

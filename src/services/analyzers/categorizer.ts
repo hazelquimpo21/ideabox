@@ -60,7 +60,9 @@ import type {
   EmailInput,
   UserContext,
   QuickAction,
+  EmailLabel,
 } from './types';
+import { EMAIL_LABELS } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -105,22 +107,24 @@ const QUICK_ACTIONS = [
  * 1. Focus on ACTION needed, not sender identity
  * 2. Explicitly exclude "client" as a category
  * 3. Provide clear criteria for each category
- * 4. Request topic extraction for additional context
- * 5. Generate assistant-style summary for quick scanning
- * 6. Suggest quick action for inbox triage
- * 7. Encourage honest confidence assessment
+ * 4. Apply secondary labels for multi-dimensional classification
+ * 5. Request topic extraction for additional context
+ * 6. Generate assistant-style summary for quick scanning
+ * 7. Suggest quick action for inbox triage
+ * 8. Encourage honest confidence assessment
  *
- * ENHANCED (Jan 2026): Added summary and quickAction generation.
+ * ENHANCED (Jan 2026): Added summary, quickAction, and labels generation.
  */
-const SYSTEM_PROMPT = `You are an email categorization and summarization specialist. Your job is to help users quickly triage their inbox.
+const BASE_SYSTEM_PROMPT = `You are an email categorization and summarization specialist. Your job is to help users quickly triage their inbox.
 
 For each email, you will:
 1. Categorize by WHAT ACTION IS NEEDED (not who sent it)
-2. Write a one-sentence summary as if you're a personal assistant briefing the user
-3. Suggest a quick action for inbox triage
+2. Apply secondary LABELS for flexible filtering
+3. Write a one-sentence summary as if you're a personal assistant briefing the user
+4. Suggest a quick action for inbox triage
 
 ═══════════════════════════════════════════════════════════════════════════════
-CATEGORIES (choose ONE)
+CATEGORIES (choose ONE primary category)
 ═══════════════════════════════════════════════════════════════════════════════
 
 IMPORTANT: "client" is NOT a category. Client relationships are tracked separately.
@@ -141,6 +145,55 @@ CATEGORY DECISION GUIDANCE:
 - Has specific date/time for an event → event
 - Selling something → promo
 - If unsure, lean toward action_required (safer to surface)
+
+═══════════════════════════════════════════════════════════════════════════════
+LABELS (choose 0-5 secondary labels)
+═══════════════════════════════════════════════════════════════════════════════
+
+Apply relevant labels to enable flexible filtering. Only add labels that clearly apply.
+
+ACTION LABELS:
+- needs_reply: Someone is explicitly waiting for a response
+- needs_decision: User must choose between options
+- needs_review: Content requires careful reading/review
+- needs_approval: Approval or sign-off is requested
+
+URGENCY LABELS:
+- urgent: Marked urgent, ASAP, or critical
+- has_deadline: Specific deadline/due date mentioned
+- time_sensitive: Limited-time offer or opportunity
+
+RELATIONSHIP LABELS:
+- from_vip: Sender is on user's VIP list (will be provided if available)
+- new_contact: First email from this sender
+- networking_opportunity: Potential valuable professional connection
+
+CONTENT LABELS:
+- has_attachment: Email mentions or has attachments
+- has_link: Contains important links to review
+- has_question: Direct question asked
+
+LOCATION LABELS:
+- local_event: Event is in user's local area (will be provided if available)
+
+PERSONAL LABELS:
+- family_related: Involves family members
+- community: Local community or group related
+
+FINANCIAL LABELS:
+- invoice: Invoice or bill
+- receipt: Purchase confirmation/receipt
+- payment_due: Payment deadline mentioned
+
+CALENDAR LABELS:
+- meeting_request: Meeting invitation
+- rsvp_needed: RSVP or registration required
+- appointment: Scheduled appointment confirmation
+
+LEARNING LABELS:
+- educational: Educational or learning content
+- industry_news: Industry news or updates
+- job_opportunity: Job or career related
 
 ═══════════════════════════════════════════════════════════════════════════════
 SUMMARY (one sentence, assistant-style)
@@ -198,6 +251,54 @@ CONFIDENCE
 
 Be decisive but honest. If truly ambiguous, use confidence < 0.7.`;
 
+/**
+ * Builds the full system prompt with user context injected.
+ * This enables personalized categorization based on user's VIPs, location, etc.
+ */
+function buildSystemPrompt(context?: UserContext): string {
+  const parts = [BASE_SYSTEM_PROMPT];
+
+  if (context) {
+    const contextParts: string[] = [];
+
+    // Add VIP context
+    if (context.vipEmails?.length || context.vipDomains?.length) {
+      const vips = [
+        ...(context.vipEmails || []),
+        ...(context.vipDomains || []),
+      ];
+      contextParts.push(`VIP CONTACTS (apply 'from_vip' label): ${vips.join(', ')}`);
+    }
+
+    // Add location context
+    if (context.locationMetro) {
+      contextParts.push(`USER LOCATION: ${context.locationMetro}. Apply 'local_event' label for events in this area.`);
+    }
+
+    // Add family context
+    if (context.familyContext?.familyNames?.length) {
+      contextParts.push(`FAMILY MEMBERS: ${context.familyContext.familyNames.join(', ')}. Apply 'family_related' label when mentioned.`);
+    }
+
+    // Add role/priorities context
+    if (context.role) {
+      contextParts.push(`USER ROLE: ${context.role}`);
+    }
+    if (context.priorities?.length) {
+      contextParts.push(`USER PRIORITIES: ${context.priorities.join(', ')}`);
+    }
+
+    if (contextParts.length > 0) {
+      parts.push('\n═══════════════════════════════════════════════════════════════════════════════');
+      parts.push('USER CONTEXT (use for personalized labeling)');
+      parts.push('═══════════════════════════════════════════════════════════════════════════════');
+      parts.push(contextParts.join('\n'));
+    }
+  }
+
+  return parts.join('\n');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // FUNCTION SCHEMA
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -208,9 +309,10 @@ Be decisive but honest. If truly ambiguous, use confidence < 0.7.`;
  * This schema defines exactly what JSON structure OpenAI should return.
  * Using function calling ensures consistent, typed responses.
  *
- * ENHANCED (Jan 2026): Added summary and quick_action fields.
+ * ENHANCED (Jan 2026): Added summary, quick_action, and labels fields.
  * - summary: One-sentence assistant-style overview
  * - quick_action: Suggested action for inbox triage
+ * - labels: Secondary labels for multi-dimensional classification
  */
 const FUNCTION_SCHEMA: FunctionSchema = {
   name: FUNCTION_NAME,
@@ -223,6 +325,17 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         type: 'string',
         enum: EMAIL_CATEGORIES as unknown as string[],
         description: 'Primary category based on action needed (NOT who sent it)',
+      },
+
+      // Secondary labels (NEW Jan 2026)
+      labels: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: EMAIL_LABELS as unknown as string[],
+        },
+        maxItems: 5,
+        description: 'Secondary labels for flexible filtering (0-5). Only apply labels that clearly fit.',
       },
 
       // Confidence score (required)
@@ -246,21 +359,21 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Key topics extracted from email: billing, meeting, feedback, etc.',
       },
 
-      // NEW: One-sentence summary (required)
+      // One-sentence summary (required)
       summary: {
         type: 'string',
         description:
           'One-sentence assistant-style summary. Example: "Sarah from Acme wants you to review the proposal by Friday"',
       },
 
-      // NEW: Quick action for inbox triage (required)
+      // Quick action for inbox triage (required)
       quick_action: {
         type: 'string',
         enum: QUICK_ACTIONS as unknown as string[],
         description: 'Suggested quick action: respond, review, archive, save, calendar, unsubscribe, follow_up, none',
       },
     },
-    required: ['category', 'confidence', 'reasoning', 'summary', 'quick_action'],
+    required: ['category', 'labels', 'confidence', 'reasoning', 'summary', 'quick_action'],
   },
 };
 
@@ -403,10 +516,13 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       reasoning: (rawData.reasoning as string) || '',
       topics: (rawData.topics as string[]) || [],
 
-      // NEW: Assistant-style summary
+      // Secondary labels (NEW Jan 2026)
+      labels: (rawData.labels as EmailLabel[]) || [],
+
+      // Assistant-style summary
       summary: (rawData.summary as string) || 'Email received',
 
-      // NEW: Quick action (convert snake_case to camelCase)
+      // Quick action (convert snake_case to camelCase)
       quickAction: (rawData.quick_action as QuickAction) || 'review',
     };
   }
@@ -432,17 +548,21 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
    * The prompt instructs the AI to:
    * - Categorize by ACTION needed, not sender
    * - Avoid using "client" as a category
+   * - Apply secondary labels for multi-dimensional filtering
    * - Be conservative (prefer action_required when unsure)
    * - Extract relevant topic keywords
    * - Be honest about confidence
    *
-   * @param _context - User context (not used by categorizer)
+   * ENHANCED (Jan 2026): Now uses user context for personalized labeling.
+   * - VIP contacts get 'from_vip' label
+   * - Local events get 'local_event' label
+   * - Family members get 'family_related' label
+   *
+   * @param context - User context for personalized labeling
    * @returns System prompt string
    */
   getSystemPrompt(context?: UserContext): string {
-    // Note: context is not used by categorizer (unlike client tagger)
-    void context;
-    return SYSTEM_PROMPT;
+    return buildSystemPrompt(context);
   }
 }
 
