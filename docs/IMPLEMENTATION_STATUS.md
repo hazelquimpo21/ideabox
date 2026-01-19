@@ -563,28 +563,46 @@ scripts/
 
 ## What to Build Next
 
-### 👉 Immediate Priority: Polish & Testing
+### 👉 Immediate Priority: Sidebar Navigation & Testing
 
-With the core features complete, focus on polish and reliability:
+With Email Intelligence UI complete, focus on integration and testing:
 
-#### 1. E2E Testing for Onboarding Flow
-- Test complete onboarding wizard
-- Test initial sync with mock emails
-- Test Discovery Dashboard rendering
+#### 1. Sidebar Navigation Updates
+- Add "Contacts" link to sidebar navigation
+- Add "Timeline" link to sidebar navigation
+- Update category counts to include timeline dates
 
-#### 2. Error Recovery Improvements
+#### 2. E2E Testing for New Features
+- Test Contacts page filtering, VIP/muted toggles
+- Test Timeline page date grouping, snooze/acknowledge actions
+- Test Hub with extracted dates rendering
+- Test onboarding flow end-to-end
+
+#### 3. Error Recovery Improvements
 - Add "Retry" mechanism for individual failed emails
 - Implement background re-analysis job
 
-#### 3. Analytics & Metrics
-- Track sync duration, email counts
-- Track category distribution
-- Dashboard for admin monitoring
-
 #### 4. Performance Optimization
-- Implement email body caching
-- Add client-side filtering optimization
-- Profile and optimize slow queries
+- Add caching for contacts list
+- Implement virtual scrolling for large lists
+- Profile and optimize timeline date queries
+
+### 🔮 Future Enhancements
+
+#### Calendar Integration
+- Month/week calendar view for Timeline
+- Export dates to external calendar
+- Import calendar events
+
+#### Contact Detail Page
+- Create `/contacts/[id]` page
+- Show email history with contact
+- Editable contact details
+
+#### Smart Suggestions
+- Suggest relationship types based on email patterns
+- Suggest VIP status for frequent contacts
+- Contact merge suggestions for duplicates
 
 ---
 
@@ -717,7 +735,62 @@ toast({
 
 ## Recent Changes (January 19, 2026)
 
-### Session 8 (Current) - User Context Onboarding UI & APIs
+### Session 9 (Current) - P5 UI Pages Complete
+
+- ✅ **useContacts Hook** (`src/hooks/useContacts.ts`, ~500 lines)
+  - Fetches contacts with VIP/muted/relationship filtering
+  - Text search across name and email
+  - Sorting by email count, last seen, or name
+  - Optimistic updates for toggleVip, toggleMuted, updateRelationship
+  - Comprehensive error logging and rollback on failure
+
+- ✅ **useExtractedDates Hook** (`src/hooks/useExtractedDates.ts`, ~550 lines)
+  - Fetches extracted dates with type/date range filtering
+  - Groups dates by time period (overdue, today, tomorrow, etc.)
+  - Actions: acknowledge, snooze (with presets), hide
+  - Includes related email and contact data
+  - Comprehensive error logging
+
+- ✅ **Contacts Page** (`src/app/(auth)/contacts/page.tsx`, ~550 lines)
+  - Route: `/contacts`
+  - Tab filters: All | VIP | Muted
+  - Search by name or email (debounced)
+  - Sort by email count, last seen, or name
+  - VIP star toggle, mute toggle
+  - View emails from contact link
+  - Relationship type badges
+  - Stats cards (total, VIP, clients, muted)
+  - Loading skeletons and empty states
+
+- ✅ **Timeline Page** (`src/app/(auth)/timeline/page.tsx`, ~650 lines)
+  - Route: `/timeline`
+  - Grouped date display: Overdue | Today | Tomorrow | This Week | Next Week | Later
+  - Type filter dropdown
+  - Show/hide acknowledged dates toggle
+  - Actions: Acknowledge (done), Snooze (presets), Hide
+  - Urgency styling for overdue items
+  - Link to source email
+  - Date type icons and colors
+  - Stats banner (total, overdue, pending, done)
+  - Collapsible group headers
+
+- ✅ **Hub Page Enhancement** (`src/app/(auth)/hub/page.tsx`)
+  - Added `extracted_date` to TYPE_CONFIG with CalendarClock icon
+  - Updated StatsBanner to include extractedDatesConsidered
+  - Extracted dates now render correctly in priority cards
+
+- ✅ **Hooks Index Update** (`src/hooks/index.ts`)
+  - Added exports for useContacts and useExtractedDates
+  - Added type exports for Contact, ExtractedDate, DateType, etc.
+
+- ✅ **Documentation Updates**
+  - Updated `docs/NEXT_STEPS_EMAIL_INTELLIGENCE.md` - Marked P5 complete
+  - Created `docs/P5_UI_IMPLEMENTATION_PLAN.md` - Implementation plan
+  - Updated `docs/IMPLEMENTATION_STATUS.md` - This file
+
+---
+
+### Session 8 - User Context Onboarding UI & APIs
 
 - ✅ **7-Step User Context Onboarding Wizard** (`src/components/onboarding/`)
   - Created `UserContextWizard.tsx` - Main wizard orchestrator with step management

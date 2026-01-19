@@ -104,3 +104,28 @@ export type {
   UseHubPrioritiesOptions,
   UseHubPrioritiesReturn,
 } from './useHubPriorities';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTACTS & TIMELINE HOOKS (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useContacts, default as useContactsDefault } from './useContacts';
+export type {
+  UseContactsOptions,
+  UseContactsReturn,
+  Contact,
+  ContactRelationshipType,
+  ContactStats,
+} from './useContacts';
+
+export { useExtractedDates, default as useExtractedDatesDefault } from './useExtractedDates';
+export type {
+  UseExtractedDatesOptions,
+  UseExtractedDatesReturn,
+  ExtractedDate,
+  DateType,
+  DateStats,
+  GroupedDates,
+  RelatedEmail,
+  RelatedContact,
+} from './useExtractedDates';
