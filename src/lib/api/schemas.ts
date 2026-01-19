@@ -390,6 +390,10 @@ export type ContactQueryParams = z.infer<typeof contactQuerySchema>;
  * @example
  * PUT /api/contacts/[id]
  * { "is_vip": true, "relationship_type": "client" }
+ *
+ * @example (with notes - P6 enhancement)
+ * PUT /api/contacts/[id]
+ * { "notes": "Key client - always respond within 24h" }
  */
 export const contactUpdateSchema = z.object({
   name: z.string().max(200).nullable().optional(),
@@ -398,6 +402,9 @@ export const contactUpdateSchema = z.object({
   relationship_type: contactRelationshipTypeSchema.optional(),
   birthday: z.string().date().nullable().optional(),
   work_anniversary: z.string().date().nullable().optional(),
+  // ─── P6 Enhancement: Notes field for contact management ───────────────────
+  // Allows users to add personal notes about contacts
+  notes: z.string().max(5000).nullable().optional(),
 }).refine((data) => Object.keys(data).length > 0, {
   message: 'At least one field must be provided',
 });

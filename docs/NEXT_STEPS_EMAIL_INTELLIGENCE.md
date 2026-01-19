@@ -2,9 +2,9 @@
 
 > **Last Updated:** January 19, 2026
 >
-> **Status:** ✅ COMPLETE - All phases implemented
+> **Status:** ✅ P6 COMPLETE - All core features implemented
 >
-> **Feature Branch:** `claude/plan-email-intelligence-I09HY`
+> **Feature Branch:** `claude/plan-email-intelligence-FEhH8`
 
 This document tracks the implementation work for the Enhanced Email Intelligence feature.
 
@@ -22,87 +22,110 @@ This document tracks the implementation work for the Enhanced Email Intelligence
 | P2 | Hub Priority Service Update | ✅ Complete |
 | P3 | Contact Backfill Endpoint | ✅ Complete |
 | P4 | Test Suite | ✅ Complete |
-| P5 | UI Pages (Contacts, Timeline) | ✅ **Complete (this session)** |
+| P5 | UI Pages (Contacts, Timeline) | ✅ Complete |
+| **P6** | **Final Enhancements** | ✅ **Complete (this session)** |
 
 ---
 
-## 🆕 Work Completed This Session (January 19, 2026)
+## 🆕 P6 Work Completed This Session (January 19, 2026)
 
-### Priority 2: Hub Priority Service Update ✅ COMPLETE
+### 1. Sidebar Navigation Updates ✅
 
-**File:** `src/services/hub/hub-priority-service.ts`
+**File modified:** `src/components/layout/Sidebar.tsx`
 
 **Changes Made:**
-1. Added `extracted_date` to `HubItemType` union
-2. Added `extractedDatesConsidered` to stats
-3. Added `dateTypeWeights` configuration:
-   - deadline: 1.6, payment_due: 1.5, expiration: 1.4, appointment: 1.3
-   - follow_up: 1.2, event: 1.1, birthday: 1.0, anniversary: 0.9
-   - reminder: 0.8, recurring: 0.7, other: 0.6
-4. Added `extractedDateBaseWeight: 13` (between actions=15 and events=12)
-5. Added `fetchExtractedDateCandidates()` function with:
-   - Date range filtering (today + 7 days)
-   - Acknowledged/hidden/snoozed filtering
-   - Full error logging and graceful degradation
-6. Added `scoreExtractedDate()` function with:
-   - Date type weight application
-   - Deadline proximity multipliers (overdue, critical, urgent, etc.)
-   - Recurring item reduction (0.85x)
-   - Low confidence reduction (0.9x for confidence < 0.7)
-7. Added date-type-specific importance reasons:
-   - `extractedDeadline()`, `paymentDue()`, `birthday()`, `anniversary()`
-   - `expiration()`, `appointment()`, `followUp()`, `genericDate()`
-8. Added `mapDateTypeToSuggestedAction()` helper
-9. Full integration with main `getTopPriorityItems()` function
+- Added `BookUser` icon import for Contacts
+- Added `CalendarDays` icon import for Timeline
+- Added "Contacts" nav item with `/contacts` route
+- Added "Timeline" nav item with `/timeline` route
+- Both links show active state when on respective pages
+- Positioned between Clients and Archive for logical flow
 
-**Lines added:** ~400 lines with comprehensive documentation
+### 2. Contact Detail Page ✅
 
-### Priority 3: Contact Backfill ✅ COMPLETE
+**Files created:**
+- `src/app/(auth)/contacts/[id]/page.tsx` (~600 lines)
+- `src/app/(auth)/contacts/[id]/loading.tsx` (~70 lines)
 
-**New Files Created:**
+**Features implemented:**
+- Contact profile display (name, email, company, job title)
+- VIP/Muted status toggles with optimistic updates
+- Relationship type selector (dropdown)
+- Email history from this contact (last 20 emails)
+- Related extracted dates section
+- Notes field with save functionality
+- Stats cards (total emails, last 30 days, last contact)
+- Loading skeleton for better UX
+- Error state with retry option
+- Back navigation to contacts list
 
-1. **Admin API Endpoint:**
-   - `src/app/api/admin/backfill-contacts/route.ts`
-   - POST endpoint to trigger backfill for authenticated user
-   - GET endpoint returns usage instructions
-   - Full authentication and authorization
-   - Calls `backfill_contacts_from_emails` database function
-   - Comprehensive error handling and logging
+### 3. Calendar View for Timeline ✅
 
-2. **One-Time Script:**
-   - `scripts/backfill-contacts.ts`
-   - Run with: `npx tsx scripts/backfill-contacts.ts`
-   - Options: `--user-id=<uuid>`, `--dry-run`, `--help`
-   - Requires `SUPABASE_SERVICE_ROLE_KEY` environment variable
-   - Progress logging and summary output
+**Files created:**
+- `src/components/timeline/CalendarView.tsx` (~450 lines)
+- `src/components/timeline/index.ts` (barrel export)
 
-### Priority 4: Test Suite ✅ COMPLETE
+**File modified:**
+- `src/app/(auth)/timeline/page.tsx` (added view toggle + integration)
 
-**New Test Files Created:**
+**Features implemented:**
+- List/Calendar view toggle buttons in header
+- Monthly calendar grid with navigation (prev/next/today)
+- Color-coded date type indicators (dots)
+- Click-to-select day with detail panel
+- Today highlighting with border
+- Date type legend
+- Acknowledged items shown with reduced opacity
+- Action buttons in detail panel (done, snooze, hide)
 
-1. **Hub Priority Service Tests:**
-   - `src/services/hub/__tests__/hub-priority-service.test.ts`
-   - Tests for:
-     - Configuration validation (date type weights)
-     - `getTopPriorityItems()` function
-     - Extracted dates in stats
-     - Error handling (graceful degradation)
-     - Time/day context helpers
-     - Extracted date scoring (overdue, deadlines, birthdays)
-     - Recurring item scoring
-     - Low confidence scoring
-     - Suggested action mapping
+### 4. Hook Tests ✅
 
-2. **Backfill Contacts API Tests:**
-   - `src/app/api/admin/backfill-contacts/__tests__/route.test.ts`
-   - Tests for:
-     - GET handler (usage instructions)
-     - Authentication (401 errors)
-     - Authorization (403 for other users)
-     - Successful backfill
-     - Database errors
-     - Malformed JSON handling
-     - Response format validation
+**Files created:**
+- `src/hooks/__tests__/useContacts.test.ts` (~400 lines)
+- `src/hooks/__tests__/useExtractedDates.test.ts` (~350 lines)
+
+**Test coverage includes:**
+- Fetching and loading states
+- Stats calculation
+- VIP/Muted toggle with optimistic updates
+- Relationship type updates
+- Acknowledge, snooze, hide actions
+- Error handling and rollback
+- Pagination (hasMore)
+- Refetch functionality
+
+### 5. Schema Update ✅
+
+**File modified:** `src/lib/api/schemas.ts`
+
+**Changes Made:**
+- Added `notes` field to `contactUpdateSchema`
+- Max length: 5000 characters
+- Nullable and optional
+
+---
+
+## File Reference - P6 Session
+
+### New Files Created
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `src/app/(auth)/contacts/[id]/page.tsx` | ~600 | Contact detail page |
+| `src/app/(auth)/contacts/[id]/loading.tsx` | ~70 | Loading skeleton |
+| `src/components/timeline/CalendarView.tsx` | ~450 | Calendar view component |
+| `src/components/timeline/index.ts` | ~10 | Barrel exports |
+| `src/hooks/__tests__/useContacts.test.ts` | ~400 | Hook tests |
+| `src/hooks/__tests__/useExtractedDates.test.ts` | ~350 | Hook tests |
+| `docs/P6_IMPLEMENTATION_PLAN.md` | ~1700 | Implementation plan |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/components/layout/Sidebar.tsx` | Added Contacts and Timeline nav items |
+| `src/app/(auth)/timeline/page.tsx` | Added view toggle and CalendarView integration |
+| `src/lib/api/schemas.ts` | Added notes field to contactUpdateSchema |
 
 ---
 
@@ -123,113 +146,11 @@ npx supabase migration up
 # 3. supabase/migrations/013_extracted_dates.sql
 ```
 
-**Verify tables exist:**
+**Note:** The `notes` column for contacts should already exist in migration 012. If not, add it:
+
 ```sql
-SELECT table_name FROM information_schema.tables
-WHERE table_schema = 'public'
-AND table_name IN ('user_context', 'contacts', 'extracted_dates');
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notes TEXT;
 ```
-
----
-
-## ✅ Priority 5 - UI Pages COMPLETE (This Session)
-
-### Contacts Page ✅
-
-**File created:** `src/app/(auth)/contacts/page.tsx` (~550 lines)
-
-**Components implemented:**
-1. ✅ `useContacts` hook in `src/hooks/useContacts.ts` (~500 lines)
-2. ✅ Contact types in `src/hooks/useContacts.ts`
-3. ✅ Page features:
-   - List contacts with search/filter (VIP, muted, relationship type)
-   - VIP badges (star icon) with toggle
-   - Muted badges (volume icon) with toggle
-   - Email count and last contact date
-   - Quick actions: Mark as VIP, Mute, View emails
-   - Relationship type display
-   - Debounced search
-   - Sorting by email count, last seen, or name
-
-### Timeline Page ✅
-
-**File created:** `src/app/(auth)/timeline/page.tsx` (~650 lines)
-
-**Components implemented:**
-1. ✅ `useExtractedDates` hook in `src/hooks/useExtractedDates.ts` (~550 lines)
-2. ✅ ExtractedDate types in `src/hooks/useExtractedDates.ts`
-3. ✅ Page features:
-   - Grouped list view (Overdue, Today, Tomorrow, This Week, Next Week, Later)
-   - Filter by date type (deadlines, birthdays, payments, etc.)
-   - Color-coded by date type
-   - Urgency styling for overdue items
-   - Acknowledge, snooze (with presets), and hide actions
-   - Link to source email
-   - Show/hide done dates toggle
-   - Stats banner with overdue count
-
-### Hub Page Enhancement ✅
-
-**File updated:** `src/app/(auth)/hub/page.tsx`
-
-**Changes made:**
-1. ✅ Added `extracted_date` to `TYPE_CONFIG` with CalendarClock icon
-2. ✅ Updated `StatsBanner` to show extracted dates count
-3. ✅ Type: 'extracted_date' now renders correctly in priority cards
-4. ✅ Links to timeline view for extracted date items
-
-### Hooks Index Updated ✅
-
-**File updated:** `src/hooks/index.ts`
-
-**New exports:**
-- `useContacts`, `Contact`, `ContactRelationshipType`, `ContactStats`
-- `useExtractedDates`, `ExtractedDate`, `DateType`, `DateStats`, `GroupedDates`
-
----
-
-## File Reference - New/Modified Files
-
-### New Files (P5 Session - UI Pages)
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `src/hooks/useContacts.ts` | ~500 | Hook for fetching/managing contacts |
-| `src/hooks/useExtractedDates.ts` | ~550 | Hook for fetching/managing timeline dates |
-| `src/app/(auth)/contacts/page.tsx` | ~550 | Contacts page with VIP/muted management |
-| `src/app/(auth)/timeline/page.tsx` | ~650 | Timeline page with date grouping |
-| `docs/P5_UI_IMPLEMENTATION_PLAN.md` | ~400 | Implementation plan for P5 |
-
-### Modified Files (P5 Session)
-
-| File | Changes |
-|------|---------|
-| `src/app/(auth)/hub/page.tsx` | Added extracted_date type, updated StatsBanner |
-| `src/hooks/index.ts` | Added exports for useContacts, useExtractedDates |
-| `docs/NEXT_STEPS_EMAIL_INTELLIGENCE.md` | Updated to mark P5 complete |
-
-### Previous Session Files
-
-| File | Purpose |
-|------|---------|
-| `src/app/api/admin/backfill-contacts/route.ts` | Admin endpoint for contact backfill |
-| `scripts/backfill-contacts.ts` | CLI script for bulk contact backfill |
-| `src/services/hub/__tests__/hub-priority-service.test.ts` | Hub service tests |
-| `src/app/api/admin/backfill-contacts/__tests__/route.test.ts` | Backfill API tests |
-| `docs/IMPLEMENTATION_PLAN_EMAIL_INTELLIGENCE.md` | Detailed implementation plan |
-| `src/services/hub/hub-priority-service.ts` | Added extracted dates integration (~400 lines) |
-
-### Key Existing Files (Reference)
-
-| File | Purpose |
-|------|---------|
-| `src/services/user-context/user-context-service.ts` | User context service with caching |
-| `src/app/api/contacts/route.ts` | GET contacts list |
-| `src/app/api/contacts/[id]/route.ts` | GET/PUT/DELETE single contact |
-| `src/app/api/dates/route.ts` | GET extracted dates list |
-| `src/app/api/dates/[id]/route.ts` | GET/POST/DELETE single date |
-| `supabase/migrations/012_contacts.sql` | Contacts table + backfill function |
-| `supabase/migrations/013_extracted_dates.sql` | Extracted dates table |
 
 ---
 
@@ -238,199 +159,238 @@ AND table_name IN ('user_context', 'contacts', 'extracted_dates');
 After applying migrations, verify the following:
 
 ```bash
-# 1. Run tests to verify Hub Priority Service
+# 1. Run all hook tests
+npx vitest run src/hooks/__tests__/
+
+# 2. Run Hub Priority Service tests
 npx vitest run src/services/hub/__tests__/
 
-# 2. Run tests to verify Backfill API
-npx vitest run src/app/api/admin/backfill-contacts/__tests__/
+# 3. Start dev server and verify pages
+npm run dev
 
-# 3. Test backfill endpoint (requires auth)
-curl -X GET http://localhost:3000/api/admin/backfill-contacts
+# 4. Visit pages to verify:
+# - http://localhost:3000/contacts (should show list)
+# - http://localhost:3000/contacts/[id] (should show detail)
+# - http://localhost:3000/timeline (should show list view)
+# - Click Calendar button to see calendar view
 
-# 4. Test contacts API
+# 5. Test API endpoints
 curl http://localhost:3000/api/contacts
-
-# 5. Test dates API
 curl http://localhost:3000/api/dates
-
-# 6. Verify Hub includes extracted dates
-curl http://localhost:3000/api/hub/priorities
 ```
 
 ---
 
-## Architecture: Hub Priority Service with Extracted Dates
+## 🚀 What's Left for Future Developers
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Hub Priority Service Flow                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   getTopPriorityItems(userId)                                               │
-│        │                                                                     │
-│        ▼                                                                     │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │              STEP 1: Fetch All Candidates (Parallel)                 │   │
-│   ├─────────────────────────────────────────────────────────────────────┤   │
-│   │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐   │   │
-│   │  │   Emails    │ │   Actions   │ │   Events    │ │ Extracted   │   │   │
-│   │  │ (20 limit)  │ │ (15 limit)  │ │ (10 limit)  │ │   Dates     │   │   │
-│   │  │             │ │             │ │             │ │ (15 limit)  │   │   │
-│   │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘   │   │
-│   │  ┌─────────────┐                                                    │   │
-│   │  │  Clients    │  (for priority multipliers)                        │   │
-│   │  └─────────────┘                                                    │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│        │                                                                     │
-│        ▼                                                                     │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │              STEP 2: Score All Candidates                            │   │
-│   ├─────────────────────────────────────────────────────────────────────┤   │
-│   │                                                                      │   │
-│   │  scoreEmail()        - Base: 10, Category boost, Client factor       │   │
-│   │  scoreAction()       - Base: 15, Deadline factor, Client factor      │   │
-│   │  scoreEvent()        - Base: 12, RSVP boost, Time proximity          │   │
-│   │  scoreExtractedDate() - Base: 13, DateType weight, Deadline factor   │   │
-│   │                                                                      │   │
-│   │  All use:                                                            │   │
-│   │  - Deadline multipliers (overdue=3.0, critical=2.5, urgent=2.0)     │   │
-│   │  - Staleness multipliers (veryStale=1.4, stale=1.25, aging=1.1)     │   │
-│   │  - Time context boost (morning/afternoon/evening)                    │   │
-│   │                                                                      │   │
-│   │  Extracted Date specific:                                            │   │
-│   │  - DateType weights (deadline=1.6, birthday=1.0, etc.)              │   │
-│   │  - Recurring reduction (0.85x)                                       │   │
-│   │  - Low confidence reduction (0.9x if confidence < 0.7)              │   │
-│   │                                                                      │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│        │                                                                     │
-│        ▼                                                                     │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │              STEP 3: Sort & Return Top N                             │   │
-│   ├─────────────────────────────────────────────────────────────────────┤   │
-│   │                                                                      │   │
-│   │  Sort by priorityScore (descending)                                  │   │
-│   │  Take first N items (default: 3)                                     │   │
-│   │  Apply Friday context (boost stale items for week cleanup)           │   │
-│   │                                                                      │   │
-│   │  Return:                                                             │   │
-│   │  {                                                                   │   │
-│   │    items: HubPriorityItem[],  // Scored and sorted items            │   │
-│   │    stats: {                                                          │   │
-│   │      totalCandidates,                                                │   │
-│   │      emailsConsidered,                                               │   │
-│   │      actionsConsidered,                                              │   │
-│   │      eventsConsidered,                                               │   │
-│   │      extractedDatesConsidered,  // NEW                               │   │
-│   │      processingTimeMs                                                │   │
-│   │    },                                                                │   │
-│   │    lastUpdated                                                       │   │
-│   │  }                                                                   │   │
-│   │                                                                      │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+The Email Intelligence feature is now **feature-complete**. Here are suggested improvements:
 
----
+### High Priority (Recommended)
 
-## 🚀 What's Next for Future Developers
+1. **Database Migration for Notes Column**
+   - Verify `notes` column exists in `contacts` table
+   - If not, create migration `014_contact_notes.sql`
 
-The Email Intelligence feature is now complete. Here are suggested next priorities:
+2. **Performance Optimization**
+   - Add caching for contact detail page
+   - Implement virtual scrolling for large contact/date lists
+   - Consider pagination for calendar view with many dates
 
-### High Priority
-
-1. **E2E Testing for New Pages**
-   - Test Contacts page filtering, VIP/muted toggles
-   - Test Timeline page date grouping, snooze/acknowledge actions
-   - Test Hub with extracted dates rendering
-
-2. **Sidebar Navigation Update**
-   - Add "Contacts" link to sidebar
-   - Add "Timeline" link to sidebar
-   - Update category counts to include timeline dates
-
-3. **Performance Optimization**
-   - Add caching for contacts list
-   - Implement virtual scrolling for large contact lists
-   - Profile and optimize timeline date queries
+3. **Mobile Responsiveness**
+   - Test calendar view on small screens
+   - Consider week view for mobile devices
 
 ### Medium Priority
 
-4. **Calendar View for Timeline**
-   - Add month/week calendar view option
-   - Integrate with user's calendar export
-
-5. **Contact Detail Page**
-   - Create `/contacts/[id]` page
-   - Show email history with contact
-   - Editable contact details
-
-6. **Timeline Notifications**
+4. **Timeline Notifications**
    - Email reminders for upcoming dates
    - Browser push notifications for deadlines
 
-### Low Priority
+5. **Calendar Integration**
+   - Export dates to Google Calendar / iCal
+   - Sync with external calendar services
 
-7. **Contact Merging**
+6. **Contact Merging**
    - Detect duplicate contacts
    - Merge contacts UI
 
-8. **Smart Contact Suggestions**
+### Low Priority
+
+7. **Smart Contact Suggestions**
    - Suggest relationship types based on email patterns
    - Suggest VIP status for frequent contacts
+
+8. **Advanced Timeline Filters**
+   - Filter by contact (show only dates from VIP contacts)
+   - Filter by email thread
+   - Date range picker
+
+9. **Analytics Dashboard**
+   - Show email volume over time
+   - Contact interaction frequency
+   - Date completion rate
 
 ---
 
 ## Notes for Next Developer
 
-### Key Design Decisions Made
+### Key Design Decisions (P6)
 
-1. **Extracted Date Scoring:**
-   - Base weight of 13 (between actions=15 and events=12)
-   - Date types have different weights (deadlines highest, anniversaries lowest)
-   - Recurring items are deprioritized (0.85x) since they repeat
-   - Low confidence extractions are deprioritized (0.9x)
+1. **Contact Detail Page:**
+   - Uses separate API calls for contact, emails, and dates (parallel fetch)
+   - Optimistic updates for all toggle/update operations
+   - Notes saved separately with dedicated save button
+   - Error states show retry option
+
+2. **Calendar View:**
+   - Color dots limited to 4 per day (+N indicator)
+   - Month navigation clears selected day
+   - Detail panel shows all items for selected day
+   - Snooze menu closes on selection
+
+3. **Testing Strategy:**
+   - Proxy-based chainable mocks for Supabase
+   - Tests cover happy path + error rollback
+   - Stats calculation verified
+   - No page-level tests (hooks tested instead)
+
+### Code Quality Notes
+
+1. **All files include:**
+   - Comprehensive JSDoc header with features list
+   - Logger instance for debugging (`createLogger`)
+   - Section separators with visual dividers
+   - Type definitions at top of file
 
 2. **Error Handling:**
-   - Individual scoring failures are logged but don't break the Hub
-   - Database errors return empty arrays (graceful degradation)
-   - Full error context logged for debugging
-   - All hooks use optimistic updates with rollback on error
+   - All API calls have try/catch with logging
+   - Optimistic updates rollback on error
+   - User feedback via toast notifications
 
-3. **UI Patterns Used:**
-   - Hooks follow `useEmails` pattern for consistency
-   - Pages follow `inbox/page.tsx` pattern for consistency
-   - Thorough JSDoc comments throughout
-   - Comprehensive error logging with `createLogger`
-
-4. **Test Strategy:**
-   - Proxy-based chainable mocks for Supabase queries
-   - Comprehensive scoring tests for extracted dates
-   - Error handling tests for graceful degradation
+3. **Accessibility:**
+   - Screen reader labels (`sr-only`)
+   - Keyboard navigation support
+   - Loading states with skeletons
 
 ### Potential Issues to Watch
 
-1. **Extracted Dates Table:** Must exist before Hub can fetch dates. Run migrations!
+1. **Date-fns:** Calendar view uses date-fns heavily. Ensure it's installed.
 
-2. **Date Parsing:** The `scoreExtractedDate` function handles invalid dates gracefully, but logs warnings. Monitor logs for parsing issues.
+2. **Snooze Dropdown:** Uses absolute positioning - may need z-index adjustment in some contexts.
 
-3. **Supabase OR Filter:** The extracted dates query uses `.or()` for snooze handling. Verify syntax works with your Supabase version.
+3. **Notes Field:** 5000 character limit - should match database column size.
 
-4. **Type Conflicts:** If TypeScript complains about `HubItemType`, ensure `extracted_date` is in the union type.
+4. **Calendar Performance:** With many dates, consider limiting to current month ±1.
 
-5. **Snooze Implementation:** Currently marks as acknowledged with description. Future enhancement could use a proper snooze_until column.
+---
 
-### Cost Impact
+## Architecture: Contact Detail Page Flow
 
-No additional AI API costs - the Hub Priority Service, Contacts page, and Timeline page only query the database, they don't call any AI APIs.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Contact Detail Page                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  useParams()  →  contactId                                       │
+│                     │                                            │
+│                     ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                   fetchContactData()                         ││
+│  │  (useCallback - runs on mount and contactId change)          ││
+│  ├─────────────────────────────────────────────────────────────┤│
+│  │                                                              ││
+│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     ││
+│  │  │   Contact   │    │   Emails    │    │    Dates    │     ││
+│  │  │   Details   │    │   History   │    │   Related   │     ││
+│  │  │             │    │             │    │             │     ││
+│  │  │ GET /api/   │    │ GET /api/   │    │ GET /api/   │     ││
+│  │  │ contacts/id │    │ emails?     │    │ dates?      │     ││
+│  │  │             │    │ sender=x    │    │ contactId=x │     ││
+│  │  └─────────────┘    └─────────────┘    └─────────────┘     ││
+│  │       │                  │                   │              ││
+│  │       ▼                  ▼                   ▼              ││
+│  │  setContact()     setEmails()      setRelatedDates()        ││
+│  │                                                              ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                     │                                            │
+│                     ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                      Render UI                               ││
+│  ├─────────────────────────────────────────────────────────────┤│
+│  │  - Header with back button and action buttons               ││
+│  │  - Profile card (company, job title, relationship)          ││
+│  │  - Stats cards (total emails, recent, last contact)         ││
+│  │  - Notes section (textarea + save button)                   ││
+│  │  - Email history (links to /inbox/{id})                     ││
+│  │  - Related dates (links to /timeline)                       ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Architecture: Calendar View Component
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      CalendarView Component                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Props:                                                          │
+│  - dates: ExtractedDate[]                                        │
+│  - onAcknowledge: (id) => void                                   │
+│  - onSnooze: (id, until) => void                                 │
+│  - onHide: (id) => void                                          │
+│                                                                  │
+│  State:                                                          │
+│  - currentMonth: Date                                            │
+│  - selectedDate: Date | null                                     │
+│                                                                  │
+│  Computed:                                                       │
+│  - datesByDay: Map<string, ExtractedDate[]>  (memoized)         │
+│  - calendarDays: Date[] (grid cells)                            │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    Month Navigation                          ││
+│  │  [Today]  [<]  January 2026  [>]                            ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    Calendar Grid                             ││
+│  │  Sun | Mon | Tue | Wed | Thu | Fri | Sat                    ││
+│  │  ─────────────────────────────────────────                   ││
+│  │  │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │                            ││
+│  │  │   │ ●●│   │ ● │   │ ●●●│   │  (color dots)             ││
+│  │  ─────────────────────────────────────────                   ││
+│  │  │ 8 │ 9 │...                                               ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │              Selected Day Panel (if selectedDate)            ││
+│  │  Wednesday, January 15, 2026                         [X]    ││
+│  │  ─────────────────────────────────────────                   ││
+│  │  ● Project Deadline                                          ││
+│  │    deadline - Jan 15, 2026                     [✓] [⏰] [👁]││
+│  │  ─────────────────────────────────────────                   ││
+│  │  ● Team Meeting                                              ││
+│  │    event at 10:00                              [✓] [⏰] [👁]││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    Color Legend                              ││
+│  │  ● deadline  ● payment  ● event  ● birthday  ...            ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Contact
 
 For questions about this implementation:
-- Check git history on branch `claude/plan-email-intelligence-I09HY`
-- Review `docs/IMPLEMENTATION_PLAN_EMAIL_INTELLIGENCE.md` for detailed code examples
-- Review `docs/P5_UI_IMPLEMENTATION_PLAN.md` for UI implementation details
+- Check git history on branch `claude/plan-email-intelligence-FEhH8`
+- Review `docs/P6_IMPLEMENTATION_PLAN.md` for detailed code examples
 - Review test files for expected behavior
+- All files have comprehensive JSDoc headers explaining features
