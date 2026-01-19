@@ -38,7 +38,7 @@ CREATE TABLE extracted_dates (
   -- ═══════════════════════════════════════════════════════════════════════════
   date_type TEXT NOT NULL,      -- 'deadline', 'birthday', 'payment_due', etc.
   date DATE NOT NULL,           -- The primary date
-  time TIME,                    -- Time if known (NULL for all-day)
+  event_time TIME,              -- Time if known (NULL for all-day)
   end_date DATE,                -- End date for ranges
   end_time TIME,                -- End time for ranges
   timezone TEXT DEFAULT 'America/Chicago',
@@ -145,7 +145,7 @@ RETURNS TABLE (
   id UUID,
   date_type TEXT,
   date DATE,
-  time TIME,
+  event_time TIME,
   title TEXT,
   description TEXT,
   priority_score INTEGER,
@@ -160,7 +160,7 @@ BEGIN
     ed.id,
     ed.date_type,
     ed.date,
-    ed.time,
+    ed.event_time,
     ed.title,
     ed.description,
     ed.priority_score,
@@ -168,7 +168,7 @@ BEGIN
     ed.contact_id,
     ed.is_recurring,
     EXTRACT(EPOCH FROM (
-      (ed.date + COALESCE(ed.time, '00:00:00'::TIME))::TIMESTAMP -
+      (ed.date + COALESCE(ed.event_time, '00:00:00'::TIME))::TIMESTAMP -
       NOW()
     )) / 3600 as hours_until
   FROM extracted_dates ed
@@ -178,7 +178,7 @@ BEGIN
     AND (ed.snoozed_until IS NULL OR ed.snoozed_until <= NOW())
     AND ed.date >= CURRENT_DATE
     AND ed.date <= CURRENT_DATE + p_days_ahead
-  ORDER BY ed.date, ed.time NULLS LAST, ed.priority_score DESC
+  ORDER BY ed.date, ed.event_time NULLS LAST, ed.priority_score DESC
   LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -192,7 +192,7 @@ CREATE OR REPLACE FUNCTION get_dates_by_type(
 RETURNS TABLE (
   id UUID,
   date DATE,
-  time TIME,
+  event_time TIME,
   title TEXT,
   description TEXT,
   related_entity TEXT,
@@ -203,7 +203,7 @@ BEGIN
   SELECT
     ed.id,
     ed.date,
-    ed.time,
+    ed.event_time,
     ed.title,
     ed.description,
     ed.related_entity,
@@ -214,7 +214,7 @@ BEGIN
     AND ed.is_hidden = FALSE
     AND ed.date >= CURRENT_DATE
     AND ed.date <= CURRENT_DATE + p_days_ahead
-  ORDER BY ed.date, ed.time NULLS LAST;
+  ORDER BY ed.date, ed.event_time NULLS LAST;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
