@@ -936,11 +936,8 @@ function mapActionType(actionType?: string | null): HubPriorityItem['suggestedAc
 }
 
 // ===============================================================================
-// EXPORTS
+// ADDITIONAL EXPORTS
 // ===============================================================================
 
-export {
-  HUB_SCORING_CONFIG,
-  getTimeContext,
-  getDayContext,
-};
+// Note: HUB_SCORING_CONFIG and getTopPriorityItems are already exported at definition
+export { getTimeContext, getDayContext };
