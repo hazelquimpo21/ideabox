@@ -73,3 +73,10 @@ export * from './sync';
 
 // Re-export Hub priority scoring services
 export * from './hub';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// USER CONTEXT SERVICES (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Re-export user context service for personalized AI analysis
+export * from './user-context';

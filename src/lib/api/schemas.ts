@@ -266,3 +266,83 @@ export const clientUpdateSchema = z.object({
 });
 
 export type ClientUpdateInput = z.infer<typeof clientUpdateSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// USER CONTEXT SCHEMAS (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Valid work days (0=Sun, 1=Mon, ..., 6=Sat).
+ */
+const workDaySchema = z.number().int().min(0).max(6);
+
+/**
+ * Family context JSONB structure.
+ */
+export const familyContextSchema = z.object({
+  spouse_name: z.string().max(100).optional(),
+  kids_count: z.number().int().min(0).max(20).optional(),
+  family_names: z.array(z.string().max(100)).max(20).optional(),
+}).optional();
+
+/**
+ * User context update schema.
+ *
+ * All fields optional - only provided fields are updated.
+ * Used for both PUT and onboarding step updates.
+ *
+ * @example
+ * PUT /api/user/context
+ * { "priorities": ["Work", "Family"], "location_city": "Milwaukee, WI" }
+ */
+export const userContextUpdateSchema = z.object({
+  // Professional identity
+  role: z.string().max(100).nullable().optional(),
+  company: z.string().max(200).nullable().optional(),
+  industry: z.string().max(100).nullable().optional(),
+
+  // Location
+  location_city: z.string().max(200).nullable().optional(),
+  location_metro: z.string().max(200).nullable().optional(),
+
+  // Priorities and projects (arrays)
+  priorities: z.array(z.string().max(100)).max(10).optional(),
+  projects: z.array(z.string().max(100)).max(20).optional(),
+
+  // VIP contacts
+  vip_emails: z.array(z.string().email()).max(50).optional(),
+  vip_domains: z.array(z.string().max(100).regex(/^@/, 'Domain must start with @')).max(20).optional(),
+
+  // Interests
+  interests: z.array(z.string().max(100)).max(20).optional(),
+
+  // Family context
+  family_context: familyContextSchema,
+
+  // Work schedule
+  work_hours_start: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:MM format').optional(),
+  work_hours_end: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:MM format').optional(),
+  work_days: z.array(workDaySchema).max(7).optional(),
+
+  // Onboarding
+  onboarding_completed: z.boolean().optional(),
+  onboarding_step: z.number().int().min(0).max(7).optional(),
+});
+
+export type UserContextUpdateInput = z.infer<typeof userContextUpdateSchema>;
+
+/**
+ * User context onboarding step update schema.
+ *
+ * Used specifically for advancing onboarding progress.
+ *
+ * @example
+ * POST /api/user/context/onboarding
+ * { "step": 3, "data": { "priorities": ["Work", "Family"] } }
+ */
+export const userContextOnboardingSchema = z.object({
+  step: z.number().int().min(1).max(7),
+  data: userContextUpdateSchema.optional(),
+});
+
+export type UserContextOnboardingInput = z.infer<typeof userContextOnboardingSchema>;
