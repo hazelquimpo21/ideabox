@@ -2,7 +2,7 @@
 
 > **Last Updated:** January 19, 2026
 >
-> **Status:** Phases B & C Complete - User Context Service & Email Processor Integration
+> **Status:** Phases B, C, D Complete - Onboarding UI & APIs Implemented
 
 This document tracks the remaining implementation work for the Enhanced Email Intelligence feature.
 
@@ -71,6 +71,58 @@ This document tracks the remaining implementation work for the Enhanced Email In
      - Automatic contact upsert for all processed emails
      - Full error logging and graceful degradation
 
+### Phase D: Onboarding UI & API Endpoints (COMPLETE ✅ - NEW!)
+
+1. **7-Step User Context Onboarding Wizard** ✅
+   - Location: `src/components/onboarding/`
+   - Main wizard: `UserContextWizard.tsx`
+   - Individual steps:
+     - `RoleStep.tsx` - Professional identity (role & company)
+     - `PrioritiesStep.tsx` - Priority ordering with drag support
+     - `ProjectsStep.tsx` - Active project names
+     - `VIPsStep.tsx` - VIP email addresses and domains
+     - `LocationStep.tsx` - City and metro area
+     - `InterestsStep.tsx` - Topics of interest
+     - `WorkHoursStep.tsx` - Work schedule configuration
+   - Features:
+     - Incremental save after each step
+     - Skip option for optional steps
+     - Progress indicator
+     - Form validation
+     - Error handling with toasts
+
+2. **Onboarding Page** ✅
+   - Location: `src/app/onboarding/context/page.tsx`
+   - Route: `/onboarding/context`
+   - Renders UserContextWizard
+   - Redirects to `/discover` on completion
+
+3. **Contacts API** ✅
+   - Location: `src/app/api/contacts/`
+   - Endpoints:
+     - `GET /api/contacts` - List with filters (VIP, muted, relationship, search)
+     - `GET /api/contacts/[id]` - Get contact details with stats
+     - `PUT /api/contacts/[id]` - Update (VIP, muted, relationship, name)
+     - `DELETE /api/contacts/[id]` - Delete contact
+
+4. **Extracted Dates API** ✅
+   - Location: `src/app/api/dates/`
+   - Endpoints:
+     - `GET /api/dates` - List with filters (type, date range, acknowledged)
+     - `GET /api/dates/[id]` - Get date with related email/contact
+     - `POST /api/dates/[id]` - Actions (acknowledge, snooze, hide)
+     - `DELETE /api/dates/[id]` - Delete extracted date
+
+5. **API Schemas** ✅
+   - Location: `src/lib/api/schemas.ts`
+   - Added schemas:
+     - `contactRelationshipTypeSchema`
+     - `contactQuerySchema`
+     - `contactUpdateSchema`
+     - `dateTypeSchema`
+     - `extractedDatesQuerySchema`
+     - `extractedDateActionSchema`
+
 ---
 
 ## 🔄 Remaining Work
@@ -95,56 +147,7 @@ npx supabase migration up
 - `supabase/migrations/012_contacts.sql`
 - `supabase/migrations/013_extracted_dates.sql`
 
-### Priority 2: Create Onboarding Flow UI
-
-**Effort:** Large (Primary UI work remaining)
-
-Build the 7-step onboarding wizard for collecting user context.
-
-**Files to create:**
-```
-src/app/onboarding/context/page.tsx  (or update existing wizard)
-src/components/onboarding/
-├── RoleStep.tsx           # Step 1: Role & Company
-├── PrioritiesStep.tsx     # Step 2: Priorities (drag to reorder)
-├── ProjectsStep.tsx       # Step 3: Active projects
-├── VIPsStep.tsx           # Step 4: VIP contacts
-├── LocationStep.tsx       # Step 5: City/metro area
-├── InterestsStep.tsx      # Step 6: Topics of interest
-├── WorkHoursStep.tsx      # Step 7: Work schedule
-└── OnboardingWizard.tsx   # Wrapper with progress bar
-```
-
-**API to use:**
-```typescript
-// Save each step's data
-POST /api/user/context/onboarding
-{
-  "step": 1,
-  "data": {
-    "role": "Developer",
-    "company": "Acme Corp"
-  }
-}
-```
-
-### Priority 3: Create Remaining API Endpoints
-
-**Effort:** Medium
-
-**Contacts API** (`src/app/api/contacts/`):
-- `GET /api/contacts` - List contacts with stats and pagination
-- `GET /api/contacts/:id` - Get contact details
-- `PUT /api/contacts/:id` - Update contact (VIP, mute, relationship type)
-- `POST /api/contacts/:id/enrich` - Trigger manual AI enrichment
-
-**Extracted Dates API** (`src/app/api/dates/`):
-- `GET /api/dates` - Get upcoming dates (with filters for type, date range)
-- `POST /api/dates/:id/acknowledge` - Mark date as handled
-- `POST /api/dates/:id/snooze` - Snooze date
-- `POST /api/dates/:id/hide` - Hide date
-
-### Priority 4: Update Hub Priority Service
+### Priority 2: Update Hub Priority Service
 
 **Effort:** Medium
 
@@ -156,7 +159,7 @@ POST /api/user/context/onboarding
 3. Surface deadline-related items in "Next 3-5 Things" view
 4. Add birthday/anniversary alerts
 
-### Priority 5: Backfill Contacts
+### Priority 3: Backfill Contacts
 
 **Effort:** Small
 
@@ -173,17 +176,31 @@ POST /api/admin/backfill-contacts
 { "user_id": "..." }
 ```
 
-### Priority 6: Testing
+### Priority 4: Testing
 
 **Unit Tests:**
 - `user-context-service.test.ts`
 - `email-processor.test.ts` (update for new analyzers)
+- `contacts-api.test.ts` (NEW)
+- `dates-api.test.ts` (NEW)
 
 **Integration Tests:**
 - User context API endpoints
-- Onboarding flow
+- Onboarding flow (7 steps)
 - Date extraction → database persistence
 - Contact enrichment → database persistence
+
+### Priority 5: UI Enhancements (Optional)
+
+**Contacts Page:**
+- Create `src/app/(auth)/contacts/page.tsx`
+- Display contacts list with VIP/muted badges
+- Allow marking contacts as VIP from UI
+
+**Timeline View:**
+- Create `src/app/(auth)/timeline/page.tsx`
+- Display extracted dates in calendar/list format
+- Allow acknowledging/snoozing from UI
 
 ---
 
@@ -253,7 +270,32 @@ POST /api/admin/backfill-contacts
 
 ## File Reference
 
-### New Files (Phase B & C)
+### New Files (Phase D - This Session)
+
+| File | Purpose |
+|------|---------|
+| `src/components/onboarding/RoleStep.tsx` | Step 1: Role & company selection |
+| `src/components/onboarding/PrioritiesStep.tsx` | Step 2: Priority ordering |
+| `src/components/onboarding/ProjectsStep.tsx` | Step 3: Active projects |
+| `src/components/onboarding/VIPsStep.tsx` | Step 4: VIP contacts |
+| `src/components/onboarding/LocationStep.tsx` | Step 5: City & metro area |
+| `src/components/onboarding/InterestsStep.tsx` | Step 6: Topic interests |
+| `src/components/onboarding/WorkHoursStep.tsx` | Step 7: Work schedule |
+| `src/components/onboarding/UserContextWizard.tsx` | 7-step wizard orchestrator |
+| `src/components/onboarding/index.ts` | Barrel export for components |
+| `src/app/onboarding/context/page.tsx` | Onboarding context page |
+| `src/app/api/contacts/route.ts` | GET contacts list |
+| `src/app/api/contacts/[id]/route.ts` | GET/PUT/DELETE single contact |
+| `src/app/api/dates/route.ts` | GET extracted dates list |
+| `src/app/api/dates/[id]/route.ts` | GET/POST/DELETE single date |
+
+### Modified Files (This Session)
+
+| File | Changes |
+|------|---------|
+| `src/lib/api/schemas.ts` | Added contact and date schemas |
+
+### Existing Files (Reference)
 
 | File | Purpose |
 |------|---------|
@@ -261,25 +303,40 @@ POST /api/admin/backfill-contacts
 | `src/services/user-context/index.ts` | Barrel export |
 | `src/app/api/user/context/route.ts` | GET/PUT user context |
 | `src/app/api/user/context/onboarding/route.ts` | POST onboarding step |
-| `src/lib/api/schemas.ts` | Added userContextUpdateSchema, userContextOnboardingSchema |
-
-### Modified Files
-
-| File | Changes |
-|------|---------|
-| `src/services/processors/email-processor.ts` | v2.0.0 - Full analyzer integration |
-| `src/services/index.ts` | Added user-context export |
-
-### Existing Files (Reference)
-
-| File | Purpose |
-|------|---------|
 | `src/services/analyzers/date-extractor.ts` | Date extraction analyzer |
 | `src/services/analyzers/contact-enricher.ts` | Contact enrichment analyzer |
 | `src/services/analyzers/categorizer.ts` | Updated with summary, labels |
+| `src/services/processors/email-processor.ts` | v2.0.0 - Full analyzer integration |
 | `supabase/migrations/011_user_context.sql` | User context table |
 | `supabase/migrations/012_contacts.sql` | Contacts table |
 | `supabase/migrations/013_extracted_dates.sql` | Extracted dates table |
+
+---
+
+## API Quick Reference
+
+### User Context
+```
+GET    /api/user/context              # Fetch user context
+PUT    /api/user/context              # Update user context
+POST   /api/user/context/onboarding   # Save onboarding step data
+```
+
+### Contacts
+```
+GET    /api/contacts                  # List contacts (filters: isVip, isMuted, relationshipType, search)
+GET    /api/contacts/:id              # Get contact details
+PUT    /api/contacts/:id              # Update contact (is_vip, is_muted, relationship_type, name)
+DELETE /api/contacts/:id              # Delete contact
+```
+
+### Extracted Dates
+```
+GET    /api/dates                     # List dates (filters: type, from, to, isAcknowledged)
+GET    /api/dates/:id                 # Get date with related email/contact
+POST   /api/dates/:id                 # Action: acknowledge, snooze, hide
+DELETE /api/dates/:id                 # Delete extracted date
+```
 
 ---
 
@@ -297,6 +354,8 @@ POST /api/admin/backfill-contacts
 
 5. **Database Constraints**: The `extracted_dates` table has a unique constraint for deduplication. Upserts ignore duplicates.
 
+6. **Onboarding Wizard**: Data is saved incrementally after each step via POST /api/user/context/onboarding. This ensures data isn't lost if user closes browser.
+
 ### Potential Issues
 
 1. **TypeScript Types**: Supabase types may not be generated for new tables. Use `@ts-nocheck` temporarily if needed.
@@ -304,6 +363,8 @@ POST /api/admin/backfill-contacts
 2. **Contact Upsert Function**: The `upsert_contact_from_email` RPC function must exist in the database (created in migration 012).
 
 3. **Date Parsing**: Relative dates ("next Friday") are parsed by the AI. Timezone-aware parsing may need refinement.
+
+4. **Onboarding Route**: The `/onboarding/context` route uses the minimal onboarding layout. Make sure it integrates with the existing onboarding flow.
 
 ### Quick Verification Steps
 
@@ -320,8 +381,14 @@ SELECT * FROM extracted_dates LIMIT 1;
 # 3. Test user context API
 curl -X GET /api/user/context
 
-# 4. Test email processing
-# (trigger a sync or use the /discover page)
+# 4. Test contacts API
+curl -X GET /api/contacts
+
+# 5. Test dates API
+curl -X GET /api/dates
+
+# 6. Test onboarding wizard
+# Navigate to /onboarding/context in browser
 ```
 
 ---

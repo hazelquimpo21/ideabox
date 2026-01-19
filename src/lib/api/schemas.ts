@@ -346,3 +346,124 @@ export const userContextOnboardingSchema = z.object({
 });
 
 export type UserContextOnboardingInput = z.infer<typeof userContextOnboardingSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTACT SCHEMAS (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Valid contact relationship types.
+ * Describes the nature of the relationship between user and contact.
+ */
+export const contactRelationshipTypeSchema = z.enum([
+  'client',
+  'colleague',
+  'vendor',
+  'friend',
+  'family',
+  'acquaintance',
+  'unknown',
+]);
+
+export type ContactRelationshipType = z.infer<typeof contactRelationshipTypeSchema>;
+
+/**
+ * Contact list query parameters.
+ *
+ * @example
+ * GET /api/contacts?isVip=true&search=acme&limit=20
+ */
+export const contactQuerySchema = paginationSchema.extend({
+  isVip: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  isMuted: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  relationshipType: contactRelationshipTypeSchema.optional(),
+  search: z.string().min(1).max(100).optional(),
+  sortBy: z.enum(['email_count', 'last_seen_at', 'name']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+});
+
+export type ContactQueryParams = z.infer<typeof contactQuerySchema>;
+
+/**
+ * Contact update schema (partial updates allowed).
+ *
+ * @example
+ * PUT /api/contacts/[id]
+ * { "is_vip": true, "relationship_type": "client" }
+ */
+export const contactUpdateSchema = z.object({
+  name: z.string().max(200).nullable().optional(),
+  is_vip: z.boolean().optional(),
+  is_muted: z.boolean().optional(),
+  relationship_type: contactRelationshipTypeSchema.optional(),
+  birthday: z.string().date().nullable().optional(),
+  work_anniversary: z.string().date().nullable().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided',
+});
+
+export type ContactUpdateInput = z.infer<typeof contactUpdateSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXTRACTED DATES SCHEMAS (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Valid date types for extracted dates.
+ */
+export const dateTypeSchema = z.enum([
+  'deadline',
+  'event',
+  'appointment',
+  'payment_due',
+  'expiration',
+  'follow_up',
+  'birthday',
+  'anniversary',
+  'recurring',
+]);
+
+export type DateType = z.infer<typeof dateTypeSchema>;
+
+/**
+ * Extracted dates list query parameters.
+ *
+ * @example
+ * GET /api/dates?type=deadline&from=2026-01-01&to=2026-01-31
+ */
+export const extractedDatesQuerySchema = paginationSchema.extend({
+  type: dateTypeSchema.optional(),
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
+  isAcknowledged: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  emailId: uuidSchema.optional(),
+  contactId: uuidSchema.optional(),
+});
+
+export type ExtractedDatesQueryParams = z.infer<typeof extractedDatesQuerySchema>;
+
+/**
+ * Acknowledge/Snooze/Hide action for extracted dates.
+ *
+ * @example
+ * POST /api/dates/[id]/action
+ * { "action": "acknowledge" }
+ * { "action": "snooze", "snooze_until": "2026-01-25" }
+ */
+export const extractedDateActionSchema = z.object({
+  action: z.enum(['acknowledge', 'snooze', 'hide']),
+  snooze_until: z.string().date().optional(),
+}).refine(
+  (data) => {
+    // If action is 'snooze', snooze_until is required
+    if (data.action === 'snooze' && !data.snooze_until) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'snooze_until is required when action is "snooze"',
+  }
+);
+
+export type ExtractedDateActionInput = z.infer<typeof extractedDateActionSchema>;
