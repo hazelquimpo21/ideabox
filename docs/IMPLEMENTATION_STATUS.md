@@ -717,7 +717,51 @@ toast({
 
 ## Recent Changes (January 19, 2026)
 
-### Session 7 (Current) - Enhanced Analyzers + Event Detection + Priority Jobs
+### Session 8 (Current) - User Context Onboarding UI & APIs
+
+- ✅ **7-Step User Context Onboarding Wizard** (`src/components/onboarding/`)
+  - Created `UserContextWizard.tsx` - Main wizard orchestrator with step management
+  - Created `RoleStep.tsx` - Professional identity (role & company selection)
+  - Created `PrioritiesStep.tsx` - Priority ordering with reorder controls
+  - Created `ProjectsStep.tsx` - Active project names with add/remove
+  - Created `VIPsStep.tsx` - VIP email addresses and domains
+  - Created `LocationStep.tsx` - City and metro area input
+  - Created `InterestsStep.tsx` - Topic interests with categories
+  - Created `WorkHoursStep.tsx` - Work schedule with presets
+  - Created `index.ts` - Barrel export for all components
+  - Features: incremental save, skip options, progress indicator, form validation, error handling
+
+- ✅ **Onboarding Context Page** (`src/app/onboarding/context/page.tsx`)
+  - Route: `/onboarding/context`
+  - Renders UserContextWizard
+  - Auth check and redirect handling
+  - Redirects to `/discover` on completion or skip
+
+- ✅ **Contacts API** (`src/app/api/contacts/`)
+  - `route.ts` - GET list with filters (VIP, muted, relationship, search, sort)
+  - `[id]/route.ts` - GET single contact, PUT update, DELETE remove
+  - Supports pagination, filtering, sorting
+  - Returns related email stats
+
+- ✅ **Extracted Dates API** (`src/app/api/dates/`)
+  - `route.ts` - GET list with filters (type, date range, acknowledged)
+  - `[id]/route.ts` - GET single, POST actions (acknowledge/snooze/hide), DELETE
+  - Returns related email and contact data
+  - Sorted by date ascending (soonest first)
+
+- ✅ **API Schemas** (`src/lib/api/schemas.ts`)
+  - Added `contactRelationshipTypeSchema`
+  - Added `contactQuerySchema`, `contactUpdateSchema`
+  - Added `dateTypeSchema`
+  - Added `extractedDatesQuerySchema`, `extractedDateActionSchema`
+
+- ✅ **Updated Documentation**
+  - `docs/NEXT_STEPS_EMAIL_INTELLIGENCE.md` - Marked Phase D complete, updated remaining work
+  - `docs/IMPLEMENTATION_STATUS.md` - This file
+
+---
+
+### Session 7 - Enhanced Analyzers + Event Detection + Priority Jobs
 
 - ✅ **Enhanced Categorizer Analyzer**
   - Added `summary` field: One-sentence assistant-style overview
