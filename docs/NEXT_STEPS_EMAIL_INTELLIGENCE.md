@@ -2,11 +2,11 @@
 
 > **Last Updated:** January 19, 2026
 >
-> **Status:** P1-P4 Complete - P5 (UI Pages) Remaining
+> **Status:** ✅ COMPLETE - All phases implemented
 >
-> **Next Action:** See [P5_UI_IMPLEMENTATION_PLAN.md](./P5_UI_IMPLEMENTATION_PLAN.md) for detailed implementation plan
+> **Feature Branch:** `claude/plan-email-intelligence-I09HY`
 
-This document tracks the remaining implementation work for the Enhanced Email Intelligence feature.
+This document tracks the implementation work for the Enhanced Email Intelligence feature.
 
 ---
 
@@ -19,10 +19,10 @@ This document tracks the remaining implementation work for the Enhanced Email In
 | C | Email Processor Integration | ✅ Complete |
 | D | Onboarding UI & APIs | ✅ Complete |
 | P1 | Run Migrations | ⚠️ **Manual step required** |
-| P2 | Hub Priority Service Update | ✅ **Complete (this session)** |
-| P3 | Contact Backfill Endpoint | ✅ **Complete (this session)** |
-| P4 | Test Suite | ✅ **Complete (this session)** |
-| P5 | UI Pages (Contacts, Timeline) | 🔄 **Remaining work** |
+| P2 | Hub Priority Service Update | ✅ Complete |
+| P3 | Contact Backfill Endpoint | ✅ Complete |
+| P4 | Test Suite | ✅ Complete |
+| P5 | UI Pages (Contacts, Timeline) | ✅ **Complete (this session)** |
 
 ---
 
@@ -132,57 +132,83 @@ AND table_name IN ('user_context', 'contacts', 'extracted_dates');
 
 ---
 
-## 🔄 Remaining Work: Priority 5 - UI Pages
+## ✅ Priority 5 - UI Pages COMPLETE (This Session)
 
-### Contacts Page
+### Contacts Page ✅
 
-**File to create:** `src/app/(auth)/contacts/page.tsx`
+**File created:** `src/app/(auth)/contacts/page.tsx` (~550 lines)
 
-**Required components:**
-1. Create `useContacts` hook in `src/hooks/useContacts.ts`
-2. Create Contact types in `src/types/database.ts`
-3. Page features:
+**Components implemented:**
+1. ✅ `useContacts` hook in `src/hooks/useContacts.ts` (~500 lines)
+2. ✅ Contact types in `src/hooks/useContacts.ts`
+3. ✅ Page features:
    - List contacts with search/filter (VIP, muted, relationship type)
-   - VIP badges (star icon)
-   - Muted badges (muted icon)
+   - VIP badges (star icon) with toggle
+   - Muted badges (volume icon) with toggle
    - Email count and last contact date
    - Quick actions: Mark as VIP, Mute, View emails
-   - Relationship type dropdown
+   - Relationship type display
+   - Debounced search
+   - Sorting by email count, last seen, or name
 
-**API to use:** `GET /api/contacts`, `PUT /api/contacts/:id`
+### Timeline Page ✅
 
-### Timeline Page
+**File created:** `src/app/(auth)/timeline/page.tsx` (~650 lines)
 
-**File to create:** `src/app/(auth)/timeline/page.tsx`
-
-**Required components:**
-1. Create `useExtractedDates` hook in `src/hooks/useExtractedDates.ts`
-2. Create ExtractedDate types in `src/types/database.ts`
-3. Page features:
-   - Calendar view or list view toggle
-   - Filter by date type (deadlines, birthdays, payments)
-   - Color-coded by date type and urgency
-   - Acknowledge/snooze/hide actions
+**Components implemented:**
+1. ✅ `useExtractedDates` hook in `src/hooks/useExtractedDates.ts` (~550 lines)
+2. ✅ ExtractedDate types in `src/hooks/useExtractedDates.ts`
+3. ✅ Page features:
+   - Grouped list view (Overdue, Today, Tomorrow, This Week, Next Week, Later)
+   - Filter by date type (deadlines, birthdays, payments, etc.)
+   - Color-coded by date type
+   - Urgency styling for overdue items
+   - Acknowledge, snooze (with presets), and hide actions
    - Link to source email
-   - Overdue section at top
+   - Show/hide done dates toggle
+   - Stats banner with overdue count
 
-**API to use:** `GET /api/dates`, `POST /api/dates/:id`
+### Hub Page Enhancement ✅
 
-### Hub Page Enhancement
+**File updated:** `src/app/(auth)/hub/page.tsx`
 
-**File to update:** `src/app/(auth)/hub/page.tsx`
+**Changes made:**
+1. ✅ Added `extracted_date` to `TYPE_CONFIG` with CalendarClock icon
+2. ✅ Updated `StatsBanner` to show extracted dates count
+3. ✅ Type: 'extracted_date' now renders correctly in priority cards
+4. ✅ Links to timeline view for extracted date items
 
-**Changes needed:**
-1. Integrate extracted dates in "Next 3-5 Things" display
-2. Show extracted date items with deadline badges
-3. Handle `type: 'extracted_date'` in item rendering
-4. Link extracted dates to timeline view
+### Hooks Index Updated ✅
+
+**File updated:** `src/hooks/index.ts`
+
+**New exports:**
+- `useContacts`, `Contact`, `ContactRelationshipType`, `ContactStats`
+- `useExtractedDates`, `ExtractedDate`, `DateType`, `DateStats`, `GroupedDates`
 
 ---
 
 ## File Reference - New/Modified Files
 
-### New Files (This Session)
+### New Files (P5 Session - UI Pages)
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `src/hooks/useContacts.ts` | ~500 | Hook for fetching/managing contacts |
+| `src/hooks/useExtractedDates.ts` | ~550 | Hook for fetching/managing timeline dates |
+| `src/app/(auth)/contacts/page.tsx` | ~550 | Contacts page with VIP/muted management |
+| `src/app/(auth)/timeline/page.tsx` | ~650 | Timeline page with date grouping |
+| `docs/P5_UI_IMPLEMENTATION_PLAN.md` | ~400 | Implementation plan for P5 |
+
+### Modified Files (P5 Session)
+
+| File | Changes |
+|------|---------|
+| `src/app/(auth)/hub/page.tsx` | Added extracted_date type, updated StatsBanner |
+| `src/hooks/index.ts` | Added exports for useContacts, useExtractedDates |
+| `docs/NEXT_STEPS_EMAIL_INTELLIGENCE.md` | Updated to mark P5 complete |
+
+### Previous Session Files
 
 | File | Purpose |
 |------|---------|
@@ -191,11 +217,6 @@ AND table_name IN ('user_context', 'contacts', 'extracted_dates');
 | `src/services/hub/__tests__/hub-priority-service.test.ts` | Hub service tests |
 | `src/app/api/admin/backfill-contacts/__tests__/route.test.ts` | Backfill API tests |
 | `docs/IMPLEMENTATION_PLAN_EMAIL_INTELLIGENCE.md` | Detailed implementation plan |
-
-### Modified Files (This Session)
-
-| File | Changes |
-|------|---------|
 | `src/services/hub/hub-priority-service.ts` | Added extracted dates integration (~400 lines) |
 
 ### Key Existing Files (Reference)
@@ -313,6 +334,54 @@ curl http://localhost:3000/api/hub/priorities
 
 ---
 
+## 🚀 What's Next for Future Developers
+
+The Email Intelligence feature is now complete. Here are suggested next priorities:
+
+### High Priority
+
+1. **E2E Testing for New Pages**
+   - Test Contacts page filtering, VIP/muted toggles
+   - Test Timeline page date grouping, snooze/acknowledge actions
+   - Test Hub with extracted dates rendering
+
+2. **Sidebar Navigation Update**
+   - Add "Contacts" link to sidebar
+   - Add "Timeline" link to sidebar
+   - Update category counts to include timeline dates
+
+3. **Performance Optimization**
+   - Add caching for contacts list
+   - Implement virtual scrolling for large contact lists
+   - Profile and optimize timeline date queries
+
+### Medium Priority
+
+4. **Calendar View for Timeline**
+   - Add month/week calendar view option
+   - Integrate with user's calendar export
+
+5. **Contact Detail Page**
+   - Create `/contacts/[id]` page
+   - Show email history with contact
+   - Editable contact details
+
+6. **Timeline Notifications**
+   - Email reminders for upcoming dates
+   - Browser push notifications for deadlines
+
+### Low Priority
+
+7. **Contact Merging**
+   - Detect duplicate contacts
+   - Merge contacts UI
+
+8. **Smart Contact Suggestions**
+   - Suggest relationship types based on email patterns
+   - Suggest VIP status for frequent contacts
+
+---
+
 ## Notes for Next Developer
 
 ### Key Design Decisions Made
@@ -327,12 +396,13 @@ curl http://localhost:3000/api/hub/priorities
    - Individual scoring failures are logged but don't break the Hub
    - Database errors return empty arrays (graceful degradation)
    - Full error context logged for debugging
+   - All hooks use optimistic updates with rollback on error
 
-3. **Backfill Strategy:**
-   - Uses existing database function `backfill_contacts_from_emails`
-   - Safe to run multiple times (uses upsert)
-   - Admin endpoint restricts to own user data
-   - Script allows bulk processing with service role key
+3. **UI Patterns Used:**
+   - Hooks follow `useEmails` pattern for consistency
+   - Pages follow `inbox/page.tsx` pattern for consistency
+   - Thorough JSDoc comments throughout
+   - Comprehensive error logging with `createLogger`
 
 4. **Test Strategy:**
    - Proxy-based chainable mocks for Supabase queries
@@ -349,15 +419,18 @@ curl http://localhost:3000/api/hub/priorities
 
 4. **Type Conflicts:** If TypeScript complains about `HubItemType`, ensure `extracted_date` is in the union type.
 
+5. **Snooze Implementation:** Currently marks as acknowledged with description. Future enhancement could use a proper snooze_until column.
+
 ### Cost Impact
 
-No additional AI API costs - the Hub Priority Service only queries the database, it doesn't call any AI APIs.
+No additional AI API costs - the Hub Priority Service, Contacts page, and Timeline page only query the database, they don't call any AI APIs.
 
 ---
 
 ## Contact
 
 For questions about this implementation:
-- Check git history on branch `claude/plan-email-intelligence-JXEnb`
+- Check git history on branch `claude/plan-email-intelligence-I09HY`
 - Review `docs/IMPLEMENTATION_PLAN_EMAIL_INTELLIGENCE.md` for detailed code examples
+- Review `docs/P5_UI_IMPLEMENTATION_PLAN.md` for UI implementation details
 - Review test files for expected behavior

@@ -33,6 +33,7 @@ import {
   Mail,
   CheckSquare,
   Calendar,
+  CalendarClock,  // Added for extracted_date type
   Clock,
   ArrowRight,
   RefreshCw,
@@ -52,6 +53,18 @@ import {
 // CONSTANTS
 // ===============================================================================
 
+/**
+ * Type configuration for Hub priority items.
+ *
+ * Maps each item type to its display properties:
+ * - icon: Lucide icon component to render
+ * - color: Text color class for the icon
+ * - bgColor: Background color class for the icon container
+ * - label: Human-readable label for badges
+ *
+ * UPDATED Jan 2026: Added extracted_date type for timeline intelligence.
+ * Extracted dates include deadlines, birthdays, payment dues, etc. from emails.
+ */
 const TYPE_CONFIG: Record<
   HubPriorityItem['type'],
   { icon: React.ElementType; color: string; bgColor: string; label: string }
@@ -73,6 +86,13 @@ const TYPE_CONFIG: Record<
     color: 'text-orange-600 dark:text-orange-400',
     bgColor: 'bg-orange-100 dark:bg-orange-900/30',
     label: 'Event',
+  },
+  // NEW: Extracted date type for timeline intelligence (deadlines, birthdays, payments, etc.)
+  extracted_date: {
+    icon: CalendarClock,
+    color: 'text-rose-600 dark:text-rose-400',
+    bgColor: 'bg-rose-100 dark:bg-rose-900/30',
+    label: 'Date',
   },
 };
 
@@ -310,20 +330,51 @@ function EmptyState() {
 
 /**
  * Stats banner showing how priorities were calculated.
+ *
+ * Displays a summary of items considered during priority calculation:
+ * - Total candidates analyzed by AI
+ * - Breakdown by type: emails, actions, events, extracted dates
+ * - Last updated timestamp
+ *
+ * UPDATED Jan 2026: Added extractedDatesConsidered for timeline intelligence.
  */
 function StatsBanner({
   stats,
   lastUpdated,
 }: {
-  stats: { totalCandidates: number; emailsConsidered: number; actionsConsidered: number; eventsConsidered: number; processingTimeMs: number } | null;
+  stats: {
+    totalCandidates: number;
+    emailsConsidered: number;
+    actionsConsidered: number;
+    eventsConsidered: number;
+    extractedDatesConsidered?: number;  // NEW: Extracted dates (deadlines, birthdays, etc.)
+    processingTimeMs: number;
+  } | null;
   lastUpdated: string | null;
 }) {
+  // Guard clause: Don't render if no stats available
   if (!stats) return null;
 
+  /**
+   * Formats an ISO timestamp to a readable time string.
+   * @param iso - ISO 8601 timestamp string
+   * @returns Formatted time like "2:30 PM"
+   */
   const formatTime = (iso: string) => {
     const date = new Date(iso);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  // Build the items breakdown string, including extracted dates if present
+  const itemsBreakdown = [
+    `${stats.emailsConsidered} emails`,
+    `${stats.actionsConsidered} actions`,
+    `${stats.eventsConsidered} events`,
+    // Only show extracted dates if the count is present and > 0
+    ...(stats.extractedDatesConsidered && stats.extractedDatesConsidered > 0
+      ? [`${stats.extractedDatesConsidered} dates`]
+      : []),
+  ].join(', ');
 
   return (
     <div className="flex items-center justify-between text-xs text-muted-foreground mb-6 px-1">
@@ -332,9 +383,7 @@ function StatsBanner({
           <Brain className="h-3 w-3" />
           AI analyzed {stats.totalCandidates} items
         </span>
-        <span>
-          {stats.emailsConsidered} emails, {stats.actionsConsidered} actions, {stats.eventsConsidered} events
-        </span>
+        <span>{itemsBreakdown}</span>
       </div>
       {lastUpdated && (
         <span>
