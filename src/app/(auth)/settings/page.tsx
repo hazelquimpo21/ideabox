@@ -238,7 +238,7 @@ function ProfileSection({ displayName }: { displayName: string }) {
  * NOTE: Previously used mock data. Now uses real data from gmail_accounts table.
  */
 function AccountsSection() {
-  const { accounts, isLoading, error, disconnectAccount, refetch } = useGmailAccounts();
+  const { accounts, isLoading, error, disconnectAccount, refetch, totalEmails } = useGmailAccounts();
   const { triggerSync, isSyncing } = useSyncStatus();
   const { toast } = useToast();
 
@@ -285,7 +285,11 @@ function AccountsSection() {
               <Mail className="h-5 w-5" />
               Connected Accounts
             </CardTitle>
-            <CardDescription>Gmail accounts synced with IdeaBox</CardDescription>
+            <CardDescription>
+              {accounts.length > 0
+                ? `${accounts.length} account${accounts.length > 1 ? 's' : ''} connected • ${totalEmails.toLocaleString()} emails synced`
+                : 'Gmail accounts synced with IdeaBox'}
+            </CardDescription>
           </div>
           <Button
             variant="outline"
@@ -319,10 +323,12 @@ function AccountsSection() {
               return (
                 <div
                   key={account.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <Mail className="h-5 w-5 text-muted-foreground" />
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Mail className="h-5 w-5 text-primary" />
+                    </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{account.email}</span>
@@ -330,9 +336,13 @@ function AccountsSection() {
                           <Badge variant="outline" className="text-xs">Primary</Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Last synced: {account.lastSyncAt ? formatLastSync(account.lastSyncAt) : 'Never'}
-                      </p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                        <span>{account.emailCount.toLocaleString()} emails</span>
+                        <span>•</span>
+                        <span>
+                          {account.lastSyncAt ? `Synced ${formatLastSync(account.lastSyncAt)}` : 'Never synced'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -365,10 +375,11 @@ function AccountsSection() {
 }
 
 /**
- * Sync Status Card - Shows detailed sync status and last sync results.
+ * Sync Status Card - Shows detailed sync status, schedule info, and last sync results.
  */
 function SyncStatusCard() {
   const { status, lastSyncAt, emailsCount, isSyncing, triggerSync, lastSyncResult, errorMessage } = useSyncStatus();
+  const { settings } = useSettings();
   const { toast } = useToast();
 
   const handleManualSync = async () => {
@@ -388,6 +399,18 @@ function SyncStatusCard() {
     }
   };
 
+  // Calculate next sync time (hourly at :00)
+  const getNextSyncTime = () => {
+    const now = new Date();
+    const nextSync = new Date(now);
+    nextSync.setHours(nextSync.getHours() + 1);
+    nextSync.setMinutes(0);
+    nextSync.setSeconds(0);
+    const diffMs = nextSync.getTime() - now.getTime();
+    const diffMins = Math.round(diffMs / 60000);
+    return diffMins <= 60 ? `~${diffMins} min` : 'Next hour';
+  };
+
   // Status display configuration
   const statusConfig = {
     idle: { label: 'Ready', color: 'bg-green-500', icon: Check },
@@ -400,6 +423,10 @@ function SyncStatusCard() {
 
   const currentStatus = statusConfig[status] || statusConfig.idle;
   const StatusIcon = currentStatus.icon;
+
+  // Get sync limits from settings
+  const maxEmailsPerSync = settings?.max_emails_per_sync || 100;
+  const maxAnalysisPerSync = settings?.max_analysis_per_sync || 50;
 
   return (
     <Card>
@@ -424,6 +451,27 @@ function SyncStatusCard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Sync Schedule Info */}
+        <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+          <div className="flex items-start gap-3">
+            <Clock className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm">Automatic Sync Active</span>
+                <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 border-green-500/30">
+                  Running
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Syncs hourly • Up to {maxEmailsPerSync} emails fetched • {maxAnalysisPerSync} analyzed per sync
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Next automatic sync in {getNextSyncTime()}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Status Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 border rounded-lg">
@@ -495,6 +543,151 @@ function SyncStatusCard() {
             </p>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Sync Settings Card - Allows users to configure sync limits.
+ */
+interface SyncSettingsCardProps {
+  settings: UserSettings | null;
+  onUpdate: (updates: Partial<UserSettings>) => Promise<void>;
+  isUpdating: boolean;
+}
+
+function SyncSettingsCard({ settings, onUpdate, isUpdating }: SyncSettingsCardProps) {
+  if (!settings) return null;
+
+  const handleChange = async (key: keyof UserSettings, value: number) => {
+    await onUpdate({ [key]: value });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FolderKanban className="h-5 w-5" />
+          Sync Settings
+        </CardTitle>
+        <CardDescription>Configure how many emails are processed during each sync</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="maxEmailsPerSync">Max Emails Fetched Per Sync</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="maxEmailsPerSync"
+                type="number"
+                min={10}
+                max={500}
+                value={settings.max_emails_per_sync}
+                onChange={(e) => handleChange('max_emails_per_sync', parseInt(e.target.value) || 100)}
+                className="w-24"
+                disabled={isUpdating}
+              />
+              <span className="text-sm text-muted-foreground">emails (10-500)</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Maximum number of recent emails to fetch from Gmail during each sync cycle.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="maxAnalysisPerSync">Max Emails Analyzed Per Sync</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="maxAnalysisPerSync"
+                type="number"
+                min={10}
+                max={200}
+                value={settings.max_analysis_per_sync}
+                onChange={(e) => handleChange('max_analysis_per_sync', parseInt(e.target.value) || 50)}
+                className="w-24"
+                disabled={isUpdating}
+              />
+              <span className="text-sm text-muted-foreground">emails (10-200)</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Maximum number of emails to analyze with AI during each sync. Affects AI costs.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+          <p>
+            <strong>Tip:</strong> Higher limits mean more emails processed but longer sync times and higher AI costs.
+            The default values (100 fetch / 50 analyze) balance coverage with cost efficiency.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * How Sync Works Card - Explains the sync process to users.
+ */
+function HowSyncWorksCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <AlertCircle className="h-5 w-5" />
+          How Email Sync Works
+        </CardTitle>
+        <CardDescription>Understanding the IdeaBox email sync process</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="h-5 w-5 text-blue-500" />
+                <span className="font-medium">Automatic Hourly Sync</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                IdeaBox automatically checks for new emails every hour using a scheduled background job.
+                No action needed from you.
+              </p>
+            </div>
+
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Mail className="h-5 w-5 text-green-500" />
+                <span className="font-medium">Incremental Fetching</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Only new emails are fetched each sync. Duplicates are automatically skipped to save time and resources.
+              </p>
+            </div>
+
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="h-5 w-5 text-purple-500" />
+                <span className="font-medium">AI Analysis</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                New emails are analyzed by AI to extract action items, categorize content, and identify clients.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg text-sm">
+            <div className="flex items-start gap-2">
+              <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium">Sync is fully automatic</p>
+                <p className="text-muted-foreground mt-0.5">
+                  Your emails are synced hourly in the background. Use &quot;Sync Now&quot; only if you need immediate updates.
+                  Each sync fetches up to your configured limit of recent emails and analyzes them.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -1795,6 +1988,12 @@ export default function SettingsPage() {
             <ProfileSection displayName={user?.name || 'User'} />
             <AccountsSection />
             <SyncStatusCard />
+            <SyncSettingsCard
+              settings={settings}
+              onUpdate={handleUpdate}
+              isUpdating={isUpdating}
+            />
+            <HowSyncWorksCard />
           </TabsContent>
 
           {/* AI Analysis Tab */}

@@ -103,14 +103,45 @@ export async function GET() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Step 3: Return response
+    // Step 3: Get email counts per account
+    // ─────────────────────────────────────────────────────────────────────────
+    const accountsWithCounts = await Promise.all(
+      (accounts || []).map(async (account) => {
+        const { count } = await supabase
+          .from('emails')
+          .select('*', { count: 'exact', head: true })
+          .eq('gmail_account_id', account.id);
+
+        return {
+          ...account,
+          email_count: count || 0,
+        };
+      })
+    );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 4: Get latest sync log for status info
+    // ─────────────────────────────────────────────────────────────────────────
+    const { data: latestSync } = await supabase
+      .from('sync_logs')
+      .select('status, completed_at, emails_fetched, emails_analyzed, error_message, duration_ms')
+      .eq('user_id', user.id)
+      .order('completed_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .single();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 5: Return response with enhanced data
     // ─────────────────────────────────────────────────────────────────────────
     logger.success('Gmail accounts fetched', {
       userId: user.id.substring(0, 8),
       count: accounts?.length || 0,
     });
 
-    return apiResponse({ accounts: accounts || [] });
+    return apiResponse({
+      accounts: accountsWithCounts,
+      latestSync: latestSync || null,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Unexpected error fetching Gmail accounts', { error: message });
