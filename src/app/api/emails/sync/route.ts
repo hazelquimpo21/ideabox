@@ -483,8 +483,30 @@ async function syncAccount(
   let messagesSkipped = 0;
   let messagesFailed = 0;
   let newHistoryId: string | undefined;
+  let lockAcquired = false;
 
   try {
+    // Step 0: Acquire sync lock to prevent concurrent syncs
+    const { data: gotLock } = await supabase.rpc('acquire_sync_lock', {
+      p_account_id: account.id,
+      p_lock_duration_seconds: 300, // 5 minutes for full sync
+    });
+
+    if (!gotLock) {
+      logger.info('Account is already being synced', { accountId: account.id });
+      return {
+        success: false,
+        messagesFetched: 0,
+        messagesCreated: 0,
+        messagesSkipped: 0,
+        messagesFailed: 0,
+        durationMs: Date.now() - startTime,
+        errors: [{ messageId: 'N/A', error: 'Account is already being synced' }],
+      };
+    }
+
+    lockAcquired = true;
+
     // Step 1: Get valid access token
     // The token manager handles refresh if needed
     const accessToken = await tokenManager.getValidToken(account);
@@ -620,6 +642,11 @@ async function syncAccount(
       Date.now() - startTime
     );
 
+    // Release sync lock on success
+    if (lockAcquired) {
+      await supabase.rpc('release_sync_lock', { p_account_id: account.id });
+    }
+
     return {
       success: true,
       messagesFetched,
@@ -631,6 +658,11 @@ async function syncAccount(
       errors,
     };
   } catch (error) {
+    // Release sync lock on error
+    if (lockAcquired) {
+      await supabase.rpc('release_sync_lock', { p_account_id: account.id });
+    }
+
     // Log the sync failure
     await createSyncLog(
       supabase,
