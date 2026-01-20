@@ -521,7 +521,7 @@ function RerunAnalysisSection() {
           description: result.error || 'Could not start analysis. Please try again.',
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         variant: 'destructive',
         title: 'Error',

@@ -85,7 +85,6 @@ export interface AboutYouStepProps {
  * - Top Priority
  */
 export function AboutYouStep({
-  user,
   onNext,
   onBack,
   isFirstStep,

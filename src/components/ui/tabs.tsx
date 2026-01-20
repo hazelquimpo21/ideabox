@@ -149,8 +149,7 @@ TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 /**
  * Props for TabsContent component.
  */
-export interface TabsContentProps
-  extends React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content> {}
+export type TabsContentProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>;
 
 /**
  * Content panel for a tab.
