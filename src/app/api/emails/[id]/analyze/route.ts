@@ -142,6 +142,10 @@ export async function POST(
       analysis,
       summary: {
         category: result.analysis?.categorization?.category,
+        summary: result.analysis?.categorization?.summary,
+        quickAction: result.analysis?.categorization?.quickAction,
+        labels: result.analysis?.categorization?.labels,
+        topics: result.analysis?.categorization?.topics,
         hasAction: result.analysis?.actionExtraction?.hasAction,
         actionTitle: result.analysis?.actionExtraction?.actionTitle,
         clientMatch: result.analysis?.clientTagging?.clientMatch,

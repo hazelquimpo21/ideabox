@@ -222,6 +222,10 @@ export interface Database {
           category: EmailCategory | null;
           priority_score: number;
           topics: string[] | null;
+          // Analysis display fields (denormalized from email_analyses for fast list queries)
+          summary: string | null;
+          quick_action: QuickActionDb | null;
+          labels: string[] | null;
           client_id: string | null;
           project_tags: string[] | null;
           is_read: boolean;
@@ -251,6 +255,9 @@ export interface Database {
           category?: EmailCategory | null;
           priority_score?: number;
           topics?: string[] | null;
+          summary?: string | null;
+          quick_action?: QuickActionDb | null;
+          labels?: string[] | null;
           client_id?: string | null;
           project_tags?: string[] | null;
           is_read?: boolean;
@@ -280,6 +287,9 @@ export interface Database {
           category?: EmailCategory | null;
           priority_score?: number;
           topics?: string[] | null;
+          summary?: string | null;
+          quick_action?: QuickActionDb | null;
+          labels?: string[] | null;
           client_id?: string | null;
           project_tags?: string[] | null;
           is_read?: boolean;

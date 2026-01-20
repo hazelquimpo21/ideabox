@@ -432,11 +432,11 @@ export class EmailProcessor {
           );
         }
 
-        // Update email category
+        // Update email with analysis fields (category, summary, quick_action, labels, topics)
         if (categorizationResult.success) {
-          await this.updateEmailCategory(
+          await this.updateEmailAnalysisFields(
             emailInput.id,
-            categorizationResult.data.category
+            categorizationResult.data
           );
         }
 
@@ -1252,23 +1252,40 @@ export class EmailProcessor {
   }
 
   /**
-   * Updates the email's category field.
+   * Updates the email's analysis fields for fast list display.
+   *
+   * This denormalizes key analysis results onto the emails table so that
+   * list views can display summary, quick_action, etc. without joining
+   * to email_analyses.
+   *
+   * Fields updated:
+   * - category: Primary action-focused category
+   * - summary: One-sentence assistant-style summary
+   * - quick_action: Suggested triage action
+   * - labels: Secondary classification labels
+   * - topics: AI-extracted topic keywords
    */
-  private async updateEmailCategory(
+  private async updateEmailAnalysisFields(
     emailId: string,
-    category: string
+    categorization: CategorizationResult['data']
   ): Promise<void> {
     const supabase = await createServerClient();
 
     const { error } = await supabase
       .from('emails')
-      .update({ category })
+      .update({
+        category: categorization.category,
+        summary: categorization.summary || null,
+        quick_action: categorization.quickAction || null,
+        labels: categorization.labels || null,
+        topics: categorization.topics || null,
+      })
       .eq('id', emailId);
 
     if (error) {
-      logger.warn('Failed to update email category', {
+      logger.warn('Failed to update email analysis fields', {
         emailId,
-        category,
+        category: categorization.category,
         error: error.message,
       });
     }
