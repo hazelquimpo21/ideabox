@@ -134,6 +134,33 @@ interface EmailListItemProps {
   isAnalyzing: boolean;
 }
 
+/**
+ * Gets display info for quick action type.
+ */
+function getQuickActionInfo(quickAction: string | null | undefined): {
+  label: string;
+  className: string;
+} | null {
+  switch (quickAction) {
+    case 'respond':
+      return { label: 'Reply needed', className: 'text-red-600 dark:text-red-400' };
+    case 'review':
+      return { label: 'Review', className: 'text-blue-600 dark:text-blue-400' };
+    case 'calendar':
+      return { label: 'Add to calendar', className: 'text-purple-600 dark:text-purple-400' };
+    case 'follow_up':
+      return { label: 'Follow up', className: 'text-orange-600 dark:text-orange-400' };
+    case 'save':
+      return { label: 'Save for later', className: 'text-teal-600 dark:text-teal-400' };
+    case 'unsubscribe':
+      return { label: 'Unsubscribe?', className: 'text-gray-500' };
+    case 'archive':
+    case 'none':
+    default:
+      return null;
+  }
+}
+
 function EmailListItem({
   email,
   onSelect,
@@ -146,6 +173,7 @@ function EmailListItem({
   const categoryInfo = getCategoryInfo(email.category);
   const isAnalyzed = !!email.analyzed_at;
   const hasPendingAnalysis = !isAnalyzed && !email.analysis_error;
+  const quickActionInfo = getQuickActionInfo(email.quick_action);
 
   return (
     <div
@@ -178,6 +206,12 @@ function EmailListItem({
             {email.sender_name || email.sender_email}
           </span>
           <div className="flex items-center gap-2">
+            {/* Quick action indicator */}
+            {quickActionInfo && (
+              <span className={`text-xs font-medium ${quickActionInfo.className}`}>
+                {quickActionInfo.label}
+              </span>
+            )}
             {/* Analysis status indicator */}
             {hasPendingAnalysis && (
               <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
@@ -185,7 +219,7 @@ function EmailListItem({
                 Pending
               </span>
             )}
-            {isAnalyzed && (
+            {isAnalyzed && !quickActionInfo && (
               <span className="text-green-500">
                 <CheckCircle2 className="h-3.5 w-3.5" />
               </span>
@@ -213,8 +247,9 @@ function EmailListItem({
           )}
         </div>
 
+        {/* Show AI summary if available, otherwise show snippet */}
         <p className="text-sm text-muted-foreground truncate">
-          {email.snippet}
+          {email.summary || email.snippet}
         </p>
       </div>
 
@@ -498,18 +533,22 @@ export default function InboxPage() {
 
       logger.success('Email analyzed', { emailId: id, category: result.summary?.category });
 
-      // Update local state
-      updateEmail(id, {
+      // Update local state with all analysis fields
+      const analysisUpdate = {
         analyzed_at: new Date().toISOString(),
         category: result.summary?.category,
-      });
+        summary: result.summary?.summary,
+        quick_action: result.summary?.quickAction,
+        labels: result.summary?.labels,
+        topics: result.summary?.topics,
+      };
+      updateEmail(id, analysisUpdate);
 
       // Update selected email if it's the one being analyzed
       if (selectedEmail?.id === id) {
         setSelectedEmail((prev) => prev ? {
           ...prev,
-          analyzed_at: new Date().toISOString(),
-          category: result.summary?.category,
+          ...analysisUpdate,
         } : null);
       }
 
