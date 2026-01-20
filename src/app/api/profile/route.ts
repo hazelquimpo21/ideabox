@@ -38,6 +38,7 @@ const updateProfileSchema = z.object({
   timezone: z.string().max(50).optional(),
   default_view: z.enum(['inbox', 'actions', 'calendar']).optional(),
   emails_per_page: z.number().min(10).max(100).optional(),
+  onboarding_completed: z.boolean().optional(), // Allow resetting onboarding from Settings
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

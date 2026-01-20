@@ -754,6 +754,100 @@ function HowSyncWorksCard() {
   );
 }
 
+/**
+ * Restart Onboarding Card
+ *
+ * Allows users to go back through the onboarding wizard to:
+ * - Update their personal context (About Me)
+ * - Re-run initial email analysis
+ * - Connect additional Gmail accounts
+ *
+ * This does NOT delete any existing data - it just opens the wizard again.
+ */
+function RestartOnboardingCard() {
+  const { toast } = useToast();
+  const [isResetting, setIsResetting] = React.useState(false);
+
+  const handleRestartOnboarding = async () => {
+    setIsResetting(true);
+
+    try {
+      // Reset onboarding_completed flag in user_profiles
+      const response = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onboarding_completed: false }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reset onboarding status');
+      }
+
+      toast({
+        title: 'Redirecting to setup...',
+        description: 'Taking you back to the onboarding wizard.',
+      });
+
+      // Small delay to show toast, then redirect
+      setTimeout(() => {
+        window.location.href = '/onboarding';
+      }, 500);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to restart onboarding.',
+      });
+      setIsResetting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <RefreshCw className="h-5 w-5" />
+          Setup Wizard
+        </CardTitle>
+        <CardDescription>
+          Go back through the initial setup to update your preferences
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Restart the onboarding wizard to:
+        </p>
+        <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+          <li>Update your personal context for better AI analysis</li>
+          <li>Re-run the initial email analysis with different settings</li>
+          <li>Review your connected Gmail accounts</li>
+        </ul>
+        <p className="text-xs text-muted-foreground">
+          Note: This won&apos;t delete any of your existing data.
+        </p>
+        <Button
+          variant="outline"
+          onClick={handleRestartOnboarding}
+          disabled={isResetting}
+          className="gap-2"
+        >
+          {isResetting ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Redirecting...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4" />
+              Restart Setup Wizard
+            </>
+          )}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // AI ANALYSIS TAB COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2055,6 +2149,7 @@ export default function SettingsPage() {
               isUpdating={isUpdating}
             />
             <HowSyncWorksCard />
+            <RestartOnboardingCard />
           </TabsContent>
 
           {/* AI Analysis Tab */}

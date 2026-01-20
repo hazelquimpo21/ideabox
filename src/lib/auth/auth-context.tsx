@@ -105,6 +105,13 @@ export interface AuthUser {
   timezone?: string | null;
   /** When the user was created */
   createdAt?: string;
+  /**
+   * Whether the profile data has been successfully loaded.
+   * - true: Profile was fetched (or confirmed not to exist for new users)
+   * - false: Profile fetch is pending, timed out, or failed
+   * This helps distinguish between "user hasn't done onboarding" vs "we don't know yet"
+   */
+  profileLoaded: boolean;
 }
 
 /**
@@ -175,9 +182,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   /**
    * Maps a Supabase user and optional profile to our AuthUser type.
    * Combines auth data with app-specific profile data.
+   *
+   * @param supabaseUser - The Supabase auth user
+   * @param profile - The user profile from DB (null if not found or not yet loaded)
+   * @param profileLoaded - Whether the profile was successfully fetched (vs timeout/error)
    */
   const mapToAuthUser = React.useCallback(
-    (supabaseUser: SupabaseUser, profile?: UserProfile | null): AuthUser => {
+    (supabaseUser: SupabaseUser, profile: UserProfile | null, profileLoaded: boolean): AuthUser => {
       return {
         id: supabaseUser.id,
         email: supabaseUser.email ?? '',
@@ -188,29 +199,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
         onboardingCompleted: profile?.onboarding_completed ?? false,
         timezone: profile?.timezone ?? null,
         createdAt: supabaseUser.created_at,
+        // Track whether profile data is reliable
+        profileLoaded,
       };
     },
     []
   );
 
   /**
+   * Result of profile fetch operation.
+   * Distinguishes between:
+   * - success (profile found or confirmed not to exist)
+   * - timeout/error (we couldn't determine profile state)
+   */
+  type ProfileFetchResult = {
+    profile: UserProfile | null;
+    success: boolean; // true if fetch completed (even if no profile found), false if timeout/error
+  };
+
+  /**
    * Fetches user profile from the database with timeout.
-   * Returns null if profile doesn't exist or fetch fails/times out.
+   * Returns an object indicating whether the fetch succeeded and the profile data.
+   * This allows distinguishing between "no profile exists" vs "fetch timed out".
    */
   const fetchUserProfile = React.useCallback(
-    async (userId: string): Promise<UserProfile | null> => {
+    async (userId: string): Promise<ProfileFetchResult> => {
       logger.info('Fetching user profile', { userId });
 
       // Use Promise.race for reliable timeout
-      const timeoutMs = 5000;
-      const timeoutPromise = new Promise<null>((resolve) => {
+      // Increased to 8 seconds to reduce false timeouts on slow connections
+      const timeoutMs = 8000;
+      const timeoutPromise = new Promise<ProfileFetchResult>((resolve) => {
         setTimeout(() => {
           logger.warn('Profile fetch timed out', { userId, timeoutMs });
-          resolve(null);
+          // Return success: false to indicate we couldn't determine profile state
+          resolve({ profile: null, success: false });
         }, timeoutMs);
       });
 
-      const fetchPromise = (async () => {
+      const fetchPromise = (async (): Promise<ProfileFetchResult> => {
         try {
           const { data: profile, error: profileError } = await supabase
             .from('user_profiles')
@@ -222,23 +249,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // PGRST116 = row not found, which is expected for new users
             if (profileError.code === 'PGRST116') {
               logger.info('No profile found (new user)', { userId });
+              // This is a successful fetch - we confirmed no profile exists
+              return { profile: null, success: true };
             } else if (profileError.code === '42P01') {
               logger.warn('user_profiles table does not exist - run migrations', { userId });
+              return { profile: null, success: false };
             } else {
               logger.warn('Failed to fetch user profile', {
                 userId,
                 error: profileError.message,
                 code: profileError.code
               });
+              return { profile: null, success: false };
             }
-            return null;
           }
 
           logger.info('Profile fetched successfully', { userId });
-          return profile;
+          return { profile, success: true };
         } catch (err) {
           logger.warn('Profile fetch exception', { userId, error: String(err) });
-          return null;
+          return { profile: null, success: false };
         }
       })();
 
@@ -250,6 +280,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   /**
    * Updates user state with fresh session and profile data.
    * Called on initial load and auth state changes.
+   *
+   * Key behavior:
+   * - If profile fetch succeeds, profileLoaded = true (even if no profile found)
+   * - If profile fetch times out/errors, profileLoaded = false
+   * - ProtectedRoute uses profileLoaded to avoid redirecting prematurely
    */
   const updateUserState = React.useCallback(
     async (supabaseUser: SupabaseUser | null) => {
@@ -261,18 +296,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       try {
-        const profile = await fetchUserProfile(supabaseUser.id);
-        const authUser = mapToAuthUser(supabaseUser, profile);
+        const { profile, success: profileLoaded } = await fetchUserProfile(supabaseUser.id);
+        const authUser = mapToAuthUser(supabaseUser, profile, profileLoaded);
         setUser(authUser);
 
         logger.success('User state updated', {
           userId: authUser.id,
           hasProfile: !!profile,
+          profileLoaded,
           onboardingCompleted: authUser.onboardingCompleted
         });
+
+        // If profile fetch timed out, retry in background (don't block UI)
+        if (!profileLoaded) {
+          logger.info('Scheduling background profile retry', { userId: supabaseUser.id });
+          setTimeout(async () => {
+            const retry = await fetchUserProfile(supabaseUser.id);
+            if (retry.success) {
+              const retryUser = mapToAuthUser(supabaseUser, retry.profile, true);
+              setUser(retryUser);
+              logger.success('Background profile retry succeeded', {
+                userId: retryUser.id,
+                onboardingCompleted: retryUser.onboardingCompleted
+              });
+            }
+          }, 2000); // Retry after 2 seconds
+        }
       } catch (err) {
         // Still set user even if profile fetch fails (graceful degradation)
-        const authUser = mapToAuthUser(supabaseUser, null);
+        const authUser = mapToAuthUser(supabaseUser, null, false);
         setUser(authUser);
         logger.warn('Using auth user without profile', {
           userId: supabaseUser.id,
