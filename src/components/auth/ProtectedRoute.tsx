@@ -178,15 +178,27 @@ export function ProtectedRoute({
     }
 
     // Check onboarding requirement
+    // IMPORTANT: Only redirect if profileLoaded is true
+    // This prevents redirecting when profile fetch timed out but user actually completed onboarding
     if (requireOnboarding && !user.onboardingCompleted) {
       // Don't redirect if already on onboarding page
       if (pathname.startsWith('/onboarding')) {
         return;
       }
 
+      // Don't redirect if profile hasn't loaded yet - we don't know the real status
+      if (!user.profileLoaded) {
+        logger.info('Waiting for profile to load before onboarding check', {
+          userId: user.id,
+          path: pathname,
+        });
+        return;
+      }
+
       logger.info('Redirecting to onboarding', {
         userId: user.id,
         from: pathname,
+        profileLoaded: user.profileLoaded,
       });
 
       hasRedirected.current = true;
@@ -200,6 +212,7 @@ export function ProtectedRoute({
       userId: user.id,
       path: pathname,
       onboardingCompleted: user.onboardingCompleted,
+      profileLoaded: user.profileLoaded,
     });
   }, [
     isLoading,
@@ -228,10 +241,16 @@ export function ProtectedRoute({
     return loadingComponent ?? <FullPageLoader message="Redirecting..." />;
   }
 
-  // Don't render if onboarding is required but not completed
-  // (unless we're already on the onboarding page)
+  // If onboarding is required and we're not on the onboarding page:
+  // - If profile is loading, show loading state (don't redirect yet)
+  // - If profile is loaded and onboarding not complete, show redirect message
   if (requireOnboarding && !user.onboardingCompleted) {
     if (!pathname.startsWith('/onboarding')) {
+      // Profile not loaded yet - show loading while we wait for profile data
+      if (!user.profileLoaded) {
+        return loadingComponent ?? <FullPageLoader message="Checking your profile..." />;
+      }
+      // Profile loaded, onboarding not complete - redirect is pending
       return loadingComponent ?? <FullPageLoader message="Redirecting to setup..." />;
     }
   }
