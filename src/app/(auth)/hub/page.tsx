@@ -16,6 +16,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout';
+import { ProfileCompletionNudge } from '@/components/hub';
 import {
   Card,
   CardContent,
@@ -47,8 +48,6 @@ import {
   Eye,
   Archive,
   CalendarPlus,
-  User,
-  ChevronRight,
 } from 'lucide-react';
 
 // ===============================================================================
@@ -393,72 +392,6 @@ function StatsBanner({
         </span>
       )}
     </div>
-  );
-}
-
-// ===============================================================================
-// PROFILE COMPLETION NUDGE
-// ===============================================================================
-
-/**
- * Nudge banner encouraging users to complete their profile.
- *
- * Shown when profile completion is below 50%. Links to Settings → About Me.
- * This helps users who skipped the "About You" step during onboarding
- * to provide context that improves AI prioritization.
- *
- * @since January 2026
- */
-function ProfileCompletionNudge({
-  completionPercent,
-  incompleteSections,
-}: {
-  completionPercent: number;
-  incompleteSections: string[];
-}) {
-  // Only show if profile is less than 50% complete
-  if (completionPercent >= 50) return null;
-
-  return (
-    <Card className="mb-6 border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
-      <CardContent className="py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-              <User className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-sm mb-1">
-                Complete your profile for better priorities
-              </h3>
-              <p className="text-sm text-muted-foreground mb-2">
-                Help AI understand your context to prioritize what matters most.
-                Your profile is {completionPercent}% complete.
-              </p>
-              {incompleteSections.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Add: {incompleteSections.slice(0, 3).join(', ')}
-                  {incompleteSections.length > 3 && ` +${incompleteSections.length - 3} more`}
-                </p>
-              )}
-            </div>
-          </div>
-          <Link href="/settings?tab=about">
-            <Button size="sm" variant="outline" className="gap-1 shrink-0">
-              Complete
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-        {/* Progress bar */}
-        <div className="mt-3 w-full bg-amber-200/50 dark:bg-amber-900/30 rounded-full h-1.5">
-          <div
-            className="h-1.5 rounded-full bg-amber-500 transition-all"
-            style={{ width: `${completionPercent}%` }}
-          />
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
