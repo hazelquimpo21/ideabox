@@ -59,8 +59,8 @@ export default function AuthLayout({
   const { user, signOut } = useAuth();
   const { toast } = useToast();
 
-  // Sidebar data (category counts and clients)
-  const { categoryCounts, clients } = useSidebarData();
+  // Sidebar data (category counts, clients, and upcoming events)
+  const { categoryCounts, clients, upcomingEvents } = useSidebarData();
 
   // Sync status for navbar sync button
   const { isSyncing, lastSyncAt, triggerSync } = useSyncStatus();
@@ -158,6 +158,7 @@ export default function AuthLayout({
             onClose={closeSidebar}
             categoryCounts={categoryCounts}
             clients={clients}
+            upcomingEvents={upcomingEvents}
           />
 
           {/* Page Content */}

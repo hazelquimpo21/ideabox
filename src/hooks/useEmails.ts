@@ -72,6 +72,21 @@ export interface UseEmailsOptions {
   unreadOnly?: boolean;
   /** Only show starred emails */
   starredOnly?: boolean;
+  /** Include event detection data for event-categorized emails (default: false) */
+  includeEventData?: boolean;
+}
+
+/**
+ * Event detection data for inbox display.
+ * Subset of full event data - just what's needed for list preview.
+ */
+export interface EventPreviewData {
+  eventDate: string;
+  eventTime?: string;
+  locationType: 'in_person' | 'virtual' | 'hybrid' | 'unknown';
+  registrationDeadline?: string;
+  rsvpRequired: boolean;
+  cost?: string;
 }
 
 /**
@@ -110,6 +125,8 @@ export interface UseEmailsReturn {
   stats: EmailStats;
   /** Update a single email optimistically */
   updateEmail: (id: string, updates: Partial<Email>) => void;
+  /** Event preview data keyed by email ID (only if includeEventData: true) */
+  eventData: Map<string, EventPreviewData>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -158,6 +175,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     starred: 0,
     events: 0,
   });
+  const [eventData, setEventData] = React.useState<Map<string, EventPreviewData>>(new Map());
 
   // Memoize the Supabase client to prevent recreation on each render
   const supabase = React.useMemo(() => createClient(), []);
@@ -170,6 +188,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     includeArchived = false,
     unreadOnly = false,
     starredOnly = false,
+    includeEventData = false,
   } = options;
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -248,6 +267,53 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         events: fetchedEmails.filter((e) => e.category === 'event').length,
       });
 
+      // Fetch event data for event emails if requested
+      if (includeEventData) {
+        const eventEmailIds = fetchedEmails
+          .filter((e) => e.category === 'event')
+          .map((e) => e.id);
+
+        if (eventEmailIds.length > 0) {
+          logger.debug('Fetching event data for event emails', { count: eventEmailIds.length });
+
+          try {
+            const { data: analysisData, error: analysisError } = await supabase
+              .from('email_analyses')
+              .select('email_id, event_detection')
+              .in('email_id', eventEmailIds);
+
+            if (analysisError) {
+              logger.warn('Failed to fetch event data', { error: analysisError.message });
+            } else if (analysisData) {
+              const newEventData = new Map<string, EventPreviewData>();
+
+              for (const analysis of analysisData) {
+                if (analysis.event_detection) {
+                  const ed = analysis.event_detection as Record<string, unknown>;
+                  newEventData.set(analysis.email_id, {
+                    eventDate: (ed.event_date as string) || (ed.eventDate as string) || '',
+                    eventTime: (ed.event_time as string) || (ed.eventTime as string),
+                    locationType: ((ed.location_type as string) || (ed.locationType as string) || 'unknown') as 'in_person' | 'virtual' | 'hybrid' | 'unknown',
+                    registrationDeadline: (ed.registration_deadline as string) || (ed.registrationDeadline as string),
+                    rsvpRequired: (ed.rsvp_required as boolean) || (ed.rsvpRequired as boolean) || false,
+                    cost: ed.cost as string,
+                  });
+                }
+              }
+
+              setEventData(newEventData);
+              logger.debug('Event data loaded', { count: newEventData.size });
+            }
+          } catch (eventErr) {
+            logger.warn('Error fetching event data', {
+              error: eventErr instanceof Error ? eventErr.message : 'Unknown error',
+            });
+          }
+        } else {
+          setEventData(new Map());
+        }
+      }
+
       logger.success('Emails fetched', {
         count: fetchedEmails.length,
         total: count,
@@ -260,7 +326,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, category, clientId, limit, includeArchived, unreadOnly, starredOnly]);
+  }, [supabase, category, clientId, limit, includeArchived, unreadOnly, starredOnly, includeEventData]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Load More (Pagination)
@@ -389,6 +455,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     hasMore,
     stats,
     updateEmail,
+    eventData,
   };
 }
 

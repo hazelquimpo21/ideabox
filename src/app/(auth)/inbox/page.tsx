@@ -29,8 +29,8 @@ import {
   DropdownMenuTrigger,
   useToast,
 } from '@/components/ui';
-import { SyncStatusBanner, EmailDetail } from '@/components/email';
-import { useEmails, type Email, type EmailCategory } from '@/hooks';
+import { SyncStatusBanner, EmailDetail, EventPreview } from '@/components/email';
+import { useEmails, type Email, type EmailCategory, type EventPreviewData } from '@/hooks';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
 import {
@@ -132,6 +132,8 @@ interface EmailListItemProps {
   onArchive: (id: string) => void;
   onAnalyze: (id: string) => void;
   isAnalyzing: boolean;
+  /** Event preview data if this is an event email */
+  eventData?: EventPreviewData;
 }
 
 /**
@@ -169,11 +171,13 @@ function EmailListItem({
   onArchive,
   onAnalyze,
   isAnalyzing,
+  eventData,
 }: EmailListItemProps) {
   const categoryInfo = getCategoryInfo(email.category);
   const isAnalyzed = !!email.analyzed_at;
   const hasPendingAnalysis = !isAnalyzed && !email.analysis_error;
   const quickActionInfo = getQuickActionInfo(email.quick_action);
+  const isEventEmail = email.category === 'event';
 
   return (
     <div
@@ -251,6 +255,11 @@ function EmailListItem({
         <p className="text-sm text-muted-foreground truncate">
           {email.summary || email.snippet}
         </p>
+
+        {/* Event Preview - only for event emails with event data */}
+        {isEventEmail && eventData && (
+          <EventPreview event={eventData} />
+        )}
       </div>
 
       {/* More Actions Dropdown */}
@@ -399,7 +408,7 @@ export default function InboxPage() {
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
   const [analyzingEmailId, setAnalyzingEmailId] = React.useState<string | null>(null);
 
-  // Fetch emails with category filter
+  // Fetch emails with category filter and event data
   const {
     emails,
     isLoading,
@@ -407,9 +416,11 @@ export default function InboxPage() {
     refetch,
     updateEmail,
     stats,
+    eventData,
   } = useEmails({
     limit: 50,
     category: categoryFilter || 'all',
+    includeEventData: true, // Fetch event preview data for event emails
   });
 
   // Open email detail sheet
@@ -686,6 +697,7 @@ export default function InboxPage() {
                   onArchive={handleArchive}
                   onAnalyze={handleAnalyzeEmail}
                   isAnalyzing={analyzingEmailId === email.id}
+                  eventData={eventData.get(email.id)}
                 />
               ))}
             </div>

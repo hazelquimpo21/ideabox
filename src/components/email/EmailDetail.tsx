@@ -13,6 +13,8 @@
 import * as React from 'react';
 import { Button, Badge, Card, CardContent, CardHeader, Skeleton } from '@/components/ui';
 import { useEmailAnalysis } from '@/hooks';
+import { EventDetailsCard } from './EventDetailsCard';
+import { createLogger } from '@/lib/utils/logger';
 import {
   X,
   Star,
@@ -41,6 +43,12 @@ import {
   Minus,
 } from 'lucide-react';
 import type { Email, EmailCategory } from '@/types/database';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('EmailDetail');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -320,7 +328,7 @@ function AnalysisSummary({
   }
 
   // Show rich analysis
-  return (
+  const analysisCard = (
     <Card className="mx-6 my-4">
       <CardHeader className="py-3 border-b">
         <div className="flex items-center justify-between">
@@ -455,6 +463,27 @@ function AnalysisSummary({
       </CardContent>
     </Card>
   );
+
+  // Return analysis card, plus event details card if this is an event email
+  if (analysis?.eventDetection?.hasEvent) {
+    logger.debug('Rendering event details for email', {
+      emailId: email.id,
+      eventTitle: analysis.eventDetection.eventTitle,
+    });
+
+    return (
+      <>
+        {analysisCard}
+        <EventDetailsCard
+          event={analysis.eventDetection}
+          emailSubject={email.subject || undefined}
+          description={email.snippet || undefined}
+        />
+      </>
+    );
+  }
+
+  return analysisCard;
 }
 
 function EmailBody({ email }: { email: Email }) {

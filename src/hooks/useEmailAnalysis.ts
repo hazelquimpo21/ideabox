@@ -64,12 +64,34 @@ export interface ClientTaggingResult {
 }
 
 /**
+ * Event detection result from AI analyzer.
+ * Only present when email category is 'event'.
+ */
+export interface EventDetectionResult {
+  hasEvent: boolean;
+  eventTitle: string;
+  eventDate: string;
+  eventTime?: string;
+  eventEndTime?: string;
+  locationType: 'in_person' | 'virtual' | 'hybrid' | 'unknown';
+  location?: string;
+  registrationDeadline?: string;
+  rsvpRequired: boolean;
+  rsvpUrl?: string;
+  organizer?: string;
+  cost?: string;
+  additionalDetails?: string;
+  confidence: number;
+}
+
+/**
  * Normalized analysis data structure.
  */
 export interface NormalizedAnalysis {
   categorization?: CategorizationResult;
   actionExtraction?: ActionExtractionResult;
   clientTagging?: ClientTaggingResult;
+  eventDetection?: EventDetectionResult;
   tokensUsed?: number;
   processingTimeMs?: number;
   analyzerVersion?: string;
@@ -139,6 +161,32 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       newClientSuggestion: (client.new_client_suggestion as string) || (client.newClientSuggestion as string),
       relationshipSignal: (client.relationship_signal as string) || (client.relationshipSignal as string) as 'positive' | 'neutral' | 'negative' | 'unknown' | undefined,
     };
+  }
+
+  // Normalize event detection (only present for event-categorized emails)
+  if (raw.event_detection) {
+    const event = raw.event_detection as Record<string, unknown>;
+    normalized.eventDetection = {
+      hasEvent: (event.has_event as boolean) || (event.hasEvent as boolean) || false,
+      eventTitle: (event.event_title as string) || (event.eventTitle as string) || 'Untitled Event',
+      eventDate: (event.event_date as string) || (event.eventDate as string) || '',
+      eventTime: (event.event_time as string) || (event.eventTime as string),
+      eventEndTime: (event.event_end_time as string) || (event.eventEndTime as string),
+      locationType: ((event.location_type as string) || (event.locationType as string) || 'unknown') as 'in_person' | 'virtual' | 'hybrid' | 'unknown',
+      location: (event.location as string),
+      registrationDeadline: (event.registration_deadline as string) || (event.registrationDeadline as string),
+      rsvpRequired: (event.rsvp_required as boolean) || (event.rsvpRequired as boolean) || false,
+      rsvpUrl: (event.rsvp_url as string) || (event.rsvpUrl as string),
+      organizer: (event.organizer as string),
+      cost: (event.cost as string),
+      additionalDetails: (event.additional_details as string) || (event.additionalDetails as string),
+      confidence: (event.confidence as number) || 0,
+    };
+    logger.debug('Normalized event detection data', {
+      eventTitle: normalized.eventDetection.eventTitle,
+      eventDate: normalized.eventDetection.eventDate,
+      locationType: normalized.eventDetection.locationType,
+    });
   }
 
   return normalized;

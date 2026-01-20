@@ -38,6 +38,7 @@ export type {
   UseEmailsOptions,
   UseEmailsReturn,
   EmailStats,
+  EventPreviewData,
 } from './useEmails';
 
 export { useActions, default as useActionsDefault } from './useActions';
@@ -76,6 +77,7 @@ export type {
   CategorizationResult,
   ActionExtractionResult,
   ClientTaggingResult,
+  EventDetectionResult,
 } from './useEmailAnalysis';
 
 export { useSidebarData, default as useSidebarDataDefault } from './useSidebarData';
@@ -83,6 +85,7 @@ export type {
   UseSidebarDataReturn,
   CategoryCounts,
   SidebarClient,
+  UpcomingEventsSummary,
 } from './useSidebarData';
 
 // ═══════════════════════════════════════════════════════════════════════════════

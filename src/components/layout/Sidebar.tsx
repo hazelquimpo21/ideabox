@@ -94,6 +94,18 @@ export interface SidebarClient {
 }
 
 /**
+ * Upcoming events summary for sidebar display.
+ */
+export interface UpcomingEventsSummary {
+  /** Total count of upcoming events */
+  count: number;
+  /** Next upcoming event date (ISO string) */
+  nextEventDate?: string;
+  /** Days until next event */
+  daysUntilNext?: number;
+}
+
+/**
  * Props for the Sidebar component.
  */
 export interface SidebarProps {
@@ -103,6 +115,8 @@ export interface SidebarProps {
   categoryCounts?: CategoryCounts;
   /** List of clients for quick access */
   clients?: SidebarClient[];
+  /** Upcoming events summary for display */
+  upcomingEvents?: UpcomingEventsSummary;
   /** Whether sidebar is open (mobile only) */
   isOpen?: boolean;
   /** Callback to close sidebar (mobile only) */
@@ -303,6 +317,7 @@ function CategoryLink({
   count,
   iconColor,
   onClick,
+  subtitle,
 }: {
   href: string;
   icon: React.ElementType;
@@ -311,6 +326,7 @@ function CategoryLink({
   count?: number;
   iconColor: string;
   onClick?: () => void;
+  subtitle?: string;
 }) {
   return (
     <Link
@@ -324,7 +340,14 @@ function CategoryLink({
       )}
     >
       <Icon className={cn('h-4 w-4 flex-shrink-0', iconColor)} />
-      <span className="flex-1 truncate">{label}</span>
+      <div className="flex-1 min-w-0">
+        <span className="truncate block">{label}</span>
+        {subtitle && (
+          <span className="text-xs text-green-600 dark:text-green-400 truncate block">
+            {subtitle}
+          </span>
+        )}
+      </div>
       {count !== undefined && count > 0 && (
         <span className="text-xs text-muted-foreground">
           {count > 99 ? '99+' : count}
@@ -406,6 +429,7 @@ export function Sidebar({
   currentPath,
   categoryCounts = {},
   clients = [],
+  upcomingEvents,
   isOpen = false,
   onClose,
   className,
@@ -455,18 +479,35 @@ export function Sidebar({
 
       {/* Category Filters */}
       <SidebarSection title="Categories">
-        {categoryItems.map((item) => (
-          <CategoryLink
-            key={item.category}
-            href={`/inbox?category=${item.category}`}
-            icon={item.icon}
-            label={item.label}
-            isActive={activePath === `/inbox?category=${item.category}`}
-            count={categoryCounts[item.category]}
-            iconColor={item.color}
-            onClick={handleLinkClick}
-          />
-        ))}
+        {categoryItems.map((item) => {
+          // Generate subtitle for Events category based on upcoming events
+          let subtitle: string | undefined;
+          if (item.category === 'event' && upcomingEvents && upcomingEvents.count > 0) {
+            if (upcomingEvents.daysUntilNext === 0) {
+              subtitle = 'Event today!';
+            } else if (upcomingEvents.daysUntilNext === 1) {
+              subtitle = 'Next: tomorrow';
+            } else if (upcomingEvents.daysUntilNext !== undefined && upcomingEvents.daysUntilNext <= 7) {
+              subtitle = `Next: in ${upcomingEvents.daysUntilNext} days`;
+            } else if (upcomingEvents.count > 0) {
+              subtitle = `${upcomingEvents.count} upcoming`;
+            }
+          }
+
+          return (
+            <CategoryLink
+              key={item.category}
+              href={`/inbox?category=${item.category}`}
+              icon={item.icon}
+              label={item.label}
+              isActive={activePath === `/inbox?category=${item.category}`}
+              count={categoryCounts[item.category]}
+              iconColor={item.color}
+              onClick={handleLinkClick}
+              subtitle={subtitle}
+            />
+          );
+        })}
       </SidebarSection>
 
       {/* Clients */}
