@@ -7,6 +7,20 @@
  * Critical for first-time users to understand the system is working.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
+ * TERMINOLOGY (STANDARDIZED)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Throughout IdeaBox, we use consistent language:
+ *
+ * - "Refresh" (user-facing) = Fetch new emails from Gmail AND analyze them
+ * - "Analyze" (user-facing) = Run AI on emails that haven't been analyzed yet
+ * - "Sync" (internal term)  = The full fetch + analyze process
+ *
+ * Button labels:
+ * - "Refresh" - Full sync (fetch + analyze), main action
+ * - "Analyze Now" - Only runs AI on unanalyzed emails, no fetch
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
  * STATES
  * ═══════════════════════════════════════════════════════════════════════════════
  * - idle: No sync in progress, shows last sync time
@@ -16,6 +30,7 @@
  * - never_synced: Account never synced (first-time user)
  *
  * @module components/email/SyncStatusBanner
+ * @since January 2026
  */
 
 'use client';
@@ -541,7 +556,7 @@ export function SyncStatusBanner({
       case 'error':
         return `Sync failed: ${syncInfo.errorMessage}`;
       case 'never_synced':
-        return 'Your emails haven\'t been synced yet. Click "Sync Now" to get started.';
+        return 'Your emails haven\'t been analyzed yet. Click "Get Started" to begin.';
       default:
         if (syncInfo.analysis?.analyzedCount) {
           return `${syncInfo.emailsCount} emails synced, ${syncInfo.analysis.analyzedCount} analyzed`;
@@ -628,7 +643,7 @@ export function SyncStatusBanner({
           </div>
         </div>
 
-        {/* Sync button - hide during syncing */}
+        {/* Refresh button - fetches new emails AND analyzes them */}
         {!isSyncing && (
           <Button
             variant={syncInfo.status === 'never_synced' ? 'default' : 'outline'}
@@ -636,9 +651,10 @@ export function SyncStatusBanner({
             onClick={handleSync}
             disabled={isSyncing}
             className="shrink-0"
+            title="Refresh: Fetch new emails from Gmail and analyze them"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Sync Now
+            {syncInfo.status === 'never_synced' ? 'Get Started' : 'Refresh'}
           </Button>
         )}
       </div>

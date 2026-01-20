@@ -323,13 +323,24 @@ function UserMenu({
           </div>
 
           {/* Menu items */}
+          {/* Profile link opens Settings on the Account tab */}
           <Link
-            href="/settings/profile"
+            href="/settings?tab=account"
             className="flex items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
             onClick={() => setIsOpen(false)}
           >
             <User className="h-4 w-4" />
             Profile
+          </Link>
+
+          {/* About Me link opens Settings on the About Me tab */}
+          <Link
+            href="/settings?tab=about"
+            className="flex items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+            onClick={() => setIsOpen(false)}
+          >
+            <Settings className="h-4 w-4" />
+            About Me
           </Link>
 
           <Link
@@ -338,7 +349,7 @@ function UserMenu({
             onClick={() => setIsOpen(false)}
           >
             <Settings className="h-4 w-4" />
-            Settings
+            All Settings
           </Link>
 
           <div className="border-t my-1" />

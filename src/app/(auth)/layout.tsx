@@ -29,8 +29,9 @@ import * as React from 'react';
 import { useAuth } from '@/lib/auth';
 import { ProtectedRoute } from '@/components/auth';
 import { Navbar, Sidebar } from '@/components/layout';
-import { useSidebarData } from '@/hooks';
+import { useSidebarData, useSyncStatus } from '@/hooks';
 import { createLogger } from '@/lib/utils/logger';
+import { useToast } from '@/components/ui';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -56,9 +57,13 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const { user, signOut } = useAuth();
+  const { toast } = useToast();
 
   // Sidebar data (category counts and clients)
   const { categoryCounts, clients } = useSidebarData();
+
+  // Sync status for navbar sync button
+  const { isSyncing, lastSyncAt, triggerSync } = useSyncStatus();
 
   // Mobile sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
@@ -83,9 +88,29 @@ export default function AuthLayout({
     logger.debug('Search triggered', { query });
   };
 
-  const handleSync = () => {
-    // TODO: Implement manual sync trigger
-    logger.debug('Manual sync triggered');
+  /**
+   * Triggers a manual email refresh (sync + analyze).
+   * Called when user clicks the sync button in the navbar.
+   *
+   * Terminology:
+   * - "Refresh" = Fetch new emails from Gmail AND analyze them
+   * - This is what users expect when they click sync
+   */
+  const handleSync = async () => {
+    logger.info('Manual refresh triggered from navbar');
+    const result = await triggerSync();
+    if (result.success) {
+      toast({
+        title: 'Refresh started',
+        description: 'Fetching and analyzing new emails...',
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Refresh failed',
+        description: result.error || 'Could not start email refresh.',
+      });
+    }
   };
 
   const toggleSidebar = () => {
@@ -114,8 +139,8 @@ export default function AuthLayout({
             avatarUrl: user.avatarUrl,
           } : null}
           syncStatus={{
-            isSyncing: false,
-            lastSyncAt: null,
+            isSyncing,
+            lastSyncAt: lastSyncAt || null,
           }}
           onSearch={handleSearch}
           onSync={handleSync}
