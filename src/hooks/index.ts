@@ -129,3 +129,20 @@ export type {
   RelatedEmail,
   RelatedContact,
 } from './useExtractedDates';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACCOUNT & CONTEXT HOOKS (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useGmailAccounts, default as useGmailAccountsDefault } from './useGmailAccounts';
+export type {
+  GmailAccountDisplay,
+  UseGmailAccountsReturn,
+} from './useGmailAccounts';
+
+export { useUserContext, default as useUserContextDefault } from './useUserContext';
+export type {
+  UserContext,
+  UserContextUpdate,
+  UseUserContextReturn,
+} from './useUserContext';

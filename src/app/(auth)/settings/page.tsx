@@ -2,20 +2,39 @@
 /**
  * Settings Page for IdeaBox
  *
- * User preferences and account settings. Organized into sections:
- * - Profile: Display name, email preferences
- * - Accounts: Connected Gmail accounts management
- * - AI Settings: Analysis preferences and categorization rules
- * - Cost Control: Daily/monthly limits and usage tracking
- * - Notifications: Email and in-app notification settings
- * - Danger Zone: Account deletion and data export
+ * Comprehensive user settings organized into tabs for better navigation.
+ * This page allows users to manage their profile, connected accounts,
+ * AI analysis preferences, costs, notifications, and personal context.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * TAB STRUCTURE
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * 1. Account & Sync   - Profile info, connected Gmail accounts, sync controls
+ * 2. AI Analysis      - Analysis toggles, limits, categorization preferences
+ * 3. Cost Control     - Usage tracking, daily/monthly limits, budget alerts
+ * 4. Notifications    - Email digests, reminders, alerts configuration
+ * 5. About Me         - Personal context for AI (role, VIPs, schedule, etc.)
+ * 6. Danger Zone      - Data export, account deletion
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * DATA SOURCES
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * This page pulls data from multiple sources:
+ * - useSettings()      - user_settings table (AI config, costs, notifications)
+ * - useUserContext()   - user_context table (role, VIPs, schedule, etc.)
+ * - useGmailAccounts() - gmail_accounts table (connected accounts)
+ * - useSyncStatus()    - sync state and triggers
  *
  * @module app/(auth)/settings/page
+ * @since January 2026
  */
 
 'use client';
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/layout';
 import {
   Card,
@@ -30,6 +49,10 @@ import {
   Skeleton,
   Badge,
   useToast,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
 } from '@/components/ui';
 import {
   User,
@@ -46,38 +69,44 @@ import {
   TrendingUp,
   AlertCircle,
   RefreshCw,
+  Briefcase,
+  MapPin,
+  Clock,
+  Star,
+  Target,
+  FolderKanban,
+  Heart,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { useSettings } from '@/hooks/useSettings';
+import { useSettings, useUserContext, useGmailAccounts, useSyncStatus } from '@/hooks';
 import type { UserSettings } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TYPE DEFINITIONS
+// CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface MockConnectedAccount {
-  id: string;
-  email: string;
-  isPrimary: boolean;
-  lastSyncedAt: Date;
-  syncStatus: 'active' | 'paused' | 'error';
-}
+/**
+ * Tab configuration for the settings page.
+ * Each tab has an id, label, icon, and description.
+ */
+const SETTINGS_TABS = [
+  { id: 'account', label: 'Account & Sync', icon: Mail, description: 'Profile and connected accounts' },
+  { id: 'ai', label: 'AI Analysis', icon: Sparkles, description: 'Analysis preferences' },
+  { id: 'costs', label: 'Costs', icon: DollarSign, description: 'Usage and limits' },
+  { id: 'notifications', label: 'Notifications', icon: Bell, description: 'Alert preferences' },
+  { id: 'about', label: 'About Me', icon: User, description: 'Personal context for AI' },
+  { id: 'danger', label: 'Danger Zone', icon: AlertTriangle, description: 'Destructive actions' },
+] as const;
 
-// Mock accounts (will be replaced with real data later)
-const MOCK_ACCOUNTS: MockConnectedAccount[] = [
-  {
-    id: '1',
-    email: 'user@gmail.com',
-    isPrimary: true,
-    lastSyncedAt: new Date(Date.now() - 1000 * 60 * 5),
-    syncStatus: 'active',
-  },
-];
+type SettingsTab = typeof SETTINGS_TABS[number]['id'];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Formats a date as a relative time string (e.g., "5 min ago").
+ */
 function formatLastSync(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -93,7 +122,10 @@ function formatLastSync(date: Date): string {
   return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 }
 
-function getSyncStatusBadge(status: MockConnectedAccount['syncStatus']) {
+/**
+ * Gets the badge variant and label for a sync status.
+ */
+function getSyncStatusBadge(status: 'active' | 'paused' | 'error') {
   switch (status) {
     case 'active':
       return { variant: 'default' as const, label: 'Active' };
@@ -106,18 +138,28 @@ function getSyncStatusBadge(status: MockConnectedAccount['syncStatus']) {
   }
 }
 
+/**
+ * Formats a cost value as USD.
+ */
 function formatCost(cost: number): string {
   return `$${cost.toFixed(4)}`;
 }
 
+/**
+ * Formats a percentage value.
+ */
 function formatPercent(percent: number): string {
   return `${Math.min(100, percent).toFixed(1)}%`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SUB-COMPONENTS
+// ACCOUNT & SYNC TAB COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Profile section within the Account tab.
+ * Allows editing display name.
+ */
 function ProfileSection({ displayName }: { displayName: string }) {
   const [name, setName] = React.useState(displayName);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -157,51 +199,130 @@ function ProfileSection({ displayName }: { displayName: string }) {
   );
 }
 
-function AccountsSection({ accounts }: { accounts: MockConnectedAccount[] }) {
+/**
+ * Connected Gmail accounts section.
+ * Shows real account data from useGmailAccounts hook.
+ *
+ * NOTE: Previously used mock data. Now uses real data from gmail_accounts table.
+ */
+function AccountsSection() {
+  const { accounts, isLoading, error, disconnectAccount, refetch } = useGmailAccounts();
+  const { triggerSync, isSyncing } = useSyncStatus();
+  const { toast } = useToast();
+
+  const handleDisconnect = async (accountId: string, email: string) => {
+    const success = await disconnectAccount(accountId);
+    if (success) {
+      toast({ title: 'Account disconnected', description: `${email} has been removed.` });
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to disconnect account.' });
+    }
+  };
+
+  const handleRefresh = async () => {
+    // Trigger a full sync (fetch new emails + analyze)
+    const result = await triggerSync();
+    if (result.success) {
+      toast({ title: 'Refresh started', description: 'Fetching new emails from Gmail...' });
+      refetch(); // Refresh account data to update lastSyncAt
+    } else {
+      toast({ variant: 'destructive', title: 'Refresh failed', description: result.error || 'Unknown error' });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-20 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-5 w-5" />
-          Connected Accounts
-        </CardTitle>
-        <CardDescription>Manage your Gmail accounts connected to IdeaBox</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Connected Accounts
+            </CardTitle>
+            <CardDescription>Gmail accounts synced with IdeaBox</CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isSyncing}
+            title="Refresh: Fetch new emails from Gmail and analyze them"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Refreshing...' : 'Refresh All'}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-3">
-          {accounts.map((account) => {
-            const statusBadge = getSyncStatusBadge(account.syncStatus);
-            return (
-              <div
-                key={account.id}
-                className="flex items-center justify-between p-3 border rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{account.email}</span>
-                      {account.isPrimary && (
-                        <Badge variant="outline" className="text-xs">Primary</Badge>
-                      )}
+        {error && (
+          <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        {accounts.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground">
+            <Mail className="h-12 w-12 mx-auto mb-3 opacity-50" />
+            <p>No Gmail accounts connected</p>
+            <p className="text-sm">Connect an account to start syncing emails.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {accounts.map((account) => {
+              const statusBadge = getSyncStatusBadge(account.syncStatus);
+              return (
+                <div
+                  key={account.id}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <Mail className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{account.email}</span>
+                        {account.isPrimary && (
+                          <Badge variant="outline" className="text-xs">Primary</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Last synced: {account.lastSyncAt ? formatLastSync(account.lastSyncAt) : 'Never'}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Last synced: {formatLastSync(account.lastSyncedAt)}
-                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+                    {!account.isPrimary && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => handleDisconnect(account.id, account.email)}
+                        title="Disconnect this account"
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
-                  {!account.isPrimary && (
-                    <Button variant="ghost" size="sm" className="text-destructive">
-                      <LogOut className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
+
         <Button variant="outline" className="w-full gap-2">
           <Plus className="h-4 w-4" />
           Connect Another Account
@@ -211,12 +332,20 @@ function AccountsSection({ accounts }: { accounts: MockConnectedAccount[] }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// AI ANALYSIS TAB COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
 interface AISettingsSectionProps {
   settings: UserSettings;
   onUpdate: (updates: Partial<UserSettings>) => Promise<void>;
   isUpdating: boolean;
 }
 
+/**
+ * AI analysis settings section.
+ * Controls auto-analyze, action extraction, categorization, and client detection.
+ */
 function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSectionProps) {
   const handleToggle = async (key: keyof UserSettings, value: boolean) => {
     await onUpdate({ [key]: value });
@@ -227,76 +356,83 @@ function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSection
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5" />
-          AI Analysis
+          AI Analysis Settings
         </CardTitle>
         <CardDescription>Configure how IdeaBox analyzes your emails</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label htmlFor="autoAnalyze">Auto-Analyze</Label>
-            <p className="text-sm text-muted-foreground">
-              Automatically analyze new emails as they arrive
-            </p>
+        {/* Analysis Toggles */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="autoAnalyze">Auto-Analyze New Emails</Label>
+              <p className="text-sm text-muted-foreground">
+                Automatically analyze emails as they arrive
+              </p>
+            </div>
+            <Switch
+              id="autoAnalyze"
+              checked={settings.auto_analyze}
+              onCheckedChange={(checked) => handleToggle('auto_analyze', checked)}
+              disabled={isUpdating}
+            />
           </div>
-          <Switch
-            id="autoAnalyze"
-            checked={settings.auto_analyze}
-            onCheckedChange={(checked) => handleToggle('auto_analyze', checked)}
-            disabled={isUpdating}
-          />
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="extractActions">Extract Action Items</Label>
+              <p className="text-sm text-muted-foreground">
+                Find tasks and to-dos in your emails
+              </p>
+            </div>
+            <Switch
+              id="extractActions"
+              checked={settings.extract_actions}
+              onCheckedChange={(checked) => handleToggle('extract_actions', checked)}
+              disabled={isUpdating}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="categorizeEmails">Categorize Emails</Label>
+              <p className="text-sm text-muted-foreground">
+                Sort emails into categories (action, event, newsletter, etc.)
+              </p>
+            </div>
+            <Switch
+              id="categorizeEmails"
+              checked={settings.categorize_emails}
+              onCheckedChange={(checked) => handleToggle('categorize_emails', checked)}
+              disabled={isUpdating}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="detectClients">Detect Clients</Label>
+              <p className="text-sm text-muted-foreground">
+                Identify and suggest new client relationships
+              </p>
+            </div>
+            <Switch
+              id="detectClients"
+              checked={settings.detect_clients}
+              onCheckedChange={(checked) => handleToggle('detect_clients', checked)}
+              disabled={isUpdating}
+            />
+          </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label htmlFor="extractActions">Extract Action Items</Label>
-            <p className="text-sm text-muted-foreground">
-              Find tasks and to-dos in your emails
-            </p>
-          </div>
-          <Switch
-            id="extractActions"
-            checked={settings.extract_actions}
-            onCheckedChange={(checked) => handleToggle('extract_actions', checked)}
-            disabled={isUpdating}
-          />
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label htmlFor="categorizeEmails">Categorize Emails</Label>
-            <p className="text-sm text-muted-foreground">
-              Automatically sort emails into categories
-            </p>
-          </div>
-          <Switch
-            id="categorizeEmails"
-            checked={settings.categorize_emails}
-            onCheckedChange={(checked) => handleToggle('categorize_emails', checked)}
-            disabled={isUpdating}
-          />
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label htmlFor="detectClients">Detect Clients</Label>
-            <p className="text-sm text-muted-foreground">
-              Identify and suggest new client relationships
-            </p>
-          </div>
-          <Switch
-            id="detectClients"
-            checked={settings.detect_clients}
-            onCheckedChange={(checked) => handleToggle('detect_clients', checked)}
-            disabled={isUpdating}
-          />
-        </div>
-
+        {/* Analysis Limits */}
         <div className="pt-4 border-t">
           <h4 className="text-sm font-medium mb-3">Analysis Limits</h4>
+          <p className="text-xs text-muted-foreground mb-4">
+            These control how many emails are processed during sync operations.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="initialSyncCount">Initial Sync Emails</Label>
+              <Label htmlFor="initialSyncCount">Initial Sync</Label>
               <select
                 id="initialSyncCount"
                 className="w-full h-10 px-3 py-2 text-sm border rounded-md bg-background"
@@ -309,10 +445,10 @@ function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSection
                 <option value={100}>100 emails</option>
                 <option value={200}>200 emails</option>
               </select>
-              <p className="text-xs text-muted-foreground">Emails analyzed on first sync</p>
+              <p className="text-xs text-muted-foreground">For new account setup</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="maxPerSync">Max Per Sync</Label>
+              <Label htmlFor="maxPerSync">Max Fetch Per Refresh</Label>
               <select
                 id="maxPerSync"
                 className="w-full h-10 px-3 py-2 text-sm border rounded-md bg-background"
@@ -325,10 +461,10 @@ function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSection
                 <option value={200}>200 emails</option>
                 <option value={500}>500 emails</option>
               </select>
-              <p className="text-xs text-muted-foreground">Max emails to fetch per sync</p>
+              <p className="text-xs text-muted-foreground">Emails to fetch from Gmail</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="maxAnalysis">Max Analysis Per Sync</Label>
+              <Label htmlFor="maxAnalysis">Max Analyze Per Refresh</Label>
               <select
                 id="maxAnalysis"
                 className="w-full h-10 px-3 py-2 text-sm border rounded-md bg-background"
@@ -341,7 +477,7 @@ function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSection
                 <option value={100}>100 emails</option>
                 <option value={200}>200 emails</option>
               </select>
-              <p className="text-xs text-muted-foreground">Max emails to analyze per sync</p>
+              <p className="text-xs text-muted-foreground">Emails to run AI on</p>
             </div>
           </div>
         </div>
@@ -349,6 +485,10 @@ function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSection
     </Card>
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COST CONTROL TAB COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 interface CostControlSectionProps {
   settings: UserSettings;
@@ -364,6 +504,10 @@ interface CostControlSectionProps {
   isUpdating: boolean;
 }
 
+/**
+ * Cost control and usage tracking section.
+ * Shows current usage, limits, and allows setting budget caps.
+ */
 function CostControlSection({
   settings,
   usage,
@@ -552,12 +696,20 @@ function CostControlSection({
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS TAB COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
 interface NotificationsSectionProps {
   settings: UserSettings;
   onUpdate: (updates: Partial<UserSettings>) => Promise<void>;
   isUpdating: boolean;
 }
 
+/**
+ * Notification preferences section.
+ * Controls email digests, reminders, and various alert types.
+ */
 function NotificationsSection({ settings, onUpdate, isUpdating }: NotificationsSectionProps) {
   return (
     <Card>
@@ -648,6 +800,361 @@ function NotificationsSection({ settings, onUpdate, isUpdating }: NotificationsS
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ABOUT ME TAB COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * About Me section - Personal context for AI personalization.
+ *
+ * This is the content from UserContextWizard, but editable in Settings.
+ * Allows users who skipped onboarding to fill in their context later.
+ *
+ * NOTE: This data goes to user_context table, NOT user_settings.
+ */
+function AboutMeSection() {
+  const { context, updateContext, isLoading, isUpdating, completionPercent, incompleteSections } = useUserContext();
+  const { toast } = useToast();
+
+  // Local state for form fields
+  const [role, setRole] = React.useState('');
+  const [company, setCompany] = React.useState('');
+  const [locationCity, setLocationCity] = React.useState('');
+  const [workStart, setWorkStart] = React.useState('09:00');
+  const [workEnd, setWorkEnd] = React.useState('17:00');
+  const [vipInput, setVipInput] = React.useState('');
+  const [priorityInput, setPriorityInput] = React.useState('');
+  const [interestInput, setInterestInput] = React.useState('');
+
+  // Sync local state with context when loaded
+  React.useEffect(() => {
+    if (context) {
+      setRole(context.role || '');
+      setCompany(context.company || '');
+      setLocationCity(context.location_city || '');
+      setWorkStart(context.work_hours_start || '09:00');
+      setWorkEnd(context.work_hours_end || '17:00');
+    }
+  }, [context]);
+
+  const handleSaveField = async (field: string, value: unknown) => {
+    const success = await updateContext({ [field]: value });
+    if (success) {
+      toast({ title: 'Saved', description: `Your ${field.replace('_', ' ')} has been updated.` });
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to save. Please try again.' });
+    }
+  };
+
+  const handleAddToArray = async (field: string, value: string, currentArray: string[]) => {
+    if (!value.trim()) return;
+    const newArray = [...currentArray, value.trim()];
+    const success = await updateContext({ [field]: newArray });
+    if (success) {
+      // Clear input
+      if (field === 'vip_emails') setVipInput('');
+      if (field === 'priorities') setPriorityInput('');
+      if (field === 'interests') setInterestInput('');
+    }
+  };
+
+  const handleRemoveFromArray = async (field: string, index: number, currentArray: string[]) => {
+    const newArray = currentArray.filter((_, i) => i !== index);
+    await updateContext({ [field]: newArray });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Completion Progress */}
+      <Card className={completionPercent < 50 ? 'border-yellow-500/50 bg-yellow-500/5' : ''}>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Target className="h-5 w-5" />
+            Profile Completion
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <div className="w-full bg-secondary rounded-full h-3">
+                <div
+                  className={`h-3 rounded-full transition-all ${
+                    completionPercent >= 80 ? 'bg-green-500' : completionPercent >= 50 ? 'bg-yellow-500' : 'bg-orange-500'
+                  }`}
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
+            </div>
+            <span className="text-lg font-bold">{completionPercent}%</span>
+          </div>
+          {incompleteSections.length > 0 && completionPercent < 80 && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Missing: {incompleteSections.slice(0, 3).join(', ')}
+              {incompleteSections.length > 3 && ` +${incompleteSections.length - 3} more`}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground mt-1">
+            A complete profile helps AI better understand and prioritize your emails.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Role & Company */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Briefcase className="h-5 w-5" />
+            Role & Company
+          </CardTitle>
+          <CardDescription>Your professional identity helps AI understand email context</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="role">Your Role</Label>
+              <Input
+                id="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                onBlur={() => role !== context?.role && handleSaveField('role', role)}
+                placeholder="e.g., Product Manager, Developer, Consultant"
+                disabled={isUpdating}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company">Company</Label>
+              <Input
+                id="company"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                onBlur={() => company !== context?.company && handleSaveField('company', company)}
+                placeholder="e.g., Acme Corp"
+                disabled={isUpdating}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* VIP Contacts */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Star className="h-5 w-5" />
+            VIP Contacts
+          </CardTitle>
+          <CardDescription>Emails from these addresses get higher priority</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              value={vipInput}
+              onChange={(e) => setVipInput(e.target.value)}
+              placeholder="Enter email address"
+              disabled={isUpdating}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddToArray('vip_emails', vipInput, context?.vip_emails || []);
+                }
+              }}
+            />
+            <Button
+              onClick={() => handleAddToArray('vip_emails', vipInput, context?.vip_emails || [])}
+              disabled={isUpdating || !vipInput.trim()}
+              size="sm"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          {context?.vip_emails && context.vip_emails.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {context.vip_emails.map((email, i) => (
+                <Badge key={i} variant="secondary" className="gap-1">
+                  {email}
+                  <button
+                    onClick={() => handleRemoveFromArray('vip_emails', i, context.vip_emails)}
+                    className="ml-1 hover:text-destructive"
+                    disabled={isUpdating}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Priorities */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FolderKanban className="h-5 w-5" />
+            Priorities
+          </CardTitle>
+          <CardDescription>What matters most to you (helps rank emails)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              value={priorityInput}
+              onChange={(e) => setPriorityInput(e.target.value)}
+              placeholder="e.g., Client work, Team meetings, Learning"
+              disabled={isUpdating}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddToArray('priorities', priorityInput, context?.priorities || []);
+                }
+              }}
+            />
+            <Button
+              onClick={() => handleAddToArray('priorities', priorityInput, context?.priorities || [])}
+              disabled={isUpdating || !priorityInput.trim()}
+              size="sm"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          {context?.priorities && context.priorities.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {context.priorities.map((priority, i) => (
+                <Badge key={i} variant="outline" className="gap-1">
+                  {i + 1}. {priority}
+                  <button
+                    onClick={() => handleRemoveFromArray('priorities', i, context.priorities)}
+                    className="ml-1 hover:text-destructive"
+                    disabled={isUpdating}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Interests */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Heart className="h-5 w-5" />
+            Interests
+          </CardTitle>
+          <CardDescription>Topics you want to stay informed about</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              value={interestInput}
+              onChange={(e) => setInterestInput(e.target.value)}
+              placeholder="e.g., AI/ML, Design, Marketing"
+              disabled={isUpdating}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddToArray('interests', interestInput, context?.interests || []);
+                }
+              }}
+            />
+            <Button
+              onClick={() => handleAddToArray('interests', interestInput, context?.interests || [])}
+              disabled={isUpdating || !interestInput.trim()}
+              size="sm"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          {context?.interests && context.interests.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {context.interests.map((interest, i) => (
+                <Badge key={i} variant="secondary" className="gap-1">
+                  {interest}
+                  <button
+                    onClick={() => handleRemoveFromArray('interests', i, context.interests)}
+                    className="ml-1 hover:text-destructive"
+                    disabled={isUpdating}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Location & Schedule */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Location & Schedule
+          </CardTitle>
+          <CardDescription>Helps with timezone-aware priority scoring</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="location" className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              Location
+            </Label>
+            <Input
+              id="location"
+              value={locationCity}
+              onChange={(e) => setLocationCity(e.target.value)}
+              onBlur={() => locationCity !== context?.location_city && handleSaveField('location_city', locationCity)}
+              placeholder="e.g., Milwaukee, WI"
+              disabled={isUpdating}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="workStart">Work Day Starts</Label>
+              <Input
+                id="workStart"
+                type="time"
+                value={workStart}
+                onChange={(e) => setWorkStart(e.target.value)}
+                onBlur={() => workStart !== context?.work_hours_start && handleSaveField('work_hours_start', workStart)}
+                disabled={isUpdating}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="workEnd">Work Day Ends</Label>
+              <Input
+                id="workEnd"
+                type="time"
+                value={workEnd}
+                onChange={(e) => setWorkEnd(e.target.value)}
+                onBlur={() => workEnd !== context?.work_hours_end && handleSaveField('work_hours_end', workEnd)}
+                disabled={isUpdating}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DANGER ZONE TAB COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Danger zone section with destructive actions.
+ * Includes data export and account deletion.
+ */
 function DangerZoneSection() {
   return (
     <Card className="border-destructive/50">
@@ -689,10 +1196,15 @@ function DangerZoneSection() {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOADING SKELETON
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function SettingsSkeleton() {
   return (
     <div className="space-y-6">
-      {[1, 2, 3, 4, 5].map((i) => (
+      <Skeleton className="h-10 w-full max-w-xl" />
+      {[1, 2, 3].map((i) => (
         <Card key={i}>
           <CardHeader>
             <Skeleton className="h-6 w-32" />
@@ -712,11 +1224,24 @@ function SettingsSkeleton() {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Settings Page
+ *
+ * Main settings page with tabbed navigation. Supports deep linking via
+ * URL query parameter (e.g., /settings?tab=about).
+ *
+ * @example URL: /settings?tab=about  -> Opens "About Me" tab
+ */
 export default function SettingsPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
   const { settings, usage, isLoading, isUpdating, error, updateSettings, refreshUsage } =
     useSettings();
   const { toast } = useToast();
+
+  // Get initial tab from URL or default to 'account'
+  const initialTab = (searchParams.get('tab') as SettingsTab) || 'account';
+  const [activeTab, setActiveTab] = React.useState<SettingsTab>(initialTab);
 
   // Handle update with toast feedback
   const handleUpdate = async (updates: Partial<UserSettings>) => {
@@ -736,7 +1261,7 @@ export default function SettingsPage() {
     <div>
       <PageHeader
         title="Settings"
-        description="Manage your account and preferences"
+        description="Manage your account, preferences, and personal context"
         breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Settings' }]}
         actions={
           isUpdating ? (
@@ -747,7 +1272,7 @@ export default function SettingsPage() {
           ) : (
             <Button variant="outline" size="sm" className="gap-2">
               <Check className="h-4 w-4" />
-              All Changes Auto-Save
+              Auto-Saved
             </Button>
           )
         }
@@ -765,28 +1290,67 @@ export default function SettingsPage() {
       {isLoading || !settings ? (
         <SettingsSkeleton />
       ) : (
-        <div className="space-y-6">
-          <ProfileSection displayName={user?.name || 'User'} />
-          <AccountsSection accounts={MOCK_ACCOUNTS} />
-          <AISettingsSection
-            settings={settings}
-            onUpdate={handleUpdate}
-            isUpdating={isUpdating}
-          />
-          <CostControlSection
-            settings={settings}
-            usage={usage}
-            onUpdate={handleUpdate}
-            onRefreshUsage={refreshUsage}
-            isUpdating={isUpdating}
-          />
-          <NotificationsSection
-            settings={settings}
-            onUpdate={handleUpdate}
-            isUpdating={isUpdating}
-          />
-          <DangerZoneSection />
-        </div>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as SettingsTab)}>
+          {/* Tab Navigation */}
+          <TabsList variant="underline" className="mb-6">
+            {SETTINGS_TABS.map((tab) => (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                variant="underline"
+                icon={<tab.icon className="h-4 w-4" />}
+                className={tab.id === 'danger' ? 'text-destructive data-[state=active]:text-destructive' : ''}
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {/* Account & Sync Tab */}
+          <TabsContent value="account" className="space-y-6">
+            <ProfileSection displayName={user?.name || 'User'} />
+            <AccountsSection />
+          </TabsContent>
+
+          {/* AI Analysis Tab */}
+          <TabsContent value="ai" className="space-y-6">
+            <AISettingsSection
+              settings={settings}
+              onUpdate={handleUpdate}
+              isUpdating={isUpdating}
+            />
+          </TabsContent>
+
+          {/* Cost Control Tab */}
+          <TabsContent value="costs" className="space-y-6">
+            <CostControlSection
+              settings={settings}
+              usage={usage}
+              onUpdate={handleUpdate}
+              onRefreshUsage={refreshUsage}
+              isUpdating={isUpdating}
+            />
+          </TabsContent>
+
+          {/* Notifications Tab */}
+          <TabsContent value="notifications" className="space-y-6">
+            <NotificationsSection
+              settings={settings}
+              onUpdate={handleUpdate}
+              isUpdating={isUpdating}
+            />
+          </TabsContent>
+
+          {/* About Me Tab */}
+          <TabsContent value="about">
+            <AboutMeSection />
+          </TabsContent>
+
+          {/* Danger Zone Tab */}
+          <TabsContent value="danger" className="space-y-6">
+            <DangerZoneSection />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

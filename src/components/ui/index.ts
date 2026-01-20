@@ -175,3 +175,17 @@ export {
   type FullPageLoaderProps,
   type InlineLoaderProps,
 } from './spinner';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TABS COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  type TabsListProps,
+  type TabsTriggerProps,
+  type TabsContentProps,
+} from './tabs';

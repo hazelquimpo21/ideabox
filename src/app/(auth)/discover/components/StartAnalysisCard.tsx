@@ -1,8 +1,26 @@
 /**
  * Start Analysis Card Component
  *
- * UI for users to initiate email analysis from the Discover page.
- * Provides options for Quick (10), Standard (25), or Deep (50) scans.
+ * UI for users to initiate their first email analysis from the Discover page.
+ * Provides options for Quick (10), Standard (25), or Deep (50) analysis.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * TERMINOLOGY (STANDARDIZED)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Throughout IdeaBox, we use consistent language:
+ *
+ * - "Analyze" = Run AI on emails to categorize, extract actions, etc.
+ * - "Refresh" = Fetch new emails from Gmail AND analyze them
+ * - "Sync" = Internal term for the full fetch + analyze process
+ *
+ * For users, we show:
+ * - "Analyze X emails" - Clear what AI will do
+ * - Estimated time and cost - Transparency
+ * - "You can change this in Settings" - Reassurance
+ *
+ * @module app/(auth)/discover/components/StartAnalysisCard
+ * @since January 2026
  */
 
 'use client';
@@ -11,15 +29,78 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Sparkles, Zap, Mail } from 'lucide-react';
+import { Sparkles, Zap, Mail, Settings, Info } from 'lucide-react';
+import Link from 'next/link';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
 
 interface StartAnalysisCardProps {
+  /** Error message from previous failed analysis attempt */
   error: string | null;
+  /** Whether analysis is currently starting */
   isStartingSync: boolean;
+  /** Callback when user selects an analysis option */
   onStartAnalysis: (emailCount: number) => void;
+  /** Callback when user skips analysis */
   onSkip: () => void;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Analysis options with user-friendly descriptions.
+ * Cost estimates based on ~$0.0006 per email at GPT-4.1-mini rates.
+ */
+const ANALYSIS_OPTIONS = [
+  {
+    count: 10,
+    name: 'Quick Start',
+    description: 'Get started fast with your 10 most recent emails',
+    time: '~15 seconds',
+    cost: '~$0.01',
+    isRecommended: true,
+    icon: Zap,
+    variant: 'primary' as const,
+  },
+  {
+    count: 25,
+    name: 'Standard',
+    description: 'Analyze 25 emails for better initial insights',
+    time: '~30 seconds',
+    cost: '~$0.02',
+    isRecommended: false,
+    icon: Mail,
+    variant: 'default' as const,
+  },
+  {
+    count: 50,
+    name: 'Comprehensive',
+    description: 'Deep analysis of 50 emails for the full picture',
+    time: '~1 minute',
+    cost: '~$0.03',
+    isRecommended: false,
+    icon: Sparkles,
+    variant: 'default' as const,
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Card displayed on the Discover page for first-time analysis.
+ *
+ * Shows three options with clear terminology:
+ * - What will happen (analyze X emails)
+ * - How long it takes
+ * - Estimated cost
+ * - Reassurance that settings can be changed later
+ */
 export function StartAnalysisCard({
   error,
   isStartingSync,
@@ -35,16 +116,17 @@ export function StartAnalysisCard({
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
               <Sparkles className="h-8 w-8 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold mb-2">Discover Your Inbox</h1>
+            <h1 className="text-2xl font-bold mb-2">Analyze Your Inbox</h1>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Let AI analyze your recent emails to find action items, events, and patterns.
+              AI will read your recent emails to find action items, categorize messages,
+              and identify what needs your attention.
             </p>
           </div>
 
-          {/* Error message if previous sync failed */}
+          {/* Error message if previous analysis failed */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-center">
-              <p className="text-red-600 text-sm">{error}</p>
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-4 mb-6 text-center">
+              <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
             </div>
           )}
 
@@ -54,65 +136,51 @@ export function StartAnalysisCard({
               Choose how many emails to analyze:
             </div>
 
-            {/* Quick Scan - 10 emails (default/recommended) */}
-            <button
-              onClick={() => onStartAnalysis(10)}
-              disabled={isStartingSync}
-              className="w-full p-4 rounded-lg border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                  <Zap className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">Quick Scan</span>
-                    <Badge variant="secondary" className="text-xs">Recommended</Badge>
+            {ANALYSIS_OPTIONS.map((option) => {
+              const Icon = option.icon;
+              const isPrimary = option.variant === 'primary';
+
+              return (
+                <button
+                  key={option.count}
+                  onClick={() => onStartAnalysis(option.count)}
+                  disabled={isStartingSync}
+                  className={`
+                    w-full p-4 rounded-lg transition-colors text-left
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    ${isPrimary
+                      ? 'border-2 border-primary bg-primary/5 hover:bg-primary/10'
+                      : 'border border-border hover:border-primary/50 hover:bg-accent/50'
+                    }
+                  `}
+                >
+                  <div className="flex items-start gap-4">
+                    <div
+                      className={`
+                        w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
+                        ${isPrimary ? 'bg-primary/20' : 'bg-muted'}
+                      `}
+                    >
+                      <Icon className={`h-5 w-5 ${isPrimary ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">{option.name}</span>
+                        {option.isRecommended && (
+                          <Badge variant="secondary" className="text-xs">Recommended</Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {option.description}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {option.count} emails &middot; {option.time} &middot; {option.cost}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Analyze your last 10 emails. Fast and gets you started quickly.
-                  </p>
-                </div>
-              </div>
-            </button>
-
-            {/* Standard Scan - 25 emails */}
-            <button
-              onClick={() => onStartAnalysis(25)}
-              disabled={isStartingSync}
-              className="w-full p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                  <Mail className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1">
-                  <span className="font-semibold">Standard Scan</span>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Analyze your last 25 emails. Better insights, takes about 30 seconds.
-                  </p>
-                </div>
-              </div>
-            </button>
-
-            {/* Deep Scan - 50 emails */}
-            <button
-              onClick={() => onStartAnalysis(50)}
-              disabled={isStartingSync}
-              className="w-full p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1">
-                  <span className="font-semibold">Deep Scan</span>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Analyze your last 50 emails. Most comprehensive, takes about a minute.
-                  </p>
-                </div>
-              </div>
-            </button>
+                </button>
+              );
+            })}
           </div>
 
           {/* Loading indicator when starting */}
@@ -122,6 +190,17 @@ export function StartAnalysisCard({
               <span>Starting analysis...</span>
             </div>
           )}
+
+          {/* Info note about settings */}
+          <div className="flex items-start gap-2 mt-6 p-3 bg-muted/50 rounded-lg">
+            <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              You can always analyze more emails later or change these settings in{' '}
+              <Link href="/settings?tab=ai" className="text-primary hover:underline">
+                Settings → AI Analysis
+              </Link>.
+            </p>
+          </div>
 
           {/* Skip option */}
           <div className="text-center mt-6">
