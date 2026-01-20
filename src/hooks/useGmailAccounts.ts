@@ -68,6 +68,20 @@ export interface GmailAccountDisplay {
   syncStatus: 'active' | 'paused' | 'error';
   /** When the account was connected */
   createdAt: Date;
+  /** Number of emails synced from this account */
+  emailCount: number;
+}
+
+/**
+ * Latest sync info returned from the API
+ */
+export interface LatestSyncInfo {
+  status: string;
+  completed_at: string | null;
+  emails_fetched: number;
+  emails_analyzed: number;
+  error_message: string | null;
+  duration_ms: number;
 }
 
 /**
@@ -88,21 +102,30 @@ export interface UseGmailAccountsReturn {
   hasAccounts: boolean;
   /** Get the primary account */
   primaryAccount: GmailAccountDisplay | null;
+  /** Latest sync info across all accounts */
+  latestSync: LatestSyncInfo | null;
+  /** Total email count across all accounts */
+  totalEmails: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** Extended GmailAccount type including email_count from API */
+interface GmailAccountWithCount extends GmailAccount {
+  email_count?: number;
+}
+
 /**
  * Transforms a database GmailAccount row into a display-friendly format.
  *
- * @param account - Raw database account row
+ * @param account - Raw database account row (with optional email_count)
  * @param isPrimary - Whether this is the primary account
  * @returns Transformed account for UI display
  */
 function transformAccount(
-  account: GmailAccount,
+  account: GmailAccountWithCount,
   isPrimary: boolean
 ): GmailAccountDisplay {
   // Determine sync status based on sync_enabled and last_sync_at
@@ -128,6 +151,7 @@ function transformAccount(
     isPrimary,
     syncStatus,
     createdAt: new Date(account.created_at),
+    emailCount: account.email_count || 0,
   };
 }
 
@@ -162,6 +186,7 @@ function transformAccount(
  */
 export function useGmailAccounts(): UseGmailAccountsReturn {
   const [accounts, setAccounts] = useState<GmailAccountDisplay[]>([]);
+  const [latestSync, setLatestSync] = useState<LatestSyncInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -182,7 +207,7 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
       const data = await response.json();
 
       // Transform and sort accounts (primary first, then by creation date)
-      const rawAccounts: GmailAccount[] = data.accounts || [];
+      const rawAccounts: GmailAccountWithCount[] = data.accounts || [];
       const sortedAccounts = rawAccounts.sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -193,6 +218,7 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
       );
 
       setAccounts(displayAccounts);
+      setLatestSync(data.latestSync || null);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to fetch accounts';
@@ -251,6 +277,7 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
 
   const hasAccounts = accounts.length > 0;
   const primaryAccount = accounts.find((a) => a.isPrimary) || null;
+  const totalEmails = accounts.reduce((sum, a) => sum + a.emailCount, 0);
 
   return {
     accounts,
@@ -260,6 +287,8 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
     disconnectAccount,
     hasAccounts,
     primaryAccount,
+    latestSync,
+    totalEmails,
   };
 }
 
