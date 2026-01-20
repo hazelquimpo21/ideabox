@@ -158,18 +158,45 @@ function formatPercent(percent: number): string {
 
 /**
  * Profile section within the Account tab.
- * Allows editing display name.
+ * Allows editing display name - actually saves to database.
  */
 function ProfileSection({ displayName }: { displayName: string }) {
   const [name, setName] = React.useState(displayName);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [hasChanges, setHasChanges] = React.useState(false);
   const { toast } = useToast();
 
+  // Track changes
+  React.useEffect(() => {
+    setHasChanges(name !== displayName);
+  }, [name, displayName]);
+
   const handleSave = async () => {
+    if (!hasChanges) return;
+
     setIsSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    setIsSaving(false);
-    toast({ title: 'Profile updated', description: 'Your display name has been saved.' });
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: name }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update profile');
+      }
+
+      toast({ title: 'Profile updated', description: 'Your display name has been saved.' });
+      setHasChanges(false);
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to save profile. Please try again.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -189,10 +216,15 @@ function ProfileSection({ displayName }: { displayName: string }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Your name"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && hasChanges) {
+                handleSave();
+              }
+            }}
           />
         </div>
-        <Button onClick={handleSave} disabled={isSaving} size="sm">
-          {isSaving ? 'Saving...' : 'Save Changes'}
+        <Button onClick={handleSave} disabled={isSaving || !hasChanges} size="sm">
+          {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
         </Button>
       </CardContent>
     </Card>
@@ -222,11 +254,11 @@ function AccountsSection() {
   const handleRefresh = async () => {
     // Trigger a full sync (fetch new emails + analyze)
     const result = await triggerSync();
-    if (result.success) {
+    if (result?.success) {
       toast({ title: 'Refresh started', description: 'Fetching new emails from Gmail...' });
       refetch(); // Refresh account data to update lastSyncAt
     } else {
-      toast({ variant: 'destructive', title: 'Refresh failed', description: result.error || 'Unknown error' });
+      toast({ variant: 'destructive', title: 'Refresh failed', description: 'Unknown error' });
     }
   };
 
@@ -327,6 +359,142 @@ function AccountsSection() {
           <Plus className="h-4 w-4" />
           Connect Another Account
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Sync Status Card - Shows detailed sync status and last sync results.
+ */
+function SyncStatusCard() {
+  const { status, lastSyncAt, emailsCount, isSyncing, triggerSync, lastSyncResult, errorMessage } = useSyncStatus();
+  const { toast } = useToast();
+
+  const handleManualSync = async () => {
+    const result = await triggerSync();
+    if (result?.success) {
+      const { totals } = result;
+      toast({
+        title: 'Sync completed',
+        description: `Fetched ${totals.totalFetched} emails, added ${totals.totalCreated} new.`,
+      });
+    } else if (result === null && errorMessage) {
+      toast({
+        variant: 'destructive',
+        title: 'Sync failed',
+        description: errorMessage,
+      });
+    }
+  };
+
+  // Status display configuration
+  const statusConfig = {
+    idle: { label: 'Ready', color: 'bg-green-500', icon: Check },
+    syncing: { label: 'Syncing...', color: 'bg-blue-500', icon: RefreshCw },
+    success: { label: 'Completed', color: 'bg-green-500', icon: Check },
+    error: { label: 'Error', color: 'bg-destructive', icon: AlertCircle },
+    never_synced: { label: 'Not synced', color: 'bg-yellow-500', icon: AlertTriangle },
+    loading: { label: 'Loading...', color: 'bg-muted', icon: RefreshCw },
+  };
+
+  const currentStatus = statusConfig[status] || statusConfig.idle;
+  const StatusIcon = currentStatus.icon;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              Sync Status
+            </CardTitle>
+            <CardDescription>Email synchronization status and controls</CardDescription>
+          </div>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleManualSync}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync Now'}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Status Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 border rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <div className={`w-2 h-2 rounded-full ${currentStatus.color} ${status === 'syncing' ? 'animate-pulse' : ''}`} />
+              <span className="text-sm font-medium">Status</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <StatusIcon className={`h-4 w-4 ${status === 'syncing' ? 'animate-spin' : ''}`} />
+              <span className="text-lg font-semibold">{currentStatus.label}</span>
+            </div>
+          </div>
+
+          <div className="p-4 border rounded-lg">
+            <div className="text-sm font-medium text-muted-foreground mb-2">Last Sync</div>
+            <div className="text-lg font-semibold">
+              {lastSyncAt ? formatLastSync(new Date(lastSyncAt)) : 'Never'}
+            </div>
+          </div>
+
+          <div className="p-4 border rounded-lg">
+            <div className="text-sm font-medium text-muted-foreground mb-2">Total Emails</div>
+            <div className="text-lg font-semibold">{emailsCount.toLocaleString()}</div>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {errorMessage && (
+          <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {/* Last Sync Results */}
+        {lastSyncResult && (
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Last Sync Results
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <div className="text-2xl font-bold text-primary">{lastSyncResult.totals.totalFetched}</div>
+                <div className="text-xs text-muted-foreground">Fetched</div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <div className="text-2xl font-bold text-green-600">{lastSyncResult.totals.totalCreated}</div>
+                <div className="text-xs text-muted-foreground">New</div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <div className="text-2xl font-bold text-yellow-600">{lastSyncResult.totals.totalSkipped}</div>
+                <div className="text-xs text-muted-foreground">Skipped</div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <div className="text-2xl font-bold text-destructive">{lastSyncResult.totals.totalFailed}</div>
+                <div className="text-xs text-muted-foreground">Failed</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sync Tip */}
+        {status === 'never_synced' && (
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-sm">
+            <p className="font-medium text-yellow-700 dark:text-yellow-400">Get started!</p>
+            <p className="text-muted-foreground mt-1">
+              Click &quot;Sync Now&quot; to fetch your emails from Gmail and start analyzing them.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -498,7 +666,7 @@ function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSection
  * @since January 2026
  */
 function RerunAnalysisSection() {
-  const { triggerSync, isSyncing } = useSyncStatus();
+  const { isSyncing } = useSyncStatus();
   const { toast } = useToast();
   const [emailCount, setEmailCount] = React.useState(50);
   const [isRunning, setIsRunning] = React.useState(false);
@@ -507,7 +675,18 @@ function RerunAnalysisSection() {
     setIsRunning(true);
 
     try {
-      const result = await triggerSync({ maxResults: emailCount, analysisMaxEmails: emailCount });
+      // Call the sync API directly with custom parameters
+      const response = await fetch('/api/emails/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          maxResults: emailCount,
+          analysisMaxEmails: emailCount,
+          runAnalysis: true,
+        }),
+      });
+
+      const result = await response.json();
 
       if (result.success) {
         toast({
@@ -833,19 +1012,46 @@ function NotificationsSection({ settings, onUpdate, isUpdating }: NotificationsS
         <CardDescription>Configure how and when you receive notifications</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label htmlFor="emailDigest">Email Digest</Label>
-            <p className="text-sm text-muted-foreground">
-              Receive a summary of your action items
-            </p>
+        {/* Email Digest Toggle and Frequency */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="emailDigest">Email Digest</Label>
+              <p className="text-sm text-muted-foreground">
+                Receive a summary of your action items
+              </p>
+            </div>
+            <Switch
+              id="emailDigest"
+              checked={settings.email_digest_enabled}
+              onCheckedChange={(checked) => onUpdate({ email_digest_enabled: checked })}
+              disabled={isUpdating}
+            />
           </div>
-          <Switch
-            id="emailDigest"
-            checked={settings.email_digest_enabled}
-            onCheckedChange={(checked) => onUpdate({ email_digest_enabled: checked })}
-            disabled={isUpdating}
-          />
+
+          {settings.email_digest_enabled && (
+            <div className="pl-4 border-l-2 border-muted">
+              <Label htmlFor="digestFrequency" className="text-sm">Digest Frequency</Label>
+              <select
+                id="digestFrequency"
+                className="mt-1 w-full max-w-xs h-10 px-3 py-2 text-sm border rounded-md bg-background"
+                value={settings.email_digest_frequency}
+                onChange={(e) => onUpdate({ email_digest_frequency: e.target.value as 'daily' | 'weekly' | 'never' })}
+                disabled={isUpdating}
+              >
+                <option value="daily">Daily (every morning)</option>
+                <option value="weekly">Weekly (every Monday)</option>
+                <option value="never">Never</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {settings.email_digest_frequency === 'daily'
+                  ? 'You\'ll receive a digest every morning at 8 AM in your timezone'
+                  : settings.email_digest_frequency === 'weekly'
+                  ? 'You\'ll receive a weekly summary every Monday morning'
+                  : 'Email digests are disabled'}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between">
@@ -931,21 +1137,39 @@ function AboutMeSection() {
   // Local state for form fields
   const [role, setRole] = React.useState('');
   const [company, setCompany] = React.useState('');
+  const [industry, setIndustry] = React.useState('');
   const [locationCity, setLocationCity] = React.useState('');
   const [workStart, setWorkStart] = React.useState('09:00');
   const [workEnd, setWorkEnd] = React.useState('17:00');
+  const [workDays, setWorkDays] = React.useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri default
   const [vipInput, setVipInput] = React.useState('');
+  const [vipDomainInput, setVipDomainInput] = React.useState('');
   const [priorityInput, setPriorityInput] = React.useState('');
+  const [projectInput, setProjectInput] = React.useState('');
   const [interestInput, setInterestInput] = React.useState('');
+
+  // Work days configuration
+  const DAYS_OF_WEEK = [
+    { value: 0, label: 'Sun' },
+    { value: 1, label: 'Mon' },
+    { value: 2, label: 'Tue' },
+    { value: 3, label: 'Wed' },
+    { value: 4, label: 'Thu' },
+    { value: 5, label: 'Fri' },
+    { value: 6, label: 'Sat' },
+  ];
 
   // Sync local state with context when loaded
   React.useEffect(() => {
     if (context) {
       setRole(context.role || '');
       setCompany(context.company || '');
+      // @ts-expect-error - industry may exist in context
+      setIndustry(context.industry || '');
       setLocationCity(context.location_city || '');
       setWorkStart(context.work_hours_start || '09:00');
       setWorkEnd(context.work_hours_end || '17:00');
+      setWorkDays(context.work_days || [1, 2, 3, 4, 5]);
     }
   }, [context]);
 
@@ -965,9 +1189,19 @@ function AboutMeSection() {
     if (success) {
       // Clear input
       if (field === 'vip_emails') setVipInput('');
+      if (field === 'vip_domains') setVipDomainInput('');
       if (field === 'priorities') setPriorityInput('');
+      if (field === 'projects') setProjectInput('');
       if (field === 'interests') setInterestInput('');
     }
+  };
+
+  const handleToggleWorkDay = async (dayValue: number) => {
+    const newDays = workDays.includes(dayValue)
+      ? workDays.filter(d => d !== dayValue)
+      : [...workDays, dayValue].sort((a, b) => a - b);
+    setWorkDays(newDays);
+    await updateContext({ work_days: newDays });
   };
 
   const handleRemoveFromArray = async (field: string, index: number, currentArray: string[]) => {
@@ -1021,17 +1255,17 @@ function AboutMeSection() {
         </CardContent>
       </Card>
 
-      {/* Role & Company */}
+      {/* Role, Company & Industry */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Briefcase className="h-5 w-5" />
-            Role & Company
+            Professional Identity
           </CardTitle>
-          <CardDescription>Your professional identity helps AI understand email context</CardDescription>
+          <CardDescription>Your professional context helps AI understand and prioritize your emails</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="role">Your Role</Label>
               <Input
@@ -1039,7 +1273,7 @@ function AboutMeSection() {
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 onBlur={() => role !== context?.role && handleSaveField('role', role)}
-                placeholder="e.g., Product Manager, Developer, Consultant"
+                placeholder="e.g., Product Manager"
                 disabled={isUpdating}
               />
             </div>
@@ -1051,6 +1285,20 @@ function AboutMeSection() {
                 onChange={(e) => setCompany(e.target.value)}
                 onBlur={() => company !== context?.company && handleSaveField('company', company)}
                 placeholder="e.g., Acme Corp"
+                disabled={isUpdating}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="industry">Industry</Label>
+              <Input
+                id="industry"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                onBlur={() => {
+                  // @ts-expect-error - industry may exist in context
+                  if (industry !== context?.industry) handleSaveField('industry', industry);
+                }}
+                placeholder="e.g., Technology, Finance"
                 disabled={isUpdating}
               />
             </div>
@@ -1104,6 +1352,50 @@ function AboutMeSection() {
               ))}
             </div>
           )}
+
+          {/* VIP Domains - emails from entire domains */}
+          <div className="pt-4 border-t">
+            <Label className="text-sm font-medium">VIP Domains</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              All emails from these domains get higher priority (e.g., @important-client.com)
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={vipDomainInput}
+                onChange={(e) => setVipDomainInput(e.target.value)}
+                placeholder="e.g., @important-client.com"
+                disabled={isUpdating}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleAddToArray('vip_domains', vipDomainInput, context?.vip_domains || []);
+                  }
+                }}
+              />
+              <Button
+                onClick={() => handleAddToArray('vip_domains', vipDomainInput, context?.vip_domains || [])}
+                disabled={isUpdating || !vipDomainInput.trim()}
+                size="sm"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {context?.vip_domains && context.vip_domains.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {context.vip_domains.map((domain, i) => (
+                  <Badge key={i} variant="outline" className="gap-1">
+                    {domain}
+                    <button
+                      onClick={() => handleRemoveFromArray('vip_domains', i, context.vip_domains)}
+                      className="ml-1 hover:text-destructive"
+                      disabled={isUpdating}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -1153,6 +1445,58 @@ function AboutMeSection() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Projects */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FolderKanban className="h-5 w-5" />
+            Active Projects
+          </CardTitle>
+          <CardDescription>Track your current projects to tag related emails</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              value={projectInput}
+              onChange={(e) => setProjectInput(e.target.value)}
+              placeholder="e.g., Website Redesign, Q1 Launch, Client ABC Project"
+              disabled={isUpdating}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddToArray('projects', projectInput, context?.projects || []);
+                }
+              }}
+            />
+            <Button
+              onClick={() => handleAddToArray('projects', projectInput, context?.projects || [])}
+              disabled={isUpdating || !projectInput.trim()}
+              size="sm"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          {context?.projects && context.projects.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {context.projects.map((project, i) => (
+                <Badge key={i} variant="secondary" className="gap-1">
+                  {project}
+                  <button
+                    onClick={() => handleRemoveFromArray('projects', i, context.projects)}
+                    className="ml-1 hover:text-destructive"
+                    disabled={isUpdating}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            AI will automatically tag emails that mention these projects
+          </p>
         </CardContent>
       </Card>
 
@@ -1212,7 +1556,7 @@ function AboutMeSection() {
             <Clock className="h-5 w-5" />
             Location & Schedule
           </CardTitle>
-          <CardDescription>Helps with timezone-aware priority scoring</CardDescription>
+          <CardDescription>Helps with timezone-aware priority scoring and scheduling</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -1229,6 +1573,30 @@ function AboutMeSection() {
               disabled={isUpdating}
             />
           </div>
+
+          {/* Work Days */}
+          <div className="space-y-2">
+            <Label>Work Days</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Select the days you typically work
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {DAYS_OF_WEEK.map((day) => (
+                <Button
+                  key={day.value}
+                  variant={workDays.includes(day.value) ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleToggleWorkDay(day.value)}
+                  disabled={isUpdating}
+                  className="w-12"
+                >
+                  {day.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Work Hours */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="workStart">Work Day Starts</Label>
@@ -1253,6 +1621,10 @@ function AboutMeSection() {
               />
             </div>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Emails arriving outside work hours may be deprioritized for immediate attention
+          </p>
         </CardContent>
       </Card>
     </div>
@@ -1422,6 +1794,7 @@ export default function SettingsPage() {
           <TabsContent value="account" className="space-y-6">
             <ProfileSection displayName={user?.name || 'User'} />
             <AccountsSection />
+            <SyncStatusCard />
           </TabsContent>
 
           {/* AI Analysis Tab */}
