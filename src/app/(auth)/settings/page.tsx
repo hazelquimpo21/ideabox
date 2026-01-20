@@ -375,12 +375,48 @@ function AccountsSection() {
 }
 
 /**
+ * Sync Statistics from API
+ */
+interface SyncStats {
+  isHealthy: boolean;
+  lastRunAt: string | null;
+  lastRunStatus: string | null;
+  stats: {
+    totalRuns: number;
+    successfulRuns: number;
+    failedRuns: number;
+    partialRuns: number;
+    totalAccountsProcessed: number;
+    totalEmailsCreated: number;
+    avgDurationMs: number;
+  };
+  syncInterval: string;
+}
+
+/**
  * Sync Status Card - Shows detailed sync status, schedule info, and last sync results.
  */
 function SyncStatusCard() {
   const { status, lastSyncAt, emailsCount, isSyncing, triggerSync, lastSyncResult, errorMessage } = useSyncStatus();
   const { settings } = useSettings();
   const { toast } = useToast();
+  const [cronStats, setCronStats] = React.useState<SyncStats | null>(null);
+
+  // Fetch cron statistics
+  React.useEffect(() => {
+    async function fetchCronStats() {
+      try {
+        const response = await fetch('/api/settings/sync-stats');
+        if (response.ok) {
+          const data = await response.json();
+          setCronStats(data);
+        }
+      } catch {
+        // Silently fail - cron stats are optional
+      }
+    }
+    fetchCronStats();
+  }, [lastSyncResult]); // Re-fetch after a sync completes
 
   const handleManualSync = async () => {
     const result = await triggerSync();
@@ -399,16 +435,14 @@ function SyncStatusCard() {
     }
   };
 
-  // Calculate next sync time (hourly at :00)
+  // Calculate next sync time (every 15 minutes)
   const getNextSyncTime = () => {
     const now = new Date();
-    const nextSync = new Date(now);
-    nextSync.setHours(nextSync.getHours() + 1);
-    nextSync.setMinutes(0);
-    nextSync.setSeconds(0);
-    const diffMs = nextSync.getTime() - now.getTime();
-    const diffMins = Math.round(diffMs / 60000);
-    return diffMins <= 60 ? `~${diffMins} min` : 'Next hour';
+    const minutes = now.getMinutes();
+    // Next sync at :00, :15, :30, or :45
+    const nextQuarter = Math.ceil((minutes + 1) / 15) * 15;
+    const minutesUntil = nextQuarter - minutes;
+    return minutesUntil <= 15 ? `~${minutesUntil} min` : `~${minutesUntil} min`;
   };
 
   // Status display configuration
@@ -452,22 +486,49 @@ function SyncStatusCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Sync Schedule Info */}
-        <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+        <div className={`p-3 rounded-lg border ${
+          cronStats?.isHealthy === false
+            ? 'bg-yellow-500/5 border-yellow-500/20'
+            : 'bg-primary/5 border-primary/20'
+        }`}>
           <div className="flex items-start gap-3">
-            <Clock className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+            <Clock className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
+              cronStats?.isHealthy === false ? 'text-yellow-600' : 'text-primary'
+            }`} />
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-sm">Automatic Sync Active</span>
-                <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 border-green-500/30">
-                  Running
-                </Badge>
+                <span className="font-medium text-sm">Automatic Sync</span>
+                {cronStats === null ? (
+                  <Badge variant="outline" className="text-xs">
+                    Checking...
+                  </Badge>
+                ) : cronStats.isHealthy ? (
+                  <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 border-green-500/30">
+                    Healthy
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs bg-yellow-500/10 text-yellow-700 border-yellow-500/30">
+                    {cronStats.stats.totalRuns === 0 ? 'No runs yet' : 'Delayed'}
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Syncs hourly • Up to {maxEmailsPerSync} emails fetched • {maxAnalysisPerSync} analyzed per sync
+                Syncs every 15 min • Up to {maxEmailsPerSync} emails fetched • {maxAnalysisPerSync} analyzed per sync
               </p>
+              {cronStats?.lastRunAt && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Last cron run: {formatLastSync(new Date(cronStats.lastRunAt))}
+                  {cronStats.lastRunStatus && ` (${cronStats.lastRunStatus})`}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground mt-0.5">
                 Next automatic sync in {getNextSyncTime()}
               </p>
+              {cronStats && cronStats.stats.totalRuns > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Last 24h: {cronStats.stats.totalRuns} runs, {cronStats.stats.totalEmailsCreated} emails created
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -646,10 +707,10 @@ function HowSyncWorksCard() {
             <div className="p-4 border rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Clock className="h-5 w-5 text-blue-500" />
-                <span className="font-medium">Automatic Hourly Sync</span>
+                <span className="font-medium">Automatic Sync (Every 15 min)</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                IdeaBox automatically checks for new emails every hour using a scheduled background job.
+                IdeaBox automatically checks for new emails every 15 minutes using a scheduled background job.
                 No action needed from you.
               </p>
             </div>
@@ -681,7 +742,7 @@ function HowSyncWorksCard() {
               <div>
                 <p className="font-medium">Sync is fully automatic</p>
                 <p className="text-muted-foreground mt-0.5">
-                  Your emails are synced hourly in the background. Use &quot;Sync Now&quot; only if you need immediate updates.
+                  Your emails are synced every 15 minutes in the background. Use &quot;Sync Now&quot; only if you need immediate updates.
                   Each sync fetches up to your configured limit of recent emails and analyzes them.
                 </p>
               </div>

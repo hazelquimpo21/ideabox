@@ -999,15 +999,6 @@ export class EmailProcessor {
           }
         : null,
 
-      // Date extraction (NEW Jan 2026)
-      date_extraction: analysis.dateExtraction
-        ? {
-            has_dates: analysis.dateExtraction.hasDates,
-            dates_count: analysis.dateExtraction.dates.length,
-            confidence: analysis.dateExtraction.confidence,
-          }
-        : null,
-
       // Event detection
       event_detection: analysis.eventDetection
         ? {
@@ -1025,18 +1016,6 @@ export class EmailProcessor {
             cost: analysis.eventDetection.cost,
             additional_details: analysis.eventDetection.additionalDetails,
             confidence: analysis.eventDetection.confidence,
-          }
-        : null,
-
-      // Contact enrichment (NEW Jan 2026)
-      contact_enrichment: analysis.contactEnrichment
-        ? {
-            has_enrichment: analysis.contactEnrichment.hasEnrichment,
-            company: analysis.contactEnrichment.company,
-            job_title: analysis.contactEnrichment.jobTitle,
-            relationship_type: analysis.contactEnrichment.relationshipType,
-            source: analysis.contactEnrichment.source,
-            confidence: analysis.contactEnrichment.confidence,
           }
         : null,
 
