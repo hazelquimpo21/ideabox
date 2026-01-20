@@ -508,7 +508,7 @@ function SyncStatusCard() {
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-xs bg-yellow-500/10 text-yellow-700 border-yellow-500/30">
-                    {cronStats.stats.totalRuns === 0 ? 'No runs yet' : 'Delayed'}
+                    {cronStats.stats?.totalRuns === 0 ? 'No runs yet' : 'Delayed'}
                   </Badge>
                 )}
               </div>
@@ -524,7 +524,7 @@ function SyncStatusCard() {
               <p className="text-xs text-muted-foreground mt-0.5">
                 Next automatic sync in {getNextSyncTime()}
               </p>
-              {cronStats && cronStats.stats.totalRuns > 0 && (
+              {cronStats?.stats && cronStats.stats.totalRuns > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Last 24h: {cronStats.stats.totalRuns} runs, {cronStats.stats.totalEmailsCreated} emails created
                 </p>
