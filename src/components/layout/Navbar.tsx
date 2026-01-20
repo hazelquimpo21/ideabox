@@ -75,8 +75,8 @@ export interface NavbarUser {
 export interface SyncStatus {
   /** Whether a sync is currently in progress */
   isSyncing: boolean;
-  /** Timestamp of the last successful sync */
-  lastSyncAt?: Date | null;
+  /** Timestamp of the last successful sync (can be Date object or ISO string) */
+  lastSyncAt?: Date | string | null;
   /** Number of emails processed in last sync */
   emailsProcessed?: number;
 }
@@ -215,9 +215,10 @@ function SyncIndicator({
   status?: SyncStatus;
   onSync?: () => void;
 }) {
-  const formatLastSync = (date: Date): string => {
+  const formatLastSync = (date: Date | string): string => {
     const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
+    const dateObj = date instanceof Date ? date : new Date(date);
+    const diffMs = now.getTime() - dateObj.getTime();
     const diffMins = Math.floor(diffMs / 60000);
 
     if (diffMins < 1) return 'Just now';
@@ -226,7 +227,7 @@ function SyncIndicator({
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
 
-    return date.toLocaleDateString();
+    return dateObj.toLocaleDateString();
   };
 
   return (
