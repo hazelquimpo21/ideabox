@@ -241,11 +241,13 @@ export async function POST(request: NextRequest) {
  * Processes a Gmail notification asynchronously.
  *
  * This function:
- * 1. Gets a valid access token
- * 2. Uses the history API to find new messages
- * 3. Fetches and saves new messages
- * 4. Runs AI analysis on new messages
- * 5. Updates account state
+ * 1. Acquires sync lock to prevent concurrent processing
+ * 2. Gets a valid access token
+ * 3. Uses the history API to find new messages
+ * 4. Falls back to marking for full sync if history is stale (404 error)
+ * 5. Fetches and saves new messages
+ * 6. Runs AI analysis on new messages
+ * 7. Updates account state and releases lock
  */
 async function processNotificationAsync(
   supabase: Awaited<ReturnType<typeof createServerClient>>,
@@ -260,6 +262,7 @@ async function processNotificationAsync(
   let messagesFound = 0;
   let messagesSynced = 0;
   let messagesAnalyzed = 0;
+  let lockAcquired = false;
 
   try {
     logger.info('Processing Gmail notification', {
@@ -269,18 +272,15 @@ async function processNotificationAsync(
     });
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Get valid access token
+    // Acquire sync lock to prevent concurrent processing
     // ─────────────────────────────────────────────────────────────────────────────
-    const accessToken = await tokenManager.getValidToken(account);
-    const gmailService = new GmailService(accessToken, account.id);
+    const { data: gotLock } = await supabase.rpc('acquire_sync_lock', {
+      p_account_id: account.id,
+      p_lock_duration_seconds: 120, // 2 minutes for push processing
+    });
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Use history API for incremental sync
-    // ─────────────────────────────────────────────────────────────────────────────
-    const startHistoryId = account.last_history_id || account.watch_history_id;
-
-    if (!startHistoryId) {
-      logger.warn('No history ID for incremental sync, skipping push processing', {
+    if (!gotLock) {
+      logger.info('Account is already being synced, skipping push', {
         accountId: account.id,
       });
 
@@ -290,14 +290,91 @@ async function processNotificationAsync(
         historyId: notification.historyId,
         messageId,
         status: 'skipped',
-        skipReason: 'no_start_history_id',
+        skipReason: 'sync_locked',
         processingTimeMs: Date.now() - startTime,
       });
 
       return;
     }
 
-    const history = await gmailService.getHistory(startHistoryId);
+    lockAcquired = true;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Get valid access token
+    // ─────────────────────────────────────────────────────────────────────────────
+    const accessToken = await tokenManager.getValidToken(account);
+    const gmailService = new GmailService(accessToken, account.id);
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Use history API for incremental sync (with stale history fallback)
+    // ─────────────────────────────────────────────────────────────────────────────
+    const startHistoryId = account.last_history_id || account.watch_history_id;
+
+    if (!startHistoryId) {
+      logger.warn('No history ID for incremental sync, marking for full sync', {
+        accountId: account.id,
+      });
+
+      // Mark account as needing full sync (scheduled sync will pick it up)
+      await supabase.rpc('mark_history_stale', { p_account_id: account.id });
+
+      await logPushNotification(supabase, {
+        accountId: account.id,
+        email: notification.emailAddress,
+        historyId: notification.historyId,
+        messageId,
+        status: 'skipped',
+        skipReason: 'no_start_history_id_marked_for_full_sync',
+        processingTimeMs: Date.now() - startTime,
+      });
+
+      // Release lock before returning
+      await supabase.rpc('release_sync_lock', { p_account_id: account.id });
+      return;
+    }
+
+    let history;
+
+    try {
+      history = await gmailService.getHistory(startHistoryId);
+
+      // Validate history ID after successful fetch
+      await supabase.rpc('validate_history_id', {
+        p_account_id: account.id,
+        p_history_id: notification.historyId,
+      });
+    } catch (historyError) {
+      // Check if this is a 404 error (history too old / expired)
+      const errorMessage = historyError instanceof Error ? historyError.message : '';
+      const is404 = errorMessage.includes('404') || errorMessage.includes('notFound') || errorMessage.includes('Not Found');
+
+      if (is404) {
+        logger.warn('History ID is stale (404), marking for full sync', {
+          accountId: account.id,
+          startHistoryId,
+        });
+
+        // Mark account as needing full sync
+        await supabase.rpc('mark_history_stale', { p_account_id: account.id });
+
+        await logPushNotification(supabase, {
+          accountId: account.id,
+          email: notification.emailAddress,
+          historyId: notification.historyId,
+          messageId,
+          status: 'skipped',
+          skipReason: 'history_expired_marked_for_full_sync',
+          processingTimeMs: Date.now() - startTime,
+        });
+
+        // Release lock - scheduled sync will pick up the full sync
+        await supabase.rpc('release_sync_lock', { p_account_id: account.id });
+        return;
+      }
+
+      // Re-throw other errors
+      throw historyError;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Collect new message IDs from history
@@ -479,6 +556,11 @@ async function processNotificationAsync(
       processingTimeMs,
     });
 
+    // Release sync lock on success
+    if (lockAcquired) {
+      await supabase.rpc('release_sync_lock', { p_account_id: account.id });
+    }
+
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const processingTimeMs = Date.now() - startTime;
@@ -501,6 +583,11 @@ async function processNotificationAsync(
       messagesAnalyzed,
       processingTimeMs,
     });
+
+    // Release sync lock on error
+    if (lockAcquired) {
+      await supabase.rpc('release_sync_lock', { p_account_id: account.id });
+    }
   }
 }
 

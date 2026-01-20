@@ -337,6 +337,12 @@ export class GmailWatchService {
           .single();
 
         if (accountError || !fullAccount) {
+          // Record failure
+          await supabase.rpc('record_watch_failure', {
+            p_account_id: account.account_id,
+            p_error_message: 'Account not found',
+          });
+
           results.push({
             success: false,
             accountId: account.account_id,
@@ -351,6 +357,11 @@ export class GmailWatchService {
 
         // Renew watch
         const watch = await this.startWatch(accessToken, account.account_id);
+
+        // Reset failure count on success
+        await supabase.rpc('reset_watch_failures', {
+          p_account_id: account.account_id,
+        });
 
         results.push({
           success: true,
@@ -367,6 +378,12 @@ export class GmailWatchService {
           accountId: account.account_id,
           email: account.email,
           error: errorMessage,
+        });
+
+        // Record failure for alerting
+        await supabase.rpc('record_watch_failure', {
+          p_account_id: account.account_id,
+          p_error_message: errorMessage,
         });
 
         results.push({
@@ -388,7 +405,60 @@ export class GmailWatchService {
       failed,
     });
 
+    // Check for accounts with multiple failures that need alerting
+    await this.checkAndAlertWatchFailures(supabase);
+
     return results;
+  }
+
+  /**
+   * Checks for accounts with multiple watch failures and creates alerts.
+   * @private
+   */
+  private async checkAndAlertWatchFailures(
+    supabase: Awaited<ReturnType<typeof createServerClient>>
+  ): Promise<void> {
+    try {
+      const { data: problemAccounts } = await supabase.rpc('get_accounts_with_watch_problems', {
+        p_min_failures: 3,
+      });
+
+      if (!problemAccounts || problemAccounts.length === 0) {
+        return;
+      }
+
+      for (const account of problemAccounts) {
+        // Skip if we already sent an alert recently (within 24 hours)
+        if (account.alert_sent_at) {
+          const alertAge = Date.now() - new Date(account.alert_sent_at).getTime();
+          if (alertAge < 24 * 60 * 60 * 1000) {
+            continue;
+          }
+        }
+
+        logger.warn('Watch renewal failing repeatedly - user should be notified', {
+          accountId: account.account_id,
+          email: account.email,
+          failureCount: account.failure_count,
+          lastError: account.last_error,
+        });
+
+        // Mark alert as sent
+        await supabase.rpc('mark_watch_alert_sent', {
+          p_account_id: account.account_id,
+        });
+
+        // TODO: Send actual notification to user (email, in-app notification, etc.)
+        // For now, we just log it. You could integrate with:
+        // - Email service (SendGrid, Resend, etc.)
+        // - In-app notifications table
+        // - Push notifications
+      }
+    } catch (error) {
+      logger.warn('Failed to check watch failures for alerting', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 
   /**

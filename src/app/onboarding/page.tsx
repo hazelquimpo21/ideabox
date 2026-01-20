@@ -178,18 +178,40 @@ export default function OnboardingPage() {
     handleComplete();
   };
 
-  // Handle skip sync (go straight to inbox)
+  // Handle skip sync (go straight to inbox, trigger background sync)
   const handleSkipSync = async () => {
     try {
-      // Mark onboarding as complete without analysis
+      // Mark onboarding as complete but flag for background sync
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('user_profiles')
         .update({
           onboarding_completed: true,
+          initial_sync_pending: true, // Background job will pick this up
           updated_at: new Date().toISOString(),
         })
         .eq('id', user?.id);
+
+      // Trigger background sync asynchronously (don't await)
+      // This fires off the request but doesn't block the user
+      fetch('/api/emails/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          maxResults: 50,
+          runAnalysis: true,
+          analysisMaxEmails: 25, // Smaller batch for background
+        }),
+      }).catch((err) => {
+        // Log but don't block - scheduled sync will catch it
+        logger.warn('Background sync trigger failed, will retry via scheduler', { error: err });
+      });
+
+      toast({
+        title: 'Setup skipped',
+        description: 'Your emails will be analyzed in the background.',
+      });
 
       await refreshSession();
       router.replace('/inbox');

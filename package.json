@@ -11,7 +11,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "verify:migrations": "tsx scripts/verify-migrations.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
