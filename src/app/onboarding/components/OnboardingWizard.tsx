@@ -7,15 +7,21 @@
  * navigation, and collects user data across steps.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * STEP FLOW
+ * STEP FLOW (Updated Jan 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * 1. Welcome → 2. Accounts → 3. Sync Config → 4. Clients → Complete
+ * 1. Welcome → 2. Accounts → 3. Sync Config → 4. Clients → 5. About You (optional) → Complete
+ *
+ * The "About You" step collects user context for better AI personalization:
+ * - Role & Company
+ * - Priorities
+ * - VIP Contacts
+ * - Work Schedule
  *
  * Users can:
  * - Navigate forward with "Next"/"Continue"
  * - Navigate back with "Back"
- * - Skip optional steps (Clients)
+ * - Skip optional steps (Clients, About You)
  * - Configure initial sync settings (email count, read/unread)
  *
  * @module app/onboarding/components/OnboardingWizard
@@ -31,6 +37,7 @@ import { WelcomeStep } from './WelcomeStep';
 import { AccountsStep } from './AccountsStep';
 import { ClientsStep } from './ClientsStep';
 import { SyncConfigStep, type SyncConfig } from './SyncConfigStep';
+import { AboutYouStep } from './AboutYouStep';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -54,8 +61,9 @@ export interface OnboardingWizardProps {
 
 /**
  * Wizard step identifiers.
+ * Updated Jan 2026: Added 'about-you' step for user context collection.
  */
-type WizardStep = 'welcome' | 'accounts' | 'sync-config' | 'clients';
+type WizardStep = 'welcome' | 'accounts' | 'sync-config' | 'clients' | 'about-you';
 
 /**
  * Step configuration.
@@ -72,6 +80,7 @@ interface StepConfig {
 
 /**
  * Ordered list of wizard steps.
+ * Updated Jan 2026: Added 'about-you' step for user context.
  */
 const STEPS: StepConfig[] = [
   {
@@ -93,6 +102,11 @@ const STEPS: StepConfig[] = [
     id: 'clients',
     title: 'Clients',
     description: 'Add your main clients (optional)',
+  },
+  {
+    id: 'about-you',
+    title: 'About You',
+    description: 'Help AI understand your context (optional)',
   },
 ];
 
@@ -227,6 +241,9 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
 
       case 'clients':
         return <ClientsStep user={user} {...commonProps} />;
+
+      case 'about-you':
+        return <AboutYouStep user={user} {...commonProps} />;
 
       default:
         return null;

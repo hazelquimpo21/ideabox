@@ -486,6 +486,118 @@ function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSection
   );
 }
 
+/**
+ * Re-run Analysis Section
+ *
+ * Allows users to trigger a new initial analysis with a chosen email count.
+ * Useful for users who:
+ * - Started with a small sample and want to analyze more
+ * - Want to re-analyze with updated settings
+ * - Skipped initial analysis and want to run it now
+ *
+ * @since January 2026
+ */
+function RerunAnalysisSection() {
+  const { triggerSync, isSyncing } = useSyncStatus();
+  const { toast } = useToast();
+  const [emailCount, setEmailCount] = React.useState(50);
+  const [isRunning, setIsRunning] = React.useState(false);
+
+  const handleRerunAnalysis = async () => {
+    setIsRunning(true);
+
+    try {
+      const result = await triggerSync({ maxResults: emailCount, analysisMaxEmails: emailCount });
+
+      if (result.success) {
+        toast({
+          title: 'Analysis started',
+          description: `Analyzing your last ${emailCount} emails. This may take a minute.`,
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Analysis failed',
+          description: result.error || 'Could not start analysis. Please try again.',
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const estimatedTime = emailCount <= 25 ? '~30 seconds' : emailCount <= 50 ? '~1 minute' : '~2 minutes';
+  const estimatedCost = `~$${(emailCount * 0.0006).toFixed(2)}`;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <RefreshCw className="h-5 w-5" />
+          Re-run Analysis
+        </CardTitle>
+        <CardDescription>
+          Run AI analysis on a fresh batch of emails with your current settings
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          This will fetch your most recent emails and run them through AI analysis.
+          Use this if you want to expand your analyzed email history or re-analyze
+          with updated settings.
+        </p>
+
+        <div className="flex items-end gap-4">
+          <div className="flex-1 max-w-xs space-y-2">
+            <Label htmlFor="rerunEmailCount">Emails to analyze</Label>
+            <select
+              id="rerunEmailCount"
+              className="w-full h-10 px-3 py-2 text-sm border rounded-md bg-background"
+              value={emailCount}
+              onChange={(e) => setEmailCount(Number(e.target.value))}
+              disabled={isRunning || isSyncing}
+            >
+              <option value={25}>25 emails (Quick)</option>
+              <option value={50}>50 emails (Recommended)</option>
+              <option value={100}>100 emails (Comprehensive)</option>
+              <option value={200}>200 emails (Deep)</option>
+            </select>
+          </div>
+          <Button
+            onClick={handleRerunAnalysis}
+            disabled={isRunning || isSyncing}
+            className="gap-2"
+          >
+            {isRunning || isSyncing ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Start Analysis
+              </>
+            )}
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span>Estimated time: {estimatedTime}</span>
+          <span>&middot;</span>
+          <span>Estimated cost: {estimatedCost}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COST CONTROL TAB COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1319,6 +1431,7 @@ export default function SettingsPage() {
               onUpdate={handleUpdate}
               isUpdating={isUpdating}
             />
+            <RerunAnalysisSection />
           </TabsContent>
 
           {/* Cost Control Tab */}
