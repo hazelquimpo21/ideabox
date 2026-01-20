@@ -41,11 +41,24 @@ export interface SidebarClient {
 }
 
 /**
+ * Upcoming events summary for sidebar display.
+ */
+export interface UpcomingEventsSummary {
+  /** Total count of upcoming events */
+  count: number;
+  /** Next upcoming event date (ISO string) */
+  nextEventDate?: string;
+  /** Days until next event */
+  daysUntilNext?: number;
+}
+
+/**
  * Return type from useSidebarData hook.
  */
 export interface UseSidebarDataReturn {
   categoryCounts: CategoryCounts;
   clients: SidebarClient[];
+  upcomingEvents: UpcomingEventsSummary;
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
@@ -63,6 +76,7 @@ export interface UseSidebarDataReturn {
 export function useSidebarData(): UseSidebarDataReturn {
   const [categoryCounts, setCategoryCounts] = React.useState<CategoryCounts>({});
   const [clients, setClients] = React.useState<SidebarClient[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = React.useState<UpcomingEventsSummary>({ count: 0 });
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
 
@@ -79,8 +93,11 @@ export function useSidebarData(): UseSidebarDataReturn {
         return;
       }
 
-      // Fetch category counts in parallel with clients
-      const [categoryResult, clientsResult] = await Promise.all([
+      // Get today's date for upcoming event filtering
+      const today = new Date().toISOString().split('T')[0];
+
+      // Fetch category counts, clients, and upcoming events in parallel
+      const [categoryResult, clientsResult, upcomingEventsResult] = await Promise.all([
         // Get emails grouped by category
         supabase
           .from('emails')
@@ -96,6 +113,17 @@ export function useSidebarData(): UseSidebarDataReturn {
           .eq('status', 'active')
           .order('name', { ascending: true })
           .limit(10),
+
+        // Get upcoming events from extracted_dates table
+        supabase
+          .from('extracted_dates')
+          .select('date')
+          .eq('user_id', user.id)
+          .eq('date_type', 'event')
+          .eq('is_hidden', false)
+          .gte('date', today)
+          .order('date', { ascending: true })
+          .limit(20),
       ]);
 
       // Process category counts
@@ -147,6 +175,33 @@ export function useSidebarData(): UseSidebarDataReturn {
         setClients(clientsWithCounts);
       }
 
+      // Process upcoming events
+      if (upcomingEventsResult.data && upcomingEventsResult.data.length > 0) {
+        const nextEvent = upcomingEventsResult.data[0];
+        const nextEventDate = nextEvent.date;
+
+        // Calculate days until next event
+        const eventDate = new Date(nextEventDate + 'T00:00:00');
+        const todayDate = new Date();
+        todayDate.setHours(0, 0, 0, 0);
+        const diffMs = eventDate.getTime() - todayDate.getTime();
+        const daysUntilNext = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+        setUpcomingEvents({
+          count: upcomingEventsResult.data.length,
+          nextEventDate,
+          daysUntilNext,
+        });
+
+        logger.debug('Upcoming events processed', {
+          count: upcomingEventsResult.data.length,
+          nextEventDate,
+          daysUntilNext,
+        });
+      } else {
+        setUpcomingEvents({ count: 0 });
+      }
+
       logger.success('Sidebar data fetched');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -171,6 +226,7 @@ export function useSidebarData(): UseSidebarDataReturn {
   return {
     categoryCounts,
     clients,
+    upcomingEvents,
     isLoading,
     error,
     refetch: fetchData,
