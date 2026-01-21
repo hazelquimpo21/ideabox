@@ -81,6 +81,7 @@ import {
 import { ANALYZER_VERSION } from '@/services/analyzers/base-analyzer';
 import { toEmailInput } from '@/services/analyzers/types';
 import { getUserContext } from '@/services/user-context';
+import { contactService } from '@/services/contacts';
 import type { Email } from '@/types/database';
 import type {
   EmailInput,
@@ -880,7 +881,13 @@ export class EmailProcessor {
    * Upserts a contact for the email sender.
    *
    * This ensures every sender has a contact record for tracking
-   * communication patterns and potential enrichment.
+   * communication patterns and potential enrichment. Uses the centralized
+   * ContactService for consistent contact management.
+   *
+   * EMAIL → CONTACT LINKING:
+   * - Every email is linked to a contact via sender's email address
+   * - Contact record tracks: email count, first/last seen, relationship type
+   * - This enables features: VIP prioritization, contact insights, email grouping
    *
    * @param userId - User ID
    * @param email - Sender email address
@@ -898,105 +905,86 @@ export class EmailProcessor {
     // Input validation
     // ─────────────────────────────────────────────────────────────────────────────
     if (!email || !email.includes('@')) {
-      logger.debug('Skipping contact upsert: invalid email', {
+      logger.debug('Skipping contact upsert: invalid sender email', {
         email: email?.substring(0, 30),
+        reason: 'missing_or_invalid_email',
       });
       return null;
     }
 
     const normalizedEmail = email.toLowerCase().trim();
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Log the email → contact linking operation
+    // This is a key part of the data flow: emails are always linked to contacts
+    // ─────────────────────────────────────────────────────────────────────────────
+    logger.info('Linking email to contact', {
+      userId: userId.substring(0, 8),
+      senderEmail: normalizedEmail.substring(0, 30),
+      senderName: name?.substring(0, 20) || '(no name)',
+      emailDate: emailDate.substring(0, 10),
+      operation: 'email_to_contact_link',
+    });
+
     try {
-      const supabase = await createServerClient();
-
       // ─────────────────────────────────────────────────────────────────────────────
-      // Call the database function for atomic upsert
-      // This function (upsert_contact_from_email) is defined in migration 012
-      // and uses SECURITY DEFINER to bypass RLS
+      // Use centralized ContactService for consistent contact management
+      // This ensures all contact operations go through one place
       // ─────────────────────────────────────────────────────────────────────────────
-      logger.debug('Upserting contact', {
-        userId: userId.substring(0, 8) + '...',
-        email: normalizedEmail.substring(0, 30),
-        hasName: !!name,
+      const contactId = await contactService.upsertFromEmail({
+        userId,
+        email: normalizedEmail,
+        name,
+        emailDate,
+        isSent: false, // This is a received email
       });
 
-      const { data, error } = await supabase.rpc('upsert_contact_from_email', {
-        p_user_id: userId,
-        p_email: normalizedEmail,
-        p_name: name ?? null, // Ensure null not undefined
-        p_email_date: emailDate,
-        p_is_sent: false, // This is a received email
-      });
-
-      if (error) {
-        // Enhanced error logging for debugging
-        logger.warn('Failed to upsert contact via RPC', {
+      if (!contactId) {
+        logger.warn('Contact upsert returned null - email will not be linked to contact', {
           email: normalizedEmail.substring(0, 30),
-          errorCode: error.code,
-          errorMessage: error.message,
-          errorHint: error.hint,
-          errorDetails: error.details,
-          // Common error codes:
-          // PGRST202: Function not found (migration not run)
-          // 23503: Foreign key violation (user doesn't exist)
-          // 42501: RLS policy violation (shouldn't happen with SECURITY DEFINER)
-        });
-
-        // If the function doesn't exist, log a critical error
-        if (error.code === 'PGRST202' || error.message?.includes('function')) {
-          logger.error('CRITICAL: upsert_contact_from_email function not found. Run migration 012_contacts.sql', {
-            errorCode: error.code,
-          });
-        }
-
-        return null;
-      }
-
-      // data should be the contact UUID returned by the function
-      if (!data) {
-        logger.warn('Contact upsert returned null data', {
-          email: normalizedEmail.substring(0, 30),
+          impact: 'email_unlinked',
         });
         return null;
       }
 
       // ─────────────────────────────────────────────────────────────────────────────
       // Fetch the contact for enrichment check
+      // We need the full contact record to check if enrichment is needed
       // ─────────────────────────────────────────────────────────────────────────────
+      const supabase = await createServerClient();
       const { data: contact, error: fetchError } = await supabase
         .from('contacts')
         .select('id, email, email_count, extraction_confidence, last_extracted_at')
-        .eq('id', data)
+        .eq('id', contactId)
         .single();
 
       if (fetchError) {
-        logger.warn('Failed to fetch upserted contact', {
-          contactId: data,
-          errorCode: fetchError.code,
-          errorMessage: fetchError.message,
+        logger.warn('Failed to fetch contact for enrichment check', {
+          contactId: contactId.substring(0, 8),
+          error: fetchError.message,
         });
         return null;
       }
 
-      logger.debug('Contact upserted successfully', {
-        contactId: contact.id,
+      // ─────────────────────────────────────────────────────────────────────────────
+      // Log successful email → contact link with useful context
+      // ─────────────────────────────────────────────────────────────────────────────
+      logger.info('Email successfully linked to contact', {
+        contactId: contact.id.substring(0, 8),
         email: contact.email.substring(0, 30),
         emailCount: contact.email_count,
+        needsEnrichment: shouldEnrichContact(contact),
+        operation: 'email_contact_linked',
       });
 
       return contact as ContactForEnrichment;
-
     } catch (error) {
-      // Catch any unexpected errors (network issues, etc.)
       const message = error instanceof Error ? error.message : 'Unknown error';
-      const stack = error instanceof Error ? error.stack : undefined;
-
-      logger.error('Unexpected error upserting contact', {
+      logger.error('Failed to link email to contact', {
         email: normalizedEmail.substring(0, 30),
         error: message,
-        stack: stack?.substring(0, 200),
+        operation: 'email_contact_link_failed',
       });
-
       return null;
     }
   }

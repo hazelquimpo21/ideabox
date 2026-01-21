@@ -10,18 +10,23 @@
  * STEP FLOW (Updated Jan 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * 1. Welcome → 2. Accounts → 3. Sync Config → 4. Clients → 5. About You (optional) → Complete
+ * 1. Welcome → 2. Accounts → 3. Sync Config → 4. Clients →
+ * 5. VIP Contacts (NEW) → 6. About You (optional) → Complete
+ *
+ * The "VIP Contacts" step (NEW Jan 2026) helps users identify important contacts:
+ * - Imports contacts from Google (if permission granted)
+ * - Shows starred contacts and frequent communicators
+ * - Lets user select VIPs for email prioritization
  *
  * The "About You" step collects user context for better AI personalization:
  * - Role & Company
  * - Priorities
- * - VIP Contacts
  * - Work Schedule
  *
  * Users can:
  * - Navigate forward with "Next"/"Continue"
  * - Navigate back with "Back"
- * - Skip optional steps (Clients, About You)
+ * - Skip optional steps (Clients, VIP Contacts, About You)
  * - Configure initial sync settings (email count, read/unread)
  *
  * @module app/onboarding/components/OnboardingWizard
@@ -37,6 +42,7 @@ import { WelcomeStep } from './WelcomeStep';
 import { AccountsStep } from './AccountsStep';
 import { ClientsStep } from './ClientsStep';
 import { SyncConfigStep, type SyncConfig } from './SyncConfigStep';
+import { ContactImportStep } from './ContactImportStep';
 import { AboutYouStep } from './AboutYouStep';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -61,9 +67,9 @@ export interface OnboardingWizardProps {
 
 /**
  * Wizard step identifiers.
- * Updated Jan 2026: Added 'about-you' step for user context collection.
+ * Updated Jan 2026: Added 'vip-contacts' step for contact import and VIP selection.
  */
-type WizardStep = 'welcome' | 'accounts' | 'sync-config' | 'clients' | 'about-you';
+type WizardStep = 'welcome' | 'accounts' | 'sync-config' | 'clients' | 'vip-contacts' | 'about-you';
 
 /**
  * Step configuration.
@@ -80,7 +86,7 @@ interface StepConfig {
 
 /**
  * Ordered list of wizard steps.
- * Updated Jan 2026: Added 'about-you' step for user context.
+ * Updated Jan 2026: Added 'vip-contacts' step for Google Contacts import and VIP selection.
  */
 const STEPS: StepConfig[] = [
   {
@@ -102,6 +108,11 @@ const STEPS: StepConfig[] = [
     id: 'clients',
     title: 'Clients',
     description: 'Add your main clients (optional)',
+  },
+  {
+    id: 'vip-contacts',
+    title: 'VIP Contacts',
+    description: 'Select your most important contacts (optional)',
   },
   {
     id: 'about-you',
@@ -241,6 +252,9 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
 
       case 'clients':
         return <ClientsStep user={user} {...commonProps} />;
+
+      case 'vip-contacts':
+        return <ContactImportStep user={user} {...commonProps} />;
 
       case 'about-you':
         return <AboutYouStep user={user} {...commonProps} />;

@@ -80,3 +80,11 @@ export * from './hub';
 
 // Re-export user context service for personalized AI analysis
 export * from './user-context';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTACT SERVICES (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Re-export contact management service
+// Handles contact creation from emails, Google import, VIP suggestions, and aliases
+export * from './contacts';

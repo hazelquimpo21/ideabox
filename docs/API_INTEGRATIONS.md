@@ -4,11 +4,14 @@
 
 IdeaBox integrates with these external services:
 1. **Gmail API** - Email fetching, management, and label syncing
-2. **OpenAI API** - AI analysis (GPT-4.1-mini only, no fallback)
-3. **Google Calendar API** - Event syncing (Phase 2)
+2. **Google People API** - Contact import for onboarding (NEW Jan 2026)
+3. **OpenAI API** - AI analysis (GPT-4.1-mini only, no fallback)
+4. **Google Calendar API** - Event syncing (Phase 2)
 
 > **Model Decision:** We use GPT-4.1-mini exclusively. No Anthropic fallback.
 > See PROJECT_OVERVIEW.md for cost analysis and rationale.
+
+> **Contact Import:** See CONTACTS_FLOW.md for detailed contact management documentation.
 
 ---
 
@@ -390,7 +393,117 @@ async applyLabel(messageId: string, labelId: string): Promise<void> {
 
 ---
 
-## 2. OpenAI API Integration
+## 2. Google People API Integration (NEW Jan 2026)
+
+The Google People API enables importing contacts for a better onboarding experience.
+
+### Why People API?
+
+- **Better VIP suggestions**: Use starred contacts as VIP candidates
+- **Contact photos**: Display avatars in the UI
+- **Contact groups**: Use labels (Work, Family) for relationship categorization
+- **Reduced friction**: Users don't have to manually type VIP email addresses
+
+### Required OAuth Scope
+
+```typescript
+const PEOPLE_SCOPES = [
+  'https://www.googleapis.com/auth/contacts.readonly',  // Read-only contacts access
+];
+
+// Combined with existing Gmail scopes:
+const ALL_SCOPES = [
+  ...GMAIL_SCOPES,
+  ...PEOPLE_SCOPES,
+];
+```
+
+### Google Cloud Console Setup
+
+1. Enable "People API" in your Google Cloud project
+2. Update OAuth consent screen to include the contacts.readonly scope
+3. No additional credentials needed (uses same OAuth client as Gmail)
+
+### Implementation
+
+```typescript
+// lib/google/people-service.ts
+import { google, people_v1 } from 'googleapis';
+
+export class GooglePeopleService {
+  private people: people_v1.People;
+
+  constructor(accessToken: string) {
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+    this.people = google.people({ version: 'v1', auth });
+  }
+
+  /**
+   * List contacts with names, emails, photos, and group memberships
+   */
+  async listContacts(options: { maxResults?: number }): Promise<GoogleContact[]> {
+    const response = await this.people.people.connections.list({
+      resourceName: 'people/me',
+      pageSize: options.maxResults || 100,
+      personFields: 'names,emailAddresses,photos,memberships,organizations',
+    });
+
+    return this.transformContacts(response.data.connections || []);
+  }
+
+  /**
+   * Get only starred contacts (excellent VIP candidates)
+   */
+  async getStarredContacts(): Promise<GoogleContact[]> {
+    const contacts = await this.listContacts({ maxResults: 500 });
+    return contacts.filter(c => c.isStarred);
+  }
+}
+```
+
+### Data Flow
+
+```
+User grants contacts scope
+        ↓
+Fetch contacts via People API
+        ↓
+Transform to GoogleContact format
+        ↓
+Upsert to contacts table (merge with email-derived contacts)
+        ↓
+Display VIP suggestions during onboarding
+        ↓
+User selects VIPs → saved to contacts.is_vip and user_context.vip_emails
+```
+
+### Rate Limits
+
+- **Quota:** 90,000 queries per day per project
+- **Per-user limit:** 180 queries per minute
+- **Strategy:** Fetch contacts once during onboarding, cache in database
+
+### Contact Service Usage
+
+```typescript
+import { contactService } from '@/services/contacts';
+
+// During onboarding, import from Google
+const result = await contactService.importFromGoogle({
+  userId: user.id,
+  accessToken: accessToken,
+  accountId: gmailAccount.id,
+  maxContacts: 100,
+});
+
+// Get VIP suggestions
+const suggestions = await contactService.getVipSuggestions(userId, 15);
+```
+
+---
+
+## 3. OpenAI API Integration
 
 ### Setup
 
@@ -628,7 +741,7 @@ function truncateBody(body: string): string {
 
 ---
 
-## 3. Google Calendar API (Phase 2)
+## 4. Google Calendar API (Phase 2)
 
 ### Setup
 
