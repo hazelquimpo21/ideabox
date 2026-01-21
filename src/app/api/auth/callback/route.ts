@@ -32,7 +32,9 @@ import { cookies } from 'next/headers';
 import { createLogger, logAuth } from '@/lib/utils/logger';
 import { gmailWatchService } from '@/lib/gmail/watch-service';
 import { ADD_ACCOUNT_COOKIE, ORIGINAL_SESSION_COOKIE } from '@/app/api/auth/connect-account/route';
+import { ADD_GMAIL_COOKIE, OAUTH_STATE_COOKIE } from '@/app/api/auth/add-gmail-account/route';
 import type { Database, TableInsert } from '@/types/database';
+import { createServerClient as createSupabaseServer } from '@/lib/supabase/server';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -132,6 +134,147 @@ export async function GET(request: Request) {
   if (!code) {
     logger.error('OAuth callback missing authorization code');
     return NextResponse.redirect(createErrorRedirect(origin, 'missing_code'));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Step 1b: Check for DIRECT Google OAuth (bypasses Supabase entirely)
+  // ─────────────────────────────────────────────────────────────────────────────
+  // This handles the "add secondary Gmail account" flow which uses direct Google
+  // OAuth to avoid session switching issues with Supabase.
+
+  const stateParam = searchParams.get('state');
+  const directGmailCookie = cookieStore.get(ADD_GMAIL_COOKIE)?.value;
+  const storedOAuthState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
+
+  // Check if this is a direct Google OAuth callback (state starts with "direct_gmail:")
+  if (stateParam?.startsWith('direct_gmail:') && directGmailCookie) {
+    logger.info('Detected direct Google OAuth callback for add-gmail flow', {
+      hasDirectGmailCookie: !!directGmailCookie,
+      hasStoredState: !!storedOAuthState,
+    });
+
+    // Extract the actual state token (after the prefix)
+    const receivedState = stateParam.replace('direct_gmail:', '');
+
+    // Verify CSRF state
+    if (!storedOAuthState || receivedState !== storedOAuthState) {
+      logger.error('CSRF state mismatch in direct Gmail OAuth', {
+        receivedStatePrefix: receivedState?.substring(0, 8),
+      });
+      return NextResponse.redirect(`${origin}/settings?tab=account&error=invalid_state`);
+    }
+
+    // Exchange code for tokens directly with Google (NOT through Supabase)
+    try {
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID!,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+          redirect_uri: `${origin}/api/auth/callback`,
+          grant_type: 'authorization_code',
+        }),
+      });
+
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        logger.error('Direct Google OAuth token exchange failed', { error: errorText });
+        return NextResponse.redirect(`${origin}/settings?tab=account&error=oauth_failed`);
+      }
+
+      const tokens = await tokenResponse.json();
+      logger.success('Direct Google OAuth token exchange successful', {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+      });
+
+      // Get user's Gmail profile
+      const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+
+      if (!profileResponse.ok) {
+        logger.error('Failed to get Gmail profile');
+        return NextResponse.redirect(`${origin}/settings?tab=account&error=oauth_failed`);
+      }
+
+      const profile = await profileResponse.json();
+      logger.info('Got Gmail profile for direct OAuth', { email: profile.email });
+
+      // Store tokens in database under the ORIGINAL user (from cookie)
+      const supabase = await createSupabaseServer();
+      const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+      // Check if account already exists
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingAccount } = await (supabase as any)
+        .from('gmail_accounts')
+        .select('id')
+        .eq('user_id', directGmailCookie)
+        .eq('email', profile.email)
+        .single();
+
+      if (existingAccount) {
+        // Update existing account
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('gmail_accounts')
+          .update({
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token || undefined,
+            token_expiry: tokenExpiry,
+            display_name: profile.name || null,
+            sync_enabled: true,
+          })
+          .eq('id', existingAccount.id);
+        logger.success('Updated Gmail account via direct OAuth', { email: profile.email });
+      } else {
+        // Insert new account
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: insertError } = await (supabase as any)
+          .from('gmail_accounts')
+          .insert({
+            user_id: directGmailCookie,
+            email: profile.email,
+            display_name: profile.name || null,
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token || '',
+            token_expiry: tokenExpiry,
+            sync_enabled: true,
+          });
+
+        if (insertError?.code === '23505') {
+          logger.warn('Gmail account already connected to another user', { email: profile.email });
+          return NextResponse.redirect(`${origin}/settings?tab=account&error=account_exists`);
+        }
+        if (insertError) {
+          logger.error('Failed to insert Gmail account', { error: insertError.message });
+          return NextResponse.redirect(`${origin}/settings?tab=account&error=oauth_failed`);
+        }
+        logger.success('Created Gmail account via direct OAuth', { email: profile.email });
+      }
+
+      // Create response - user's Supabase session is UNTOUCHED
+      const response = NextResponse.redirect(`${origin}/settings?tab=account&account_added=true`);
+
+      // Clear OAuth cookies
+      response.cookies.set(ADD_GMAIL_COOKIE, '', { path: '/', maxAge: 0 });
+      response.cookies.set(OAUTH_STATE_COOKIE, '', { path: '/', maxAge: 0 });
+
+      logger.success('Direct Gmail OAuth complete - user session preserved', {
+        originalUserId: directGmailCookie.substring(0, 8),
+        addedEmail: profile.email,
+      });
+
+      return response;
+    } catch (err) {
+      logger.error('Direct Google OAuth failed', {
+        error: err instanceof Error ? err.message : 'Unknown',
+      });
+      return NextResponse.redirect(`${origin}/settings?tab=account&error=oauth_failed`);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

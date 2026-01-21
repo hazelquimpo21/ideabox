@@ -85,14 +85,15 @@ export async function GET(request: Request) {
     const state = crypto.randomBytes(32).toString('hex');
 
     // Build Google OAuth URL directly
+    // Use the existing callback URL that's already registered in Google Cloud Console
     const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     googleAuthUrl.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID!);
-    googleAuthUrl.searchParams.set('redirect_uri', `${origin}/api/auth/gmail-callback`);
+    googleAuthUrl.searchParams.set('redirect_uri', `${origin}/api/auth/callback`);
     googleAuthUrl.searchParams.set('response_type', 'code');
     googleAuthUrl.searchParams.set('scope', GMAIL_OAUTH_SCOPES);
     googleAuthUrl.searchParams.set('access_type', 'offline');
     googleAuthUrl.searchParams.set('prompt', 'select_account consent'); // Force account picker + consent
-    googleAuthUrl.searchParams.set('state', state);
+    googleAuthUrl.searchParams.set('state', `direct_gmail:${state}`); // Prefix to identify direct OAuth
 
     // Create response that redirects to Google OAuth
     const response = NextResponse.redirect(googleAuthUrl.toString());
@@ -117,7 +118,7 @@ export async function GET(request: Request) {
 
     logger.success('Redirecting to direct Google OAuth', {
       userId: user.id.substring(0, 8),
-      redirectUri: `${origin}/api/auth/gmail-callback`,
+      redirectUri: `${origin}/api/auth/callback`,
     });
 
     return response;
