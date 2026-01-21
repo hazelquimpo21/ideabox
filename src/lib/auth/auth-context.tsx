@@ -470,13 +470,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   /**
    * Connect an additional Gmail account.
    *
-   * Redirects to /api/auth/connect-account which:
-   * - Sets a secure cookie with the current user's ID
-   * - Redirects to Google OAuth with account picker
-   * - Callback associates new Gmail account with original user
+   * Redirects to /api/auth/add-gmail-account which uses DIRECT Google OAuth
+   * (bypassing Supabase auth) to avoid session switching issues.
+   *
+   * Flow:
+   * 1. Sets a secure cookie with the current user's ID
+   * 2. Redirects directly to Google OAuth (not through Supabase)
+   * 3. Callback exchanges code for tokens directly with Google
+   * 4. Stores tokens in gmail_accounts for the original user
+   * 5. User's Supabase session is NEVER touched
    *
    * This ensures the new Gmail account is linked to the current user,
-   * even if they select a different Google account.
+   * and the user stays logged in as their original account.
    */
   const connectAdditionalAccount = React.useCallback(async () => {
     if (!user) {
@@ -486,9 +491,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     logger.start('Connecting additional Gmail account', { userId: user.id });
     setError(null);
 
-    // Redirect to server-side connect-account endpoint
-    // This sets a secure cookie and redirects to Google OAuth
-    window.location.href = '/api/auth/connect-account';
+    // Redirect to server-side add-gmail-account endpoint
+    // This uses direct Google OAuth (not Supabase) to avoid session switching
+    window.location.href = '/api/auth/add-gmail-account';
   }, [user]);
 
   /**

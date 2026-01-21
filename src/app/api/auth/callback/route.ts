@@ -97,6 +97,18 @@ export async function GET(request: Request) {
   // This is more reliable than URL params which may not survive OAuth redirects
   const cookieStore = await cookies();
   const addAccountCookieValue = cookieStore.get(ADD_ACCOUNT_COOKIE)?.value ?? null;
+  const originalSessionCookieValue = cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value ?? null;
+
+  // DEBUG: Log ALL cookies to understand what's being sent
+  const allCookies = cookieStore.getAll();
+  logger.info('🔍 DEBUG: All cookies received in callback', {
+    cookieCount: allCookies.length,
+    cookieNames: allCookies.map(c => c.name),
+    hasAddAccountCookie: !!addAccountCookieValue,
+    hasOriginalSessionCookie: !!originalSessionCookieValue,
+    addAccountCookieValueLength: addAccountCookieValue?.length ?? 0,
+    originalSessionCookieValueLength: originalSessionCookieValue?.length ?? 0,
+  });
 
   // Check if this is "add account" mode using BOTH the cookie AND URL param
   // The cookie is the reliable source of truth since we set it ourselves
@@ -109,6 +121,7 @@ export async function GET(request: Request) {
     returnUrl,
     modeParam,
     hasAddAccountCookie: !!addAccountCookieValue,
+    hasOriginalSessionCookie: !!originalSessionCookieValue,
     isAddAccountMode,
   });
 
@@ -359,9 +372,20 @@ export async function GET(request: Request) {
   if (isAddAccountMode && originalUserIdFromCookie) {
     const originalSessionJson = cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value;
 
+    logger.info('🔍 DEBUG: Attempting session restoration', {
+      hasOriginalSessionJson: !!originalSessionJson,
+      originalSessionJsonLength: originalSessionJson?.length ?? 0,
+      originalSessionJsonPreview: originalSessionJson?.substring(0, 100) ?? 'null',
+    });
+
     if (originalSessionJson) {
       try {
         originalAuthCookies = JSON.parse(originalSessionJson);
+        logger.info('🔍 DEBUG: Parsed original auth cookies', {
+          isArray: Array.isArray(originalAuthCookies),
+          cookieCount: Array.isArray(originalAuthCookies) ? originalAuthCookies.length : 0,
+          cookieNames: Array.isArray(originalAuthCookies) ? originalAuthCookies.map((c: { name: string }) => c.name) : [],
+        });
         if (Array.isArray(originalAuthCookies) && originalAuthCookies.length > 0) {
           sessionRestored = true;
           logger.info('Will restore original auth cookies', {
@@ -372,11 +396,13 @@ export async function GET(request: Request) {
       } catch (parseError) {
         logger.warn('Failed to parse original session cookie', {
           error: parseError instanceof Error ? parseError.message : 'Unknown error',
+          jsonPreview: originalSessionJson?.substring(0, 100),
         });
       }
     } else {
       logger.warn('No original session cookie found in add_account mode', {
         originalUserId: originalUserIdFromCookie.substring(0, 8),
+        allCookieNames: allCookies.map(c => c.name),
       });
     }
   }
