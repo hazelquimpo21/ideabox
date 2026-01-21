@@ -11,9 +11,10 @@
  * - List all contacts with filtering (VIP, All, Muted)
  * - Search by name or email
  * - Sort by email count, last seen, or name
+ * - Page-based pagination with navigation controls
  * - Mark contacts as VIP for priority handling
  * - Mute contacts to hide their emails
- * - View emails from a specific contact
+ * - Click contact card to view full CRM-style detail page
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE
@@ -22,7 +23,7 @@
  * Protected: Yes (requires authentication)
  *
  * @module app/(auth)/contacts/page
- * @version 1.0.0
+ * @version 2.0.0
  * @since January 2026
  */
 
@@ -30,18 +31,18 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/layout';
 import {
   Card,
   CardContent,
   CardDescription,
-  CardHeader,
   CardTitle,
   Badge,
   Button,
   Input,
   Skeleton,
-  useToast,
+  Pagination,
 } from '@/components/ui';
 import { useContacts } from '@/hooks/useContacts';
 import { SyncContactsButton } from '@/components/contacts';
@@ -59,11 +60,9 @@ import {
   Clock,
   RefreshCw,
   AlertTriangle,
-  UserPlus,
-  Filter,
   ArrowUpDown,
   ChevronDown,
-  TrendingUp,
+  ChevronRight,
   Sparkles,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
@@ -77,6 +76,9 @@ const logger = createLogger('ContactsPage');
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/** Number of contacts to display per page */
+const PAGE_SIZE = 50;
 
 /**
  * Filter tabs for the contacts list.
@@ -192,7 +194,7 @@ function StatsCards({ stats, isLoading }: { stats: ContactStats; isLoading?: boo
               {isLoading ? (
                 <Skeleton className="h-7 w-12" />
               ) : (
-                <span className="text-2xl font-bold tabular-nums">{item.value}</span>
+                <span className="text-2xl font-bold tabular-nums">{item.value.toLocaleString()}</span>
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">{item.label}</p>
@@ -282,6 +284,7 @@ function ContactFilters({
 /**
  * Single contact card component.
  * Displays contact info with action buttons.
+ * The entire card is clickable and navigates to the contact detail page.
  */
 function ContactCard({
   contact,
@@ -289,118 +292,115 @@ function ContactCard({
   onToggleMuted,
 }: {
   contact: Contact;
-  onToggleVip: (id: string) => void;
-  onToggleMuted: (id: string) => void;
+  onToggleVip: (id: string, e: React.MouseEvent) => void;
+  onToggleMuted: (id: string, e: React.MouseEvent) => void;
 }) {
   const relationshipConfig = RELATIONSHIP_CONFIG[contact.relationship_type] || RELATIONSHIP_CONFIG.unknown;
 
   return (
-    <Card className="hover:bg-muted/50 transition-colors">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          {/* Contact info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              {/* VIP indicator */}
-              {contact.is_vip && (
-                <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 shrink-0" />
-              )}
-
-              {/* Name */}
-              <h3 className="font-medium truncate">
-                {contact.name || contact.email.split('@')[0]}
-              </h3>
-
-              {/* Relationship badge */}
-              <Badge className={`text-xs shrink-0 ${relationshipConfig.color}`}>
-                {relationshipConfig.label}
-              </Badge>
-
-              {/* Muted indicator */}
-              {contact.is_muted && (
-                <Badge variant="secondary" className="text-xs shrink-0">
-                  <VolumeX className="h-3 w-3 mr-1" />
-                  Muted
-                </Badge>
-              )}
-            </div>
-
-            {/* Email */}
-            <p className="text-sm text-muted-foreground truncate">{contact.email}</p>
-
-            {/* Company and job title */}
-            {(contact.company || contact.job_title) && (
-              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                {contact.job_title && (
-                  <span className="flex items-center gap-1">
-                    <Briefcase className="h-3 w-3" />
-                    {contact.job_title}
-                  </span>
+    <Link href={`/contacts/${contact.id}`} className="block">
+      <Card className="hover:bg-muted/50 hover:border-primary/20 transition-colors cursor-pointer group">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-4">
+            {/* Contact info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                {/* VIP indicator */}
+                {contact.is_vip && (
+                  <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 shrink-0" />
                 )}
-                {contact.company && (
-                  <span className="flex items-center gap-1">
-                    <Building2 className="h-3 w-3" />
-                    {contact.company}
-                  </span>
+
+                {/* Name */}
+                <h3 className="font-medium truncate group-hover:text-primary transition-colors">
+                  {contact.name || contact.email.split('@')[0]}
+                </h3>
+
+                {/* Relationship badge */}
+                <Badge className={`text-xs shrink-0 ${relationshipConfig.color}`}>
+                  {relationshipConfig.label}
+                </Badge>
+
+                {/* Muted indicator */}
+                {contact.is_muted && (
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    <VolumeX className="h-3 w-3 mr-1" />
+                    Muted
+                  </Badge>
                 )}
               </div>
-            )}
 
-            {/* Stats row */}
-            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Mail className="h-3 w-3" />
-                {contact.email_count} emails
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {formatRelativeTime(contact.last_seen_at)}
-              </span>
+              {/* Email */}
+              <p className="text-sm text-muted-foreground truncate">{contact.email}</p>
+
+              {/* Company and job title */}
+              {(contact.company || contact.job_title) && (
+                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                  {contact.job_title && (
+                    <span className="flex items-center gap-1">
+                      <Briefcase className="h-3 w-3" />
+                      {contact.job_title}
+                    </span>
+                  )}
+                  {contact.company && (
+                    <span className="flex items-center gap-1">
+                      <Building2 className="h-3 w-3" />
+                      {contact.company}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Stats row */}
+              <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  {contact.email_count} emails
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {formatRelativeTime(contact.last_seen_at)}
+                </span>
+              </div>
+            </div>
+
+            {/* Action buttons - prevent card click propagation */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* VIP toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => onToggleVip(contact.id, e)}
+                title={contact.is_vip ? 'Remove VIP' : 'Mark as VIP'}
+                className={contact.is_vip ? 'text-yellow-500' : ''}
+              >
+                {contact.is_vip ? (
+                  <Star className="h-4 w-4 fill-current" />
+                ) : (
+                  <StarOff className="h-4 w-4" />
+                )}
+              </Button>
+
+              {/* Mute toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => onToggleMuted(contact.id, e)}
+                title={contact.is_muted ? 'Unmute' : 'Mute'}
+              >
+                {contact.is_muted ? (
+                  <Volume2 className="h-4 w-4" />
+                ) : (
+                  <VolumeX className="h-4 w-4" />
+                )}
+              </Button>
+
+              {/* View indicator */}
+              <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* View emails button */}
-            <Link href={`/inbox?sender=${encodeURIComponent(contact.email)}`}>
-              <Button variant="outline" size="sm" className="gap-1">
-                <Mail className="h-3 w-3" />
-                Emails
-              </Button>
-            </Link>
-
-            {/* VIP toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onToggleVip(contact.id)}
-              title={contact.is_vip ? 'Remove VIP' : 'Mark as VIP'}
-              className={contact.is_vip ? 'text-yellow-500' : ''}
-            >
-              {contact.is_vip ? (
-                <Star className="h-4 w-4 fill-current" />
-              ) : (
-                <StarOff className="h-4 w-4" />
-              )}
-            </Button>
-
-            {/* Mute toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onToggleMuted(contact.id)}
-              title={contact.is_muted ? 'Unmute' : 'Mute'}
-            >
-              {contact.is_muted ? (
-                <Volume2 className="h-4 w-4" />
-              ) : (
-                <VolumeX className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -425,7 +425,6 @@ function ContactCardSkeleton() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Skeleton className="h-8 w-20" />
             <Skeleton className="h-8 w-8" />
             <Skeleton className="h-8 w-8" />
           </div>
@@ -534,10 +533,25 @@ function ErrorBanner({
  * - Tab filters: All | VIP | Muted
  * - Search by name or email
  * - Sort by email count, last seen, or name
+ * - Page-based pagination
  * - Toggle VIP and muted status
- * - Link to view emails from each contact
+ * - Click card to view contact detail page
  */
 export default function ContactsPage() {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Router and URL State
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Get initial page from URL, default to 1
+  const initialPage = React.useMemo(() => {
+    const pageParam = searchParams.get('page');
+    const parsed = pageParam ? parseInt(pageParam, 10) : 1;
+    return isNaN(parsed) || parsed < 1 ? 1 : parsed;
+  }, [searchParams]);
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Local State
   // ─────────────────────────────────────────────────────────────────────────────
@@ -567,8 +581,10 @@ export default function ContactsPage() {
       search: debouncedSearch || undefined,
       sortBy: sortBy as 'email_count' | 'last_seen_at' | 'name',
       sortOrder: sortBy === 'name' ? 'asc' as const : 'desc' as const,
+      page: initialPage,
+      pageSize: PAGE_SIZE,
     };
-  }, [activeTab, debouncedSearch, sortBy]);
+  }, [activeTab, debouncedSearch, sortBy, initialPage]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Fetch contacts using the hook
@@ -579,13 +595,40 @@ export default function ContactsPage() {
     isLoading,
     error,
     refetch,
-    loadMore,
-    hasMore,
+    pagination,
+    goToPage,
     stats,
     refreshStats,
     toggleVip,
     toggleMuted,
   } = useContacts(filterOptions);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Handle page change - update URL and scroll to top
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const handlePageChange = React.useCallback((newPage: number) => {
+    logger.info('Page changed', {
+      from: pagination.page,
+      to: newPage,
+      totalPages: pagination.totalPages,
+    });
+
+    // Update URL with new page
+    const url = new URL(window.location.href);
+    if (newPage === 1) {
+      url.searchParams.delete('page');
+    } else {
+      url.searchParams.set('page', newPage.toString());
+    }
+    router.push(url.pathname + url.search, { scroll: false });
+
+    // Navigate to the new page
+    goToPage(newPage);
+
+    // Scroll to top of list
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [router, goToPage, pagination.page, pagination.totalPages]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Handle sync completion - refresh both contacts and stats
@@ -604,6 +647,10 @@ export default function ContactsPage() {
   const handleTabChange = (tab: string) => {
     logger.debug('Tab changed', { from: activeTab, to: tab });
     setActiveTab(tab);
+    // Reset to page 1 when changing tabs (URL will be updated by the hook)
+    if (pagination.page !== 1) {
+      handlePageChange(1);
+    }
   };
 
   const handleSearchChange = (value: string) => {
@@ -615,12 +662,22 @@ export default function ContactsPage() {
     setSortBy(value);
   };
 
-  const handleToggleVip = async (contactId: string) => {
+  /**
+   * Handle VIP toggle - prevents card navigation when clicking the button.
+   */
+  const handleToggleVip = async (contactId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     logger.start('Toggle VIP', { contactId: contactId.substring(0, 8) });
     await toggleVip(contactId);
   };
 
-  const handleToggleMuted = async (contactId: string) => {
+  /**
+   * Handle muted toggle - prevents card navigation when clicking the button.
+   */
+  const handleToggleMuted = async (contactId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     logger.start('Toggle muted', { contactId: contactId.substring(0, 8) });
     await toggleMuted(contactId);
   };
@@ -629,8 +686,8 @@ export default function ContactsPage() {
   // Sync handler for empty state
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const handleSyncFromEmptyState = async () => {
-    // Trigger the sync button programmatically - we'll use a ref
+  const handleSyncFromEmptyState = () => {
+    // Trigger the sync button programmatically
     const syncButton = document.querySelector('[data-sync-button]') as HTMLButtonElement;
     if (syncButton) {
       syncButton.click();
@@ -715,19 +772,8 @@ export default function ContactsPage() {
             onSyncGoogle={handleSyncFromEmptyState}
           />
         ) : (
-          // Contact cards
+          // Contact cards with pagination
           <>
-            {/* Results summary */}
-            <div className="flex items-center justify-between text-sm text-muted-foreground pb-2">
-              <span>
-                {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
-                {debouncedSearch && ` matching "${debouncedSearch}"`}
-              </span>
-              {hasMore && (
-                <span className="text-xs">Scroll for more</span>
-              )}
-            </div>
-
             {contacts.map((contact) => (
               <ContactCard
                 key={contact.id}
@@ -737,15 +783,17 @@ export default function ContactsPage() {
               />
             ))}
 
-            {/* Load More Button */}
-            {hasMore && (
-              <div className="flex justify-center pt-4 pb-8">
-                <Button variant="outline" onClick={loadMore} className="gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Load More Contacts
-                </Button>
-              </div>
-            )}
+            {/* Pagination */}
+            <div className="pt-6 pb-8">
+              <Pagination
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalCount}
+                pageSize={pagination.pageSize}
+                onPageChange={handlePageChange}
+                showInfo
+              />
+            </div>
           </>
         )}
       </div>

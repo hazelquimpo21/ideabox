@@ -66,6 +66,11 @@ import {
   Badge,
   Skeleton,
   Textarea,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  Pagination,
 } from '@/components/ui';
 import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
@@ -123,6 +128,11 @@ interface ContactDetail {
 }
 
 /**
+ * Email direction filter type.
+ */
+type EmailDirection = 'all' | 'received' | 'sent';
+
+/**
  * Email item from the contact's history.
  */
 interface ContactEmail {
@@ -132,6 +142,8 @@ interface ContactEmail {
   snippet: string;
   category: string;
   is_read: boolean;
+  /** Direction indicator - added for display purposes */
+  direction?: 'received' | 'sent';
 }
 
 /**
@@ -239,6 +251,21 @@ export default function ContactDetailPage() {
   /** Email history from this contact */
   const [emails, setEmails] = React.useState<ContactEmail[]>([]);
 
+  /** Total email count for pagination */
+  const [totalEmails, setTotalEmails] = React.useState(0);
+
+  /** Current email direction filter */
+  const [emailDirection, setEmailDirection] = React.useState<EmailDirection>('all');
+
+  /** Current page for email history */
+  const [emailPage, setEmailPage] = React.useState(1);
+
+  /** Emails per page */
+  const emailsPerPage = 10;
+
+  /** Loading state for email fetches (separate from initial load) */
+  const [isLoadingEmails, setIsLoadingEmails] = React.useState(false);
+
   /** Extracted dates related to this contact */
   const [relatedDates, setRelatedDates] = React.useState<RelatedDate[]>([]);
 
@@ -303,20 +330,24 @@ export default function ContactDetailPage() {
 
       // ─────────────────────────────────────────────────────────────────────────
       // Step 2: Fetch email history from this contact (in parallel)
+      // Uses the new contactEmail and direction parameters for CRM-style view
       // ─────────────────────────────────────────────────────────────────────────
       const emailsPromise = fetch(
-        `/api/emails?sender=${encodeURIComponent(contactData.email)}&limit=20`
+        `/api/emails?contactEmail=${encodeURIComponent(contactData.email)}&direction=all&limit=${emailsPerPage}&page=1`
       )
-        .then((res) => {
+        .then(async (res) => {
           if (!res.ok) {
             logger.warn('Failed to fetch emails', { status: res.status });
-            return { emails: [] };
+            return { data: [], total: 0 };
           }
-          return res.json();
+          const data = await res.json();
+          // Get total count from header or response
+          const totalCount = parseInt(res.headers.get('X-Total-Count') || '0', 10);
+          return { data: data.data || data || [], total: totalCount || data.length || 0 };
         })
         .catch((err) => {
           logger.error('Email fetch error', { error: err.message });
-          return { emails: [] };
+          return { data: [], total: 0 };
         });
 
       // ─────────────────────────────────────────────────────────────────────────
@@ -338,12 +369,14 @@ export default function ContactDetailPage() {
       // Wait for parallel fetches
       const [emailsData, datesData] = await Promise.all([emailsPromise, datesPromise]);
 
-      setEmails(emailsData.emails || []);
+      setEmails(emailsData.data || []);
+      setTotalEmails(emailsData.total || 0);
       setRelatedDates(datesData.dates || []);
 
       logger.success('Contact data loaded', {
         contactId: contactId.substring(0, 8),
-        emailCount: emailsData.emails?.length || 0,
+        emailCount: emailsData.data?.length || 0,
+        totalEmails: emailsData.total || 0,
         dateCount: datesData.dates?.length || 0,
       });
     } catch (err) {
@@ -560,6 +593,76 @@ export default function ContactDetailPage() {
     const newValue = e.target.value;
     setNotes(newValue);
     setNotesModified(newValue !== (contact?.notes || ''));
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Email Fetching (for direction/page changes)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Fetches emails for the contact with the given direction and page.
+   * Called when user changes direction tab or navigates pagination.
+   */
+  const fetchEmails = React.useCallback(async (direction: EmailDirection, page: number) => {
+    if (!contact?.email) return;
+
+    logger.start('Fetching emails', {
+      contactId: contactId.substring(0, 8),
+      direction,
+      page,
+    });
+
+    setIsLoadingEmails(true);
+
+    try {
+      const res = await fetch(
+        `/api/emails?contactEmail=${encodeURIComponent(contact.email)}&direction=${direction}&limit=${emailsPerPage}&page=${page}`
+      );
+
+      if (!res.ok) {
+        logger.warn('Failed to fetch emails', { status: res.status });
+        return;
+      }
+
+      const data = await res.json();
+      const totalCount = parseInt(res.headers.get('X-Total-Count') || '0', 10);
+
+      setEmails(data.data || data || []);
+      setTotalEmails(totalCount || data.length || 0);
+
+      logger.success('Emails fetched', {
+        count: (data.data || data || []).length,
+        total: totalCount,
+        direction,
+        page,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      logger.error('Failed to fetch emails', { error: message });
+    } finally {
+      setIsLoadingEmails(false);
+    }
+  }, [contact?.email, contactId, emailsPerPage]);
+
+  /**
+   * Handle direction tab change.
+   * Resets to page 1 when switching directions.
+   */
+  const handleDirectionChange = (direction: string) => {
+    const newDirection = direction as EmailDirection;
+    logger.debug('Email direction changed', { from: emailDirection, to: newDirection });
+    setEmailDirection(newDirection);
+    setEmailPage(1);
+    fetchEmails(newDirection, 1);
+  };
+
+  /**
+   * Handle email pagination page change.
+   */
+  const handleEmailPageChange = (page: number) => {
+    logger.debug('Email page changed', { from: emailPage, to: page });
+    setEmailPage(page);
+    fetchEmails(emailDirection, page);
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -830,56 +933,111 @@ export default function ContactDetailPage() {
       </Card>
 
       {/* ─────────────────────────────────────────────────────────────────────── */}
-      {/* Email History */}
+      {/* Email History with Direction Tabs and Pagination */}
       {/* ─────────────────────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base">Email History</CardTitle>
           <Link href={`/inbox?sender=${encodeURIComponent(contact.email)}`}>
             <Button variant="ghost" size="sm">
-              View All
-              <ChevronRight className="h-4 w-4 ml-1" />
+              View in Inbox
+              <ExternalLink className="h-4 w-4 ml-1" />
             </Button>
           </Link>
         </CardHeader>
-        <CardContent>
-          {emails.length === 0 ? (
-            <div className="text-center py-8">
-              <Mail className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No emails found from this contact
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {emails.map((email) => (
-                <Link
-                  key={email.id}
-                  href={`/inbox/${email.id}`}
-                  className="block p-3 rounded-lg border hover:bg-accent transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        'font-medium truncate flex-1',
-                        !email.is_read && 'font-semibold'
-                      )}
+        <CardContent className="space-y-4">
+          {/* Direction Tabs */}
+          <Tabs value={emailDirection} onValueChange={handleDirectionChange}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="received">Received</TabsTrigger>
+              <TabsTrigger value="sent">Sent</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value={emailDirection} className="mt-4">
+              {/* Loading State */}
+              {isLoadingEmails ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : emails.length === 0 ? (
+                /* Empty State */
+                <div className="text-center py-8">
+                  <Mail className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    {emailDirection === 'all'
+                      ? 'No emails found with this contact'
+                      : emailDirection === 'received'
+                      ? 'No emails received from this contact'
+                      : 'No emails sent to this contact'}
+                  </p>
+                </div>
+              ) : (
+                /* Email List */
+                <div className="space-y-2">
+                  {emails.map((email) => (
+                    <Link
+                      key={email.id}
+                      href={`/inbox/${email.id}`}
+                      className="block p-3 rounded-lg border hover:bg-accent transition-colors"
                     >
-                      {email.subject || '(No subject)'}
-                    </span>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">
-                      {format(new Date(email.date), 'MMM d, yyyy')}
-                    </span>
-                  </div>
-                  {email.snippet && (
-                    <p className="text-sm text-muted-foreground truncate mt-1">
-                      {email.snippet}
-                    </p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          )}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {/* Direction indicator badge */}
+                          {emailDirection === 'all' && (
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-[10px] px-1.5 py-0 h-4 flex-shrink-0',
+                                email.direction === 'sent'
+                                  ? 'border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400'
+                                  : 'border-green-300 text-green-600 dark:border-green-700 dark:text-green-400'
+                              )}
+                            >
+                              {email.direction === 'sent' ? 'Sent' : 'Received'}
+                            </Badge>
+                          )}
+                          <span
+                            className={cn(
+                              'font-medium truncate',
+                              !email.is_read && 'font-semibold'
+                            )}
+                          >
+                            {email.subject || '(No subject)'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                          {format(new Date(email.date), 'MMM d, yyyy')}
+                        </span>
+                      </div>
+                      {email.snippet && (
+                        <p className="text-sm text-muted-foreground truncate mt-1">
+                          {email.snippet}
+                        </p>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              )}
+
+              {/* Pagination */}
+              {totalEmails > emailsPerPage && (
+                <div className="pt-4">
+                  <Pagination
+                    currentPage={emailPage}
+                    totalPages={Math.ceil(totalEmails / emailsPerPage)}
+                    onPageChange={handleEmailPageChange}
+                    showInfo
+                    totalItems={totalEmails}
+                    itemsPerPage={emailsPerPage}
+                    itemLabel="emails"
+                  />
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

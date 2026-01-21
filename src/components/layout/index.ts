@@ -62,3 +62,9 @@ export {
   type PageHeaderProps,
   type BreadcrumbItem,
 } from './PageHeader';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SYNC STATUS BANNER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { SyncStatusBanner } from './SyncStatusBanner';

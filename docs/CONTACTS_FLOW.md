@@ -446,10 +446,167 @@ Check:
 
 ---
 
+---
+
+## Contacts Page Features (NEW Jan 2026)
+
+### Page-Based Pagination
+
+The contacts page now uses page-based pagination (not infinite scroll) for better shareability and UX:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  GET /api/contacts?page=1&limit=50                              │
+│                                                                 │
+│  Returns:                                                       │
+│  - contacts: array of contacts for current page                 │
+│  - X-Total-Count header: total number of contacts               │
+│  - Link header: pagination links (RFC 5988)                     │
+│                                                                 │
+│  URL State:                                                     │
+│  - Page number stored in URL (?page=2)                          │
+│  - Shareable and bookmarkable                                   │
+│  - Browser back/forward navigation works                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Pagination Component** (`src/components/ui/pagination.tsx`):
+- Page numbers with ellipsis for large sets
+- Prev/Next navigation
+- Optional info display ("Showing 1-50 of 234 contacts")
+- Keyboard accessible
+
+### CRM-Style Contact Detail Page
+
+Clicking a contact card navigates to `/contacts/[id]` detail page (not inbox filter):
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Contact Detail Page (/contacts/[id])                           │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Profile: Name, Email, Company, Job Title, Relationship  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Stats: Total Emails | Last 30 Days | Last Contact       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Email History (with Direction Tabs)                      │   │
+│  │ [All] [Received] [Sent]                                  │   │
+│  │                                                          │   │
+│  │ • Email 1 - [Received] Subject...  Jan 15               │   │
+│  │ • Email 2 - [Sent] Subject...      Jan 14               │   │
+│  │                                                          │   │
+│  │ < 1 2 3 ... 10 >  (pagination)                          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Email Direction Filter**:
+- `all`: Both sent and received emails with this contact
+- `received`: Emails FROM the contact (they are sender)
+- `sent`: Emails TO the contact (user sent to them)
+
+### API: Email Direction Parameter
+
+The emails API now supports contact-based filtering:
+
+```
+GET /api/emails?contactEmail=john@example.com&direction=all
+
+Parameters:
+- contactEmail: Filter emails involving this contact
+- direction: 'all' | 'received' | 'sent'
+
+Response includes `direction` field on each email:
+{
+  "id": "...",
+  "subject": "...",
+  "direction": "received"  // or "sent" or "unknown"
+}
+```
+
+---
+
+## Google Contacts Sync Progress (NEW Jan 2026)
+
+### Sync Status Banner
+
+A global progress banner shows during contacts import:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ ████████████████░░░░ 75%                                    [X] │
+│ 🔄 Importing contacts (375 of ~500) from work@gmail.com...      │
+│    127 skipped (no email address)                               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Features**:
+- Sticky banner below navbar (visible across all pages)
+- Real-time progress percentage and counts
+- Current account indicator for multi-account syncs
+- Dismissible (sync continues in background)
+- Error state with retry button
+- Success state with auto-dismiss
+
+### Context Provider
+
+Global sync state managed via React Context:
+
+```typescript
+import { useContactsSyncStatus } from '@/lib/contexts/sync-status-context';
+
+function SyncButton() {
+  const { isActive, startSync, status } = useContactsSyncStatus();
+
+  return (
+    <Button
+      onClick={() => startSync('contacts')}
+      disabled={isActive}
+    >
+      {isActive ? `Syncing ${status.progress}%` : 'Sync Contacts'}
+    </Button>
+  );
+}
+```
+
+**Available Methods**:
+- `startSync(type)` - Begin sync, show banner
+- `updateProgress(data)` - Update counts/percentage
+- `completeSync(result)` - Mark complete, show success
+- `failSync(error)` - Mark failed, show error
+- `dismiss()` - Hide banner (sync continues)
+- `reset()` - Return to idle state
+
+### Progress Tracking API
+
+Sync progress stored in database for polling:
+
+```
+GET /api/contacts/sync-progress
+
+Response:
+{
+  "status": "in_progress",
+  "progress": 75,
+  "imported": 375,
+  "estimatedTotal": 500,
+  "skipped": 127,
+  "currentAccount": "work@gmail.com"
+}
+```
+
+Progress stored in `user_profiles.sync_progress` JSONB field.
+
+---
+
 ## Future Enhancements
 
 1. **Contact Deduplication**: Auto-detect same person with different emails
 2. **Contact Merge UI**: Let users manually merge contacts
 3. **Contact Export**: Export contacts to CSV
-4. **Contact Timeline**: Show all interactions with a contact
+4. ~~**Contact Timeline**: Show all interactions with a contact~~ ✅ DONE (email history on detail page)
 5. **Contact Health**: Warn when important contacts go quiet
