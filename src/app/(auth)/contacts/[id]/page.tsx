@@ -821,13 +821,13 @@ export default function ContactDetailPage() {
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <select
-                value={contact.relationship_type}
+                value={contact.relationship_type || 'unknown'}
                 onChange={(e) =>
                   handleRelationshipChange(e.target.value as ContactRelationshipType)
                 }
                 className={cn(
                   'px-2 py-1 rounded-md text-sm font-medium border-0 cursor-pointer',
-                  RELATIONSHIP_CONFIG[contact.relationship_type].color
+                  (RELATIONSHIP_CONFIG[contact.relationship_type as ContactRelationshipType] || RELATIONSHIP_CONFIG.unknown).color
                 )}
               >
                 {Object.entries(RELATIONSHIP_CONFIG).map(([value, config]) => (
