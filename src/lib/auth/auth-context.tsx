@@ -241,45 +241,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const fetchPromise = (async (): Promise<ProfileFetchResult> => {
         try {
+          const startTime = Date.now();
+
           // IMPORTANT: Call getUser() first to ensure auth state is synchronized
           // This is required because when called from onAuthStateChange, the Supabase
           // client's internal JWT may not be fully processed yet. Without this,
           // RLS policies using auth.uid() may fail or hang.
+          logger.info('Starting getUser() call', { userId });
           const { error: authError } = await supabase.auth.getUser();
+          const getUserMs = Date.now() - startTime;
+          logger.info('getUser() completed', { userId, durationMs: getUserMs });
+
           if (authError) {
             logger.warn('Auth verification failed before profile fetch', {
               userId,
               error: authError.message,
+              durationMs: getUserMs,
             });
             return { profile: null, success: false };
           }
 
+          const queryStartTime = Date.now();
+          logger.info('Starting profile query', { userId });
           const { data: profile, error: profileError } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', userId)
             .single();
+          const queryMs = Date.now() - queryStartTime;
 
           if (profileError) {
             // PGRST116 = row not found, which is expected for new users
             if (profileError.code === 'PGRST116') {
-              logger.info('No profile found (new user)', { userId });
+              logger.info('No profile found (new user)', { userId, queryMs });
               // This is a successful fetch - we confirmed no profile exists
               return { profile: null, success: true };
             } else if (profileError.code === '42P01') {
-              logger.warn('user_profiles table does not exist - run migrations', { userId });
+              logger.warn('user_profiles table does not exist - run migrations', { userId, queryMs });
               return { profile: null, success: false };
             } else {
               logger.warn('Failed to fetch user profile', {
                 userId,
                 error: profileError.message,
-                code: profileError.code
+                code: profileError.code,
+                queryMs,
               });
               return { profile: null, success: false };
             }
           }
 
-          logger.info('Profile fetched successfully', { userId });
+          logger.info('Profile fetched successfully', { userId, queryMs });
           return { profile, success: true };
         } catch (err) {
           logger.warn('Profile fetch exception', { userId, error: String(err) });
