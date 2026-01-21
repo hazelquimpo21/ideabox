@@ -45,7 +45,7 @@ import {
   Pagination,
 } from '@/components/ui';
 import { useContacts } from '@/hooks/useContacts';
-import { SyncContactsButton } from '@/components/contacts';
+import { SyncContactsButton, HistoricalSyncButton } from '@/components/contacts';
 import type { Contact, ContactRelationshipType, ContactStats } from '@/hooks/useContacts';
 import {
   Users,
@@ -711,6 +711,10 @@ export default function ContactsPage() {
         actions={
           <div className="flex items-center gap-2">
             <SyncContactsButton
+              onSyncComplete={handleSyncComplete}
+              variant="default"
+            />
+            <HistoricalSyncButton
               onSyncComplete={handleSyncComplete}
               variant="default"
             />

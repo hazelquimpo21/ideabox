@@ -51,3 +51,8 @@ export {
   createInitialSyncOrchestrator,
   type InitialSyncOrchestratorConfig,
 } from './initial-sync-orchestrator';
+
+export {
+  HistoricalSyncService,
+  createHistoricalSyncService,
+} from './historical-sync-service';
