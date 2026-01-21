@@ -450,7 +450,7 @@ export class EmailProcessor {
           );
         }
 
-        // Save extracted dates
+        // Save extracted dates from DateExtractor
         if (
           dateResult &&
           dateResult.success &&
@@ -462,6 +462,22 @@ export class EmailProcessor {
             emailInput.id,
             contact?.id ?? null,
             dateResult.data.dates
+          );
+        }
+
+        // Save event from EventDetector to extracted_dates
+        // This enables the Events page to display events detected by EventDetector
+        // Events are stored with date_type='event' and rich metadata for EventCard display
+        if (
+          eventResult &&
+          eventResult.success &&
+          eventResult.data.hasEvent
+        ) {
+          await this.saveEventToExtractedDates(
+            context.userId,
+            emailInput.id,
+            contact?.id ?? null,
+            eventResult.data
           );
         }
 
@@ -1145,6 +1161,166 @@ export class EmailProcessor {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Unexpected error saving extracted dates', {
         emailId,
+        error: message,
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PRIVATE METHODS - EVENT TO EXTRACTED_DATES SYNC
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Saves an event from EventDetector to the extracted_dates table.
+   *
+   * This bridges the gap between EventDetector (which stores rich data in
+   * email_analyses.event_detection) and the Events page (which queries
+   * extracted_dates). By also saving to extracted_dates, events appear
+   * in the timeline view and Events page.
+   *
+   * UI/UX ROUTING LOGIC:
+   * - Full events (isKeyDate=false) → date_type='event' → Events page
+   * - Open houses (isKeyDate=true, keyDateType='open_house') → date_type='event' (you attend them)
+   * - Deadlines/other key dates → date_type='deadline' → Hub/Timeline, not Events page
+   *
+   * The event_metadata JSONB column stores rich fields like locality, location,
+   * RSVP info etc. for enhanced EventCard display without requiring JOINs.
+   *
+   * @param userId - User ID
+   * @param emailId - Source email ID
+   * @param contactId - Associated contact ID (may be null)
+   * @param eventData - Rich event data from EventDetector
+   */
+  private async saveEventToExtractedDates(
+    userId: string,
+    emailId: string,
+    contactId: string | null,
+    eventData: EventDetectionResult['data']
+  ): Promise<void> {
+    // Skip if no event or no date
+    if (!eventData.hasEvent || !eventData.eventDate) {
+      logger.debug('Skipping event save: no event or date', {
+        emailId,
+        hasEvent: eventData.hasEvent,
+        hasDate: !!eventData.eventDate,
+      });
+      return;
+    }
+
+    try {
+      const supabase = await createServerClient();
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Determine date_type based on UI/UX routing logic
+      // - Full events and open houses go to Events page (date_type='event')
+      // - Other key dates (deadlines, etc.) go to Hub/Timeline (date_type='deadline')
+      // ─────────────────────────────────────────────────────────────────────────
+      let dateType: string = 'event';
+      if (eventData.isKeyDate) {
+        // Open houses are still events you attend
+        if (eventData.keyDateType === 'open_house') {
+          dateType = 'event';
+        } else {
+          // Registration deadlines, other deadlines, release dates → not Events page
+          dateType = 'deadline';
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Build event_metadata JSONB for rich EventCard display
+      // This avoids needing JOINs to email_analyses for rich event data
+      // ─────────────────────────────────────────────────────────────────────────
+      const eventMetadata = {
+        // Location fields
+        locality: eventData.eventLocality ?? null,
+        locationType: eventData.locationType,
+        location: eventData.location ?? null,
+
+        // RSVP fields
+        rsvpRequired: eventData.rsvpRequired,
+        rsvpUrl: eventData.rsvpUrl ?? null,
+        rsvpDeadline: eventData.registrationDeadline ?? null,
+
+        // Event details
+        organizer: eventData.organizer ?? null,
+        cost: eventData.cost ?? null,
+        additionalDetails: eventData.additionalDetails ?? null,
+
+        // Key date classification
+        isKeyDate: eventData.isKeyDate ?? false,
+        keyDateType: eventData.keyDateType ?? null,
+
+        // Assistant-style summary for quick scanning
+        eventSummary: eventData.eventSummary ?? null,
+        keyPoints: eventData.keyPoints ?? null,
+      };
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Calculate priority score for Hub ranking
+      // Events have base priority of 5, key dates (deadlines) get 7-8
+      // ─────────────────────────────────────────────────────────────────────────
+      let priorityScore = 5;
+      if (eventData.isKeyDate && eventData.keyDateType !== 'open_house') {
+        priorityScore = 7; // Deadlines are more urgent
+      }
+      // Adjust by confidence
+      priorityScore = Math.round(priorityScore * eventData.confidence);
+      priorityScore = Math.max(1, Math.min(10, priorityScore));
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Build the record for extracted_dates
+      // ─────────────────────────────────────────────────────────────────────────
+      const record = {
+        user_id: userId,
+        email_id: emailId,
+        contact_id: contactId,
+        date_type: dateType,
+        date: eventData.eventDate,
+        event_time: eventData.eventTime ?? null,
+        end_date: eventData.eventEndDate ?? null,
+        end_time: eventData.eventEndTime ?? null,
+        title: eventData.eventTitle,
+        description: eventData.eventSummary ?? eventData.additionalDetails ?? null,
+        source_snippet: eventData.keyPoints?.join(' • ') ?? null,
+        related_entity: eventData.organizer ?? null,
+        is_recurring: false, // EventDetector doesn't detect recurrence
+        confidence: eventData.confidence,
+        priority_score: priorityScore,
+        extracted_by: 'event_detector',
+        event_metadata: eventMetadata,
+      };
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Upsert to prevent duplicates (same email, type, date, title)
+      // ─────────────────────────────────────────────────────────────────────────
+      const { error } = await supabase.from('extracted_dates').upsert(record, {
+        onConflict: 'email_id,date_type,date,title',
+        ignoreDuplicates: false, // Update if exists (may have new metadata)
+      });
+
+      if (error) {
+        logger.warn('Failed to save event to extracted_dates', {
+          emailId,
+          eventTitle: eventData.eventTitle,
+          dateType,
+          error: error.message,
+          errorCode: error.code,
+        });
+      } else {
+        logger.info('Event saved to extracted_dates', {
+          emailId,
+          eventTitle: eventData.eventTitle.substring(0, 40),
+          dateType,
+          date: eventData.eventDate,
+          locality: eventData.eventLocality ?? 'unknown',
+          isKeyDate: eventData.isKeyDate ?? false,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Unexpected error saving event to extracted_dates', {
+        emailId,
+        eventTitle: eventData.eventTitle,
         error: message,
       });
     }

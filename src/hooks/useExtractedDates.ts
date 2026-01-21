@@ -102,6 +102,42 @@ export interface RelatedContact {
 }
 
 /**
+ * Rich event metadata stored in the event_metadata JSONB column.
+ * Only populated for events from EventDetector (date_type='event').
+ * Enables rich EventCard display with locality badges, locations, RSVP info.
+ *
+ * @since January 2026
+ */
+export interface EventMetadata {
+  /** Where the event is relative to user: 'local' | 'out_of_town' | 'virtual' */
+  locality: 'local' | 'out_of_town' | 'virtual' | null;
+  /** How people participate: 'in_person' | 'virtual' | 'hybrid' | 'unknown' */
+  locationType: string;
+  /** Physical address or video meeting link */
+  location: string | null;
+  /** Whether RSVP/registration is required */
+  rsvpRequired: boolean;
+  /** URL to register or RSVP */
+  rsvpUrl: string | null;
+  /** RSVP deadline date (ISO format) */
+  rsvpDeadline: string | null;
+  /** Event organizer name */
+  organizer: string | null;
+  /** Cost info ('Free', '$25', etc.) */
+  cost: string | null;
+  /** Additional event details */
+  additionalDetails: string | null;
+  /** Whether this is a key date vs full event */
+  isKeyDate: boolean;
+  /** Type of key date if applicable */
+  keyDateType: string | null;
+  /** One-sentence assistant-style summary */
+  eventSummary: string | null;
+  /** 2-4 bullet points for quick scanning */
+  keyPoints: string[] | null;
+}
+
+/**
  * Extracted date entity from the database.
  * Represents a date/deadline/event extracted from an email.
  */
@@ -143,6 +179,14 @@ export interface ExtractedDate {
   emails?: RelatedEmail | null;
   /** Related contact data (from join) */
   contacts?: RelatedContact | null;
+  /**
+   * Rich event metadata for EventCard display.
+   * Only present for events from EventDetector (date_type='event').
+   * Contains locality, location, RSVP info, and assistant-style summaries.
+   *
+   * @since January 2026
+   */
+  event_metadata?: EventMetadata | null;
 }
 
 /**

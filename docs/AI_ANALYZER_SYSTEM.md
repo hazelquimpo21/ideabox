@@ -806,40 +806,76 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 ## Analyzer Execution Flow (Jan 2026)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    EMAIL PROCESSING PIPELINE                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐           │
-│  │ Categorizer │   │   Action    │   │   Client    │           │
-│  │             │   │  Extractor  │   │   Tagger    │           │
-│  │ + summary   │   │             │   │             │           │
-│  │ + quickAct  │   │             │   │             │           │
-│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘           │
-│         │                 │                 │                   │
-│         └────────────┬────┴────────────────┘                   │
-│                      │                                          │
-│                      ▼                                          │
-│              ┌───────────────┐                                  │
-│              │  Is category  │                                  │
-│              │   = 'event'?  │                                  │
-│              └───────┬───────┘                                  │
-│                      │                                          │
-│           ┌─────────┴─────────┐                                │
-│           │ YES               │ NO                              │
-│           ▼                   ▼                                 │
-│    ┌─────────────┐     ┌───────────┐                           │
-│    │    Event    │     │   Skip    │                           │
-│    │  Detector   │     │  (save $) │                           │
-│    └──────┬──────┘     └─────┬─────┘                           │
-│           │                  │                                  │
-│           └────────┬─────────┘                                  │
-│                    │                                            │
-│                    ▼                                            │
-│           ┌───────────────┐                                     │
-│           │  Save to DB   │                                     │
-│           │email_analyses │                                     │
-│           └───────────────┘                                     │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        EMAIL PROCESSING PIPELINE                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PHASE 1: Core Analyzers (run in parallel)                                  │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐     │
+│  │ Categorizer │   │   Action    │   │   Client    │   │    Date     │     │
+│  │             │   │  Extractor  │   │   Tagger    │   │  Extractor  │     │
+│  │ + category  │   │             │   │             │   │             │     │
+│  │ + labels    │   │             │   │             │   │ deadlines,  │     │
+│  │   has_event │   │             │   │             │   │ payments    │     │
+│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘     │
+│         │                 │                 │                 │             │
+│         └────────────┬────┴────────────────┴────────────────┘             │
+│                      │                                                      │
+│                      ▼                                                      │
+│  PHASE 2: Conditional Analyzers                                            │
+│              ┌───────────────┐                                              │
+│              │ labels include│                                              │
+│              │  'has_event'? │                                              │
+│              └───────┬───────┘                                              │
+│                      │                                                      │
+│           ┌─────────┴─────────┐                                            │
+│           │ YES               │ NO                                          │
+│           ▼                   ▼                                             │
+│    ┌─────────────┐     ┌───────────┐                                       │
+│    │    Event    │     │   Skip    │                                       │
+│    │  Detector   │     │  (save $) │                                       │
+│    │             │     └───────────┘                                       │
+│    │ + locality  │                                                          │
+│    │ + location  │                                                          │
+│    │ + RSVP info │                                                          │
+│    └──────┬──────┘                                                          │
+│           │                                                                  │
+│           ▼                                                                  │
+│  PHASE 3: Save Results                                                      │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │                                                                       │ │
+│  │  ┌─────────────────┐                  ┌─────────────────────────┐    │ │
+│  │  │ email_analyses  │                  │    extracted_dates       │    │ │
+│  │  │                 │                  │                          │    │ │
+│  │  │ - categorization│                  │ DateExtractor results:   │    │ │
+│  │  │ - actions       │                  │ - date_type: deadline,   │    │ │
+│  │  │ - client        │                  │   payment_due, etc.      │    │ │
+│  │  │ - event_detect- │                  │                          │    │ │
+│  │  │   ion (JSONB)   │                  │ EventDetector results:   │    │ │
+│  │  │                 │                  │ - date_type: 'event'     │    │ │
+│  │  └─────────────────┘                  │ - event_metadata (JSONB) │    │ │
+│  │                                       │   locality, location,    │    │ │
+│  │                                       │   RSVP, cost, etc.       │    │ │
+│  │                                       └─────────────────────────┘    │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Event Data Flow (Jan 2026 Update)
+
+Events now flow through a two-part storage system:
+
+1. **EventDetector** extracts rich event data when Categorizer labels email with `has_event`
+2. **email_analyses.event_detection** stores the full JSONB for debugging/history
+3. **extracted_dates** stores a simplified record with `date_type='event'` + `event_metadata`
+4. **Events page** queries `extracted_dates` where `date_type='event'`
+5. **EventCard** displays rich data from `event_metadata` (locality badges, location, RSVP)
+
+**Key Design Decision**: Store rich metadata in `event_metadata` JSONB to avoid JOINs.
+The Events page only queries `extracted_dates`, not `email_analyses`.
+
+**UI/UX Routing Logic**:
+- Full events (`isKeyDate=false`) → `date_type='event'` → Events page
+- Open houses (`isKeyDate=true`, `keyDateType='open_house'`) → `date_type='event'` (you attend them)
+- Other key dates (registration deadlines) → `date_type='deadline'` → Hub/Timeline only

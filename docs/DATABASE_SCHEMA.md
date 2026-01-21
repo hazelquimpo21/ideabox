@@ -288,6 +288,101 @@ CREATE POLICY "Users can manage own actions"
   USING (auth.uid() = user_id);
 ```
 
+### extracted_dates
+Timeline dates extracted from emails (deadlines, events, payments, etc.).
+Powers the Hub "upcoming things" view and the Events page.
+
+```sql
+CREATE TABLE extracted_dates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- Source References
+  email_id UUID REFERENCES emails(id) ON DELETE CASCADE,
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+
+  -- Date Information
+  date_type TEXT NOT NULL,      -- 'deadline', 'event', 'payment_due', 'birthday', etc.
+  date DATE NOT NULL,           -- The primary date
+  event_time TIME,              -- Time if known (NULL for all-day)
+  end_date DATE,                -- End date for ranges
+  end_time TIME,                -- End time for ranges
+  timezone TEXT DEFAULT 'America/Chicago',
+
+  -- Context
+  title TEXT NOT NULL,          -- "Invoice #1234 due", "Milwaukee Tech Meetup"
+  description TEXT,             -- Additional context
+  source_snippet TEXT,          -- Original text or key points
+  related_entity TEXT,          -- Company, person, or organizer
+
+  -- Recurrence
+  is_recurring BOOLEAN DEFAULT FALSE,
+  recurrence_pattern TEXT,      -- 'daily', 'weekly', 'monthly', 'yearly'
+
+  -- Extraction Metadata
+  confidence DECIMAL(3,2),      -- 0.00-1.00 confidence in extraction
+  extracted_by TEXT DEFAULT 'date_extractor',  -- Which analyzer extracted this
+
+  -- Hub Display & User Interaction
+  priority_score INTEGER DEFAULT 5,     -- 1-10, for Hub ranking
+  is_acknowledged BOOLEAN DEFAULT FALSE,
+  acknowledged_at TIMESTAMPTZ,
+  is_hidden BOOLEAN DEFAULT FALSE,
+  snoozed_until TIMESTAMPTZ,
+
+  -- Rich Event Metadata (NEW Jan 2026)
+  -- Only populated for events from EventDetector (date_type='event')
+  -- Contains locality, location, RSVP info for enhanced EventCard display
+  event_metadata JSONB,
+
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_extracted_dates_user_date ON extracted_dates(user_id, date);
+CREATE INDEX idx_extracted_dates_type ON extracted_dates(user_id, date_type, date);
+CREATE INDEX idx_extracted_dates_email ON extracted_dates(email_id);
+
+-- Deduplication index
+CREATE UNIQUE INDEX idx_extracted_dates_dedup
+  ON extracted_dates(email_id, date_type, date, title)
+  WHERE email_id IS NOT NULL;
+
+-- Index for event locality queries (uses event_metadata JSONB)
+CREATE INDEX idx_extracted_dates_event_locality
+  ON extracted_dates USING GIN (event_metadata jsonb_path_ops)
+  WHERE date_type = 'event' AND event_metadata IS NOT NULL;
+
+-- RLS Policies
+ALTER TABLE extracted_dates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own extracted dates"
+  ON extracted_dates FOR ALL
+  USING (auth.uid() = user_id);
+```
+
+#### event_metadata JSONB Schema
+For events extracted by EventDetector, the `event_metadata` column contains:
+
+```json
+{
+  "locality": "local" | "out_of_town" | "virtual",
+  "locationType": "in_person" | "virtual" | "hybrid" | "unknown",
+  "location": "123 Main St, Milwaukee, WI" | "https://zoom.us/j/...",
+  "rsvpRequired": true,
+  "rsvpUrl": "https://meetup.com/...",
+  "rsvpDeadline": "2026-01-23",
+  "organizer": "MKE Tech Community",
+  "cost": "Free" | "$25",
+  "additionalDetails": "Parking available...",
+  "isKeyDate": false,
+  "keyDateType": null | "registration_deadline" | "open_house",
+  "eventSummary": "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (local). Free.",
+  "keyPoints": ["Sat Jan 25, 6-8pm", "In-person: 123 Main St", "Free"]
+}
+```
+
 ## Phase 2 Tables
 
 ### urls
