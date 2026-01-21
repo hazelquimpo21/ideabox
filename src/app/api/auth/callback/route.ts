@@ -32,6 +32,7 @@ import { cookies } from 'next/headers';
 import { createLogger, logAuth } from '@/lib/utils/logger';
 import { gmailWatchService } from '@/lib/gmail/watch-service';
 import { ADD_ACCOUNT_COOKIE, ORIGINAL_SESSION_COOKIE } from '@/app/api/auth/connect-account/route';
+import { createServiceClient } from '@/lib/supabase/server';
 import type { Database, TableInsert } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -218,10 +219,18 @@ export async function GET(request: Request) {
     // Calculate token expiry (Google tokens typically expire in 1 hour)
     const tokenExpiry = new Date(Date.now() + 3600 * 1000).toISOString();
 
-    // Check if gmail_account exists, upsert if needed
-    // In add_account mode, targetUserId may differ from user.id
+    // In add_account mode, use service role client to bypass RLS
+    // This is necessary because:
+    // 1. The OAuth flow creates a session for the NEW account (user B)
+    // 2. But we need to insert with user_id = originalUserId (user A)
+    // 3. RLS policy only allows users to insert rows for themselves
+    // 4. Service role bypasses RLS, allowing us to insert for user A
+    const dbClient = (isAddAccountMode && originalUserIdFromCookie)
+      ? createServiceClient()
+      : supabase;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: gmailError } = await (supabase as any)
+    const { error: gmailError } = await (dbClient as any)
       .from('gmail_accounts')
       .upsert(
         {
@@ -240,12 +249,14 @@ export async function GET(request: Request) {
       logger.warn('Failed to store Gmail tokens', {
         targetUserId: targetUserId.substring(0, 8),
         error: gmailError.message,
+        usingServiceRole: isAddAccountMode && !!originalUserIdFromCookie,
       });
     } else {
       logger.success('Stored Gmail OAuth tokens', {
         targetUserId: targetUserId.substring(0, 8),
         email: user.email,
         isAddAccountMode,
+        usingServiceRole: isAddAccountMode && !!originalUserIdFromCookie,
       });
 
       // ─────────────────────────────────────────────────────────────────────────
@@ -255,9 +266,9 @@ export async function GET(request: Request) {
       // If watch setup fails, we fall back to polling (scheduled sync).
       if (gmailWatchService.isPushEnabled()) {
         try {
-          // Get the account ID we just created/updated
+          // Get the account ID we just created/updated (using same client)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: gmailAccount } = await (supabase as any)
+          const { data: gmailAccount } = await (dbClient as any)
             .from('gmail_accounts')
             .select('id')
             .eq('user_id', targetUserId)
@@ -347,39 +358,17 @@ export async function GET(request: Request) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 5b: Prepare session restoration if in add_account mode
+  // Step 5b: Session handling for add_account mode
   // ─────────────────────────────────────────────────────────────────────────────
-  // When adding an account, Supabase OAuth switches the session to the new user.
-  // We stored the original Supabase auth cookies before OAuth, and will restore
-  // them on the response to keep the user logged in as their original account.
-
-  let originalAuthCookies: Array<{ name: string; value: string }> = [];
-  let sessionRestored = false;
-
-  if (isAddAccountMode && originalUserIdFromCookie) {
-    const originalSessionJson = cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value;
-
-    if (originalSessionJson) {
-      try {
-        originalAuthCookies = JSON.parse(originalSessionJson);
-        if (Array.isArray(originalAuthCookies) && originalAuthCookies.length > 0) {
-          sessionRestored = true;
-          logger.info('Will restore original auth cookies', {
-            originalUserId: originalUserIdFromCookie.substring(0, 8),
-            cookieCount: originalAuthCookies.length,
-          });
-        }
-      } catch (parseError) {
-        logger.warn('Failed to parse original session cookie', {
-          error: parseError instanceof Error ? parseError.message : 'Unknown error',
-        });
-      }
-    } else {
-      logger.warn('No original session cookie found in add_account mode', {
-        originalUserId: originalUserIdFromCookie.substring(0, 8),
-      });
-    }
-  }
+  // When adding an account, Supabase OAuth creates a new session for the selected
+  // Google account. However, we DON'T want to switch the user's session.
+  //
+  // Key insight: The browser's original session cookies survive the OAuth redirect.
+  // By NOT setting the new session cookies on the response, the user stays logged
+  // in as their original account.
+  //
+  // We already used the service role client above to insert the gmail_account,
+  // so the database operation succeeds regardless of which user is in the session.
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Step 6: Determine redirect destination
@@ -393,7 +382,6 @@ export async function GET(request: Request) {
     logger.success('Add account flow complete', {
       originalUserId: originalUserIdFromCookie.substring(0, 8),
       newEmail: user.email,
-      sessionRestored,
     });
   } else if (isNewUser) {
     // New users always go to onboarding
@@ -427,50 +415,15 @@ export async function GET(request: Request) {
   const response = NextResponse.redirect(`${origin}${redirectPath}`);
 
   if (isAddAccountMode && originalUserIdFromCookie) {
-    if (sessionRestored && originalAuthCookies.length > 0) {
-      // In add_account mode with session restoration:
-      // DON'T set the new session cookies (from exchangeCodeForSession)
-      // Instead, restore the ORIGINAL auth cookies to keep user logged in as original account
-      logger.info('Restoring original session cookies instead of new session', {
-        originalUserId: originalUserIdFromCookie.substring(0, 8),
-        newSessionCookieCount: cookiesToSet.length,
-        originalCookieCount: originalAuthCookies.length,
-      });
-
-      for (const cookie of originalAuthCookies) {
-        response.cookies.set(cookie.name, cookie.value, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          path: '/',
-          // Set maxAge to match Supabase's default session duration (7 days)
-          // Without this, cookies would be session-only and might behave differently
-          maxAge: 60 * 60 * 24 * 7,
-        });
-      }
-
-      logger.success('Restored original user session after add account', {
-        originalUserId: originalUserIdFromCookie.substring(0, 8),
-        newAccountEmail: user.email,
-      });
-    } else {
-      // CRITICAL: Session restoration failed in add_account mode
-      // This means we couldn't find/parse the original session cookies
-      // The OAuth flow switched the user to the new account, which we don't want
-      // DON'T set the new OAuth cookies - leave cookies unchanged and show error
-      logger.error('Session restoration FAILED in add_account mode - not setting new cookies', {
-        originalUserId: originalUserIdFromCookie.substring(0, 8),
-        sessionUserId: user.id.substring(0, 8),
-        sessionRestored,
-        originalCookieCount: originalAuthCookies.length,
-        hadOriginalSessionCookie: !!cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value,
-      });
-
-      // Redirect to settings with error instead of success
-      // The user should still be logged in as their original account
-      // because we're not setting any new cookies
-      return NextResponse.redirect(`${origin}/settings?tab=account&error=session_restore_failed`);
-    }
+    // In add_account mode: DON'T set the new session cookies
+    // The browser still has the original user's session cookies from before
+    // the OAuth redirect, so by not overwriting them, user stays logged in
+    // as their original account.
+    logger.info('Add account mode: preserving original session (not setting new OAuth cookies)', {
+      originalUserId: originalUserIdFromCookie.substring(0, 8),
+      newSessionCookieCount: cookiesToSet.length,
+      newAccountEmail: user.email,
+    });
   } else {
     // Normal flow: set cookies from OAuth flow
     for (const { name, value, options } of cookiesToSet) {
