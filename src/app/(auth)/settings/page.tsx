@@ -1090,7 +1090,7 @@ function DevToolsSection() {
         setLastResult(result);
         toast({
           title: 'Rescan complete',
-          description: `Re-analyzed ${result.rescanned} emails. ${result.results.actionsCreated} actions created.`,
+          description: `Re-analyzed ${result.rescanned ?? 0} emails. ${result.results?.actionsCreated ?? 0} actions created.`,
         });
       } else {
         toast({
@@ -1177,7 +1177,7 @@ function DevToolsSection() {
         </div>
 
         {/* Last Result Summary */}
-        {lastResult && (
+        {lastResult?.results && (
           <div className="pt-4 border-t">
             <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
               <Check className="h-4 w-4 text-green-500" />
@@ -1185,23 +1185,23 @@ function DevToolsSection() {
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="p-3 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-primary">{lastResult.results.clearedCount}</div>
+                <div className="text-2xl font-bold text-primary">{lastResult.results.clearedCount ?? 0}</div>
                 <div className="text-xs text-muted-foreground">Cleared</div>
               </div>
               <div className="p-3 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-green-600">{lastResult.results.successCount}</div>
+                <div className="text-2xl font-bold text-green-600">{lastResult.results.successCount ?? 0}</div>
                 <div className="text-xs text-muted-foreground">Re-analyzed</div>
               </div>
               <div className="p-3 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-blue-600">{lastResult.results.actionsCreated}</div>
+                <div className="text-2xl font-bold text-blue-600">{lastResult.results.actionsCreated ?? 0}</div>
                 <div className="text-xs text-muted-foreground">Actions</div>
               </div>
               <div className="p-3 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-purple-600">${lastResult.results.estimatedCost.toFixed(4)}</div>
+                <div className="text-2xl font-bold text-purple-600">${(lastResult.results.estimatedCost ?? 0).toFixed(4)}</div>
                 <div className="text-xs text-muted-foreground">Cost</div>
               </div>
             </div>
-            {lastResult.results.failureCount > 0 && (
+            {(lastResult.results.failureCount ?? 0) > 0 && (
               <p className="text-xs text-destructive mt-2">
                 {lastResult.results.failureCount} emails failed to analyze
               </p>
