@@ -240,7 +240,9 @@ function ProfileSection({ displayName }: { displayName: string }) {
 function AccountsSection() {
   const { accounts, isLoading, error, disconnectAccount, refetch, totalEmails } = useGmailAccounts();
   const { triggerSync, isSyncing } = useSyncStatus();
+  const { connectAdditionalAccount } = useAuth();
   const { toast } = useToast();
+  const [isConnecting, setIsConnecting] = React.useState(false);
 
   const handleDisconnect = async (accountId: string, email: string) => {
     const success = await disconnectAccount(accountId);
@@ -259,6 +261,21 @@ function AccountsSection() {
       refetch(); // Refresh account data to update lastSyncAt
     } else {
       toast({ variant: 'destructive', title: 'Refresh failed', description: 'Unknown error' });
+    }
+  };
+
+  const handleConnectAccount = async () => {
+    setIsConnecting(true);
+    try {
+      await connectAdditionalAccount();
+      // Will redirect to OAuth flow, so we won't reach here
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to connect',
+        description: err instanceof Error ? err.message : 'Could not initiate account connection.',
+      });
+      setIsConnecting(false);
     }
   };
 
@@ -347,6 +364,18 @@ function AccountsSection() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+                    {account.syncStatus === 'error' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-amber-600 hover:text-amber-700"
+                        onClick={handleConnectAccount}
+                        disabled={isConnecting}
+                        title="Reconnect this account to refresh access"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    )}
                     {!account.isPrimary && (
                       <Button
                         variant="ghost"
@@ -365,9 +394,23 @@ function AccountsSection() {
           </div>
         )}
 
-        <Button variant="outline" className="w-full gap-2">
-          <Plus className="h-4 w-4" />
-          Connect Another Account
+        <Button
+          variant="outline"
+          className="w-full gap-2"
+          onClick={handleConnectAccount}
+          disabled={isConnecting}
+        >
+          {isConnecting ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Connecting...
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              Connect Another Account
+            </>
+          )}
         </Button>
       </CardContent>
     </Card>
@@ -2070,10 +2113,28 @@ export default function SettingsPage() {
   const { settings, usage, isLoading, isUpdating, error, updateSettings, refreshUsage } =
     useSettings();
   const { toast } = useToast();
+  const { refetch: refetchAccounts } = useGmailAccounts();
 
   // Get initial tab from URL or default to 'account'
   const initialTab = (searchParams.get('tab') as SettingsTab) || 'account';
   const [activeTab, setActiveTab] = React.useState<SettingsTab>(initialTab);
+
+  // Handle "account_added" success message from OAuth callback
+  React.useEffect(() => {
+    const accountAdded = searchParams.get('account_added');
+    if (accountAdded === 'true') {
+      toast({
+        title: 'Account connected',
+        description: 'Your new Gmail account has been added successfully.',
+      });
+      // Refresh accounts to show the new one
+      refetchAccounts();
+      // Remove the query param from URL to prevent showing toast on refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete('account_added');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [searchParams, toast, refetchAccounts]);
 
   // Handle update with toast feedback
   const handleUpdate = async (updates: Partial<UserSettings>) => {

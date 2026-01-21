@@ -99,14 +99,9 @@ export function AccountsStep({ user, onNext, onBack }: StepProps) {
     setIsAddingAccount(true);
     logger.info('User initiated adding another Gmail account');
 
-    // For now, show a toast explaining this feature
-    // In production, this would trigger the Gmail OAuth flow for additional accounts
-    toast({
-      title: 'Coming soon',
-      description: 'Multi-account support will be available in the next update.',
-    });
-
-    setIsAddingAccount(false);
+    // Redirect to the connect-account API route which handles OAuth
+    // This will set a cookie with the current user ID and redirect to Google
+    window.location.href = '/api/auth/connect-account';
   };
 
   // ───────────────────────────────────────────────────────────────────────────

@@ -129,6 +129,8 @@ export interface AuthContextValue {
   error: Error | null;
   /** Initiate sign in with Gmail */
   signInWithGmail: () => Promise<void>;
+  /** Connect an additional Gmail account (shows account picker) */
+  connectAdditionalAccount: () => Promise<void>;
   /** Sign out the current user */
   signOut: () => Promise<void>;
   /** Refresh the current session */
@@ -466,6 +468,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [supabase]);
 
   /**
+   * Connect an additional Gmail account.
+   *
+   * Redirects to /api/auth/connect-account which:
+   * - Sets a secure cookie with the current user's ID
+   * - Redirects to Google OAuth with account picker
+   * - Callback associates new Gmail account with original user
+   *
+   * This ensures the new Gmail account is linked to the current user,
+   * even if they select a different Google account.
+   */
+  const connectAdditionalAccount = React.useCallback(async () => {
+    if (!user) {
+      throw new Error('Must be logged in to connect additional accounts');
+    }
+
+    logger.start('Connecting additional Gmail account', { userId: user.id });
+    setError(null);
+
+    // Redirect to server-side connect-account endpoint
+    // This sets a secure cookie and redirects to Google OAuth
+    window.location.href = '/api/auth/connect-account';
+  }, [user]);
+
+  /**
    * Sign out the current user.
    *
    * Clears the Supabase session and resets local state.
@@ -538,10 +564,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated: !!user,
       error,
       signInWithGmail,
+      connectAdditionalAccount,
       signOut,
       refreshSession,
     }),
-    [user, isLoading, error, signInWithGmail, signOut, refreshSession]
+    [user, isLoading, error, signInWithGmail, connectAdditionalAccount, signOut, refreshSession]
   );
 
   return (

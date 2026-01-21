@@ -31,6 +31,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createLogger, logAuth } from '@/lib/utils/logger';
 import { gmailWatchService } from '@/lib/gmail/watch-service';
+import { ADD_ACCOUNT_COOKIE } from '@/app/api/auth/connect-account/route';
 import type { Database, TableInsert } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -90,11 +91,16 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const next = searchParams.get('next');
   const returnUrl = searchParams.get('returnUrl');
+  const mode = searchParams.get('mode');
+
+  // Check if this is "add account" mode
+  const isAddAccountMode = mode === 'add_account';
 
   logger.start('Processing OAuth callback', {
     hasCode: !!code,
     next,
     returnUrl,
+    isAddAccountMode,
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -161,25 +167,56 @@ export async function GET(request: Request) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 3: Store Google OAuth tokens in database (reduces cookie size)
+  // Step 3: Handle "add account" mode - get original user ID from cookie
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  let targetUserId = user.id;
+  let originalUserIdFromCookie: string | null = null;
+
+  if (isAddAccountMode) {
+    // In "add account" mode, we need to associate the new Gmail account
+    // with the ORIGINAL user, not the session user (which may have changed)
+    originalUserIdFromCookie = cookieStore.get(ADD_ACCOUNT_COOKIE)?.value ?? null;
+
+    if (originalUserIdFromCookie) {
+      targetUserId = originalUserIdFromCookie;
+      logger.info('Add account mode: using original user ID', {
+        originalUserId: originalUserIdFromCookie.substring(0, 8),
+        sessionUserId: user.id.substring(0, 8),
+        newEmail: user.email,
+      });
+    } else {
+      logger.warn('Add account mode but no cookie found, using session user', {
+        sessionUserId: user.id.substring(0, 8),
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Step 4: Store Google OAuth tokens in database (reduces cookie size)
   // ─────────────────────────────────────────────────────────────────────────────
 
   const providerToken = sessionData.session?.provider_token;
   const providerRefreshToken = sessionData.session?.provider_refresh_token;
 
   if (providerToken && user.email) {
-    logger.info('Storing Gmail OAuth tokens', { userId: user.id });
+    logger.info('Storing Gmail OAuth tokens', {
+      targetUserId: targetUserId.substring(0, 8),
+      email: user.email,
+      isAddAccountMode,
+    });
 
     // Calculate token expiry (Google tokens typically expire in 1 hour)
     const tokenExpiry = new Date(Date.now() + 3600 * 1000).toISOString();
 
     // Check if gmail_account exists, upsert if needed
+    // In add_account mode, targetUserId may differ from user.id
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: gmailError } = await (supabase as any)
       .from('gmail_accounts')
       .upsert(
         {
-          user_id: user.id,
+          user_id: targetUserId,
           email: user.email,
           display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
           access_token: providerToken,
@@ -192,11 +229,15 @@ export async function GET(request: Request) {
 
     if (gmailError) {
       logger.warn('Failed to store Gmail tokens', {
-        userId: user.id,
+        targetUserId: targetUserId.substring(0, 8),
         error: gmailError.message,
       });
     } else {
-      logger.success('Stored Gmail OAuth tokens', { userId: user.id });
+      logger.success('Stored Gmail OAuth tokens', {
+        targetUserId: targetUserId.substring(0, 8),
+        email: user.email,
+        isAddAccountMode,
+      });
 
       // ─────────────────────────────────────────────────────────────────────────
       // Start Gmail watch for push notifications (if enabled)
@@ -210,7 +251,7 @@ export async function GET(request: Request) {
           const { data: gmailAccount } = await (supabase as any)
             .from('gmail_accounts')
             .select('id')
-            .eq('user_id', user.id)
+            .eq('user_id', targetUserId)
             .eq('email', user.email)
             .single();
 
@@ -220,7 +261,7 @@ export async function GET(request: Request) {
               gmailAccount.id
             );
             logger.success('Started Gmail push notifications', {
-              userId: user.id,
+              targetUserId: targetUserId.substring(0, 8),
               historyId: watch.historyId,
               expiresAt: new Date(parseInt(watch.expiration)).toISOString(),
             });
@@ -229,13 +270,13 @@ export async function GET(request: Request) {
           // Don't fail the auth flow if watch setup fails
           // We'll fall back to polling via scheduled sync
           logger.warn('Failed to start Gmail push notifications (will use polling)', {
-            userId: user.id,
+            targetUserId: targetUserId.substring(0, 8),
             error: watchError instanceof Error ? watchError.message : 'Unknown error',
           });
         }
       } else {
         logger.debug('Gmail push notifications not enabled (missing GOOGLE_CLOUD_PROJECT)', {
-          userId: user.id,
+          targetUserId: targetUserId.substring(0, 8),
         });
       }
     }
@@ -297,12 +338,19 @@ export async function GET(request: Request) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 5: Determine redirect destination
+  // Step 6: Determine redirect destination
   // ─────────────────────────────────────────────────────────────────────────────
 
   let redirectPath: string;
 
-  if (isNewUser) {
+  if (isAddAccountMode && originalUserIdFromCookie) {
+    // "Add account" mode - redirect back to settings with success message
+    redirectPath = '/settings?tab=account&account_added=true';
+    logger.success('Add account flow complete', {
+      originalUserId: originalUserIdFromCookie.substring(0, 8),
+      newEmail: user.email,
+    });
+  } else if (isNewUser) {
     // New users always go to onboarding
     redirectPath = '/onboarding';
   } else if (existingProfile && !existingProfile.onboarding_completed) {
@@ -322,11 +370,12 @@ export async function GET(request: Request) {
   logger.success('OAuth callback complete', {
     userId: user.id,
     isNewUser,
+    isAddAccountMode,
     redirectTo: redirectPath,
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 6: Redirect to destination with cookies
+  // Step 7: Redirect to destination with cookies
   // ─────────────────────────────────────────────────────────────────────────────
 
   // Create redirect response and set all collected cookies
@@ -335,6 +384,17 @@ export async function GET(request: Request) {
   // Set cookies on response (this enables proper cookie chunking by @supabase/ssr)
   for (const { name, value, options } of cookiesToSet) {
     response.cookies.set(name, value, options);
+  }
+
+  // Clear the add_account cookie if it was used
+  if (isAddAccountMode) {
+    response.cookies.set(ADD_ACCOUNT_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 0, // Delete the cookie
+    });
   }
 
   return response;
