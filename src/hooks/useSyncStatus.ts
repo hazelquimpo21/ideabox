@@ -167,6 +167,9 @@ export function useSyncStatus(): UseSyncStatusReturn {
   const [isReady, setIsReady] = React.useState(false);
   const [isSyncing, setIsSyncing] = React.useState(false);
 
+  // Use a ref to store lastSyncResult to avoid dependency loop in fetchStatus
+  const lastSyncResultRef = React.useRef<SyncResult | null>(null);
+
   const supabase = React.useMemo(() => createClient(), []);
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -255,7 +258,7 @@ export function useSyncStatus(): UseSyncStatusReturn {
         emailsCount: emailsCount || 0,
         accountEmail: account?.email || null,
         errorMessage,
-        lastSyncResult: statusInfo.lastSyncResult, // Preserve last result
+        lastSyncResult: lastSyncResultRef.current, // Preserve last result from ref
       };
 
       setStatusInfo(newStatusInfo);
@@ -273,7 +276,7 @@ export function useSyncStatus(): UseSyncStatusReturn {
       setStatusInfo(prev => ({ ...prev, status: 'error', errorMessage }));
       setIsReady(true);
     }
-  }, [supabase, statusInfo.lastSyncResult]);
+  }, [supabase]); // Removed statusInfo.lastSyncResult to fix infinite loop
 
   // ───────────────────────────────────────────────────────────────────────────
   // Trigger manual sync
@@ -319,6 +322,8 @@ export function useSyncStatus(): UseSyncStatusReturn {
         ...result.totals,
       });
 
+      // Update ref first, then state
+      lastSyncResultRef.current = result;
       setStatusInfo(prev => ({
         ...prev,
         status: 'success',
