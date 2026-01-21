@@ -31,7 +31,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createLogger, logAuth } from '@/lib/utils/logger';
 import { gmailWatchService } from '@/lib/gmail/watch-service';
-import { ADD_ACCOUNT_COOKIE } from '@/app/api/auth/connect-account/route';
+import { ADD_ACCOUNT_COOKIE, ORIGINAL_SESSION_COOKIE } from '@/app/api/auth/connect-account/route';
 import type { Database, TableInsert } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -338,6 +338,53 @@ export async function GET(request: Request) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Step 5b: Restore original session if in add_account mode
+  // ─────────────────────────────────────────────────────────────────────────────
+  // When adding an account, Supabase OAuth switches the session to the new user.
+  // We need to restore the original session so the user stays logged in as
+  // their original account, not the newly added Gmail account.
+
+  let sessionRestored = false;
+  if (isAddAccountMode && originalUserIdFromCookie) {
+    const originalSessionJson = cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value;
+
+    if (originalSessionJson) {
+      try {
+        const originalSession = JSON.parse(originalSessionJson);
+
+        if (originalSession.access_token && originalSession.refresh_token) {
+          // Restore the original session
+          const { error: restoreError } = await supabase.auth.setSession({
+            access_token: originalSession.access_token,
+            refresh_token: originalSession.refresh_token,
+          });
+
+          if (restoreError) {
+            logger.warn('Failed to restore original session', {
+              error: restoreError.message,
+              originalUserId: originalUserIdFromCookie.substring(0, 8),
+            });
+          } else {
+            sessionRestored = true;
+            logger.success('Restored original user session after add account', {
+              originalUserId: originalUserIdFromCookie.substring(0, 8),
+              newAccountEmail: user.email,
+            });
+          }
+        }
+      } catch (parseError) {
+        logger.warn('Failed to parse original session cookie', {
+          error: parseError instanceof Error ? parseError.message : 'Unknown error',
+        });
+      }
+    } else {
+      logger.warn('No original session cookie found in add_account mode', {
+        originalUserId: originalUserIdFromCookie.substring(0, 8),
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Step 6: Determine redirect destination
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -349,6 +396,7 @@ export async function GET(request: Request) {
     logger.success('Add account flow complete', {
       originalUserId: originalUserIdFromCookie.substring(0, 8),
       newEmail: user.email,
+      sessionRestored,
     });
   } else if (isNewUser) {
     // New users always go to onboarding
@@ -386,9 +434,16 @@ export async function GET(request: Request) {
     response.cookies.set(name, value, options);
   }
 
-  // Clear the add_account cookie if it was used
+  // Clear the add_account cookies if they were used
   if (isAddAccountMode) {
     response.cookies.set(ADD_ACCOUNT_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 0, // Delete the cookie
+    });
+    response.cookies.set(ORIGINAL_SESSION_COOKIE, '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
