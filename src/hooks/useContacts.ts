@@ -82,6 +82,34 @@ export type ContactRelationshipType =
   | 'unknown';
 
 /**
+ * Sender types for classifying contacts (NEW Jan 2026).
+ *
+ * Distinguishes real contacts from newsletters/broadcasts:
+ * - direct: Real person who knows you
+ * - broadcast: Newsletter/marketing sender
+ * - cold_outreach: Cold emails from strangers
+ * - opportunity: HARO-style mailing lists
+ * - unknown: Not yet classified
+ * - all: No filter (show all)
+ */
+export type SenderType =
+  | 'direct'
+  | 'broadcast'
+  | 'cold_outreach'
+  | 'opportunity'
+  | 'unknown'
+  | 'all';
+
+/**
+ * Broadcast subtypes for newsletter classification.
+ */
+export type BroadcastSubtype =
+  | 'newsletter_author'
+  | 'company_newsletter'
+  | 'digest_service'
+  | 'transactional';
+
+/**
  * Contact entity from the database.
  * Represents a person the user has exchanged emails with.
  */
@@ -98,7 +126,7 @@ export interface Contact {
   company: string | null;
   /** Job title (extracted from email signature) */
   job_title: string | null;
-  /** Inferred relationship type */
+  /** Inferred relationship type (only meaningful for direct senders) */
   relationship_type: ContactRelationshipType;
   /** Whether this contact is marked as VIP (high priority) */
   is_vip: boolean;
@@ -115,6 +143,17 @@ export interface Contact {
   /** Record timestamps */
   created_at: string;
   updated_at: string;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SENDER TYPE FIELDS (NEW Jan 2026)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Sender type classification: direct, broadcast, cold_outreach, opportunity, unknown */
+  sender_type: SenderType | null;
+  /** Broadcast subtype (only for sender_type='broadcast') */
+  broadcast_subtype: BroadcastSubtype | null;
+  /** Confidence in sender type classification (0-1) */
+  sender_type_confidence: number | null;
 }
 
 /**
@@ -137,6 +176,39 @@ export interface UseContactsOptions {
   page?: number;
   /** Number of contacts per page */
   pageSize?: number;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SENDER TYPE FILTERING (NEW Jan 2026)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Filter by sender type:
+   * - 'direct': Real contacts who know you
+   * - 'broadcast': Newsletter/marketing senders
+   * - 'cold_outreach': Cold emails from strangers
+   * - 'opportunity': HARO-style mailing lists
+   * - 'unknown': Not yet classified
+   * - 'all' or undefined: No filter (return all)
+   */
+  senderType?: SenderType;
+  /** Filter by broadcast subtype (only when senderType='broadcast') */
+  broadcastSubtype?: BroadcastSubtype;
+}
+
+/**
+ * Sender type statistics for tab badges.
+ */
+export interface SenderTypeStats {
+  /** Real contacts who know you */
+  direct: number;
+  /** Newsletter/marketing senders */
+  broadcast: number;
+  /** Cold emails from strangers */
+  cold_outreach: number;
+  /** HARO-style mailing lists */
+  opportunity: number;
+  /** Not yet classified */
+  unknown: number;
 }
 
 /**
@@ -153,6 +225,13 @@ export interface ContactStats {
   clients: number;
   /** Last Google contacts sync timestamp */
   lastGoogleSync: string | null;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SENDER TYPE STATS (NEW Jan 2026)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Counts by sender type (for tab badges) */
+  bySenderType: SenderTypeStats;
 }
 
 /**
@@ -296,6 +375,13 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     muted: 0,
     clients: 0,
     lastGoogleSync: null,
+    bySenderType: {
+      direct: 0,
+      broadcast: 0,
+      cold_outreach: 0,
+      opportunity: 0,
+      unknown: 0,
+    },
   });
 
   // Memoize the Supabase client to prevent recreation on each render
@@ -311,6 +397,8 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     sortOrder = 'desc',
     page: requestedPage = DEFAULT_PAGE,
     pageSize = DEFAULT_PAGE_SIZE,
+    senderType,
+    broadcastSubtype,
   } = options;
 
   // Internal page state - allows navigation without requiring parent to track page
@@ -371,6 +459,8 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
       isVip,
       isMuted,
       relationshipType,
+      senderType: senderType ?? 'all',
+      broadcastSubtype,
       search: search ? `"${search}"` : undefined,
       sortBy,
       sortOrder,
@@ -404,6 +494,21 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
       if (relationshipType) {
         query = query.eq('relationship_type', relationshipType);
         logger.debug('Applying relationship filter', { relationshipType });
+      }
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // SENDER TYPE FILTER (NEW Jan 2026)
+      // Allows filtering to show only real contacts, newsletters, etc.
+      // ─────────────────────────────────────────────────────────────────────────
+      if (senderType && senderType !== 'all') {
+        query = query.eq('sender_type', senderType);
+        logger.debug('Applying sender type filter', { senderType });
+
+        // Additional subtype filter for broadcasts
+        if (senderType === 'broadcast' && broadcastSubtype) {
+          query = query.eq('broadcast_subtype', broadcastSubtype);
+          logger.debug('Applying broadcast subtype filter', { broadcastSubtype });
+        }
       }
 
       // Text search - searches across both name and email fields
@@ -462,7 +567,7 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, internalPage, pageSize, isVip, isMuted, relationshipType, search, sortBy, sortOrder]);
+  }, [supabase, internalPage, pageSize, isVip, isMuted, relationshipType, senderType, broadcastSubtype, search, sortBy, sortOrder]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Page Navigation
@@ -545,6 +650,7 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
   /**
    * Fetches global contact statistics from the dedicated stats endpoint.
    * This ensures accurate totals regardless of current filters.
+   * Now includes sender type statistics (NEW Jan 2026).
    */
   const fetchStats = React.useCallback(async () => {
     try {
@@ -557,8 +663,19 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
           muted: data.muted || 0,
           clients: data.clients || 0,
           lastGoogleSync: data.lastGoogleSync || null,
+          // Sender type stats (NEW Jan 2026)
+          bySenderType: data.bySenderType || {
+            direct: 0,
+            broadcast: 0,
+            cold_outreach: 0,
+            opportunity: 0,
+            unknown: 0,
+          },
         });
-        logger.debug('Global stats fetched', data);
+        logger.debug('Global stats fetched', {
+          total: data.total,
+          bySenderType: data.bySenderType,
+        });
       }
     } catch (err) {
       // Don't throw - stats are non-critical
@@ -794,7 +911,7 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
   }, [fetchStats]);
 
   // Reset to page 1 when filters change (but not when page changes)
-  const filterKey = `${isVip}-${isMuted}-${relationshipType}-${search}-${sortBy}-${sortOrder}`;
+  const filterKey = `${isVip}-${isMuted}-${relationshipType}-${senderType}-${broadcastSubtype}-${search}-${sortBy}-${sortOrder}`;
   const prevFilterKeyRef = React.useRef(filterKey);
 
   React.useEffect(() => {

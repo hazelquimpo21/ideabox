@@ -120,11 +120,68 @@ export type DateType = typeof DATE_TYPES[number];
 export type RecurrencePattern = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | null;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SENDER TYPE CLASSIFICATION (NEW Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Sender type classification - HOW does this person communicate with you?
+ *
+ * This is orthogonal to relationship_type (WHO is this person):
+ * - sender_type: Nature of the communication channel
+ * - relationship_type: Your relationship with the person (only meaningful for 'direct')
+ *
+ * Examples:
+ * - A Substack author: sender_type='broadcast', relationship_type=null
+ * - Your colleague: sender_type='direct', relationship_type='colleague'
+ * - A cold sales email: sender_type='cold_outreach', relationship_type=null
+ * - HARO query: sender_type='opportunity', relationship_type=null
+ */
+export const SENDER_TYPES = [
+  'direct',         // Real person who knows you, expects/welcomes replies
+  'broadcast',      // One-to-many sender (newsletter, marketing, notifications)
+  'cold_outreach',  // Person reaching out cold (sales, recruiter, PR pitch)
+  'opportunity',    // Mailing list where response is optional (HARO, community asks)
+  'unknown',        // Not yet classified
+] as const;
+
+export type SenderType = typeof SENDER_TYPES[number];
+
+/**
+ * Subtypes for broadcast senders - finer classification.
+ *
+ * Only applicable when sender_type = 'broadcast'.
+ */
+export const BROADCAST_SUBTYPES = [
+  'newsletter_author',    // Individual creator (Substack, personal blog)
+  'company_newsletter',   // Company marketing/updates you signed up for
+  'digest_service',       // LinkedIn digest, GitHub notifications, aggregators
+  'transactional',        // Receipts, confirmations, noreply@ addresses
+] as const;
+
+export type BroadcastSubtype = typeof BROADCAST_SUBTYPES[number];
+
+/**
+ * How sender_type was determined.
+ */
+export const SENDER_TYPE_SOURCES = [
+  'header',         // Detected from email headers (List-Unsubscribe, etc.)
+  'email_pattern',  // Detected from email address pattern (noreply@, @substack.com)
+  'ai_analysis',    // Determined by AI analyzer
+  'user_behavior',  // Inferred from user actions (replied = direct)
+  'manual',         // User explicitly set this
+] as const;
+
+export type SenderTypeSource = typeof SENDER_TYPE_SOURCES[number];
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // CONTACT RELATIONSHIP TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Types of relationships with contacts.
+ *
+ * NOTE: Only meaningful when sender_type = 'direct'. For broadcast/cold_outreach
+ * senders, relationship_type should be null or 'unknown'.
  */
 export const RELATIONSHIP_TYPES = [
   'client',         // Paying client
@@ -814,6 +871,11 @@ export type DateExtractionResult = AnalyzerResult<DateExtractionData>;
  * - Only runs when contact has extraction_confidence IS NULL or < 0.5
  * - Or last_extracted_at > 30 days ago
  * - And contact has 3+ emails (worth the token cost)
+ *
+ * SENDER TYPE CLASSIFICATION (Jan 2026):
+ * - Now also determines sender_type (direct, broadcast, cold_outreach, opportunity)
+ * - For broadcast senders, determines broadcast_subtype
+ * - This helps distinguish real contacts from newsletters/subscriptions
  */
 export interface ContactEnrichmentData {
   /**
@@ -843,6 +905,7 @@ export interface ContactEnrichmentData {
 
   /**
    * Inferred relationship type.
+   * NOTE: Only meaningful when senderType = 'direct'.
    */
   relationshipType?: ContactRelationshipType;
 
@@ -865,6 +928,44 @@ export interface ContactEnrichmentData {
    * Confidence in the extracted data (0-1).
    */
   confidence: number;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SENDER TYPE CLASSIFICATION (NEW Jan 2026)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Classification of how this sender communicates.
+   *
+   * - 'direct': Real person who knows you, expects/welcomes replies
+   * - 'broadcast': Newsletter, marketing, notifications (one-to-many)
+   * - 'cold_outreach': Cold email (sales, recruiter, PR pitch)
+   * - 'opportunity': Mailing list with optional response (HARO, community asks)
+   * - 'unknown': Cannot determine from content
+   */
+  senderType?: SenderType;
+
+  /**
+   * For broadcast senders, the specific subtype.
+   * Only set when senderType = 'broadcast'.
+   *
+   * - 'newsletter_author': Individual creator (Substack, personal blog)
+   * - 'company_newsletter': Company marketing/updates
+   * - 'digest_service': LinkedIn digest, GitHub notifications
+   * - 'transactional': Receipts, confirmations, noreply
+   */
+  broadcastSubtype?: BroadcastSubtype;
+
+  /**
+   * Confidence in the sender type classification (0-1).
+   * Separate from overall enrichment confidence.
+   */
+  senderTypeConfidence?: number;
+
+  /**
+   * Reasoning for the sender type classification.
+   * Helps with debugging and transparency.
+   */
+  senderTypeReasoning?: string;
 }
 
 /**

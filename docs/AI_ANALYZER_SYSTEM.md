@@ -791,6 +791,115 @@ await reassessPrioritiesForAllUsers();
 
 ---
 
+### 5. Contact Enricher Analyzer (ENHANCED Jan 2026)
+
+**Purpose:** Extract contact metadata from signatures AND classify sender type
+
+> **NEW (Jan 2026):** Now also classifies sender_type to distinguish real contacts from newsletters/broadcasts.
+
+**When It Runs:** Selectively - only for contacts that need enrichment:
+- Contact has extraction_confidence IS NULL (never enriched)
+- OR extraction_confidence < 0.5 (low quality)
+- OR last_extracted_at > 30 days ago (stale)
+- AND contact has 3+ emails (worth the token cost)
+
+**Sender Type Classification:**
+
+The key insight: `relationship_type` (client, friend) and `sender_type` (direct, broadcast) are orthogonal:
+- `sender_type`: HOW does this sender communicate? (one-to-one vs one-to-many)
+- `relationship_type`: WHO is this person? (only meaningful for direct contacts)
+
+| Sender Type | Description | Examples |
+|-------------|-------------|----------|
+| `direct` | Real person who knows you | Colleague, client, friend |
+| `broadcast` | Newsletter/marketing (one-to-many) | Substack, company updates |
+| `cold_outreach` | Targeted but no relationship | Sales, recruiter, PR |
+| `opportunity` | Mailing list with optional response | HARO, job boards |
+| `unknown` | Cannot determine | Needs more data |
+
+**Detection Priority:**
+1. **Headers** (highest confidence): List-Unsubscribe, ESP detection
+2. **Email pattern**: noreply@, @substack.com, newsletter@
+3. **Content analysis**: "View in browser", unsubscribe links
+4. **AI analysis**: When signals are ambiguous
+
+**Function Schema:**
+```typescript
+{
+  name: 'enrich_contact',
+  parameters: {
+    type: 'object',
+    properties: {
+      has_enrichment: { type: 'boolean' },
+      company: { type: 'string' },
+      job_title: { type: 'string' },
+      phone: { type: 'string' },
+      linkedin_url: { type: 'string' },
+      relationship_type: { type: 'string', enum: ['client', 'colleague', 'vendor', ...] },
+      source: { type: 'string', enum: ['signature', 'email_body', 'both'] },
+      confidence: { type: 'number' },
+      // NEW FIELDS (Jan 2026)
+      sender_type: { type: 'string', enum: ['direct', 'broadcast', 'cold_outreach', 'opportunity', 'unknown'] },
+      broadcast_subtype: { type: 'string', enum: ['newsletter_author', 'company_newsletter', 'digest_service', 'transactional'] },
+      sender_type_confidence: { type: 'number' },
+      sender_type_reasoning: { type: 'string' },
+    },
+    required: ['has_enrichment', 'source', 'confidence', 'sender_type', 'sender_type_confidence'],
+  },
+}
+```
+
+**Key Prompt Guidance for Sender Type:**
+```
+BE SKEPTICAL of personal-looking sender names. Many marketing emails use
+"Sarah from Acme" to feel personal, but Sarah doesn't know the recipient.
+If newsletter signals are present (unsubscribe link, view in browser, etc.),
+classify as 'broadcast' even if the sender name looks like a person.
+```
+
+**Impact on UI:**
+- Contacts page defaults to `sender_type = 'direct'` (real contacts)
+- "Subscriptions" tab shows `sender_type = 'broadcast'`
+- Stats API returns counts by sender_type for tab badges
+
+**Cost:** ~$0.0003 per email (runs selectively, maybe 5-10% of contacts)
+
+---
+
+### 6. Sender Type Detector (Pre-AI Utility)
+
+**Purpose:** Fast pattern-based sender type detection before AI analysis
+
+**Location:** `src/services/sync/sender-type-detector.ts`
+
+This utility provides:
+1. **Header-based detection**: Checks List-Unsubscribe, ESP patterns
+2. **Email pattern detection**: Known domains (@substack.com) and prefixes (noreply@)
+3. **Content pattern detection**: "View in browser", unsubscribe links
+
+**Usage:**
+```typescript
+import { senderTypeDetector } from '@/services/sync/sender-type-detector';
+
+const result = senderTypeDetector.detect({
+  senderEmail: 'newsletter@substack.com',
+  subject: 'Weekly Update',
+  bodyText: 'Click here to unsubscribe...',
+});
+
+// result.senderType = 'broadcast'
+// result.broadcastSubtype = 'newsletter_author'
+// result.confidence = 0.95
+// result.source = 'email_pattern'
+```
+
+**Why Pre-AI Detection?**
+- Saves tokens by catching obvious cases
+- Header-based detection is more reliable than AI
+- Provides initial classification that AI can refine
+
+---
+
 ## Phase 2+ Analyzer Additions
 
 Future analyzers to add (same pattern):
