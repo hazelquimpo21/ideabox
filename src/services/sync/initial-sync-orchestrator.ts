@@ -373,12 +373,14 @@ export class InitialSyncOrchestrator {
   private async fetchEmailsFromDatabase(): Promise<EmailForAnalysis[]> {
     const supabase = await createServerClient();
 
+    // Exclude emails that previously failed analysis (per DECISIONS.md: "Do NOT retry on next sync")
     const { data, error } = await supabase
       .from('emails')
       .select('id, gmail_id, subject, sender_email, sender_name, snippet, body_text, gmail_labels, is_read, date')
       .eq('user_id', this.userId)
       .eq('gmail_account_id', this.gmailAccountId)
       .is('analyzed_at', null) // Only unanalyzed emails
+      .is('analysis_error', null) // Exclude emails that previously failed analysis
       .order('date', { ascending: false })
       .limit(this.config.maxEmails);
 

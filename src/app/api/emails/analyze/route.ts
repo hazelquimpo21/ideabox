@@ -327,9 +327,11 @@ async function getUnanalyzedEmails(
     .order('date', { ascending: false })
     .limit(maxEmails);
 
-  // Filter to unanalyzed emails
+  // Filter to unanalyzed emails (per DECISIONS.md: "Do NOT retry on next sync")
   if (skipAnalyzed) {
-    query = query.is('analyzed_at', null);
+    query = query
+      .is('analyzed_at', null)
+      .is('analysis_error', null); // Exclude emails that previously failed analysis
   }
 
   const { data: emails, error } = await query;
