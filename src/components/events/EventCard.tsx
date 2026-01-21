@@ -66,7 +66,7 @@ import {
   formatRelativeDate,
   getDeadlineUrgency,
 } from '@/lib/utils/calendar';
-import type { EventData } from '@/hooks/useEvents';
+import type { EventData, EventMetadata } from '@/hooks/useEvents';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -80,9 +80,39 @@ const logger = createLogger('EventCard');
 
 /**
  * Event locality type - where the event is relative to the user.
- * Derived from the EventDetector's eventLocality field.
+ * Now sourced from event_metadata.locality field.
+ *
+ * @since January 2026 - Now uses event_metadata instead of email_analyses JOIN
  */
 type EventLocality = 'local' | 'out_of_town' | 'virtual' | null;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Extracts event metadata from an event record.
+ * Returns null if no metadata available (non-EventDetector events).
+ */
+function getEventMetadata(event: EventData): EventMetadata | null {
+  return event.event_metadata ?? null;
+}
+
+/**
+ * Gets the locality from event metadata.
+ * Falls back to determining from location type if metadata is incomplete.
+ */
+function getLocality(event: EventData): EventLocality {
+  const metadata = getEventMetadata(event);
+  if (metadata?.locality) {
+    return metadata.locality;
+  }
+  // Fallback: if locationType is virtual, assume virtual locality
+  if (metadata?.locationType === 'virtual') {
+    return 'virtual';
+  }
+  return null;
+}
 
 /**
  * Props for the EventCard component.
@@ -316,7 +346,7 @@ function CompactEventCard({
 
             {/* Locality badge and chevron */}
             <div className="flex items-center gap-1 shrink-0">
-              {/* Note: locality is not directly on extracted_dates, would need join with email_analyses */}
+              <LocalityBadge locality={getLocality(event)} />
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
           </div>
@@ -469,13 +499,82 @@ export function EventCard({
           </div>
 
           {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* Date and Time */}
+          {/* Date, Time, and Locality */}
           {/* ─────────────────────────────────────────────────────────────────── */}
-          <DateTimeDisplay
-            date={event.date}
-            time={event.event_time}
-            showRelative={!isToday}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <DateTimeDisplay
+              date={event.date}
+              time={event.event_time}
+              showRelative={!isToday}
+            />
+            <LocalityBadge locality={getLocality(event)} />
+          </div>
+
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {/* Location (from event_metadata) */}
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {getEventMetadata(event)?.location && (
+            <LocationDisplay location={getEventMetadata(event)!.location!} />
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {/* RSVP and Cost Info (from event_metadata) */}
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {(() => {
+            const meta = getEventMetadata(event);
+            if (!meta) return null;
+
+            const showRsvp = meta.rsvpRequired || meta.rsvpDeadline || meta.rsvpUrl;
+            const showCost = meta.cost;
+
+            if (!showRsvp && !showCost) return null;
+
+            return (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                {/* Cost badge */}
+                {showCost && (
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${
+                      meta.cost?.toLowerCase() === 'free'
+                        ? 'border-green-300 text-green-700 dark:border-green-700 dark:text-green-300'
+                        : 'border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-300'
+                    }`}
+                  >
+                    {meta.cost}
+                  </Badge>
+                )}
+
+                {/* RSVP indicator */}
+                {meta.rsvpRequired && (
+                  <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
+                    RSVP Required
+                  </Badge>
+                )}
+
+                {/* RSVP deadline */}
+                {meta.rsvpDeadline && (
+                  <span className="text-xs text-muted-foreground">
+                    RSVP by {formatEventDate(meta.rsvpDeadline, { short: true })}
+                  </span>
+                )}
+
+                {/* RSVP link */}
+                {meta.rsvpUrl && (
+                  <a
+                    href={meta.rsvpUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+                    onClick={() => logger.info('RSVP link clicked', { eventId: event.id.substring(0, 8) })}
+                  >
+                    Register
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ─────────────────────────────────────────────────────────────────── */}
           {/* Source email info */}

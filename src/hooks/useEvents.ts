@@ -71,7 +71,11 @@ import type {
   GroupedDates,
   DateStats,
   UseExtractedDatesOptions,
+  EventMetadata,
 } from './useExtractedDates';
+
+// Re-export EventMetadata for EventCard to use
+export type { EventMetadata };
 import { createLogger } from '@/lib/utils/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════════

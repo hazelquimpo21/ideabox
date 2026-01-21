@@ -102,11 +102,13 @@ export async function GET(request: NextRequest) {
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Step 4: Build the database query
+    // Includes event_metadata JSONB for rich event display (locality, location, RSVP)
     // ─────────────────────────────────────────────────────────────────────────────
     let query = supabase
       .from('extracted_dates')
       .select(`
         *,
+        event_metadata,
         emails:email_id (
           id,
           subject,
