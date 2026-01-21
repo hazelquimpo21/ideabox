@@ -1,8 +1,8 @@
 # IdeaBox - Implementation Status
 
-> **Last Updated:** January 19, 2026
-> **Current Phase:** Phase 1 - Core Features Complete (Enhanced Analyzers + Event Detection + Priority Jobs)
-> **Branch:** `claude/analyze-polling-events-lPsoz`
+> **Last Updated:** January 21, 2026
+> **Current Phase:** Phase 1 - Core Features Complete + Events Page Enhancement
+> **Branch:** `claude/plan-event-cards-sidebar-6BOBV`
 
 ## Overview
 
@@ -447,7 +447,9 @@ src/
 │       ├── archive/
 │       │   └── page.tsx         ✅ Archive page (useEmails hook)
 │       ├── discover/
-│       │   └── page.tsx         ✅ Discovery Dashboard (NEW!)
+│       │   └── page.tsx         ✅ Discovery Dashboard
+│       ├── events/
+│       │   └── page.tsx         ✅ Events page with cards (NEW! Jan 2026)
 │       └── settings/
 │           └── page.tsx         ✅ Settings page
 ├── components/
@@ -462,6 +464,9 @@ src/
 │   │   ├── QuickActions.tsx     ✅ Suggested actions
 │   │   ├── FailureSummary.tsx   ✅ Failed analyses
 │   │   └── DiscoveryHero.tsx    ✅ Hero with stats
+│   ├── events/                  ✅ Events components (NEW! Jan 2026)
+│   │   ├── index.ts             ✅ Barrel export
+│   │   └── EventCard.tsx        ✅ Full & compact event cards
 │   ├── email/                   ✅ Email components
 │   │   ├── index.ts             ✅ Barrel export
 │   │   └── EmailDetail.tsx      ✅ Full email view with AI analysis
@@ -491,11 +496,14 @@ src/
 │   ├── useEmails.ts             ✅ Email fetching with filtering (12 tests)
 │   ├── useActions.ts            ✅ Action CRUD operations (11 tests)
 │   ├── useClients.ts            ✅ Client management (11 tests)
-│   ├── useInitialSyncProgress.ts ✅ Sync progress polling (NEW!)
+│   ├── useInitialSyncProgress.ts ✅ Sync progress polling
 │   ├── useEmailAnalysis.ts      ✅ Single email AI analysis
 │   ├── useSyncStatus.ts         ✅ Sync status tracking
 │   ├── useSettings.ts           ✅ User settings
 │   ├── useSidebarData.ts        ✅ Sidebar category counts
+│   ├── useContacts.ts           ✅ Contact management (Jan 2026)
+│   ├── useExtractedDates.ts     ✅ Timeline dates (Jan 2026)
+│   ├── useEvents.ts             ✅ Events wrapper hook (NEW! Jan 2026)
 │   └── __tests__/
 │       ├── useEmails.test.ts    ✅
 │       ├── useActions.test.ts   ✅
@@ -733,9 +741,64 @@ toast({
 
 ---
 
+## Recent Changes (January 21, 2026)
+
+### Session 10 (Current) - Events Page Enhancement
+
+A dedicated Events page with friendly event cards, replacing the category-based filter approach.
+
+**Background:**
+Since January 2026, events are no longer a primary email category. Instead, they're detected via the `has_event` label and stored in `extracted_dates` with `date_type = 'event'`. The old Events category link (`/inbox?category=event`) no longer worked properly. This enhancement provides a dedicated events experience.
+
+**New Components:**
+
+- **useEvents Hook** (`src/hooks/useEvents.ts`, ~300 lines)
+  - Wraps `useExtractedDates` with `type: 'event'` filter
+  - Provides event-specific stats (total, today, thisWeek, upcoming)
+  - Generates sidebar summary (count, daysUntilNext, hasEventToday)
+  - Exports: `useEvents`, `EventData`, `EventStats`, `EventsSummary`, `GroupedEvents`
+
+- **EventCard Component** (`src/components/events/EventCard.tsx`, ~350 lines)
+  - Full variant: Title, date/time, description, Add to Calendar, Done button
+  - Compact variant: Minimal card for sidebar preview
+  - Date formatting with relative indicators (Today, Tomorrow, In X days)
+  - Source email info with link
+  - Today highlighting with green accent
+  - Comprehensive logging
+
+- **Events Page** (`src/app/(auth)/events/page.tsx`, ~400 lines)
+  - Route: `/events`
+  - Stats banner (Total, Today, This Week, Upcoming)
+  - Events grouped by time period (Today, Tomorrow, This Week, Next Week, Later)
+  - Show Past toggle for historical events
+  - Collapsible groups with counts
+  - Highlight event via URL param (`?highlight=<eventId>`)
+  - Add to Calendar integration (Google Calendar links)
+  - Loading skeletons and empty states
+
+**Sidebar Updates:**
+
+- **Main Navigation** - Added "Events" link to `/events` in main nav (after Timeline)
+- **Category Filters** - Removed Events from category filters (no longer a category)
+- **Upcoming Events Preview** - New collapsible section showing next 3 events as compact cards
+- **New Types** - `UpcomingEvent` interface for sidebar preview data
+
+**Files Changed:**
+- `src/hooks/useEvents.ts` - NEW
+- `src/hooks/index.ts` - Added useEvents exports
+- `src/components/events/EventCard.tsx` - NEW
+- `src/components/events/index.ts` - NEW
+- `src/app/(auth)/events/page.tsx` - NEW
+- `src/components/layout/Sidebar.tsx` - Updated with Events nav and preview section
+
+**Documentation:**
+- `docs/IMPLEMENTATION_STATUS.md` - This file
+
+---
+
 ## Recent Changes (January 19, 2026)
 
-### Session 9 (Current) - P5 UI Pages Complete
+### Session 9 - P5 UI Pages Complete
 
 - ✅ **useContacts Hook** (`src/hooks/useContacts.ts`, ~500 lines)
   - Fetches contacts with VIP/muted/relationship filtering

@@ -137,6 +137,21 @@ export type {
 } from './useExtractedDates';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EVENTS HOOKS (NEW - Jan 2026)
+// Specialized hook for event management, wrapping useExtractedDates
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useEvents, default as useEventsDefault } from './useEvents';
+export type {
+  UseEventsOptions,
+  UseEventsReturn,
+  EventData,
+  GroupedEvents,
+  EventStats,
+  EventsSummary,
+} from './useEvents';
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ACCOUNT & CONTEXT HOOKS (NEW - Jan 2026)
 // ═══════════════════════════════════════════════════════════════════════════════
 
