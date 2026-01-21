@@ -1238,7 +1238,7 @@ function scoreExtractedDate(
   try {
     // Handle date parsing carefully - dates might be in various formats
     const dateStr = extractedDate.date;
-    const timeStr = extractedDate.time;
+    const timeStr = extractedDate.event_time;
 
     if (timeStr) {
       // Combine date and time
@@ -1253,7 +1253,7 @@ function scoreExtractedDate(
       logger.warn('Invalid date in extracted date', {
         dateId: extractedDate.id,
         date: dateStr,
-        time: timeStr,
+        event_time: timeStr,
       });
       // Use a fallback - treat as today at 9 AM
       dateTime = new Date();

@@ -907,7 +907,7 @@ export class EmailProcessor {
       const { data, error } = await supabase.rpc('upsert_contact_from_email', {
         p_user_id: userId,
         p_email: normalizedEmail,
-        p_name: name,
+        p_name: name ?? null, // Ensure null not undefined
         p_email_date: emailDate,
         p_is_sent: false, // This is a received email
       });
@@ -1262,14 +1262,13 @@ export class EmailProcessor {
     const record = {
       email_id: emailId,
       user_id: userId,
-      type: action.actionType,
+      action_type: action.actionType,
       title: action.actionTitle ?? 'Action Required',
       description: action.actionDescription ?? null,
       urgency_score: action.urgencyScore,
-      due_date: action.deadline ?? null,
+      deadline: action.deadline ?? null,
       estimated_minutes: action.estimatedMinutes ?? null,
       status: 'pending' as const,
-      source: 'ai' as const,
     };
 
     const { error } = await supabase.from('actions').insert(record);

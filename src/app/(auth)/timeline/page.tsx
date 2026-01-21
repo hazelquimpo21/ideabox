@@ -64,7 +64,7 @@ import {
   Bell,
   RefreshCw,
   Check,
-  Snooze,
+  AlarmClockOff,
   EyeOff,
   Mail,
   Star,
@@ -411,7 +411,7 @@ function DateCard({
               {/* Date and time */}
               <p className={`text-sm ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground'}`}>
                 {formatDate(date.date)}
-                {date.time && ` at ${date.time}`}
+                {date.event_time && ` at ${date.event_time}`}
                 {isOverdue && ' (Overdue!)'}
               </p>
 
@@ -472,7 +472,7 @@ function DateCard({
                   onClick={() => setShowSnoozeMenu(!showSnoozeMenu)}
                   title="Snooze"
                 >
-                  <Snooze className="h-4 w-4" />
+                  <AlarmClockOff className="h-4 w-4" />
                 </Button>
 
                 {/* Snooze dropdown */}

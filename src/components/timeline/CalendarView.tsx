@@ -55,7 +55,7 @@ import {
   ChevronRight,
   X,
   Check,
-  Snooze,
+  AlarmClockOff,
   EyeOff,
   Mail,
   RefreshCw,
@@ -567,7 +567,7 @@ function SelectedDayPanel({
                       <span className={cn('capitalize', colors.text)}>
                         {item.date_type.replace('_', ' ')}
                       </span>
-                      {item.time && ` at ${item.time}`}
+                      {item.event_time && ` at ${item.event_time}`}
                       {item.is_recurring && (
                         <>
                           {' '}
@@ -617,7 +617,7 @@ function SelectedDayPanel({
                           }
                           title="Snooze"
                         >
-                          <Snooze className="h-4 w-4" />
+                          <AlarmClockOff className="h-4 w-4" />
                         </Button>
 
                         {/* Snooze dropdown */}

@@ -100,134 +100,152 @@ export const SKIP_SENDER_PATTERNS: RegExp[] = [
  * Domains that can be auto-categorized without AI.
  * Key: domain (lowercase), Value: category
  *
+ * REFACTORED (Jan 2026): Updated for life-bucket categories.
+ *
  * These are high-confidence patterns that rarely need AI analysis.
  * User-specific patterns are stored in user_profiles.sender_patterns.
  */
 export const AUTO_CATEGORIZE_DOMAINS: Record<string, EmailCategory> = {
   // ─────────────────────────────────────────────────────────────────────────
-  // Promotional (promo)
+  // Shopping (orders, shipping, retail promos)
   // ─────────────────────────────────────────────────────────────────────────
-  'amazon.com': 'promo',
-  'marketing.amazon.com': 'promo',
-  'target.com': 'promo',
-  'walmart.com': 'promo',
-  'bestbuy.com': 'promo',
-  'kohls.com': 'promo',
-  'macys.com': 'promo',
-  'nordstrom.com': 'promo',
-  'gap.com': 'promo',
-  'oldnavy.com': 'promo',
-  'bananarepublic.com': 'promo',
-  'etsy.com': 'promo',
-  'ebay.com': 'promo',
-  'wish.com': 'promo',
-  'aliexpress.com': 'promo',
-  'groupon.com': 'promo',
-  'retailmenot.com': 'promo',
+  'amazon.com': 'shopping',
+  'marketing.amazon.com': 'shopping',
+  'target.com': 'shopping',
+  'walmart.com': 'shopping',
+  'bestbuy.com': 'shopping',
+  'kohls.com': 'shopping',
+  'macys.com': 'shopping',
+  'nordstrom.com': 'shopping',
+  'gap.com': 'shopping',
+  'oldnavy.com': 'shopping',
+  'bananarepublic.com': 'shopping',
+  'etsy.com': 'shopping',
+  'ebay.com': 'shopping',
+  'wish.com': 'shopping',
+  'aliexpress.com': 'shopping',
+  'groupon.com': 'shopping',
+  'retailmenot.com': 'shopping',
+  'usps.com': 'shopping',
+  'ups.com': 'shopping',
+  'fedex.com': 'shopping',
+  'dhl.com': 'shopping',
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Newsletters (newsletter)
+  // Newsletters - General (substacks, digests, curated content)
   // ─────────────────────────────────────────────────────────────────────────
-  'substack.com': 'newsletter',
-  'substackinc.com': 'newsletter',
-  'medium.com': 'newsletter',
-  'morningbrew.com': 'newsletter',
-  'thehustle.co': 'newsletter',
-  'axios.com': 'newsletter',
-  'thedailybeast.com': 'newsletter',
-  'nytimes.com': 'newsletter',
-  'washingtonpost.com': 'newsletter',
-  'wsj.com': 'newsletter',
-  'bloomberg.com': 'newsletter',
-  'techcrunch.com': 'newsletter',
-  'theverge.com': 'newsletter',
-  'wired.com': 'newsletter',
-  'ycombinator.com': 'newsletter', // HN digest
+  'substack.com': 'newsletters_general',
+  'substackinc.com': 'newsletters_general',
+  'medium.com': 'newsletters_general',
+  'morningbrew.com': 'newsletters_general',
+  'thehustle.co': 'newsletters_general',
+  'ycombinator.com': 'newsletters_general', // HN digest
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Admin (receipts, confirmations, notifications)
+  // News & Politics
   // ─────────────────────────────────────────────────────────────────────────
-  'paypal.com': 'admin',
-  'venmo.com': 'admin',
-  'stripe.com': 'admin',
-  'square.com': 'admin',
-  'intuit.com': 'admin',
-  'turbotax.com': 'admin',
-  'chase.com': 'admin',
-  'bankofamerica.com': 'admin',
-  'wellsfargo.com': 'admin',
-  'capitalone.com': 'admin',
-  'discover.com': 'admin',
-  'americanexpress.com': 'admin',
-  'citi.com': 'admin',
-  'usps.com': 'admin',
-  'ups.com': 'admin',
-  'fedex.com': 'admin',
-  'dhl.com': 'admin',
-  'irs.gov': 'admin',
+  'axios.com': 'news_politics',
+  'thedailybeast.com': 'news_politics',
+  'nytimes.com': 'news_politics',
+  'washingtonpost.com': 'news_politics',
+  'wsj.com': 'news_politics',
+  'bloomberg.com': 'news_politics',
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Events (event)
+  // Product Updates (tech, services you use)
   // ─────────────────────────────────────────────────────────────────────────
-  'eventbrite.com': 'event',
-  'meetup.com': 'event',
-  'evite.com': 'event',
-  'paperlesspost.com': 'event',
-  'calendar.google.com': 'event',
-  'outlook.live.com': 'event',
+  'techcrunch.com': 'product_updates',
+  'theverge.com': 'product_updates',
+  'wired.com': 'product_updates',
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Noise (low value, safe to ignore)
+  // Finance (payments, banking, investments)
   // ─────────────────────────────────────────────────────────────────────────
-  'linkedin.com': 'noise', // Most LinkedIn emails are low-value
-  'quora.com': 'noise',
-  'pinterest.com': 'noise',
-  'twitter.com': 'noise', // Notifications
-  'x.com': 'noise',
-  'facebook.com': 'noise',
-  'facebookmail.com': 'noise',
-  'instagram.com': 'noise',
-  'tiktok.com': 'noise',
+  'paypal.com': 'finance',
+  'venmo.com': 'finance',
+  'stripe.com': 'finance',
+  'square.com': 'finance',
+  'intuit.com': 'finance',
+  'turbotax.com': 'finance',
+  'chase.com': 'finance',
+  'bankofamerica.com': 'finance',
+  'wellsfargo.com': 'finance',
+  'capitalone.com': 'finance',
+  'discover.com': 'finance',
+  'americanexpress.com': 'finance',
+  'citi.com': 'finance',
+  'irs.gov': 'finance',
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Local (community, events, neighborhood)
+  // Note: Events are now tracked via has_event label, category is life-bucket
+  // ─────────────────────────────────────────────────────────────────────────
+  'eventbrite.com': 'local',
+  'meetup.com': 'local',
+  'evite.com': 'local',
+  'paperlesspost.com': 'local',
+  'calendar.google.com': 'business_work_general',
+  'outlook.live.com': 'business_work_general',
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Product Updates - Social (notifications from social platforms)
+  // ─────────────────────────────────────────────────────────────────────────
+  'linkedin.com': 'business_work_general', // Professional network
+  'quora.com': 'newsletters_general',
+  'pinterest.com': 'personal_friends_family',
+  'twitter.com': 'newsletters_general',
+  'x.com': 'newsletters_general',
+  'facebook.com': 'personal_friends_family',
+  'facebookmail.com': 'personal_friends_family',
+  'instagram.com': 'personal_friends_family',
+  'tiktok.com': 'personal_friends_family',
 };
 
 /**
  * Email address prefixes that indicate auto-categorization.
  * Key: prefix pattern, Value: category
  *
+ * REFACTORED (Jan 2026): Updated for life-bucket categories.
+ *
  * Matches the local part of email (before @).
  */
 export const AUTO_CATEGORIZE_PREFIXES: Record<string, EmailCategory> = {
-  receipt: 'admin',
-  receipts: 'admin',
-  order: 'admin',
-  orders: 'admin',
-  shipping: 'admin',
-  shipment: 'admin',
-  tracking: 'admin',
-  confirmation: 'admin',
-  confirm: 'admin',
-  invoice: 'admin',
-  billing: 'admin',
-  payment: 'admin',
+  // Shopping (orders, receipts, shipping)
+  receipt: 'shopping',
+  receipts: 'shopping',
+  order: 'shopping',
+  orders: 'shopping',
+  shipping: 'shopping',
+  shipment: 'shopping',
+  tracking: 'shopping',
+  confirmation: 'shopping',
+  confirm: 'shopping',
 
-  newsletter: 'newsletter',
-  newsletters: 'newsletter',
-  digest: 'newsletter',
-  weekly: 'newsletter',
-  daily: 'newsletter',
-  update: 'newsletter',
-  updates: 'newsletter',
+  // Finance (billing, payments, invoices)
+  invoice: 'finance',
+  billing: 'finance',
+  payment: 'finance',
 
-  promo: 'promo',
-  promos: 'promo',
-  promotions: 'promo',
-  deals: 'promo',
-  sale: 'promo',
-  sales: 'promo',
-  offer: 'promo',
-  offers: 'promo',
-  marketing: 'promo',
-  discount: 'promo',
+  // Newsletters - General
+  newsletter: 'newsletters_general',
+  newsletters: 'newsletters_general',
+  digest: 'newsletters_general',
+  weekly: 'newsletters_general',
+  daily: 'newsletters_general',
+  update: 'product_updates',
+  updates: 'product_updates',
+
+  // Shopping (promos, deals)
+  promo: 'shopping',
+  promos: 'shopping',
+  promotions: 'shopping',
+  deals: 'shopping',
+  sale: 'shopping',
+  sales: 'shopping',
+  offer: 'shopping',
+  offers: 'shopping',
+  marketing: 'shopping',
+  discount: 'shopping',
 };
 
 // =============================================================================
@@ -237,6 +255,8 @@ export const AUTO_CATEGORIZE_PREFIXES: Record<string, EmailCategory> = {
 /**
  * Templates for generating category insights.
  * Used by the discovery builder to create human-readable insights.
+ *
+ * REFACTORED (Jan 2026): Updated for life-bucket categories.
  */
 export const CATEGORY_INSIGHT_TEMPLATES: Record<
   EmailCategory,
@@ -249,43 +269,68 @@ export const CATEGORY_INSIGHT_TEMPLATES: Record<
     plural: (count: number, urgentCount?: number) => string;
   }
 > = {
-  action_required: {
-    empty: 'No action items found',
-    singular: '1 email needs your attention',
-    plural: (count, urgentCount) =>
-      urgentCount && urgentCount > 0
-        ? `${count} emails need attention (${urgentCount} urgent)`
-        : `${count} emails need your attention`,
-  },
-  event: {
-    empty: 'No events detected',
-    singular: '1 event invitation found',
-    plural: (count) => `${count} events and invitations`,
-  },
-  newsletter: {
+  newsletters_general: {
     empty: 'No newsletters',
     singular: '1 newsletter',
     plural: (count) => `${count} newsletters and digests`,
   },
-  promo: {
-    empty: 'No promotional emails',
-    singular: '1 promotional email',
-    plural: (count) => `${count} promotional emails`,
+  news_politics: {
+    empty: 'No news updates',
+    singular: '1 news update',
+    plural: (count) => `${count} news and politics updates`,
   },
-  admin: {
-    empty: 'No admin emails',
-    singular: '1 receipt or confirmation',
-    plural: (count) => `${count} receipts and confirmations`,
+  product_updates: {
+    empty: 'No product updates',
+    singular: '1 product update',
+    plural: (count) => `${count} product updates`,
   },
-  personal: {
+  local: {
+    empty: 'No local updates',
+    singular: '1 local event or update',
+    plural: (count) => `${count} local events and updates`,
+  },
+  shopping: {
+    empty: 'No shopping emails',
+    singular: '1 shopping email',
+    plural: (count) => `${count} orders, shipping, and deals`,
+  },
+  travel: {
+    empty: 'No travel emails',
+    singular: '1 travel email',
+    plural: (count) => `${count} travel confirmations and updates`,
+  },
+  finance: {
+    empty: 'No finance emails',
+    singular: '1 finance email',
+    plural: (count) => `${count} bills, payments, and statements`,
+  },
+  family_kids_school: {
+    empty: 'No school emails',
+    singular: '1 school or kids email',
+    plural: (count) => `${count} school and kids emails`,
+  },
+  family_health_appointments: {
+    empty: 'No health emails',
+    singular: '1 health appointment',
+    plural: (count) => `${count} health and appointment emails`,
+  },
+  client_pipeline: {
+    empty: 'No client emails',
+    singular: '1 client email',
+    plural: (count, urgentCount) =>
+      urgentCount && urgentCount > 0
+        ? `${count} client emails (${urgentCount} need attention)`
+        : `${count} client emails`,
+  },
+  business_work_general: {
+    empty: 'No work emails',
+    singular: '1 work email',
+    plural: (count) => `${count} work and business emails`,
+  },
+  personal_friends_family: {
     empty: 'No personal emails',
     singular: '1 personal email',
     plural: (count) => `${count} personal emails`,
-  },
-  noise: {
-    empty: 'No noise detected',
-    singular: '1 low-priority email',
-    plural: (count) => `${count} low-priority emails (safe to archive)`,
   },
 };
 
