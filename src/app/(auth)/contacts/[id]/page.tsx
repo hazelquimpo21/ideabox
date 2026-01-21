@@ -319,7 +319,9 @@ export default function ContactDetailPage() {
         throw new Error('Failed to fetch contact details');
       }
 
-      const contactData = await contactRes.json();
+      const contactResponse = await contactRes.json();
+      // API returns { success: true, data: contact } - unwrap the data
+      const contactData = contactResponse.data || contactResponse;
       setContact(contactData);
       setNotes(contactData.notes || '');
 
@@ -331,39 +333,52 @@ export default function ContactDetailPage() {
       // ─────────────────────────────────────────────────────────────────────────
       // Step 2: Fetch email history from this contact (in parallel)
       // Uses the new contactEmail and direction parameters for CRM-style view
+      // Skip if contact has no email (shouldn't happen, but defensive check)
       // ─────────────────────────────────────────────────────────────────────────
-      const emailsPromise = fetch(
-        `/api/emails?contactEmail=${encodeURIComponent(contactData.email)}&direction=all&limit=${emailsPerPage}&page=1`
-      )
-        .then(async (res) => {
-          if (!res.ok) {
-            logger.warn('Failed to fetch emails', { status: res.status });
-            return { data: [], total: 0 };
-          }
-          const data = await res.json();
-          // Get total count from header or response
-          const totalCount = parseInt(res.headers.get('X-Total-Count') || '0', 10);
-          return { data: data.data || data || [], total: totalCount || data.length || 0 };
-        })
-        .catch((err) => {
-          logger.error('Email fetch error', { error: err.message });
-          return { data: [], total: 0 };
+      if (!contactData.email) {
+        logger.warn('Contact has no email, skipping email fetch', {
+          contactId: contactId.substring(0, 8),
         });
+      }
+
+      const emailsPromise = contactData.email
+        ? fetch(
+            `/api/emails?contactEmail=${encodeURIComponent(contactData.email)}&direction=all&limit=${emailsPerPage}&page=1`
+          )
+            .then(async (res) => {
+              if (!res.ok) {
+                logger.warn('Failed to fetch emails', { status: res.status });
+                return { data: [], total: 0 };
+              }
+              const emailResponse = await res.json();
+              // API returns { success: true, data: [...] } - unwrap the data
+              const emailList = emailResponse.data || emailResponse || [];
+              // Get total count from header or response
+              const totalCount = parseInt(res.headers.get('X-Total-Count') || '0', 10);
+              return { data: emailList, total: totalCount || emailList.length || 0 };
+            })
+            .catch((err) => {
+              logger.error('Email fetch error', { error: err.message });
+              return { data: [], total: 0 };
+            })
+        : Promise.resolve({ data: [], total: 0 });
 
       // ─────────────────────────────────────────────────────────────────────────
       // Step 3: Fetch related extracted dates (in parallel)
       // ─────────────────────────────────────────────────────────────────────────
       const datesPromise = fetch(`/api/dates?contactId=${contactId}&limit=10`)
-        .then((res) => {
+        .then(async (res) => {
           if (!res.ok) {
             logger.warn('Failed to fetch dates', { status: res.status });
-            return { dates: [] };
+            return { data: [] };
           }
-          return res.json();
+          const datesResponse = await res.json();
+          // API returns { success: true, data: [...] } - unwrap the data
+          return { data: datesResponse.data || [] };
         })
         .catch((err) => {
           logger.error('Dates fetch error', { error: err.message });
-          return { dates: [] };
+          return { data: [] };
         });
 
       // Wait for parallel fetches
@@ -371,13 +386,13 @@ export default function ContactDetailPage() {
 
       setEmails(emailsData.data || []);
       setTotalEmails(emailsData.total || 0);
-      setRelatedDates(datesData.dates || []);
+      setRelatedDates(datesData.data || []);
 
       logger.success('Contact data loaded', {
         contactId: contactId.substring(0, 8),
         emailCount: emailsData.data?.length || 0,
         totalEmails: emailsData.total || 0,
-        dateCount: datesData.dates?.length || 0,
+        dateCount: datesData.data?.length || 0,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error occurred';
@@ -624,14 +639,16 @@ export default function ContactDetailPage() {
         return;
       }
 
-      const data = await res.json();
+      const response = await res.json();
+      // API returns { success: true, data: [...] } - unwrap the data
+      const emailList = response.data || response || [];
       const totalCount = parseInt(res.headers.get('X-Total-Count') || '0', 10);
 
-      setEmails(data.data || data || []);
-      setTotalEmails(totalCount || data.length || 0);
+      setEmails(emailList);
+      setTotalEmails(totalCount || emailList.length || 0);
 
       logger.success('Emails fetched', {
-        count: (data.data || data || []).length,
+        count: emailList.length,
         total: totalCount,
         direction,
         page,
