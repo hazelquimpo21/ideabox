@@ -2143,6 +2143,30 @@ export default function SettingsPage() {
         title: 'Connection failed',
         description: 'OAuth authorization failed. Please try again.',
       });
+    } else if (oauthError === 'oauth_denied') {
+      toast({
+        variant: 'destructive',
+        title: 'Connection cancelled',
+        description: 'You cancelled the account connection. Try again when ready.',
+      });
+    } else if (oauthError === 'account_exists') {
+      toast({
+        variant: 'destructive',
+        title: 'Account already connected',
+        description: 'This Gmail account is already connected to another IdeaBox user.',
+      });
+    } else if (oauthError === 'invalid_state') {
+      toast({
+        variant: 'destructive',
+        title: 'Security error',
+        description: 'The connection request expired. Please try again.',
+      });
+    } else if (oauthError === 'missing_code' || oauthError === 'missing_user') {
+      toast({
+        variant: 'destructive',
+        title: 'Connection failed',
+        description: 'Something went wrong. Please try again.',
+      });
     }
 
     // Remove the query params from URL to prevent showing toast on refresh

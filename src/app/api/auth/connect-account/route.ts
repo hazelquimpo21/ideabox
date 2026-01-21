@@ -116,19 +116,38 @@ export async function GET(request: Request) {
       c.name.includes('-auth-token') || c.name.includes('sb-')
     );
 
+    logger.info('🔍 DEBUG: All cookies before redirect', {
+      totalCookies: allCookies.length,
+      allCookieNames: allCookies.map(c => c.name),
+      supabaseAuthCookieCount: supabaseAuthCookies.length,
+      supabaseAuthCookieNames: supabaseAuthCookies.map(c => c.name),
+    });
+
     if (supabaseAuthCookies.length > 0) {
-      response.cookies.set(ORIGINAL_SESSION_COOKIE, JSON.stringify(supabaseAuthCookies), {
+      const sessionJson = JSON.stringify(supabaseAuthCookies);
+      response.cookies.set(ORIGINAL_SESSION_COOKIE, sessionJson, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
         maxAge: 60 * 10, // 10 minutes
       });
-      logger.debug('Stored original auth cookies for restoration', {
+      logger.info('🔍 DEBUG: Stored original auth cookies for restoration', {
         cookieCount: supabaseAuthCookies.length,
         cookieNames: supabaseAuthCookies.map(c => c.name),
+        sessionJsonLength: sessionJson.length,
+        sessionJsonPreview: sessionJson.substring(0, 100),
+      });
+    } else {
+      logger.warn('🔍 DEBUG: No Supabase auth cookies found to store!', {
+        allCookieNames: allCookies.map(c => c.name),
       });
     }
+
+    logger.info('🔍 DEBUG: Cookies being set on redirect response', {
+      addAccountCookie: user.id.substring(0, 8) + '...',
+      originalSessionCookieSet: supabaseAuthCookies.length > 0,
+    });
 
     logger.success('Redirecting to Google OAuth with account picker', {
       userId: user.id.substring(0, 8),
