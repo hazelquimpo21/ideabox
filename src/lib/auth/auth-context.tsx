@@ -231,8 +231,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Use Promise.race for reliable timeout
       // Increased to 8 seconds to reduce false timeouts on slow connections
       const timeoutMs = 8000;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let didTimeout = false;
+
       const timeoutPromise = new Promise<ProfileFetchResult>((resolve) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
+          didTimeout = true;
           logger.warn('Profile fetch timed out', { userId, timeoutMs });
           // Return success: false to indicate we couldn't determine profile state
           resolve({ profile: null, success: false });
@@ -295,6 +299,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } catch (err) {
           logger.warn('Profile fetch exception', { userId, error: String(err) });
           return { profile: null, success: false };
+        } finally {
+          // Clear timeout to prevent stale timeout warnings (e.g., from React StrictMode double-renders)
+          if (timeoutId && !didTimeout) {
+            clearTimeout(timeoutId);
+          }
         }
       })();
 
