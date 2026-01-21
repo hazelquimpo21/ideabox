@@ -252,10 +252,50 @@ function DateTimeDisplay({
 }
 
 /**
- * Location display with optional link.
- * Detects video meeting links and shows appropriate action.
+ * Extracts city name from a location string.
+ * Handles common address formats like "123 Main St, Milwaukee, WI" or "Milwaukee, Wisconsin".
+ *
+ * @param location - Full location string
+ * @returns City name or null if not detectable
  */
-function LocationDisplay({ location }: { location: string }) {
+function extractCityFromLocation(location: string): string | null {
+  if (!location) return null;
+
+  // Skip URLs
+  if (location.startsWith('http')) return null;
+
+  // Common patterns for addresses:
+  // "123 Main St, Milwaukee, WI" -> "Milwaukee"
+  // "Milwaukee, WI" -> "Milwaukee"
+  // "123 Main St, Milwaukee, Wisconsin 53211" -> "Milwaukee"
+
+  const parts = location.split(',').map(p => p.trim());
+
+  if (parts.length >= 2) {
+    // For "City, State" or "Street, City, State" patterns
+    // The city is usually the second-to-last meaningful part
+    const potentialCity = parts.length >= 3 ? parts[parts.length - 2] : parts[0];
+
+    // Clean up: remove zip codes, state abbreviations that got attached
+    const cleaned = potentialCity
+      .replace(/\d{5}(-\d{4})?/, '') // Remove zip codes
+      .replace(/\s+(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)$/i, '')
+      .trim();
+
+    if (cleaned && cleaned.length > 1 && !/^\d+$/.test(cleaned)) {
+      return cleaned;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Location display with optional link and city badge.
+ * Detects video meeting links and shows appropriate action.
+ * For physical addresses, extracts and displays the city name prominently.
+ */
+function LocationDisplay({ location, locality }: { location: string; locality?: EventLocality }) {
   // Detect if this is a video meeting link
   const isVideoLink =
     location.includes('zoom') ||
@@ -267,6 +307,9 @@ function LocationDisplay({ location }: { location: string }) {
   const mapsLink = !isVideoLink
     ? `https://maps.google.com/?q=${encodeURIComponent(location)}`
     : null;
+
+  // Extract city name for non-virtual events
+  const cityName = !isVideoLink ? extractCityFromLocation(location) : null;
 
   return (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -286,8 +329,23 @@ function LocationDisplay({ location }: { location: string }) {
         </>
       ) : (
         <>
-          <MapPin className="h-3.5 w-3.5 text-blue-500" />
-          <span className="truncate flex-1">{location}</span>
+          <MapPin className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+          {/* City badge - shows prominently for local/in-person events */}
+          {cityName ? (
+            <span className={`
+              text-xs font-medium px-1.5 py-0.5 rounded shrink-0
+              ${locality === 'local'
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                : locality === 'out_of_town'
+                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+              }
+            `}>
+              {cityName}
+            </span>
+          ) : (
+            <span className="truncate flex-1 text-xs">{location}</span>
+          )}
           {mapsLink && (
             <a
               href={mapsLink}
@@ -295,6 +353,7 @@ function LocationDisplay({ location }: { location: string }) {
               rel="noopener noreferrer"
               className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 shrink-0"
               onClick={() => logger.info('Maps link clicked', { location })}
+              title={location}
             >
               <MapPin className="h-3 w-3" />
               Map
@@ -647,7 +706,10 @@ export function EventCard({
             {/* Location (from event_metadata) */}
             {/* ─────────────────────────────────────────────────────────────────── */}
             {getEventMetadata(event)?.location && (
-              <LocationDisplay location={getEventMetadata(event)!.location!} />
+              <LocationDisplay
+                location={getEventMetadata(event)!.location!}
+                locality={getLocality(event)}
+              />
             )}
 
             {/* ─────────────────────────────────────────────────────────────────── */}
