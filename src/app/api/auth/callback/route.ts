@@ -91,15 +91,24 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const next = searchParams.get('next');
   const returnUrl = searchParams.get('returnUrl');
-  const mode = searchParams.get('mode');
+  const modeParam = searchParams.get('mode');
 
-  // Check if this is "add account" mode
-  const isAddAccountMode = mode === 'add_account';
+  // Get cookie store early to check for add_account cookie
+  // This is more reliable than URL params which may not survive OAuth redirects
+  const cookieStore = await cookies();
+  const addAccountCookieValue = cookieStore.get(ADD_ACCOUNT_COOKIE)?.value ?? null;
+
+  // Check if this is "add account" mode using BOTH the cookie AND URL param
+  // The cookie is the reliable source of truth since we set it ourselves
+  // The URL param may get lost during the OAuth redirect chain through external systems
+  const isAddAccountMode = !!addAccountCookieValue || modeParam === 'add_account';
 
   logger.start('Processing OAuth callback', {
     hasCode: !!code,
     next,
     returnUrl,
+    modeParam,
+    hasAddAccountCookie: !!addAccountCookieValue,
     isAddAccountMode,
   });
 
@@ -116,7 +125,7 @@ export async function GET(request: Request) {
   // Step 2: Exchange code for session (with proper cookie handling)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const cookieStore = await cookies();
+  // Note: cookieStore was already created above for add_account detection
 
   // Track cookies that need to be set on the response
   const cookiesToSet: Array<{
@@ -171,25 +180,25 @@ export async function GET(request: Request) {
   // ─────────────────────────────────────────────────────────────────────────────
 
   let targetUserId = user.id;
-  let originalUserIdFromCookie: string | null = null;
+  // Use the cookie value we already retrieved (more reliable than URL param)
+  const originalUserIdFromCookie = addAccountCookieValue;
 
-  if (isAddAccountMode) {
+  if (isAddAccountMode && originalUserIdFromCookie) {
     // In "add account" mode, we need to associate the new Gmail account
     // with the ORIGINAL user, not the session user (which may have changed)
-    originalUserIdFromCookie = cookieStore.get(ADD_ACCOUNT_COOKIE)?.value ?? null;
-
-    if (originalUserIdFromCookie) {
-      targetUserId = originalUserIdFromCookie;
-      logger.info('Add account mode: using original user ID', {
-        originalUserId: originalUserIdFromCookie.substring(0, 8),
-        sessionUserId: user.id.substring(0, 8),
-        newEmail: user.email,
-      });
-    } else {
-      logger.warn('Add account mode but no cookie found, using session user', {
-        sessionUserId: user.id.substring(0, 8),
-      });
-    }
+    targetUserId = originalUserIdFromCookie;
+    logger.info('Add account mode: using original user ID from cookie', {
+      originalUserId: originalUserIdFromCookie.substring(0, 8),
+      sessionUserId: user.id.substring(0, 8),
+      newEmail: user.email,
+      sessionUserMatchesOriginal: user.id === originalUserIdFromCookie,
+    });
+  } else if (isAddAccountMode && !originalUserIdFromCookie) {
+    // This shouldn't happen if modeParam was set - log for debugging
+    logger.warn('Add account mode detected from URL param but no cookie found', {
+      sessionUserId: user.id.substring(0, 8),
+      modeParam,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -417,29 +426,51 @@ export async function GET(request: Request) {
   // Create redirect response and set all collected cookies
   const response = NextResponse.redirect(`${origin}${redirectPath}`);
 
-  if (isAddAccountMode && sessionRestored && originalAuthCookies.length > 0) {
-    // In add_account mode with session restoration:
-    // DON'T set the new session cookies (from exchangeCodeForSession)
-    // Instead, restore the ORIGINAL auth cookies to keep user logged in as original account
-    logger.info('Restoring original session cookies instead of new session', {
-      originalUserId: originalUserIdFromCookie?.substring(0, 8),
-      newSessionCookieCount: cookiesToSet.length,
-      originalCookieCount: originalAuthCookies.length,
-    });
-
-    for (const cookie of originalAuthCookies) {
-      response.cookies.set(cookie.name, cookie.value, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
+  if (isAddAccountMode && originalUserIdFromCookie) {
+    if (sessionRestored && originalAuthCookies.length > 0) {
+      // In add_account mode with session restoration:
+      // DON'T set the new session cookies (from exchangeCodeForSession)
+      // Instead, restore the ORIGINAL auth cookies to keep user logged in as original account
+      logger.info('Restoring original session cookies instead of new session', {
+        originalUserId: originalUserIdFromCookie.substring(0, 8),
+        newSessionCookieCount: cookiesToSet.length,
+        originalCookieCount: originalAuthCookies.length,
       });
-    }
 
-    logger.success('Restored original user session after add account', {
-      originalUserId: originalUserIdFromCookie?.substring(0, 8),
-      newAccountEmail: user.email,
-    });
+      for (const cookie of originalAuthCookies) {
+        response.cookies.set(cookie.name, cookie.value, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          // Set maxAge to match Supabase's default session duration (7 days)
+          // Without this, cookies would be session-only and might behave differently
+          maxAge: 60 * 60 * 24 * 7,
+        });
+      }
+
+      logger.success('Restored original user session after add account', {
+        originalUserId: originalUserIdFromCookie.substring(0, 8),
+        newAccountEmail: user.email,
+      });
+    } else {
+      // CRITICAL: Session restoration failed in add_account mode
+      // This means we couldn't find/parse the original session cookies
+      // The OAuth flow switched the user to the new account, which we don't want
+      // DON'T set the new OAuth cookies - leave cookies unchanged and show error
+      logger.error('Session restoration FAILED in add_account mode - not setting new cookies', {
+        originalUserId: originalUserIdFromCookie.substring(0, 8),
+        sessionUserId: user.id.substring(0, 8),
+        sessionRestored,
+        originalCookieCount: originalAuthCookies.length,
+        hadOriginalSessionCookie: !!cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value,
+      });
+
+      // Redirect to settings with error instead of success
+      // The user should still be logged in as their original account
+      // because we're not setting any new cookies
+      return NextResponse.redirect(`${origin}/settings?tab=account&error=session_restore_failed`);
+    }
   } else {
     // Normal flow: set cookies from OAuth flow
     for (const { name, value, options } of cookiesToSet) {
