@@ -298,7 +298,7 @@ function generateSummary(
  *       {groupedEvents.today.length > 0 && (
  *         <EventGroup title="Today" events={groupedEvents.today} />
  *       )}
- *       {/* ... */}
+ *       // ... more groups
  *     </div>
  *   );
  * }
