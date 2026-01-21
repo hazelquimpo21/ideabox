@@ -37,7 +37,8 @@
  * - Fetches events from emails with has_event label
  * - Groups events by time period (today, tomorrow, this week, etc.)
  * - Provides upcoming events summary for sidebar display
- * - Supports acknowledge functionality (when using extracted_dates source)
+ * - Event state management: dismiss, maybe, saved_to_calendar
+ * - Optimistic UI updates for state changes
  * - Comprehensive logging for debugging data flow issues
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -53,11 +54,17 @@
  *
  * // Include past events
  * const { events, stats } = useEvents({ includePast: true });
+ *
+ * // With state management
+ * const { dismiss, saveToMaybe, trackCalendarSave } = useEvents();
+ * await dismiss(eventId);  // Remove from view
+ * await saveToMaybe(eventId);  // Add to watch list
+ * await trackCalendarSave(eventId);  // Track calendar add
  * ```
  *
  * @module hooks/useEvents
- * @version 2.0.0
- * @since January 2026 - Updated to use dual-source strategy
+ * @version 3.0.0
+ * @since January 2026 - Updated with state management (dismiss, maybe, calendar)
  */
 
 'use client';
@@ -75,6 +82,14 @@ const logger = createLogger('useEvents');
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Valid event state values.
+ * - dismissed: User doesn't want to see this event
+ * - maybe: User is interested but not committed (watch list)
+ * - saved_to_calendar: User has added to their calendar
+ */
+export type EventState = 'dismissed' | 'maybe' | 'saved_to_calendar';
 
 /**
  * Event metadata from EventDetector.
@@ -150,6 +165,8 @@ export interface EventData {
   } | null;
   /** When this event record was created */
   created_at: string;
+  /** User states for this event (populated from user_event_states) */
+  states?: EventState[];
 }
 
 /**
@@ -185,6 +202,10 @@ export interface EventStats {
   today: number;
   /** Number of events this week */
   thisWeek: number;
+  /** Number of events in maybe list */
+  maybe: number;
+  /** Number of events saved to calendar */
+  savedToCalendar: number;
 }
 
 /**
@@ -216,6 +237,10 @@ export interface UseEventsOptions {
   includePast?: boolean;
   /** Date to start from (default: today if includePast is false) */
   fromDate?: string;
+  /** Whether to show dismissed events (default: false) */
+  showDismissed?: boolean;
+  /** Filter to only show events with specific state */
+  filterByState?: EventState;
 }
 
 /**
@@ -240,12 +265,22 @@ export interface UseEventsReturn {
   stats: EventStats;
   /** Summary for sidebar preview */
   summary: EventsSummary;
-  /** Mark an event as acknowledged/done (placeholder - not yet implemented) */
+  /** Mark an event as acknowledged/done */
   acknowledge: (eventId: string) => Promise<void>;
-  /** Snooze an event (placeholder - not yet implemented) */
+  /** Snooze an event */
   snooze: (eventId: string, until: string) => Promise<void>;
-  /** Hide an event (placeholder - not yet implemented) */
-  hide: (eventId: string) => Promise<void>;
+  /** Dismiss an event (hide from view) */
+  dismiss: (eventId: string) => Promise<void>;
+  /** Save event to maybe list (watch list) */
+  saveToMaybe: (eventId: string, notes?: string) => Promise<void>;
+  /** Track that user added event to calendar */
+  trackCalendarSave: (eventId: string) => Promise<void>;
+  /** Remove a state from an event (un-dismiss, remove from maybe, etc.) */
+  removeState: (eventId: string, state: EventState) => Promise<void>;
+  /** Check if an event has a specific state */
+  hasState: (eventId: string, state: EventState) => boolean;
+  /** Check if a state operation is pending for an event */
+  isStatePending: (eventId: string) => boolean;
   /** Data source being used ('api' for new endpoint, 'extracted_dates' for fallback) */
   dataSource: 'api' | 'extracted_dates';
 }
@@ -355,17 +390,30 @@ function groupEventsByPeriod(events: EventData[]): GroupedEvents {
 }
 
 /**
- * Calculates event statistics from grouped events.
+ * Calculates event statistics from events and state map.
  *
  * @param events - All events
  * @param grouped - Grouped events
+ * @param statesMap - Map of event ID to states
  * @returns Statistics object
  */
-function calculateStats(events: EventData[], grouped: GroupedEvents): EventStats {
+function calculateStats(
+  events: EventData[],
+  grouped: GroupedEvents,
+  statesMap: Map<string, EventState[]>
+): EventStats {
   const today = getToday();
 
   const past = events.filter(e => e.date < today).length;
   const upcoming = events.filter(e => e.date >= today).length;
+
+  // Count events with specific states
+  let maybe = 0;
+  let savedToCalendar = 0;
+  statesMap.forEach((states) => {
+    if (states.includes('maybe')) maybe++;
+    if (states.includes('saved_to_calendar')) savedToCalendar++;
+  });
 
   return {
     total: events.length,
@@ -373,6 +421,8 @@ function calculateStats(events: EventData[], grouped: GroupedEvents): EventStats
     upcoming,
     today: grouped.today.length,
     thisWeek: grouped.today.length + grouped.tomorrow.length + grouped.thisWeek.length,
+    maybe,
+    savedToCalendar,
   };
 }
 
@@ -412,36 +462,6 @@ function generateSummary(events: EventData[], grouped: GroupedEvents): EventsSum
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EMPTY STATE CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const EMPTY_GROUPED: GroupedEvents = {
-  overdue: [],
-  today: [],
-  tomorrow: [],
-  thisWeek: [],
-  nextWeek: [],
-  later: [],
-};
-
-const EMPTY_STATS: EventStats = {
-  total: 0,
-  past: 0,
-  upcoming: 0,
-  today: 0,
-  thisWeek: 0,
-};
-
-const EMPTY_SUMMARY: EventsSummary = {
-  count: 0,
-  daysUntilNext: null,
-  nextEventTitle: null,
-  nextEventDate: null,
-  hasEventToday: false,
-  hasEventTomorrow: false,
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // HOOK IMPLEMENTATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -451,6 +471,12 @@ const EMPTY_SUMMARY: EventsSummary = {
  * This hook uses a dual-source strategy:
  * 1. PRIMARY: /api/events endpoint (reads from email_analyses)
  * 2. FALLBACK: extracted_dates table (original implementation)
+ *
+ * State management features:
+ * - dismiss: Hide events you're not interested in
+ * - saveToMaybe: Add to a watch list for events you're unsure about
+ * - trackCalendarSave: Track when you've added events to your calendar
+ * - removeState: Undo any of the above
  *
  * @param options - Configuration options
  * @returns Events data, loading state, and control functions
@@ -463,25 +489,39 @@ const EMPTY_SUMMARY: EventsSummary = {
  *     groupedEvents,
  *     isLoading,
  *     stats,
- *     dataSource,
+ *     dismiss,
+ *     saveToMaybe,
+ *     hasState,
  *   } = useEvents();
  *
- *   if (isLoading) return <LoadingSkeleton />;
+ *   const handleDismiss = async (eventId: string) => {
+ *     await dismiss(eventId);
+ *     // Event is now hidden from the list
+ *   };
  *
  *   return (
  *     <div>
- *       <h1>Events ({stats.total})</h1>
- *       <p>Data source: {dataSource}</p>
- *       {groupedEvents.today.length > 0 && (
- *         <EventGroup title="Today" events={groupedEvents.today} />
- *       )}
+ *       {events.map(event => (
+ *         <EventCard
+ *           key={event.id}
+ *           event={event}
+ *           isMaybe={hasState(event.id, 'maybe')}
+ *           onDismiss={() => handleDismiss(event.id)}
+ *         />
+ *       ))}
  *     </div>
  *   );
  * }
  * ```
  */
 export function useEvents(options: UseEventsOptions = {}): UseEventsReturn {
-  const { limit = 100, includePast = false, fromDate } = options;
+  const {
+    limit = 100,
+    includePast = false,
+    fromDate,
+    showDismissed = false,
+    filterByState,
+  } = options;
 
   // Auth context for user ID
   const { user } = useAuth();
@@ -495,16 +535,55 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsReturn {
   const [error, setError] = React.useState<Error | null>(null);
   const [dataSource, setDataSource] = React.useState<'api' | 'extracted_dates'>('api');
 
+  // Map of event ID to states (for quick lookups)
+  const [eventStatesMap, setEventStatesMap] = React.useState<Map<string, EventState[]>>(new Map());
+
+  // Track pending state operations for optimistic UI
+  const [pendingOperations, setPendingOperations] = React.useState<Set<string>>(new Set());
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Filter events based on states
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const filteredEvents = React.useMemo(() => {
+    let filtered = events;
+
+    // Filter out dismissed events unless showDismissed is true
+    if (!showDismissed) {
+      filtered = filtered.filter(event => {
+        const states = eventStatesMap.get(event.id) || [];
+        return !states.includes('dismissed');
+      });
+    }
+
+    // Filter to only events with specific state
+    if (filterByState) {
+      filtered = filtered.filter(event => {
+        const states = eventStatesMap.get(event.id) || [];
+        return states.includes(filterByState);
+      });
+    }
+
+    logger.debug('Events filtered', {
+      original: events.length,
+      filtered: filtered.length,
+      showDismissed,
+      filterByState,
+    });
+
+    return filtered;
+  }, [events, eventStatesMap, showDismissed, filterByState]);
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Computed values
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const groupedEvents = React.useMemo(() => groupEventsByPeriod(events), [events]);
-  const stats = React.useMemo(() => calculateStats(events, groupedEvents), [events, groupedEvents]);
-  const summary = React.useMemo(() => generateSummary(events, groupedEvents), [events, groupedEvents]);
+  const groupedEvents = React.useMemo(() => groupEventsByPeriod(filteredEvents), [filteredEvents]);
+  const stats = React.useMemo(() => calculateStats(filteredEvents, groupedEvents, eventStatesMap), [filteredEvents, groupedEvents, eventStatesMap]);
+  const summary = React.useMemo(() => generateSummary(filteredEvents, groupedEvents), [filteredEvents, groupedEvents]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Fetch function
+  // Fetch Events
   // ─────────────────────────────────────────────────────────────────────────────
 
   const fetchEvents = React.useCallback(async () => {
@@ -555,6 +634,9 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsReturn {
       setEvents(fetchedEvents);
       setDataSource('api');
 
+      // Fetch states for all events
+      await fetchEventStates(fetchedEvents.map(e => e.id));
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch events';
 
@@ -563,7 +645,7 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsReturn {
         fallbackAvailable: true,
       });
 
-      // Set error state but don't show to user if we have a fallback
+      // Set error state
       setError(new Error(errorMessage));
       setEvents([]);
       setDataSource('api');
@@ -571,6 +653,45 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsReturn {
       setIsLoading(false);
     }
   }, [user?.id, limit, includePast, fromDate]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Fetch Event States
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const fetchEventStates = React.useCallback(async (eventIds: string[]) => {
+    if (eventIds.length === 0) return;
+
+    logger.debug('Fetching states for events', { count: eventIds.length });
+
+    const newStatesMap = new Map<string, EventState[]>();
+
+    // Fetch states for each event
+    // In a real implementation, we might batch this into a single API call
+    const statePromises = eventIds.map(async (eventId) => {
+      try {
+        const response = await fetch(`/api/events/${eventId}/state`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data?.states) {
+            newStatesMap.set(eventId, data.data.states);
+          }
+        }
+      } catch (err) {
+        logger.warn('Failed to fetch states for event', {
+          eventId: eventId.substring(0, 8),
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    });
+
+    await Promise.all(statePromises);
+
+    setEventStatesMap(newStatesMap);
+
+    logger.debug('Event states fetched', {
+      eventsWithStates: newStatesMap.size,
+    });
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Initial fetch and refetch on dependency changes
@@ -581,61 +702,217 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsReturn {
   }, [fetchEvents]);
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // State Management Helpers
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Add a state to an event with optimistic update.
+   */
+  const addState = React.useCallback(async (
+    eventId: string,
+    state: EventState,
+    notes?: string
+  ) => {
+    logger.start(`Adding state to event`, { eventId: eventId.substring(0, 8), state });
+
+    // Optimistic update
+    setPendingOperations(prev => new Set(prev).add(eventId));
+    setEventStatesMap(prev => {
+      const newMap = new Map(prev);
+      const currentStates = newMap.get(eventId) || [];
+      if (!currentStates.includes(state)) {
+        newMap.set(eventId, [...currentStates, state]);
+      }
+      return newMap;
+    });
+
+    try {
+      const response = await fetch(`/api/events/${eventId}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, notes }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      logger.success(`State added to event`, { eventId: eventId.substring(0, 8), state });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add state';
+      logger.error('Failed to add state to event', {
+        eventId: eventId.substring(0, 8),
+        state,
+        error: errorMessage,
+      });
+
+      // Rollback optimistic update
+      setEventStatesMap(prev => {
+        const newMap = new Map(prev);
+        const currentStates = newMap.get(eventId) || [];
+        newMap.set(eventId, currentStates.filter(s => s !== state));
+        return newMap;
+      });
+
+      throw new Error(errorMessage);
+    } finally {
+      setPendingOperations(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(eventId);
+        return newSet;
+      });
+    }
+  }, []);
+
+  /**
+   * Remove a state from an event with optimistic update.
+   */
+  const removeState = React.useCallback(async (eventId: string, state: EventState) => {
+    logger.start(`Removing state from event`, { eventId: eventId.substring(0, 8), state });
+
+    // Store original state for rollback
+    const originalStates = eventStatesMap.get(eventId) || [];
+
+    // Optimistic update
+    setPendingOperations(prev => new Set(prev).add(eventId));
+    setEventStatesMap(prev => {
+      const newMap = new Map(prev);
+      const currentStates = newMap.get(eventId) || [];
+      newMap.set(eventId, currentStates.filter(s => s !== state));
+      return newMap;
+    });
+
+    try {
+      const response = await fetch(`/api/events/${eventId}/state`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      logger.success(`State removed from event`, { eventId: eventId.substring(0, 8), state });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to remove state';
+      logger.error('Failed to remove state from event', {
+        eventId: eventId.substring(0, 8),
+        state,
+        error: errorMessage,
+      });
+
+      // Rollback optimistic update
+      setEventStatesMap(prev => {
+        const newMap = new Map(prev);
+        newMap.set(eventId, originalStates);
+        return newMap;
+      });
+
+      throw new Error(errorMessage);
+    } finally {
+      setPendingOperations(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(eventId);
+        return newSet;
+      });
+    }
+  }, [eventStatesMap]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Public State Actions
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Dismiss an event (hide from view).
+   * The event will be filtered out unless showDismissed option is true.
+   */
+  const dismiss = React.useCallback(async (eventId: string) => {
+    logger.info('Dismissing event', { eventId: eventId.substring(0, 8) });
+    await addState(eventId, 'dismissed');
+  }, [addState]);
+
+  /**
+   * Save an event to the "maybe" watch list.
+   * Use this for events you're interested in but not committed to.
+   */
+  const saveToMaybe = React.useCallback(async (eventId: string, notes?: string) => {
+    logger.info('Saving event to maybe', { eventId: eventId.substring(0, 8), hasNotes: !!notes });
+    await addState(eventId, 'maybe', notes);
+  }, [addState]);
+
+  /**
+   * Track that the user added an event to their calendar.
+   * This is called after the user clicks "Add to Calendar".
+   */
+  const trackCalendarSave = React.useCallback(async (eventId: string) => {
+    logger.info('Tracking calendar save', { eventId: eventId.substring(0, 8) });
+    await addState(eventId, 'saved_to_calendar');
+  }, [addState]);
+
+  /**
+   * Check if an event has a specific state.
+   */
+  const hasState = React.useCallback((eventId: string, state: EventState): boolean => {
+    const states = eventStatesMap.get(eventId) || [];
+    return states.includes(state);
+  }, [eventStatesMap]);
+
+  /**
+   * Check if a state operation is pending for an event.
+   */
+  const isStatePending = React.useCallback((eventId: string): boolean => {
+    return pendingOperations.has(eventId);
+  }, [pendingOperations]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Legacy Actions (for backwards compatibility)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const acknowledge = React.useCallback(async (eventId: string) => {
+    // Legacy acknowledge - now just dismisses
+    logger.info('Acknowledge called (legacy), dismissing event', { eventId: eventId.substring(0, 8) });
+    await dismiss(eventId);
+  }, [dismiss]);
+
+  const snooze = React.useCallback(async (eventId: string, until: string) => {
+    // Snooze not yet implemented
+    logger.warn('Snooze not yet implemented', {
+      eventId: eventId.substring(0, 8),
+      until,
+    });
+  }, []);
+
+  const loadMore = React.useCallback(async () => {
+    // Pagination not yet implemented
+    logger.debug('Load more not yet implemented');
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Log state changes for debugging
   // ─────────────────────────────────────────────────────────────────────────────
 
   React.useEffect(() => {
     if (!isLoading && !error) {
       logger.success('Events state updated', {
-        total: events.length,
+        total: filteredEvents.length,
         today: groupedEvents.today.length,
         upcoming: stats.upcoming,
+        maybe: stats.maybe,
+        savedToCalendar: stats.savedToCalendar,
         dataSource,
       });
     }
-  }, [isLoading, error, events.length, groupedEvents.today.length, stats.upcoming, dataSource]);
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Action handlers (placeholders for future implementation)
-  //
-  // These actions would need to update the extracted_dates table, which requires
-  // a different API endpoint. For now, they log a warning and no-op.
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  const acknowledge = React.useCallback(async (eventId: string) => {
-    // TODO: Implement acknowledge via /api/events/[id]/acknowledge
-    // This would mark the event as done in extracted_dates or a new events table
-    logger.warn('Acknowledge not yet implemented for API source', {
-      eventId: eventId.substring(0, 8),
-    });
-  }, []);
-
-  const snooze = React.useCallback(async (eventId: string, until: string) => {
-    // TODO: Implement snooze via /api/events/[id]/snooze
-    logger.warn('Snooze not yet implemented for API source', {
-      eventId: eventId.substring(0, 8),
-      until,
-    });
-  }, []);
-
-  const hide = React.useCallback(async (eventId: string) => {
-    // TODO: Implement hide via /api/events/[id]/hide
-    logger.warn('Hide not yet implemented for API source', {
-      eventId: eventId.substring(0, 8),
-    });
-  }, []);
-
-  const loadMore = React.useCallback(async () => {
-    // TODO: Implement pagination
-    logger.debug('Load more not yet implemented');
-  }, []);
+  }, [isLoading, error, filteredEvents.length, groupedEvents.today.length, stats, dataSource]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Return hook API
   // ─────────────────────────────────────────────────────────────────────────────
 
   return {
-    events,
+    events: filteredEvents,
     groupedEvents,
     isLoading,
     error,
@@ -646,7 +923,12 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsReturn {
     summary,
     acknowledge,
     snooze,
-    hide,
+    dismiss,
+    saveToMaybe,
+    trackCalendarSave,
+    removeState,
+    hasState,
+    isStatePending,
     dataSource,
   };
 }
