@@ -175,6 +175,12 @@ function sanitizeHtml(html: string): string {
   // Remove javascript: URLs
   clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
 
+  // Remove form action attributes to prevent submissions
+  clean = clean.replace(/<form\b([^>]*)action\s*=\s*["'][^"']*["']([^>]*)>/gi, '<form $1$2>');
+
+  // Convert submit buttons to regular buttons to prevent form submission
+  clean = clean.replace(/type\s*=\s*["']submit["']/gi, 'type="button"');
+
   // Make external links open in new tab
   clean = clean.replace(
     /<a\s+([^>]*?)href\s*=\s*["']([^"']+)["']([^>]*)>/gi,
@@ -268,8 +274,19 @@ function EmailContent({ email }: { email: EmailData }) {
     subject: email.subject?.substring(0, 30),
   });
 
+  // Prevent any form submissions within email content
+  const handleContentClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // If clicking a submit button or form element, prevent default
+    if (target.closest('form') || target.getAttribute('type') === 'submit') {
+      e.preventDefault();
+      e.stopPropagation();
+      logger.debug('Prevented form interaction in email content');
+    }
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onClick={handleContentClick}>
       {/* ─────────────────────────────────────────────────────────────────────── */}
       {/* Sender Info */}
       {/* ─────────────────────────────────────────────────────────────────────── */}
@@ -328,7 +345,7 @@ function EmailContent({ email }: { email: EmailData }) {
       <div className="pt-4 border-t">
         {hasHtml ? (
           <div
-            className="prose prose-sm max-w-none dark:prose-invert overflow-hidden"
+            className="prose prose-sm max-w-none dark:prose-invert break-words"
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(email.body_html || '') }}
           />
         ) : hasText ? (
@@ -493,7 +510,7 @@ export function EmailPreviewModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         {/* ─────────────────────────────────────────────────────────────────── */}
         {/* Header */}
         {/* ─────────────────────────────────────────────────────────────────── */}
@@ -510,7 +527,7 @@ export function EmailPreviewModal({
         {/* ─────────────────────────────────────────────────────────────────── */}
         {/* Content */}
         {/* ─────────────────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+        <div className="min-h-0">
           {isLoading ? (
             <EmailLoadingSkeleton />
           ) : error ? (
