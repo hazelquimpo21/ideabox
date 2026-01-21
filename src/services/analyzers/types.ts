@@ -28,6 +28,10 @@ import type { AnalyzerConfig as BaseAnalyzerConfig } from '@/config/analyzers';
  * Secondary labels that can be applied to any email.
  * These provide flexible, multi-dimensional classification beyond the primary category.
  *
+ * REFACTORED (Jan 2026): Added `has_event` label since events are no longer
+ * a primary category. Events are detected via this label and processed
+ * by the EventDetector analyzer when present.
+ *
  * Labels are organized by concern:
  * - Action: What type of action is needed
  * - Urgency: Time sensitivity
@@ -60,6 +64,7 @@ export const EMAIL_LABELS = [
   'has_attachment',        // Email has attachments
   'has_link',              // Contains important links
   'has_question',          // Direct question asked
+  'has_event',             // Contains a calendar-worthy event with date/time (NEW Jan 2026)
 
   // Location
   'local_event',           // Event in user's metro area
@@ -310,17 +315,23 @@ export type QuickAction =
 /**
  * Result data from the categorizer analyzer.
  *
- * ENHANCED (Jan 2026): Added `summary` and `quickAction` fields.
+ * REFACTORED (Jan 2026): Changed to life-bucket categorization.
+ * - category: Now represents what AREA OF LIFE the email touches
+ * - labels: Include action labels like `has_event`, `needs_reply` for filtering
  * - summary: One-sentence assistant-style overview of the email
- * - quickAction: Suggested quick interaction for ALL emails
+ * - quickAction: Suggested quick interaction for inbox triage
  *
- * ENHANCED (Jan 2026): Added `labels` for multi-label classification.
- * - labels: Secondary labels for flexible filtering (0-5 labels per email)
+ * The AI uses HUMAN-EYE INFERENCE to categorize - considering sender context,
+ * domain patterns, and content to make smart decisions like a thoughtful assistant.
  */
 export interface CategorizationData {
   /**
-   * Primary email category.
-   * This is action-focused: what does the user need to DO?
+   * Primary email category (LIFE BUCKET).
+   * What area of the user's life does this email touch?
+   *
+   * Categories: newsletters_general, news_politics, product_updates, local,
+   * shopping, travel, finance, family_kids_school, family_health_appointments,
+   * client_pipeline, business_work_general, personal_friends_family
    */
   category: EmailCategory;
 
@@ -506,24 +517,43 @@ export type ClientTaggingResult = AnalyzerResult<ClientTaggingData>;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Event location type.
- * Helps users understand if travel is required.
+ * Event format type - describes how attendees participate.
+ * Helps users understand the format of the event.
  */
 export type EventLocationType = 'in_person' | 'virtual' | 'hybrid' | 'unknown';
 
 /**
+ * Event locality type - describes where the event is relative to the user.
+ *
+ * ADDED (Jan 2026): Helps users understand if travel is required.
+ * - local: Event is in or near the user's metro area
+ * - out_of_town: Event requires travel to another city
+ * - virtual: Event is online-only (no physical location)
+ */
+export type EventLocality = 'local' | 'out_of_town' | 'virtual' | null;
+
+/**
+ * Key date types - for important dates that aren't full events.
+ * Examples: registration deadlines, open house dates, release dates.
+ */
+export type KeyDateType = 'registration_deadline' | 'open_house' | 'deadline' | 'release_date' | 'other';
+
+/**
  * Result data from the event detector analyzer.
  *
- * This analyzer ONLY runs when category === 'event'.
- * It extracts rich details needed for calendar integration.
+ * REFACTORED (Jan 2026): This analyzer now runs when the `has_event` label
+ * is present (detected by the categorizer), not based on a category.
+ *
+ * It extracts rich details needed for calendar integration including:
+ * - Date/time with proper start and end
+ * - Locality (local, out_of_town, virtual)
+ * - Key dates that aren't full events (deadlines, open houses)
  *
  * DESIGN DECISION: Separate analyzer instead of extending categorizer.
  * - Keeps categorizer fast and focused
  * - Only incurs cost for actual events (~5-10% of emails)
  * - Easier to tune independently
  * - Can be disabled without affecting categorization
- *
- * ENHANCED (Jan 2026): Added `eventSummary` and `keyPoints` for assistant-style display.
  */
 export interface EventDetectionData {
   /**
@@ -559,10 +589,26 @@ export interface EventDetectionData {
   eventEndTime?: string;
 
   /**
+   * Event end date for multi-day events (YYYY-MM-DD).
+   * Example: "2026-01-27" for a 3-day conference starting Jan 25.
+   * May be null for single-day events.
+   */
+  eventEndDate?: string;
+
+  /**
    * Type of location: in-person, virtual, hybrid, or unknown.
-   * Helps users understand if travel is required.
+   * Describes the FORMAT of the event (how people participate).
    */
   locationType: EventLocationType;
+
+  /**
+   * Where the event is relative to the user's location.
+   * NEW (Jan 2026): Helps users understand if travel is required.
+   * - local: In user's metro area
+   * - out_of_town: Requires travel to another city
+   * - virtual: Online only (set automatically if locationType is 'virtual')
+   */
+  eventLocality?: EventLocality;
 
   /**
    * Physical address or virtual meeting link.
@@ -631,6 +677,19 @@ export interface EventDetectionData {
    * - ["$50 per person", "Dress code: Business casual", "RSVP link included"]
    */
   keyPoints?: string[];
+
+  /**
+   * Whether this is a key date rather than a full event.
+   * NEW (Jan 2026): For things like registration deadlines, open houses.
+   * Key dates are important dates to note but aren't full events to attend.
+   */
+  isKeyDate?: boolean;
+
+  /**
+   * Type of key date if isKeyDate is true.
+   * Examples: registration_deadline, open_house, deadline, release_date
+   */
+  keyDateType?: KeyDateType;
 
   /**
    * Confidence in the event extraction (0-1).
@@ -821,13 +880,13 @@ export type ContactEnrichmentResult = AnalyzerResult<ContactEnrichmentData>;
  * Combined analysis data from all analyzers.
  * This is stored in the email_analyses table.
  *
- * STRUCTURE:
- * - categorization: Always runs (core classification + summary + labels)
+ * STRUCTURE (REFACTORED Jan 2026):
+ * - categorization: Always runs (life-bucket classification + summary + labels)
  * - actionExtraction: Always runs (detailed action info)
  * - clientTagging: Always runs (client linking)
- * - dateExtraction: Always runs (timeline intelligence) [NEW Jan 2026]
- * - eventDetection: Only runs when category === 'event'
- * - contactEnrichment: Selective (only for contacts needing enrichment) [NEW Jan 2026]
+ * - dateExtraction: Always runs (timeline intelligence)
+ * - eventDetection: Only runs when `has_event` label is present
+ * - contactEnrichment: Selective (only for contacts needing enrichment)
  *
  * Future analyzers (Phase 2+):
  * - urlExtraction: Extract and categorize URLs

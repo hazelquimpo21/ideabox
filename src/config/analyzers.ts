@@ -47,20 +47,27 @@ export interface AnalyzerConfig {
 
 /**
  * Email categories that the categorizer can assign.
- * These are action-focused: what does the user need to DO with this email?
+ * These are life-bucket focused: what PART OF LIFE does this email touch?
  *
- * NOTE: "client" is NOT a category. Client relationships are tracked
- * via the client_id foreign key, allowing a client email to be
- * categorized as "action_required" rather than hidden in a "client" bucket.
+ * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
+ * Actions are tracked separately via the `actions` table and action extraction.
+ *
+ * The AI analyzer uses human-eye inference to categorize - considering sender
+ * context, domain patterns, and content to make smart categorization decisions.
  */
 export const EMAIL_CATEGORIES = [
-  'action_required', // Needs response, decision, or action from user
-  'event',           // Calendar-worthy: invitation, announcement with date/time
-  'newsletter',      // Informational content, digest, regular publication
-  'promo',           // Marketing, promotional, sales content
-  'admin',           // Receipts, confirmations, notifications, automated
-  'personal',        // Personal correspondence (friends, family)
-  'noise',           // Low-value, safe to ignore or bulk archive
+  'newsletters_general',           // Substacks, digests, curated content
+  'news_politics',                 // News outlets, political updates
+  'product_updates',               // Tech products, SaaS tools, subscriptions you use
+  'local',                         // Community events, neighborhood, local orgs
+  'shopping',                      // Orders, shipping, deals, retail
+  'travel',                        // Flights, hotels, bookings, trip info
+  'finance',                       // Bills, banking, investments, receipts
+  'family_kids_school',            // School emails, activities, kid logistics
+  'family_health_appointments',    // Medical, appointments, family scheduling
+  'client_pipeline',               // Direct client correspondence, project work
+  'business_work_general',         // Team/internal, industry stuff, professional
+  'personal_friends_family',       // Social, relationships, personal correspondence
 ] as const;
 
 export type EmailCategory = typeof EMAIL_CATEGORIES[number];

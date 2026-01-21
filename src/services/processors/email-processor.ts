@@ -338,14 +338,16 @@ export class EmailProcessor {
     let eventResult: EventDetectionResult | undefined;
     let contactEnrichmentResult: ContactEnrichmentResult | undefined;
 
-    // EventDetector: Only run if category === 'event'
-    if (
-      categorizationResult.success &&
-      categorizationResult.data.category === 'event' &&
-      this.eventDetector.isEnabled()
-    ) {
-      logger.debug('Running EventDetector (category is event)', {
+    // EventDetector: Only run if email has the 'has_event' label
+    // REFACTORED (Jan 2026): Now uses label instead of category since
+    // events can appear in any life-bucket category (local, family_kids_school, etc.)
+    const hasEventLabel = categorizationResult.success &&
+      categorizationResult.data.labels?.includes('has_event');
+
+    if (hasEventLabel && this.eventDetector.isEnabled()) {
+      logger.debug('Running EventDetector (has_event label detected)', {
         emailId: emailInput.id,
+        category: categorizationResult.data.category,
       });
       eventResult = await this.runEventDetector(emailInput, enrichedContext);
     }

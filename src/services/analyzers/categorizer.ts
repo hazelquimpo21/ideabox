@@ -1,25 +1,32 @@
 /**
  * Categorizer Analyzer
  *
- * Classifies emails by what ACTION is needed, not by who sent them.
+ * Classifies emails by LIFE BUCKET - what area of the user's life each email touches.
  * This is the first analyzer in the processing pipeline.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * CATEGORY PHILOSOPHY
+ * CATEGORY PHILOSOPHY (REFACTORED Jan 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * IMPORTANT: "client" is NOT a category. Client relationships are tracked
- * separately via the client_id foreign key. This design allows a client email
- * to be categorized as "action_required" rather than hidden in a "client" bucket.
+ * Categories are now LIFE-BUCKET focused, not action-focused:
+ * - newsletters_general: Substacks, digests, curated content
+ * - news_politics: News outlets, political updates
+ * - product_updates: Tech products, SaaS tools you use
+ * - local: Community events, neighborhood, local orgs
+ * - shopping: Orders, shipping, deals, retail
+ * - travel: Flights, hotels, bookings, trip info
+ * - finance: Bills, banking, investments, receipts
+ * - family_kids_school: School emails, kid activities, logistics
+ * - family_health_appointments: Medical, appointments, family scheduling
+ * - client_pipeline: Direct client correspondence, project work
+ * - business_work_general: Team, industry, professional (not direct clients)
+ * - personal_friends_family: Social, relationships, personal correspondence
  *
- * Categories are action-focused:
- * - action_required: User needs to respond, decide, or do something
- * - event: Calendar-worthy with date/time/location
- * - newsletter: Informational content, no action needed
- * - promo: Marketing/promotional content
- * - admin: Receipts, confirmations, automated notifications
- * - personal: Friends, family, non-work correspondence
- * - noise: Low value, safe to ignore
+ * Actions are tracked separately via the `actions` table and `has_event` label.
+ * Events are now detected via the `has_event` label and processed by EventDetector.
+ *
+ * The analyzer uses HUMAN-EYE INFERENCE - thinking like a thoughtful assistant
+ * who considers sender context, domain patterns, and content holistically.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE EXAMPLE
@@ -32,23 +39,23 @@
  *
  * const result = await categorizer.analyze({
  *   id: 'email-123',
- *   subject: 'Can you review this proposal?',
- *   senderEmail: 'client@example.com',
- *   senderName: 'Jane Smith',
+ *   subject: 'Q1 Proposal Review',
+ *   senderEmail: 'sarah@acmecorp.com',
+ *   senderName: 'Sarah Johnson',
  *   date: '2024-01-15T10:00:00Z',
  *   snippet: 'Please review the attached proposal...',
  *   bodyText: 'Hi, I hope this email finds you well...',
  * });
  *
  * if (result.success) {
- *   console.log(result.data.category);  // 'action_required'
- *   console.log(result.data.topics);    // ['proposal', 'review']
- *   console.log(result.confidence);     // 0.92
+ *   console.log(result.data.category);  // 'client_pipeline'
+ *   console.log(result.data.labels);    // ['needs_review', 'has_deadline']
+ *   console.log(result.data.summary);   // 'Sarah from Acme Corp wants you to review...'
  * }
  * ```
  *
  * @module services/analyzers/categorizer
- * @version 1.0.0
+ * @version 2.0.0
  */
 
 import { BaseAnalyzer } from './base-analyzer';
@@ -103,60 +110,124 @@ const QUICK_ACTIONS = [
 /**
  * System prompt for the categorizer.
  *
- * This prompt is carefully crafted to:
- * 1. Focus on ACTION needed, not sender identity
- * 2. Explicitly exclude "client" as a category
- * 3. Provide clear criteria for each category
- * 4. Apply secondary labels for multi-dimensional classification
- * 5. Request topic extraction for additional context
- * 6. Generate assistant-style summary for quick scanning
- * 7. Suggest quick action for inbox triage
- * 8. Encourage honest confidence assessment
+ * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categorization.
  *
- * ENHANCED (Jan 2026): Added summary, quickAction, and labels generation.
+ * This prompt is carefully crafted to:
+ * 1. Focus on LIFE BUCKET - what area of the user's life does this email touch
+ * 2. Use human-eye inference - think like a thoughtful assistant who knows the user
+ * 3. Apply secondary labels for action tracking and flexible filtering
+ * 4. Generate assistant-style summary for quick scanning
+ * 5. Suggest quick action for inbox triage
+ * 6. Consider sender context, domain patterns, and content holistically
  */
-const BASE_SYSTEM_PROMPT = `You are an email categorization and summarization specialist. Your job is to help users quickly triage their inbox.
-
-For each email, you will:
-1. Categorize by WHAT ACTION IS NEEDED (not who sent it)
-2. Apply secondary LABELS for flexible filtering
-3. Write a one-sentence summary as if you're a personal assistant briefing the user
-4. Suggest a quick action for inbox triage
+const BASE_SYSTEM_PROMPT = `You are an intelligent email organizer. Your job is to categorize emails into LIFE BUCKETS - organizing by what part of the user's life each email touches.
 
 ═══════════════════════════════════════════════════════════════════════════════
-CATEGORIES (choose ONE primary category)
+THINK LIKE A HUMAN ASSISTANT
 ═══════════════════════════════════════════════════════════════════════════════
 
-IMPORTANT: "client" is NOT a category. Client relationships are tracked separately.
-A client email asking for something should be "action_required", not hidden in a client bucket.
+Categorize as a thoughtful human assistant would - someone who understands the user's life context. Don't just keyword match. Consider:
 
-- action_required: User needs to respond, decide, review, or do something
-- event: Contains a calendar-worthy event with date/time/location
-- newsletter: Informational content, digest, regular publication (no action needed)
-- promo: Marketing, promotional, sales content
-- admin: Receipts, confirmations, automated notifications
-- personal: Personal correspondence (friends, family, non-work)
-- noise: Low value, safe to ignore (spam-adjacent, irrelevant)
+- WHO sent this? (sender email, domain, name)
+- WHY would they be emailing?
+- WHAT part of the user's life does this touch?
+- WHERE would the user naturally look for it?
 
-CATEGORY DECISION GUIDANCE:
-- Email asks a question → action_required
-- Requests feedback/review/approval → action_required
-- Purely FYI with no expected response → newsletter or admin
-- Has specific date/time for an event → event
-- Selling something → promo
-- If unsure, lean toward action_required (safer to surface)
+Use INFERENCE and CONTEXT CLUES:
+- noreply@kumon.com → obviously Family - Kids & School (even without "your child")
+- Email from *.edu domain → likely school-related
+- Email from pediatrician's office → Family - Health
+- Figma updates when user is a developer → Product Updates (tool they use)
+- LinkedIn message from potential client → Client Pipeline (not Business/Work)
+- Eventbrite for Milwaukee tech meetup → Local (even though it's also "tech")
+
+When ambiguous, choose the bucket where the user would most naturally look for it.
+
+═══════════════════════════════════════════════════════════════════════════════
+CATEGORIES (choose ONE primary life bucket)
+═══════════════════════════════════════════════════════════════════════════════
+
+- newsletters_general: Substacks, digests, curated content, reading material
+  Examples: Morning Brew, Hacker News digest, industry newsletters
+
+- news_politics: News outlets, political updates, current events
+  Examples: NYT, CNN, political campaigns, government notices
+
+- product_updates: Tech products, SaaS tools, services you subscribe to
+  Examples: Figma updates, GitHub notifications, Spotify, Netflix
+  KEY: Tools/products the user actively USES, not marketing from random companies
+
+- local: Community events, neighborhood, local organizations
+  Examples: Local meetups, community boards, city newsletters, library events
+  KEY: Geographically local to the user's area
+
+- shopping: Orders, shipping, deals, retail, purchases
+  Examples: Amazon orders, shipping notifications, sale alerts, returns
+
+- travel: Flights, hotels, bookings, trip planning
+  Examples: Airline confirmations, hotel bookings, Airbnb, trip itineraries
+
+- finance: Bills, banking, investments, financial receipts
+  Examples: Bank statements, credit card alerts, invoices, payment confirmations
+
+- family_kids_school: School emails, kid activities, educational logistics
+  Examples: Teacher emails, school newsletters, class signups, activity registrations
+  KEY: Related to children's education, activities, or care
+
+- family_health_appointments: Medical, health appointments, family scheduling
+  Examples: Doctor appointments, health reminders, prescription alerts, dental
+  KEY: Health-related for any family member
+
+- client_pipeline: Direct client work, project correspondence, billable relationships
+  Examples: Client emails about projects, contract discussions, deliverable reviews
+  KEY: People/companies you do paid work FOR
+
+- business_work_general: Professional but not direct client work
+  Examples: Internal team emails, industry discussions, professional networking,
+  job boards, B2B SaaS marketing, conference invites
+  KEY: Work-related but not a paying client relationship
+
+- personal_friends_family: Social relationships, personal correspondence
+  Examples: Friends reaching out, family messages, social invitations, personal news
+  KEY: Personal relationships (not business, not logistics)
+
+═══════════════════════════════════════════════════════════════════════════════
+DISAMBIGUATION GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+PRODUCT UPDATES vs BUSINESS/WORK:
+- Tool you USE daily (Figma, Slack, GitHub) → product_updates
+- Random B2B marketing → business_work_general
+- Tool for a specific client project → product_updates (still a tool you use)
+
+CLIENT PIPELINE vs BUSINESS/WORK:
+- Email FROM a paying client → client_pipeline
+- Email about industry news → business_work_general
+- LinkedIn recruiter → business_work_general
+- LinkedIn message from potential client → client_pipeline
+
+PERSONAL vs FAMILY:
+- Friend inviting you to dinner → personal_friends_family
+- Kid's school event → family_kids_school
+- Mom sharing photos → personal_friends_family
+- Pediatrician appointment → family_health_appointments
+
+LOCAL vs OTHER:
+- Event in your metro area → local (even if also tech, art, etc.)
+- Virtual webinar → business_work_general or newsletters_general
+- Conference in another city → travel or business_work_general
 
 ═══════════════════════════════════════════════════════════════════════════════
 LABELS (choose 0-5 secondary labels)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Apply relevant labels to enable flexible filtering. Only add labels that clearly apply.
+Labels provide ADDITIONAL context beyond the category. Apply relevant labels.
 
-ACTION LABELS:
+ACTION LABELS (what needs to happen):
 - needs_reply: Someone is explicitly waiting for a response
 - needs_decision: User must choose between options
-- needs_review: Content requires careful reading/review
-- needs_approval: Approval or sign-off is requested
+- needs_review: Content requires careful reading
+- needs_approval: Approval or sign-off requested
 
 URGENCY LABELS:
 - urgent: Marked urgent, ASAP, or critical
@@ -164,92 +235,65 @@ URGENCY LABELS:
 - time_sensitive: Limited-time offer or opportunity
 
 RELATIONSHIP LABELS:
-- from_vip: Sender is on user's VIP list (will be provided if available)
+- from_vip: Sender is on user's VIP list
 - new_contact: First email from this sender
-- networking_opportunity: Potential valuable professional connection
+- networking_opportunity: Potential valuable connection
 
 CONTENT LABELS:
 - has_attachment: Email mentions or has attachments
-- has_link: Contains important links to review
+- has_link: Contains important links
 - has_question: Direct question asked
-
-LOCATION LABELS:
-- local_event: Event is in user's local area (will be provided if available)
-
-PERSONAL LABELS:
-- family_related: Involves family members
-- community: Local community or group related
+- has_event: Contains a calendar-worthy event (date/time)
 
 FINANCIAL LABELS:
-- invoice: Invoice or bill
-- receipt: Purchase confirmation/receipt
-- payment_due: Payment deadline mentioned
+- invoice: Invoice or bill to pay
+- receipt: Purchase confirmation
+- payment_due: Payment deadline
 
 CALENDAR LABELS:
 - meeting_request: Meeting invitation
 - rsvp_needed: RSVP or registration required
-- appointment: Scheduled appointment confirmation
-
-LEARNING LABELS:
-- educational: Educational or learning content
-- industry_news: Industry news or updates
-- job_opportunity: Job or career related
+- appointment: Scheduled appointment
 
 ═══════════════════════════════════════════════════════════════════════════════
 SUMMARY (one sentence, assistant-style)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Write as if you're a personal assistant briefing the user. Be concise but informative.
+Write as if you're briefing the user. Be concise but informative.
 Include: who it's from, what they want/are saying, any deadline if mentioned.
 
 GOOD EXAMPLES:
 - "Sarah from Acme Corp wants you to review the Q1 proposal by Friday"
-- "Your AWS bill for January is $142.67 - payment processed automatically"
-- "LinkedIn: 5 people viewed your profile this week"
-- "Mom sent photos from the weekend trip"
-- "Conference registration confirmation for TechConf 2026 on March 15"
-- "Newsletter from Hacker News with this week's top stories"
-- "Promotional email from SaaS tool offering 20% discount"
-
-BAD EXAMPLES (too vague):
-- "Email from someone" (who?)
-- "Important message" (about what?)
-- "Please review" (review what?)
+- "Your AWS bill for January is $142.67 - payment processed"
+- "Kumon reminder: homework packets due Monday"
+- "Shorewood Library: Summer reading program starts June 1"
+- "Order shipped: Your Amazon package arriving Thursday"
+- "Dr. Smith: Annual checkup reminder for next Tuesday"
 
 ═══════════════════════════════════════════════════════════════════════════════
 QUICK ACTION (for inbox triage)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Suggest ONE quick action to help the user process this email:
-
-- respond: Reply is needed - someone is waiting for an answer
-- review: Worth reading carefully - contains important information
-- archive: Can be dismissed - low value or already handled
-- save: Interesting content to save for later reference
-- calendar: Add to calendar - contains event/date information
-- unsubscribe: Suggest unsubscribing - appears to be unwanted newsletter
-- follow_up: Need to follow up on something user initiated
-- none: Truly nothing to do - purely informational
-
-QUICK ACTION GUIDANCE:
-- action_required category → usually "respond" or "review"
-- event category → usually "calendar"
-- newsletter category → "review", "save", or "unsubscribe"
-- promo category → usually "archive" or "unsubscribe"
-- admin category → usually "archive" or "none"
-- noise category → usually "archive" or "unsubscribe"
+- respond: Reply needed
+- review: Worth reading carefully
+- archive: Can be dismissed
+- save: Interesting, save for later
+- calendar: Add to calendar
+- unsubscribe: Suggest unsubscribing
+- follow_up: Need to follow up
+- none: Nothing to do
 
 ═══════════════════════════════════════════════════════════════════════════════
 TOPICS (1-5 keywords)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Extract key topics: billing, meeting, project-update, feedback, shipping, etc.
+Extract key topics: billing, project-update, homework, appointment, shipping, etc.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CONFIDENCE
 ═══════════════════════════════════════════════════════════════════════════════
 
-Be decisive but honest. If truly ambiguous, use confidence < 0.7.`;
+Be decisive. If truly ambiguous between two buckets, pick the most likely one and note lower confidence (< 0.7).`;
 
 /**
  * Builds the full system prompt with user context injected.

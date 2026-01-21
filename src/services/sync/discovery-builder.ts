@@ -290,17 +290,19 @@ export class DiscoveryBuilderService {
         });
       }
 
-      // Track urgent count for action_required
+      // Track urgent count for work-related categories (client_pipeline, business_work_general)
+      // REFACTORED (Jan 2026): Changed from action_required to work categories
       if (
-        email.category === 'action_required' &&
+        (email.category === 'client_pipeline' || email.category === 'business_work_general') &&
         email.actionUrgency &&
         email.actionUrgency >= 7
       ) {
         aggregate.urgentCount++;
       }
 
-      // Track upcoming event
-      if (email.category === 'event' && email.eventDetected) {
+      // Track upcoming event (events are now detected via analysis, not category)
+      // The eventDetected field comes from analysis labels, not category
+      if (email.eventDetected) {
         if (
           !aggregate.upcomingEvent ||
           email.eventDetected.date < aggregate.upcomingEvent.date
@@ -346,11 +348,17 @@ export class DiscoveryBuilderService {
     };
 
     // Add category-specific fields
-    if (category === 'action_required' && aggregate.urgentCount > 0) {
+    // REFACTORED (Jan 2026): Show urgent count for work categories
+    if (
+      (category === 'client_pipeline' || category === 'business_work_general') &&
+      aggregate.urgentCount > 0
+    ) {
       summary.urgentCount = aggregate.urgentCount;
     }
 
-    if (category === 'event' && aggregate.upcomingEvent) {
+    // Events can now appear in any category (local, family_kids_school, etc.)
+    // Show upcoming event if detected for categories that commonly have events
+    if (aggregate.upcomingEvent) {
       summary.upcomingEvent = aggregate.upcomingEvent;
     }
 
