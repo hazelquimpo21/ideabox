@@ -529,6 +529,21 @@ export function EventCard({
 
   const [showEmailModal, setShowEmailModal] = React.useState(false);
 
+  // Debug: Track modal state changes and component lifecycle
+  React.useEffect(() => {
+    logger.debug('EventCard mounted', { eventId: event.id.substring(0, 8) });
+    return () => {
+      logger.debug('EventCard unmounted', { eventId: event.id.substring(0, 8) });
+    };
+  }, [event.id]);
+
+  React.useEffect(() => {
+    logger.debug('Modal state changed', {
+      eventId: event.id.substring(0, 8),
+      showEmailModal
+    });
+  }, [showEmailModal, event.id]);
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Compact variant - delegate to specialized component
   // ─────────────────────────────────────────────────────────────────────────────
