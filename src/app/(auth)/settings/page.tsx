@@ -2119,9 +2119,11 @@ export default function SettingsPage() {
   const initialTab = (searchParams.get('tab') as SettingsTab) || 'account';
   const [activeTab, setActiveTab] = React.useState<SettingsTab>(initialTab);
 
-  // Handle "account_added" success message from OAuth callback
+  // Handle "account_added" success and errors from OAuth callback
   React.useEffect(() => {
     const accountAdded = searchParams.get('account_added');
+    const oauthError = searchParams.get('error');
+
     if (accountAdded === 'true') {
       toast({
         title: 'Account connected',
@@ -2129,9 +2131,25 @@ export default function SettingsPage() {
       });
       // Refresh accounts to show the new one
       refetchAccounts();
-      // Remove the query param from URL to prevent showing toast on refresh
+    } else if (oauthError === 'session_restore_failed') {
+      toast({
+        variant: 'destructive',
+        title: 'Connection failed',
+        description: 'Could not add the account while preserving your session. Please try again.',
+      });
+    } else if (oauthError === 'oauth_failed') {
+      toast({
+        variant: 'destructive',
+        title: 'Connection failed',
+        description: 'OAuth authorization failed. Please try again.',
+      });
+    }
+
+    // Remove the query params from URL to prevent showing toast on refresh
+    if (accountAdded || oauthError) {
       const url = new URL(window.location.href);
       url.searchParams.delete('account_added');
+      url.searchParams.delete('error');
       window.history.replaceState({}, '', url.toString());
     }
   }, [searchParams, toast, refetchAccounts]);
