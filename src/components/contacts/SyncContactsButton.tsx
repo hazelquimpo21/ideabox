@@ -20,14 +20,9 @@
 import * as React from 'react';
 import {
   Button,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   useToast,
 } from '@/components/ui';
 import {
-  RefreshCw,
   Cloud,
   CloudOff,
   Check,
@@ -203,27 +198,19 @@ export function SyncContactsButton({
     }
   };
 
-  // Compact variant - icon only with tooltip
+  // Compact variant - icon only with title tooltip
   if (variant === 'compact') {
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSync}
-              disabled={syncState === 'syncing'}
-              className={className}
-            >
-              {getIcon()}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Sync contacts from Google</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleSync}
+        disabled={syncState === 'syncing'}
+        className={className}
+        title="Sync contacts from Google"
+      >
+        {getIcon()}
+      </Button>
     );
   }
 
