@@ -37,6 +37,14 @@
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════════
+-- STEP 0: Drop the existing CHECK constraint on category
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- The old constraint only allows: action_required, event, newsletter, promo, admin, personal, noise
+-- We need to drop it before we can update to the new category values.
+
+ALTER TABLE public.emails DROP CONSTRAINT IF EXISTS emails_category_check;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
 -- STEP 1: Document the category mapping (no actual type change needed)
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- Note: The `category` column in `emails` table is TEXT, not an ENUM.
@@ -211,6 +219,30 @@ IMPORTANT LABELS:
 - from_vip: Sender is on users VIP list
 - local_event: Event is in users metro area
 ';
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- STEP 6: Add new CHECK constraint with updated category values
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Re-add the CHECK constraint with the new life-bucket category values.
+-- This ensures data integrity going forward.
+
+ALTER TABLE public.emails
+ADD CONSTRAINT emails_category_check CHECK (
+  category IS NULL OR category IN (
+    'newsletters_general',
+    'news_politics',
+    'product_updates',
+    'local',
+    'shopping',
+    'travel',
+    'finance',
+    'family_kids_school',
+    'family_health_appointments',
+    'client_pipeline',
+    'business_work_general',
+    'personal_friends_family'
+  )
+);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- VERIFICATION
