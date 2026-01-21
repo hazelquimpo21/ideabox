@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     // ─────────────────────────────────────────────────────────────────────────────
     let query = supabase
       .from('gmail_accounts')
-      .select('id, email, access_token, refresh_token, token_expires_at')
+      .select('id, email, access_token, refresh_token, token_expiry')
       .eq('user_id', user.id)
       .eq('is_active', true);
 
