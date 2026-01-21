@@ -167,20 +167,19 @@ export function generateGoogleCalendarLink(event: CalendarEventData): string {
 
 /**
  * Formats a 24-hour time string to 12-hour format with AM/PM.
- * Optionally displays the time in a specific timezone.
+ * The input time is assumed to already be in the user's timezone (no conversion needed).
  *
  * @param time24h - Time in 24h format (HH:MM)
  * @param options - Optional formatting options
- * @param options.timezone - IANA timezone (e.g., 'America/Chicago'). Defaults to Central Time.
- * @param options.date - Date string (YYYY-MM-DD) for timezone-accurate conversion. If not provided, uses today.
+ * @param options.timezone - IANA timezone for displaying timezone label (e.g., 'America/Chicago')
  * @param options.showTimezone - Whether to show timezone abbreviation (e.g., "6:00 PM CST")
  * @returns Time in 12h format (e.g., "6:00 PM" or "6:00 PM CST")
  *
  * @example
  * ```typescript
  * formatTime12h('18:00'); // "6:00 PM"
- * formatTime12h('18:00', { timezone: 'America/New_York' }); // "7:00 PM" (if source is Central)
- * formatTime12h('18:00', { showTimezone: true }); // "6:00 PM CST"
+ * formatTime12h('09:30'); // "9:30 AM"
+ * formatTime12h('18:00', { showTimezone: true, timezone: 'America/Chicago' }); // "6:00 PM CST"
  * ```
  */
 export function formatTime12h(
@@ -192,50 +191,43 @@ export function formatTime12h(
   }
 ): string {
   try {
-    const timezone = options?.timezone || DEFAULT_TIMEZONE;
-    const dateStr = options?.date || new Date().toISOString().split('T')[0];
-    const showTz = options?.showTimezone ?? false;
-
-    // Create a date object with the time
-    // We interpret the input time as being in the target timezone
     const [hoursStr, minutesStr] = time24h.split(':');
     const hours = parseInt(hoursStr, 10);
-    const minutes = parseInt(minutesStr || '0', 10);
+    const minutes = minutesStr || '00';
 
-    // Create a Date object for formatting
-    // Parse the date and time together
-    const dateTimeStr = `${dateStr}T${time24h.padEnd(5, ':00')}:00`;
-    const date = new Date(dateTimeStr);
+    // Convert to 12-hour format
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
 
-    // Format using Intl.DateTimeFormat for proper timezone handling
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: timezone,
-      ...(showTz && { timeZoneName: 'short' }),
-    });
+    let result = `${hours12}:${minutes} ${period}`;
 
-    return formatter.format(date);
+    // Add timezone abbreviation if requested
+    if (options?.showTimezone && options?.timezone) {
+      try {
+        // Get timezone abbreviation using Intl
+        const now = new Date();
+        const tzAbbr = new Intl.DateTimeFormat('en-US', {
+          timeZone: options.timezone,
+          timeZoneName: 'short',
+        })
+          .formatToParts(now)
+          .find(part => part.type === 'timeZoneName')?.value;
+
+        if (tzAbbr) {
+          result += ` ${tzAbbr}`;
+        }
+      } catch {
+        // Ignore timezone abbreviation errors
+      }
+    }
+
+    return result;
   } catch (error) {
-    logger.warn('Failed to format time with timezone, falling back to simple format', {
+    logger.warn('Failed to format time', {
       time24h,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
-
-    // Fallback to simple formatting without timezone
-    try {
-      const [hoursStr, minutesStr] = time24h.split(':');
-      const hours = parseInt(hoursStr, 10);
-      const minutes = minutesStr || '00';
-
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const hours12 = hours % 12 || 12;
-
-      return `${hours12}:${minutes} ${period}`;
-    } catch {
-      return time24h;
-    }
+    return time24h; // Return original if parsing fails
   }
 }
 

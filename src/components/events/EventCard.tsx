@@ -76,9 +76,7 @@ import {
   formatTime12h,
   calculateDaysFromNow,
   formatRelativeDate,
-  DEFAULT_TIMEZONE,
 } from '@/lib/utils/calendar';
-import { useAuth } from '@/lib/auth';
 import { EmailPreviewModal } from './EmailPreviewModal';
 import type { EventData, EventMetadata } from '@/hooks/useEvents';
 
@@ -126,6 +124,23 @@ function getLocality(event: EventData): EventLocality {
     return 'virtual';
   }
   return null;
+}
+
+/**
+ * Gets the left border accent color class based on locality.
+ * Virtual events get purple, local gets green, out-of-town gets orange.
+ */
+function getLocalityBorderClass(locality: EventLocality): string {
+  switch (locality) {
+    case 'virtual':
+      return 'border-l-4 border-l-purple-400 dark:border-l-purple-500';
+    case 'local':
+      return 'border-l-4 border-l-green-400 dark:border-l-green-500';
+    case 'out_of_town':
+      return 'border-l-4 border-l-orange-400 dark:border-l-orange-500';
+    default:
+      return '';
+  }
 }
 
 /**
@@ -204,18 +219,16 @@ function LocalityBadge({ locality }: { locality: EventLocality }) {
 /**
  * Date/time display component.
  * Shows formatted date with optional time and relative indicator.
- * Times are displayed in the user's timezone (defaults to Central Time).
+ * Times are stored in the event's timezone and displayed as-is.
  */
 function DateTimeDisplay({
   date,
   time,
   showRelative = true,
-  timezone,
 }: {
   date: string;
   time?: string | null;
   showRelative?: boolean;
-  timezone?: string;
 }) {
   const daysFromNow = calculateDaysFromNow(date);
   const relativeDate = formatRelativeDate(daysFromNow);
@@ -224,10 +237,8 @@ function DateTimeDisplay({
   const isToday = daysFromNow === 0;
   const isTomorrow = daysFromNow === 1;
 
-  // Format time with user's timezone (defaults to Central Time)
-  const formattedTime = time
-    ? formatTime12h(time, { timezone: timezone || DEFAULT_TIMEZONE, date })
-    : null;
+  // Format time (no conversion - times are stored in display format)
+  const formattedTime = time ? formatTime12h(time) : null;
 
   return (
     <div className="flex items-center gap-2 text-sm">
@@ -382,20 +393,22 @@ function LocationDisplay({ location, locality }: { location: string; locality?: 
 /**
  * Compact event card for sidebar preview.
  * Shows minimal info: title, date, and locality badge.
- * Times are displayed in the user's timezone.
+ * Has a left border accent indicating virtual/local/out-of-town.
  */
 function CompactEventCard({
   event,
   className,
-  timezone,
 }: {
   event: EventData;
   className?: string;
-  timezone?: string;
 }) {
   const daysFromNow = calculateDaysFromNow(event.date);
   const isToday = daysFromNow === 0;
   const isTomorrow = daysFromNow === 1;
+
+  // Get locality for visual styling
+  const locality = getLocality(event);
+  const localityBorderClass = getLocalityBorderClass(locality);
 
   logger.debug('Rendering compact EventCard', {
     eventId: event.id.substring(0, 8),
@@ -403,17 +416,16 @@ function CompactEventCard({
     date: event.date,
   });
 
-  // Format time with user's timezone (defaults to Central Time)
-  const formattedTime = event.event_time
-    ? formatTime12h(event.event_time, { timezone: timezone || DEFAULT_TIMEZONE, date: event.date })
-    : null;
+  // Format time (no timezone conversion needed - times are stored in display format)
+  const formattedTime = event.event_time ? formatTime12h(event.event_time) : null;
 
   return (
     <Link href={`/events?highlight=${event.id}`}>
       <Card
         className={`
           cursor-pointer transition-all hover:shadow-md hover:border-green-300
-          dark:hover:border-green-700
+          dark:hover:border-green-700 overflow-hidden
+          ${localityBorderClass}
           ${isToday ? 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/20' : ''}
           ${className || ''}
         `}
@@ -445,7 +457,7 @@ function CompactEventCard({
 
             {/* Locality badge and chevron */}
             <div className="flex items-center gap-1 shrink-0">
-              <LocalityBadge locality={getLocality(event)} />
+              <LocalityBadge locality={locality} />
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
           </div>
@@ -512,13 +524,6 @@ export function EventCard({
   className,
 }: EventCardProps) {
   // ─────────────────────────────────────────────────────────────────────────────
-  // Get user timezone from auth context
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  const { user } = useAuth();
-  const userTimezone = user?.timezone || DEFAULT_TIMEZONE;
-
-  // ─────────────────────────────────────────────────────────────────────────────
   // Local state for email preview modal
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -529,7 +534,7 @@ export function EventCard({
   // ─────────────────────────────────────────────────────────────────────────────
 
   if (variant === 'compact') {
-    return <CompactEventCard event={event} className={className} timezone={userTimezone} />;
+    return <CompactEventCard event={event} className={className} />;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -641,11 +646,16 @@ export function EventCard({
     setShowEmailModal(true);
   };
 
+  // Get locality for visual styling
+  const locality = getLocality(event);
+  const localityBorderClass = getLocalityBorderClass(locality);
+
   return (
     <>
       <Card
         className={`
-          transition-all relative
+          transition-all relative overflow-hidden
+          ${localityBorderClass}
           ${isToday ? 'border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-950/10' : ''}
           ${isPast ? 'opacity-60' : ''}
           ${isMaybe ? 'border-yellow-300 dark:border-yellow-700' : ''}
@@ -723,7 +733,6 @@ export function EventCard({
                 date={event.date}
                 time={event.event_time}
                 showRelative={!isToday}
-                timezone={userTimezone}
               />
               <LocalityBadge locality={getLocality(event)} />
             </div>
