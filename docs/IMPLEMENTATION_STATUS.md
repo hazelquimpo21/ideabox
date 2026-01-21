@@ -474,7 +474,8 @@ src/
 │   │   ├── index.ts
 │   │   ├── Navbar.tsx
 │   │   ├── Sidebar.tsx
-│   │   └── PageHeader.tsx
+│   │   ├── PageHeader.tsx
+│   │   └── SyncStatusBanner.tsx ✅ Contacts sync progress (NEW!)
 │   └── ui/                      ✅ Complete UI component library
 │       ├── index.ts
 │       ├── button.tsx
@@ -490,7 +491,8 @@ src/
 │       ├── toaster.tsx
 │       ├── use-toast.ts
 │       ├── skeleton.tsx
-│       └── spinner.tsx
+│       ├── spinner.tsx
+│       └── pagination.tsx       ✅ Page navigation (NEW!)
 ├── hooks/                       ✅ Data fetching hooks
 │   ├── index.ts                 ✅ Barrel export + type re-exports
 │   ├── useEmails.ts             ✅ Email fetching with filtering (12 tests)
@@ -557,6 +559,8 @@ src/
 │   │   ├── client.ts            ✅
 │   │   ├── server.ts            ✅
 │   │   └── types.ts             ✅
+│   ├── contexts/                ✅ React contexts (NEW!)
+│   │   └── sync-status-context.tsx ✅ Contacts sync state
 │   └── utils/
 │       ├── logger.ts            ✅ Enhanced with emojis
 │       └── cn.ts                ✅ Class name utility
@@ -602,10 +606,10 @@ With Email Intelligence UI complete, focus on integration and testing:
 - Export dates to external calendar
 - Import calendar events
 
-#### Contact Detail Page
-- Create `/contacts/[id]` page
-- Show email history with contact
-- Editable contact details
+#### ~~Contact Detail Page~~ ✅ DONE (Session 12)
+- ~~Create `/contacts/[id]` page~~
+- ~~Show email history with contact~~
+- ~~Editable contact details~~
 
 #### Smart Suggestions
 - Suggest relationship types based on email patterns
@@ -743,7 +747,76 @@ toast({
 
 ## Recent Changes (January 21, 2026)
 
-### Session 11 (Current) - Event State Management & Email Preview
+### Session 12 (Current) - Contacts Display & Sync Improvements
+
+Comprehensive improvements to the contacts area: pagination for 50+ contacts, sync progress UX, and CRM-style contact detail page.
+
+**New Components:**
+
+- **Pagination Component** (`src/components/ui/pagination.tsx`, ~300 lines) - NEW
+  - Reusable page-based pagination with prev/next and page numbers
+  - Ellipsis for large page ranges
+  - Optional info display ("Showing 1-50 of 234 contacts")
+  - `usePaginationInfo` helper hook
+
+- **ContactsSyncStatusProvider** (`src/lib/contexts/sync-status-context.tsx`, ~500 lines) - NEW
+  - Global state for Google contacts import progress
+  - Methods: `startSync`, `updateProgress`, `completeSync`, `failSync`, `dismiss`, `reset`
+  - Automatic polling for progress updates
+  - Auto-dismiss success after 5 seconds
+
+- **SyncStatusBanner** (`src/components/layout/SyncStatusBanner.tsx`, ~280 lines) - NEW
+  - Sticky banner showing sync progress across all pages
+  - Progress bar with real-time counts
+  - Current account indicator for multi-account syncs
+  - Error state with retry, dismiss button
+
+**New API Endpoints:**
+
+- **GET `/api/contacts/sync-progress`** - Lightweight polling endpoint for sync progress
+- **Updated `/api/emails`** - New `contactEmail` and `direction` query params for CRM view
+
+**Updated Components:**
+
+- **useContacts Hook** - Page-based pagination (`pagination`, `goToPage()`, `nextPage()`, `prevPage()`)
+- **Contacts Page** - Pagination UI, contact cards now link to `/contacts/[id]`
+- **Contact Detail Page** - Email direction tabs (All/Received/Sent), paginated email history
+- **SyncContactsButton** - Uses ContactsSyncStatusContext for global sync coordination
+- **Auth Layout** - Wrapped with `ContactsSyncStatusProvider`, added `SyncStatusBanner`
+- **import-google API** - Progress tracking via `user_profiles.sync_progress` JSONB field
+
+**Key Features:**
+
+- ✅ Page-based pagination with URL state (?page=2) for shareability
+- ✅ 50 contacts per page (configurable)
+- ✅ Global sync progress banner visible across all pages
+- ✅ Real-time progress with counts and percentage
+- ✅ CRM-style contact detail with email history
+- ✅ Email direction filter (all/received/sent)
+- ✅ Sent/Received badges in "All" view
+
+**Files Changed:**
+- `src/components/ui/pagination.tsx` - NEW
+- `src/lib/contexts/sync-status-context.tsx` - NEW
+- `src/components/layout/SyncStatusBanner.tsx` - NEW
+- `src/app/api/contacts/sync-progress/route.ts` - NEW
+- `src/hooks/useContacts.ts` - Enhanced with page-based pagination
+- `src/app/(auth)/contacts/page.tsx` - Enhanced with pagination UI
+- `src/app/(auth)/contacts/[id]/page.tsx` - Enhanced with email tabs and pagination
+- `src/app/api/emails/route.ts` - Added contactEmail and direction filters
+- `src/lib/api/schemas.ts` - Added emailDirectionSchema
+- `src/components/contacts/SyncContactsButton.tsx` - Uses sync context
+- `src/app/(auth)/layout.tsx` - Added provider and banner
+- `src/app/api/contacts/import-google/route.ts` - Progress tracking
+
+**Documentation:**
+- `docs/CONTACTS_FLOW.md` - Updated with pagination, sync progress, CRM detail sections
+- `docs/CONTACTS_IMPROVEMENTS_PLAN.md` - Implementation plan (created earlier)
+- `docs/IMPLEMENTATION_STATUS.md` - This file
+
+---
+
+### Session 11 - Event State Management & Email Preview
 
 Comprehensive event management with dismiss, maybe list, calendar tracking, and email preview modal.
 
