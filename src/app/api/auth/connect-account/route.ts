@@ -12,12 +12,13 @@
  *
  * 1. User clicks "Connect Another Account" in Settings
  * 2. Frontend calls this endpoint
- * 3. We set a secure cookie with the user's ID
+ * 3. We set a secure cookie with the user's ID AND store original session
  * 4. We redirect to Supabase OAuth (which redirects to Google)
  * 5. Google shows account picker
  * 6. User selects account
  * 7. Google redirects to our callback
  * 8. Callback checks for cookie and uses stored user_id for gmail_accounts
+ * 9. Callback restores original session so user stays logged in as original user
  *
  * @module app/api/auth/connect-account/route
  * @since January 2026
@@ -32,6 +33,8 @@ const logger = createLogger('ConnectAccount');
 
 // Cookie name for storing the original user ID
 export const ADD_ACCOUNT_COOKIE = 'ideabox_add_account_user_id';
+// Cookie name for storing original session (to restore after OAuth)
+export const ORIGINAL_SESSION_COOKIE = 'ideabox_original_session';
 
 // Gmail OAuth scopes (must match auth-context.tsx)
 const GMAIL_OAUTH_SCOPES = [
@@ -88,6 +91,9 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/settings?error=oauth_failed`);
     }
 
+    // Get the current session to store for restoration after OAuth
+    const { data: sessionData } = await supabase.auth.getSession();
+
     // Create response that redirects to Google OAuth
     const response = NextResponse.redirect(data.url);
 
@@ -101,8 +107,25 @@ export async function GET(request: Request) {
       maxAge: 60 * 10, // 10 minutes - enough for OAuth flow
     });
 
+    // Store the original session tokens so we can restore after OAuth
+    // This prevents the user from being logged in as the new account
+    if (sessionData?.session) {
+      const sessionToStore = {
+        access_token: sessionData.session.access_token,
+        refresh_token: sessionData.session.refresh_token,
+      };
+      response.cookies.set(ORIGINAL_SESSION_COOKIE, JSON.stringify(sessionToStore), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 10, // 10 minutes
+      });
+    }
+
     logger.success('Redirecting to Google OAuth with account picker', {
       userId: user.id.substring(0, 8),
+      hasSessionToRestore: !!sessionData?.session,
     });
 
     return response;

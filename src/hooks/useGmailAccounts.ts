@@ -137,11 +137,12 @@ function transformAccount(
   if (!account.sync_enabled) {
     syncStatus = 'paused';
   } else if (account.last_sync_at) {
-    // If last sync was more than 24 hours ago, consider it an error state
+    // If last sync was more than 7 days ago, consider it an error state
+    // (24 hours was too aggressive - syncs run every 15 min but users may not use app daily)
     const lastSync = new Date(account.last_sync_at);
-    const hoursSinceSync =
-      (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
-    if (hoursSinceSync > 24) {
+    const daysSinceSync =
+      (Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceSync > 7) {
       syncStatus = 'error';
     }
   }
