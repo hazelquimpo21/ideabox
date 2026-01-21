@@ -479,24 +479,69 @@ export class ContactService {
             continue;
           }
 
-          // Use the database function for atomic upsert
-          const { error } = await supabase.rpc('upsert_google_contact', {
-            p_user_id: userId,
-            p_email: gContact.email,
-            p_name: gContact.name,
-            p_avatar_url: gContact.photoUrl,
-            p_google_resource_name: gContact.resourceName,
-            p_google_labels: gContact.labels,
-            p_is_starred: gContact.isStarred,
-          });
+          // Try using the database function first, fallback to direct upsert
+          // This allows the feature to work before migration 022 is run
+          let upsertError: Error | null = null;
 
-          if (error) {
-            logger.warn('Failed to import Google contact', {
-              email: gContact.email.substring(0, 30),
-              error: error.message,
+          try {
+            const { error } = await supabase.rpc('upsert_google_contact', {
+              p_user_id: userId,
+              p_email: gContact.email,
+              p_name: gContact.name,
+              p_avatar_url: gContact.photoUrl,
+              p_google_resource_name: gContact.resourceName,
+              p_google_labels: gContact.labels,
+              p_is_starred: gContact.isStarred,
             });
-            result.errors.push(`${gContact.email}: ${error.message}`);
-            continue;
+
+            if (error) {
+              upsertError = new Error(error.message);
+            }
+          } catch (rpcError) {
+            // RPC function might not exist - use fallback
+            upsertError = rpcError instanceof Error ? rpcError : new Error('RPC failed');
+          }
+
+          // Fallback: Direct upsert without Google-specific fields
+          if (upsertError) {
+            logger.debug('RPC failed, using fallback upsert', {
+              email: gContact.email.substring(0, 30),
+              error: upsertError.message,
+            });
+
+            const { error: fallbackError } = await supabase
+              .from('contacts')
+              .upsert(
+                {
+                  user_id: userId,
+                  email: gContact.email.toLowerCase().trim(),
+                  name: gContact.name,
+                  // Google-specific fields may not exist yet
+                  ...(await this.getGoogleFieldsIfAvailable(supabase, {
+                    avatar_url: gContact.photoUrl,
+                    google_resource_name: gContact.resourceName,
+                    google_labels: gContact.labels,
+                    is_google_starred: gContact.isStarred,
+                    google_synced_at: new Date().toISOString(),
+                    import_source: 'google',
+                  })),
+                  needs_enrichment: true,
+                  updated_at: new Date().toISOString(),
+                },
+                {
+                  onConflict: 'user_id,email',
+                  ignoreDuplicates: false,
+                }
+              );
+
+            if (fallbackError) {
+              logger.warn('Failed to import Google contact (fallback)', {
+                email: gContact.email.substring(0, 30),
+                error: fallbackError.message,
+              });
+              result.errors.push(`${gContact.email}: ${fallbackError.message}`);
+              continue;
+            }
           }
 
           result.imported++;
@@ -510,15 +555,20 @@ export class ContactService {
       }
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Update account sync timestamp
+      // Update account sync timestamp (may fail if columns don't exist yet)
       // ─────────────────────────────────────────────────────────────────────────
-      await supabase
-        .from('gmail_accounts')
-        .update({
-          contacts_synced_at: new Date().toISOString(),
-          contacts_sync_enabled: true,
-        })
-        .eq('id', accountId);
+      try {
+        await supabase
+          .from('gmail_accounts')
+          .update({
+            contacts_synced_at: new Date().toISOString(),
+            contacts_sync_enabled: true,
+          })
+          .eq('id', accountId);
+      } catch {
+        // Columns may not exist yet - ignore
+        logger.debug('Could not update contacts_synced_at (column may not exist)');
+      }
 
       logger.info('Google contacts import complete', {
         userId: userId.substring(0, 8),
@@ -579,37 +629,78 @@ export class ContactService {
     try {
       const supabase = await createServerClient();
 
-      // Use the database function that handles all the logic
-      const { data, error } = await supabase.rpc('get_vip_suggestions', {
-        p_user_id: userId,
-        p_limit: limit,
-      });
+      // Try using the database function first
+      let suggestions: VipSuggestion[] = [];
+      let usedFallback = false;
 
-      if (error) {
-        logger.error('Failed to get VIP suggestions', {
-          userId: userId.substring(0, 8),
-          error: error.message,
+      try {
+        const { data, error } = await supabase.rpc('get_vip_suggestions', {
+          p_user_id: userId,
+          p_limit: limit,
         });
-        return [];
-      }
 
-      const suggestions: VipSuggestion[] = (data || []).map((row: Record<string, unknown>) => ({
-        id: row.id as string,
-        email: row.email as string,
-        name: row.name as string | null,
-        avatarUrl: row.avatar_url as string | null,
-        emailCount: row.email_count as number,
-        lastSeenAt: row.last_seen_at as string | null,
-        isGoogleStarred: row.is_google_starred as boolean,
-        googleLabels: row.google_labels as string[] || [],
-        relationshipType: row.relationship_type as string | null,
-        suggestionReason: row.suggestion_reason as string,
-      }));
+        if (!error && data) {
+          suggestions = (data || []).map((row: Record<string, unknown>) => ({
+            id: row.id as string,
+            email: row.email as string,
+            name: row.name as string | null,
+            avatarUrl: row.avatar_url as string | null,
+            emailCount: row.email_count as number,
+            lastSeenAt: row.last_seen_at as string | null,
+            isGoogleStarred: row.is_google_starred as boolean,
+            googleLabels: (row.google_labels as string[]) || [],
+            relationshipType: row.relationship_type as string | null,
+            suggestionReason: row.suggestion_reason as string,
+          }));
+        } else {
+          throw new Error(error?.message || 'RPC returned no data');
+        }
+      } catch (rpcError) {
+        // RPC function doesn't exist - use fallback query
+        logger.debug('get_vip_suggestions RPC not available, using fallback', {
+          error: rpcError instanceof Error ? rpcError.message : 'Unknown',
+        });
+        usedFallback = true;
+
+        // Fallback: Direct query for contacts with high email count
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('contacts')
+          .select('id, email, name, email_count, last_seen_at, relationship_type, is_vip')
+          .eq('user_id', userId)
+          .eq('is_archived', false)
+          .eq('is_vip', false)
+          .gte('email_count', 3)
+          .order('email_count', { ascending: false })
+          .limit(limit);
+
+        if (fallbackError) {
+          logger.error('Fallback query failed', { error: fallbackError.message });
+          return [];
+        }
+
+        suggestions = (fallbackData || []).map((row) => ({
+          id: row.id,
+          email: row.email,
+          name: row.name,
+          avatarUrl: null,
+          emailCount: row.email_count,
+          lastSeenAt: row.last_seen_at,
+          isGoogleStarred: false,
+          googleLabels: [],
+          relationshipType: row.relationship_type,
+          suggestionReason: row.email_count >= 20
+            ? `Frequent (${row.email_count} emails)`
+            : row.email_count >= 10
+              ? `Regular contact (${row.email_count} emails)`
+              : `${row.email_count} emails`,
+        }));
+      }
 
       logger.info('VIP suggestions retrieved', {
         userId: userId.substring(0, 8),
         count: suggestions.length,
-        starredCount: suggestions.filter(s => s.isGoogleStarred).length,
+        usedFallback,
+        starredCount: suggestions.filter((s) => s.isGoogleStarred).length,
       });
 
       return suggestions;
@@ -642,33 +733,64 @@ export class ContactService {
     try {
       const supabase = await createServerClient();
 
-      const { data, error } = await supabase.rpc('get_frequent_contacts', {
-        p_user_id: userId,
-        p_limit: limit,
-      });
+      // Try RPC first, fallback to direct query
+      let contacts: ContactSummary[] = [];
 
-      if (error) {
-        logger.error('Failed to get frequent contacts', {
-          userId: userId.substring(0, 8),
-          error: error.message,
+      try {
+        const { data, error } = await supabase.rpc('get_frequent_contacts', {
+          p_user_id: userId,
+          p_limit: limit,
         });
-        return [];
-      }
 
-      const contacts: ContactSummary[] = (data || []).map((row: Record<string, unknown>) => ({
-        id: row.id as string,
-        email: row.email as string,
-        name: row.name as string | null,
-        avatarUrl: row.avatar_url as string | null,
-        emailCount: row.email_count as number,
-        sentCount: row.sent_count as number,
-        receivedCount: row.received_count as number,
-        firstSeenAt: row.first_seen_at as string | null,
-        lastSeenAt: row.last_seen_at as string | null,
-        relationshipType: row.relationship_type as string | null,
-        isVip: row.is_vip as boolean,
-        isGoogleStarred: row.is_google_starred as boolean,
-      }));
+        if (!error && data) {
+          contacts = (data || []).map((row: Record<string, unknown>) => ({
+            id: row.id as string,
+            email: row.email as string,
+            name: row.name as string | null,
+            avatarUrl: row.avatar_url as string | null,
+            emailCount: row.email_count as number,
+            sentCount: row.sent_count as number,
+            receivedCount: row.received_count as number,
+            firstSeenAt: row.first_seen_at as string | null,
+            lastSeenAt: row.last_seen_at as string | null,
+            relationshipType: row.relationship_type as string | null,
+            isVip: row.is_vip as boolean,
+            isGoogleStarred: row.is_google_starred as boolean,
+          }));
+        } else {
+          throw new Error(error?.message || 'RPC not available');
+        }
+      } catch {
+        // Fallback: Direct query
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('contacts')
+          .select('id, email, name, email_count, sent_count, received_count, first_seen_at, last_seen_at, relationship_type, is_vip')
+          .eq('user_id', userId)
+          .eq('is_archived', false)
+          .gte('email_count', 3)
+          .order('email_count', { ascending: false })
+          .limit(limit);
+
+        if (fallbackError) {
+          logger.error('Fallback query failed', { error: fallbackError.message });
+          return [];
+        }
+
+        contacts = (fallbackData || []).map((row) => ({
+          id: row.id,
+          email: row.email,
+          name: row.name,
+          avatarUrl: null,
+          emailCount: row.email_count,
+          sentCount: row.sent_count || 0,
+          receivedCount: row.received_count || 0,
+          firstSeenAt: row.first_seen_at,
+          lastSeenAt: row.last_seen_at,
+          relationshipType: row.relationship_type,
+          isVip: row.is_vip,
+          isGoogleStarred: false,
+        }));
+      }
 
       logger.info('Frequent contacts retrieved', {
         userId: userId.substring(0, 8),
@@ -805,6 +927,45 @@ export class ContactService {
         error: message,
       });
       return null;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PRIVATE HELPER METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Returns Google-specific fields only if the columns exist in the database.
+   * This allows the import to work before migration 022 is run.
+   *
+   * @param supabase - Supabase client
+   * @param fields - The Google-specific fields to potentially include
+   * @returns The fields if columns exist, empty object otherwise
+   */
+  private async getGoogleFieldsIfAvailable(
+    supabase: Awaited<ReturnType<typeof createServerClient>>,
+    fields: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    // Check if Google fields exist by querying table info
+    // For now, just try to return the fields - the upsert will ignore unknown columns
+    // in most cases, or we can catch the error
+    try {
+      // Quick check: try to select one of the Google-specific columns
+      const { error } = await supabase
+        .from('contacts')
+        .select('avatar_url')
+        .limit(0);
+
+      if (error && error.message.includes('avatar_url')) {
+        // Column doesn't exist - don't include Google fields
+        logger.debug('Google-specific columns not available yet');
+        return {};
+      }
+
+      return fields;
+    } catch {
+      // If check fails, return empty to be safe
+      return {};
     }
   }
 }
