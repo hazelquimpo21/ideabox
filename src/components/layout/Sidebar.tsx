@@ -2,7 +2,8 @@
  * 📑 Sidebar Component for IdeaBox
  *
  * The main navigation sidebar that appears on the left side of authenticated pages.
- * Contains navigation links, email category filters, and client quick-access list.
+ * Contains navigation links, email category filters, upcoming events preview, and
+ * client quick-access list.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * FEATURES
@@ -10,6 +11,7 @@
  * - Collapsible on mobile (controlled by parent)
  * - Navigation links with active state indication
  * - Email category quick filters with counts
+ * - Upcoming Events preview section with compact cards (P6 Enhancement, Jan 2026)
  * - Client list for quick access to client-filtered views
  * - Keyboard navigation support
  *
@@ -54,10 +56,20 @@ import {
   // ─── Email Intelligence P6 icons ───────────────────────────────────────────
   BookUser,      // Contacts page - represents address book / contact management
   CalendarDays,  // Timeline page - represents date-based timeline view
+  // ─── Events Page Enhancement (Jan 2026) ────────────────────────────────────
+  CalendarCheck, // For event cards in sidebar
 } from 'lucide-react';
 
+import { createLogger } from '@/lib/utils/logger';
+
 import { cn } from '@/lib/utils/cn';
-import { Button, Badge } from '@/components/ui';
+import { Button, Badge, Card, CardContent } from '@/components/ui';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('Sidebar');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -94,7 +106,27 @@ export interface SidebarClient {
 }
 
 /**
+ * Individual event data for sidebar preview cards.
+ * Minimal data needed for compact display.
+ *
+ * @since January 2026 (Events Page Enhancement)
+ */
+export interface UpcomingEvent {
+  /** Unique event identifier */
+  id: string;
+  /** Event title */
+  title: string;
+  /** Event date (YYYY-MM-DD format) */
+  date: string;
+  /** Event time (HH:MM format, optional) */
+  time?: string;
+  /** Days until event (0 = today, 1 = tomorrow, etc.) */
+  daysUntil: number;
+}
+
+/**
  * Upcoming events summary for sidebar display.
+ * Enhanced in January 2026 to include preview events for sidebar cards.
  */
 export interface UpcomingEventsSummary {
   /** Total count of upcoming events */
@@ -103,6 +135,8 @@ export interface UpcomingEventsSummary {
   nextEventDate?: string;
   /** Days until next event */
   daysUntilNext?: number;
+  /** Preview events for sidebar cards (max 3) */
+  previewEvents?: UpcomingEvent[];
 }
 
 /**
@@ -185,6 +219,16 @@ const mainNavItems: NavItem[] = [
     icon: CalendarDays,
   },
   // ─────────────────────────────────────────────────────────────────────────────
+  // Events Page Enhancement: January 2026
+  // Dedicated events page with friendly event cards, separate from Timeline.
+  // Events are detected via the `has_event` label since the Jan 2026 refactor.
+  // ─────────────────────────────────────────────────────────────────────────────
+  {
+    label: 'Events',
+    href: '/events',
+    icon: Calendar,
+  },
+  // ─────────────────────────────────────────────────────────────────────────────
   {
     label: 'Archive',
     href: '/archive',
@@ -194,6 +238,10 @@ const mainNavItems: NavItem[] = [
 
 /**
  * Category filter items for quick inbox filtering.
+ *
+ * Note: Events was removed from this list in January 2026 as it now has a
+ * dedicated /events page. Events are detected via the `has_event` label
+ * rather than being a primary category.
  */
 interface CategoryItem {
   label: string;
@@ -209,12 +257,7 @@ const categoryItems: CategoryItem[] = [
     icon: AlertCircle,
     color: 'text-red-500',
   },
-  {
-    label: 'Events',
-    category: 'event',
-    icon: Calendar,
-    color: 'text-purple-500',
-  },
+  // Note: Events moved to dedicated /events page and main nav (Jan 2026)
   {
     label: 'Newsletters',
     category: 'newsletter',
@@ -392,6 +435,134 @@ function ClientLink({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// UPCOMING EVENTS PREVIEW (P6 Enhancement - January 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Compact event card for sidebar preview.
+ * Shows minimal info: title, date indicator, and click action.
+ *
+ * This component provides a quick glance at upcoming events directly in the
+ * sidebar, eliminating the need to navigate to the Events page for basic info.
+ *
+ * @since January 2026
+ */
+function CompactEventCard({
+  event,
+  onClick,
+}: {
+  event: UpcomingEvent;
+  onClick?: () => void;
+}) {
+  const isToday = event.daysUntil === 0;
+  const isTomorrow = event.daysUntil === 1;
+
+  logger.debug('Rendering CompactEventCard', {
+    eventId: event.id.substring(0, 8),
+    title: event.title,
+    daysUntil: event.daysUntil,
+  });
+
+  return (
+    <Link href={`/events?highlight=${event.id}`} onClick={onClick}>
+      <Card
+        className={cn(
+          'cursor-pointer transition-all hover:shadow-sm hover:border-green-300 dark:hover:border-green-700',
+          isToday && 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/20'
+        )}
+      >
+        <CardContent className="p-2.5">
+          <div className="flex items-center gap-2">
+            {/* Calendar icon with color based on urgency */}
+            <CalendarCheck
+              className={cn(
+                'h-3.5 w-3.5 shrink-0',
+                isToday
+                  ? 'text-green-600 dark:text-green-400'
+                  : isTomorrow
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-muted-foreground'
+              )}
+            />
+
+            <div className="flex-1 min-w-0">
+              {/* Event title - truncated */}
+              <p className="text-xs font-medium truncate">{event.title}</p>
+
+              {/* Date indicator */}
+              <p className="text-[10px] text-muted-foreground">
+                {isToday ? (
+                  <span className="text-green-600 dark:text-green-400 font-medium">Today</span>
+                ) : isTomorrow ? (
+                  <span className="text-blue-600 dark:text-blue-400 font-medium">Tomorrow</span>
+                ) : event.daysUntil <= 7 ? (
+                  `In ${event.daysUntil} days`
+                ) : (
+                  event.date
+                )}
+                {event.time && <span className="ml-1">at {event.time}</span>}
+              </p>
+            </div>
+
+            {/* Chevron */}
+            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+/**
+ * Upcoming events preview section.
+ * Displays up to 3 compact event cards in the sidebar.
+ *
+ * This section provides at-a-glance visibility into upcoming events without
+ * requiring navigation to the Events page. Helps users stay on top of their
+ * schedule while working in other parts of the app.
+ *
+ * @since January 2026
+ */
+function UpcomingEventsPreview({
+  events,
+  onEventClick,
+}: {
+  events: UpcomingEvent[];
+  onEventClick?: () => void;
+}) {
+  if (!events || events.length === 0) {
+    logger.debug('No preview events to display');
+    return null;
+  }
+
+  logger.debug('Rendering UpcomingEventsPreview', { eventCount: events.length });
+
+  return (
+    <SidebarSection title="Upcoming Events">
+      <div className="space-y-1.5 px-2">
+        {events.slice(0, 3).map((event) => (
+          <CompactEventCard
+            key={event.id}
+            event={event}
+            onClick={onEventClick}
+          />
+        ))}
+
+        {/* View all link */}
+        <Link
+          href="/events"
+          onClick={onEventClick}
+          className="flex items-center justify-center gap-1 rounded-md py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          View all events
+          <ChevronRight className="h-3 w-3" />
+        </Link>
+      </div>
+    </SidebarSection>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -399,8 +570,9 @@ function ClientLink({
  * Main sidebar navigation component.
  *
  * Provides hierarchical navigation with:
- * - Main navigation (Inbox, Actions, Clients, Archive)
- * - Category quick filters
+ * - Main navigation (Hub, Inbox, Actions, Events, Clients, Contacts, Timeline, Archive)
+ * - Category quick filters (Action Required, Newsletters, Promo)
+ * - Upcoming Events preview cards (P6 Enhancement - January 2026)
  * - Client quick-access list
  *
  * On mobile, renders as an overlay that can be toggled open/closed.
@@ -413,13 +585,20 @@ function ClientLink({
  * <Sidebar
  *   categoryCounts={{
  *     action_required: 5,
- *     event: 3,
  *     newsletter: 12,
  *   }}
  *   clients={[
  *     { id: '1', name: 'Acme Corp', unreadCount: 2 },
  *     { id: '2', name: 'StartupXYZ' },
  *   ]}
+ *   upcomingEvents={{
+ *     count: 3,
+ *     daysUntilNext: 0,
+ *     previewEvents: [
+ *       { id: '1', title: 'Team Standup', date: '2026-01-21', daysUntil: 0 },
+ *       { id: '2', title: 'Design Review', date: '2026-01-22', daysUntil: 1 },
+ *     ],
+ *   }}
  *   isOpen={sidebarOpen}
  *   onClose={() => setSidebarOpen(false)}
  * />
@@ -479,36 +658,30 @@ export function Sidebar({
 
       {/* Category Filters */}
       <SidebarSection title="Categories">
-        {categoryItems.map((item) => {
-          // Generate subtitle for Events category based on upcoming events
-          let subtitle: string | undefined;
-          if (item.category === 'event' && upcomingEvents && upcomingEvents.count > 0) {
-            if (upcomingEvents.daysUntilNext === 0) {
-              subtitle = 'Event today!';
-            } else if (upcomingEvents.daysUntilNext === 1) {
-              subtitle = 'Next: tomorrow';
-            } else if (upcomingEvents.daysUntilNext !== undefined && upcomingEvents.daysUntilNext <= 7) {
-              subtitle = `Next: in ${upcomingEvents.daysUntilNext} days`;
-            } else if (upcomingEvents.count > 0) {
-              subtitle = `${upcomingEvents.count} upcoming`;
-            }
-          }
-
-          return (
-            <CategoryLink
-              key={item.category}
-              href={`/inbox?category=${item.category}`}
-              icon={item.icon}
-              label={item.label}
-              isActive={activePath === `/inbox?category=${item.category}`}
-              count={categoryCounts[item.category]}
-              iconColor={item.color}
-              onClick={handleLinkClick}
-              subtitle={subtitle}
-            />
-          );
-        })}
+        {categoryItems.map((item) => (
+          <CategoryLink
+            key={item.category}
+            href={`/inbox?category=${item.category}`}
+            icon={item.icon}
+            label={item.label}
+            isActive={activePath === `/inbox?category=${item.category}`}
+            count={categoryCounts[item.category]}
+            iconColor={item.color}
+            onClick={handleLinkClick}
+          />
+        ))}
       </SidebarSection>
+
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* Upcoming Events Preview (P6 Enhancement - January 2026) */}
+      {/* Shows compact event cards for quick visibility into upcoming events */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {upcomingEvents?.previewEvents && upcomingEvents.previewEvents.length > 0 && (
+        <UpcomingEventsPreview
+          events={upcomingEvents.previewEvents}
+          onEventClick={handleLinkClick}
+        />
+      )}
 
       {/* Clients */}
       {clients.length > 0 && (
