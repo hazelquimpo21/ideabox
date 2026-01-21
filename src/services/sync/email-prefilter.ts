@@ -147,7 +147,7 @@ export class EmailPreFilterService {
       return {
         shouldAnalyze: false,
         skipReason: `Automated sender (${skipPattern})`,
-        autoCategory: 'admin', // Most automated emails are admin
+        autoCategory: 'product_updates', // Most automated emails are product updates/notifications
         autoConfidence: 0.8,
       };
     }

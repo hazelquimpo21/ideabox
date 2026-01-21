@@ -245,6 +245,31 @@ ADD CONSTRAINT emails_category_check CHECK (
 );
 
 -- ═══════════════════════════════════════════════════════════════════════════════
+-- STEP 7: Add sender_patterns column to user_profiles
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Stores learned sender patterns for auto-categorization without AI.
+-- Used by the email prefilter service.
+
+ALTER TABLE public.user_profiles
+ADD COLUMN IF NOT EXISTS sender_patterns JSONB DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN public.user_profiles.sender_patterns IS '
+Learned sender patterns for auto-categorization (JSONB array).
+
+Each pattern:
+{
+  "pattern": string (email or domain),
+  "isDomain": boolean (true if domain-level pattern),
+  "category": EmailCategory,
+  "confidence": number (0-1),
+  "sampleSize": number (emails that contributed to pattern),
+  "updatedAt": ISO timestamp
+}
+
+Used by EmailPreFilterService to skip AI analysis for known senders.
+';
+
+-- ═══════════════════════════════════════════════════════════════════════════════
 -- VERIFICATION
 -- ═══════════════════════════════════════════════════════════════════════════════
 

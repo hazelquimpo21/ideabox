@@ -553,6 +553,13 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
    * @returns Normalized data (camelCase)
    */
   private normalizeResponse(rawData: Record<string, unknown>): CategorizationData {
+    // Validate quick_action is one of the allowed values
+    const validQuickActions = new Set(QUICK_ACTIONS);
+    const rawQuickAction = rawData.quick_action as string;
+    const quickAction: QuickAction = validQuickActions.has(rawQuickAction)
+      ? (rawQuickAction as QuickAction)
+      : 'review'; // Default to 'review' if invalid
+
     return {
       // Core categorization fields
       category: rawData.category as CategorizationData['category'],
@@ -566,8 +573,8 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       // Assistant-style summary
       summary: (rawData.summary as string) || 'Email received',
 
-      // Quick action (convert snake_case to camelCase)
-      quickAction: (rawData.quick_action as QuickAction) || 'review',
+      // Quick action (validated)
+      quickAction,
     };
   }
 

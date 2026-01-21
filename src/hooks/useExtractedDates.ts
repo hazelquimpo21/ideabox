@@ -118,8 +118,8 @@ export interface ExtractedDate {
   date_type: DateType;
   /** The actual date */
   date: string;
-  /** Optional time if specified */
-  time: string | null;
+  /** Optional time if specified (HH:MM:SS format) */
+  event_time: string | null;
   /** Display title for this date */
   title: string;
   /** Additional description or context */
