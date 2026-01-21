@@ -8,3 +8,4 @@
 
 export { VipSuggestionsModal } from './VipSuggestionsModal';
 export { SyncContactsButton } from './SyncContactsButton';
+export { HistoricalSyncButton } from './HistoricalSyncButton';
