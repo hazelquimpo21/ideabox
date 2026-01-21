@@ -241,6 +241,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const fetchPromise = (async (): Promise<ProfileFetchResult> => {
         try {
+          // IMPORTANT: Call getUser() first to ensure auth state is synchronized
+          // This is required because when called from onAuthStateChange, the Supabase
+          // client's internal JWT may not be fully processed yet. Without this,
+          // RLS policies using auth.uid() may fail or hang.
+          const { error: authError } = await supabase.auth.getUser();
+          if (authError) {
+            logger.warn('Auth verification failed before profile fetch', {
+              userId,
+              error: authError.message,
+            });
+            return { profile: null, success: false };
+          }
+
           const { data: profile, error: profileError } = await supabase
             .from('user_profiles')
             .select('*')
