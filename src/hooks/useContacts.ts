@@ -143,6 +143,8 @@ export interface ContactStats {
   muted: number;
   /** Number of client contacts */
   clients: number;
+  /** Last Google contacts sync timestamp */
+  lastGoogleSync: string | null;
 }
 
 /**
@@ -161,8 +163,10 @@ export interface UseContactsReturn {
   loadMore: () => Promise<void>;
   /** Whether more contacts are available */
   hasMore: boolean;
-  /** Contact statistics */
+  /** Contact statistics (global, not affected by filters) */
   stats: ContactStats;
+  /** Refresh just the stats (useful after external changes like sync) */
+  refreshStats: () => Promise<void>;
   /** Toggle VIP status for a contact (optimistic update) */
   toggleVip: (contactId: string) => Promise<void>;
   /** Toggle muted status for a contact (optimistic update) */
@@ -226,6 +230,7 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     vip: 0,
     muted: 0,
     clients: 0,
+    lastGoogleSync: null,
   });
 
   // Memoize the Supabase client to prevent recreation on each render
@@ -328,15 +333,8 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
       setContacts(fetchedContacts);
       setHasMore(fetchedContacts.length >= limit);
 
-      // Calculate stats from fetched data
-      // Note: In a production app, you might want a separate stats query
-      // for accurate totals when filters are applied
-      setStats({
-        total: count || fetchedContacts.length,
-        vip: fetchedContacts.filter((c) => c.is_vip).length,
-        muted: fetchedContacts.filter((c) => c.is_muted).length,
-        clients: fetchedContacts.filter((c) => c.relationship_type === 'client').length,
-      });
+      // Note: Global stats are now fetched separately via /api/contacts/stats
+      // to ensure accurate totals regardless of filters
 
       logger.success('Contacts fetched', {
         count: fetchedContacts.length,
@@ -464,12 +462,6 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
         prev.map((c) => (c.id === contactId ? { ...c, is_vip: newVipStatus } : c))
       );
 
-      // Update stats optimistically
-      setStats((prev) => ({
-        ...prev,
-        vip: newVipStatus ? prev.vip + 1 : prev.vip - 1,
-      }));
-
       try {
         // Persist to database
         const { error: updateError } = await supabase
@@ -489,6 +481,9 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
           contactId: contactId.substring(0, 8),
           newStatus: newVipStatus,
         });
+
+        // Refresh global stats after successful toggle
+        fetchStats();
       } catch (err) {
         // Rollback optimistic update on error
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -497,15 +492,11 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
         setContacts((prev) =>
           prev.map((c) => (c.id === contactId ? { ...c, is_vip: contact.is_vip } : c))
         );
-        setStats((prev) => ({
-          ...prev,
-          vip: contact.is_vip ? prev.vip + 1 : prev.vip - 1,
-        }));
 
         setError(err instanceof Error ? err : new Error(errorMessage));
       }
     },
-    [supabase, contacts]
+    [supabase, contacts, fetchStats]
   );
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -540,12 +531,6 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
         prev.map((c) => (c.id === contactId ? { ...c, is_muted: newMutedStatus } : c))
       );
 
-      // Update stats optimistically
-      setStats((prev) => ({
-        ...prev,
-        muted: newMutedStatus ? prev.muted + 1 : prev.muted - 1,
-      }));
-
       try {
         // Persist to database
         const { error: updateError } = await supabase
@@ -565,6 +550,9 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
           contactId: contactId.substring(0, 8),
           newStatus: newMutedStatus,
         });
+
+        // Refresh global stats after successful toggle
+        fetchStats();
       } catch (err) {
         // Rollback optimistic update on error
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -573,15 +561,11 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
         setContacts((prev) =>
           prev.map((c) => (c.id === contactId ? { ...c, is_muted: contact.is_muted } : c))
         );
-        setStats((prev) => ({
-          ...prev,
-          muted: contact.is_muted ? prev.muted + 1 : prev.muted - 1,
-        }));
 
         setError(err instanceof Error ? err : new Error(errorMessage));
       }
     },
-    [supabase, contacts]
+    [supabase, contacts, fetchStats]
   );
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -617,19 +601,6 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
         prev.map((c) => (c.id === contactId ? { ...c, relationship_type: type } : c))
       );
 
-      // Update client count in stats if changing to/from client
-      if (type === 'client' || previousType === 'client') {
-        setStats((prev) => ({
-          ...prev,
-          clients:
-            type === 'client'
-              ? prev.clients + 1
-              : previousType === 'client'
-                ? prev.clients - 1
-                : prev.clients,
-        }));
-      }
-
       try {
         const { error: updateError } = await supabase
           .from('contacts')
@@ -648,6 +619,11 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
           contactId: contactId.substring(0, 8),
           newType: type,
         });
+
+        // Refresh stats if client count changed
+        if (type === 'client' || previousType === 'client') {
+          fetchStats();
+        }
       } catch (err) {
         // Rollback on error
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -659,23 +635,41 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
           )
         );
 
-        if (type === 'client' || previousType === 'client') {
-          setStats((prev) => ({
-            ...prev,
-            clients:
-              previousType === 'client'
-                ? prev.clients + 1
-                : type === 'client'
-                  ? prev.clients - 1
-                  : prev.clients,
-          }));
-        }
-
         setError(err instanceof Error ? err : new Error(errorMessage));
       }
     },
-    [supabase, contacts]
+    [supabase, contacts, fetchStats]
   );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Fetch Global Stats (separate from filtered contacts)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Fetches global contact statistics from the dedicated stats endpoint.
+   * This ensures accurate totals regardless of current filters.
+   */
+  const fetchStats = React.useCallback(async () => {
+    try {
+      const response = await fetch('/api/contacts/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setStats({
+          total: data.total || 0,
+          vip: data.vip || 0,
+          muted: data.muted || 0,
+          clients: data.clients || 0,
+          lastGoogleSync: data.lastGoogleSync || null,
+        });
+        logger.debug('Global stats fetched', data);
+      }
+    } catch (err) {
+      // Don't throw - stats are non-critical
+      logger.warn('Failed to fetch global stats', {
+        error: err instanceof Error ? err.message : 'Unknown',
+      });
+    }
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Effects
@@ -685,6 +679,11 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
   React.useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
+
+  // Fetch global stats on mount and after certain actions
+  React.useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Return Hook API
@@ -698,6 +697,7 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     loadMore,
     hasMore,
     stats,
+    refreshStats: fetchStats,
     toggleVip,
     toggleMuted,
     updateRelationship,
