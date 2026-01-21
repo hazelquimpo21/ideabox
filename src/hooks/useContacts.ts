@@ -431,6 +431,36 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
   ]);
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Fetch Global Stats (separate from filtered contacts)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Fetches global contact statistics from the dedicated stats endpoint.
+   * This ensures accurate totals regardless of current filters.
+   */
+  const fetchStats = React.useCallback(async () => {
+    try {
+      const response = await fetch('/api/contacts/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setStats({
+          total: data.total || 0,
+          vip: data.vip || 0,
+          muted: data.muted || 0,
+          clients: data.clients || 0,
+          lastGoogleSync: data.lastGoogleSync || null,
+        });
+        logger.debug('Global stats fetched', data);
+      }
+    } catch (err) {
+      // Don't throw - stats are non-critical
+      logger.warn('Failed to fetch global stats', {
+        error: err instanceof Error ? err.message : 'Unknown',
+      });
+    }
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Toggle VIP Status (Optimistic Update)
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -640,36 +670,6 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     },
     [supabase, contacts, fetchStats]
   );
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Fetch Global Stats (separate from filtered contacts)
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Fetches global contact statistics from the dedicated stats endpoint.
-   * This ensures accurate totals regardless of current filters.
-   */
-  const fetchStats = React.useCallback(async () => {
-    try {
-      const response = await fetch('/api/contacts/stats');
-      if (response.ok) {
-        const data = await response.json();
-        setStats({
-          total: data.total || 0,
-          vip: data.vip || 0,
-          muted: data.muted || 0,
-          clients: data.clients || 0,
-          lastGoogleSync: data.lastGoogleSync || null,
-        });
-        logger.debug('Global stats fetched', data);
-      }
-    } catch (err) {
-      // Don't throw - stats are non-critical
-      logger.warn('Failed to fetch global stats', {
-        error: err instanceof Error ? err.message : 'Unknown',
-      });
-    }
-  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Effects
