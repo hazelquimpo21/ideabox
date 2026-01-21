@@ -108,7 +108,7 @@ export function SyncContactsButton({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  window.location.href = '/api/auth/google?scope=contacts';
+                  window.location.href = '/api/auth/add-contacts-scope?returnTo=/contacts';
                 }}
               >
                 Grant Access
