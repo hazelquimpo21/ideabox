@@ -335,6 +335,27 @@ export function EventDetailsCard({
       </CardHeader>
 
       <CardContent className="pt-4 space-y-4">
+        {/* Event Summary - Assistant-style one-liner */}
+        {event.eventSummary && (
+          <div className="text-sm font-medium text-foreground bg-green-100/50 dark:bg-green-900/20 rounded-md p-3 border-l-4 border-green-500">
+            {event.eventSummary}
+          </div>
+        )}
+
+        {/* Key Points - Quick scannable bullets */}
+        {event.keyPoints && event.keyPoints.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {event.keyPoints.map((point, index) => (
+              <span
+                key={index}
+                className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-muted text-muted-foreground"
+              >
+                {point}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Event Title */}
         <div>
           <h3 className="font-semibold text-lg leading-tight">{event.eventTitle}</h3>

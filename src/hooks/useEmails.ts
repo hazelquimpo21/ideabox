@@ -87,6 +87,8 @@ export interface EventPreviewData {
   registrationDeadline?: string;
   rsvpRequired: boolean;
   cost?: string;
+  /** Assistant-style one-sentence event summary */
+  eventSummary?: string;
 }
 
 /**
@@ -297,6 +299,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
                     registrationDeadline: (ed.registration_deadline as string) || (ed.registrationDeadline as string),
                     rsvpRequired: (ed.rsvp_required as boolean) || (ed.rsvpRequired as boolean) || false,
                     cost: ed.cost as string,
+                    eventSummary: (ed.event_summary as string) || (ed.eventSummary as string),
                   });
                 }
               }

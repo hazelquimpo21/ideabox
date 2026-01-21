@@ -81,6 +81,10 @@ export interface EventDetectionResult {
   organizer?: string;
   cost?: string;
   additionalDetails?: string;
+  /** One-sentence assistant-style summary of the event */
+  eventSummary?: string;
+  /** 2-4 key bullet points about the event */
+  keyPoints?: string[];
   confidence: number;
 }
 
@@ -180,12 +184,17 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       organizer: (event.organizer as string),
       cost: (event.cost as string),
       additionalDetails: (event.additional_details as string) || (event.additionalDetails as string),
+      // Assistant-style summary and key points (NEW Jan 2026)
+      eventSummary: (event.event_summary as string) || (event.eventSummary as string),
+      keyPoints: (event.key_points as string[]) || (event.keyPoints as string[]),
       confidence: (event.confidence as number) || 0,
     };
     logger.debug('Normalized event detection data', {
       eventTitle: normalized.eventDetection.eventTitle,
       eventDate: normalized.eventDetection.eventDate,
       locationType: normalized.eventDetection.locationType,
+      hasEventSummary: !!normalized.eventDetection.eventSummary,
+      keyPointsCount: normalized.eventDetection.keyPoints?.length || 0,
     });
   }
 
