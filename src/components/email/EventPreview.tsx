@@ -116,6 +116,23 @@ export function EventPreview({ event, className = '' }: EventPreviewProps) {
     rsvpUrgency = getDeadlineUrgency(daysUntilRsvp);
   }
 
+  // If we have an AI-generated summary, show it prominently
+  if (event.eventSummary) {
+    return (
+      <div
+        className={`text-xs bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/50 rounded-md px-2.5 py-1.5 mt-2 ${className}`}
+      >
+        <div className="flex items-start gap-1.5">
+          <Calendar className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+          <span className="text-green-800 dark:text-green-300 leading-relaxed">
+            {event.eventSummary}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback to structured display if no summary available
   return (
     <div
       className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/50 rounded-md px-2.5 py-1.5 mt-2 ${className}`}

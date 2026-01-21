@@ -522,6 +522,8 @@ export type EventLocationType = 'in_person' | 'virtual' | 'hybrid' | 'unknown';
  * - Only incurs cost for actual events (~5-10% of emails)
  * - Easier to tune independently
  * - Can be disabled without affecting categorization
+ *
+ * ENHANCED (Jan 2026): Added `eventSummary` and `keyPoints` for assistant-style display.
  */
 export interface EventDetectionData {
   /**
@@ -605,6 +607,30 @@ export interface EventDetectionData {
    * Example: "Parking available in attached garage"
    */
   additionalDetails?: string;
+
+  /**
+   * One-sentence assistant-style summary of the event.
+   * Written as if a personal assistant is briefing the user.
+   *
+   * Examples:
+   * - "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (in-person). Free. RSVP by Jan 23."
+   * - "Webinar: Cloud Security 101 on Fri at 2pm (virtual). Free, registration required."
+   * - "Client dinner at Fancy Restaurant on Jan 30 at 7pm. RSVP to Sarah by Monday."
+   *
+   * This makes events scannable at a glance.
+   */
+  eventSummary?: string;
+
+  /**
+   * 2-4 key bullet points about the event.
+   * Concise, actionable information for quick scanning.
+   *
+   * Examples:
+   * - ["Sat Jan 25, 6-8pm", "In-person: 123 Main St", "Free", "RSVP by Jan 23"]
+   * - ["Fri Jan 30, 2pm", "Virtual (Zoom)", "Registration required"]
+   * - ["$50 per person", "Dress code: Business casual", "RSVP link included"]
+   */
+  keyPoints?: string[];
 
   /**
    * Confidence in the event extraction (0-1).

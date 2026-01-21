@@ -107,7 +107,50 @@ const LOCATION_TYPES = ['in_person', 'virtual', 'hybrid', 'unknown'] as const;
  * 4. Capture registration requirements
  * 5. Be conservative about missing information
  */
-const SYSTEM_PROMPT = `You are an event extraction specialist. Your job is to extract detailed event information from emails for calendar integration.
+const SYSTEM_PROMPT = `You are an event extraction specialist and personal assistant. Your job is to extract detailed event information AND present it in a way that helps busy users quickly understand what they need to know.
+
+═══════════════════════════════════════════════════════════════════════════════
+YOUR MISSION
+═══════════════════════════════════════════════════════════════════════════════
+
+Extract event details AND write a concise, assistant-style summary with key points.
+Think: "What would a smart assistant tell me about this event in 10 seconds?"
+
+═══════════════════════════════════════════════════════════════════════════════
+EVENT SUMMARY (one sentence - REQUIRED!)
+═══════════════════════════════════════════════════════════════════════════════
+
+Write ONE sentence that tells the user everything they need to know at a glance.
+Format: "[Event name] on [Day Date] at [Time] ([location type]). [Cost]. [RSVP info if needed]."
+
+GOOD EXAMPLES:
+- "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (in-person). Free. RSVP by Jan 23."
+- "Q1 Planning Call on Mon Jan 27 at 10am (virtual via Zoom). No RSVP needed."
+- "Client dinner at Fancy Restaurant on Thu Jan 30 at 7pm. RSVP to Sarah by Monday."
+- "Webinar: Cloud Security 101 on Fri at 2pm (virtual). Free, registration required."
+- "Annual company picnic on Sat Feb 15, 11am-4pm at Lakefront Park. Bring your family!"
+
+BAD EXAMPLES (too vague or wordy):
+- "There's an event coming up" (no details!)
+- "You're invited to attend a networking event" (when? where?)
+
+═══════════════════════════════════════════════════════════════════════════════
+KEY POINTS (2-4 bullet points - REQUIRED!)
+═══════════════════════════════════════════════════════════════════════════════
+
+Create 2-4 concise bullet points with the most important information.
+Each point should be scannable in 2 seconds.
+
+ALWAYS include (in this priority order):
+1. When: Date and time (e.g., "Sat Jan 25, 6-8pm")
+2. Where: Location type + place (e.g., "In-person: 123 Main St" or "Virtual: Zoom")
+3. Cost: If mentioned (e.g., "Free" or "$25/person")
+4. Action needed: RSVP deadline or registration requirement
+
+GOOD KEY POINTS:
+- ["Sat Jan 25, 6-8pm", "In-person at Tech Hub", "Free", "RSVP by Jan 23"]
+- ["Mon Jan 27, 10-11am", "Virtual (Zoom)", "No registration needed"]
+- ["$50/person", "Dress code: Business casual", "RSVP to Sarah"]
 
 ═══════════════════════════════════════════════════════════════════════════════
 DATE AND TIME EXTRACTION
@@ -290,6 +333,21 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Any other relevant event details (parking, dress code, etc.)',
       },
 
+      // Event summary (NEW - assistant-style)
+      event_summary: {
+        type: 'string',
+        description: 'One-sentence assistant-style summary. Example: "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (in-person). Free. RSVP by Jan 23."',
+      },
+
+      // Key points (NEW - bullet points)
+      key_points: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 2,
+        maxItems: 4,
+        description: '2-4 concise bullet points: when, where, cost, action needed. Example: ["Sat Jan 25, 6-8pm", "In-person at Tech Hub", "Free", "RSVP by Jan 23"]',
+      },
+
       // Confidence
       confidence: {
         type: 'number',
@@ -298,7 +356,7 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Confidence in the extraction accuracy (0-1)',
       },
     },
-    required: ['has_event', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence'],
+    required: ['has_event', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence', 'event_summary', 'key_points'],
   },
 };
 
@@ -496,6 +554,10 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
       organizer: rawData.organizer as string | undefined,
       cost: rawData.cost as string | undefined,
       additionalDetails: rawData.additional_details as string | undefined,
+
+      // Assistant-style summary and key points (NEW Jan 2026)
+      eventSummary: rawData.event_summary as string | undefined,
+      keyPoints: rawData.key_points as string[] | undefined,
 
       // Confidence
       confidence: (rawData.confidence as number) || 0.5,
