@@ -76,7 +76,9 @@ import {
   formatTime12h,
   calculateDaysFromNow,
   formatRelativeDate,
+  DEFAULT_TIMEZONE,
 } from '@/lib/utils/calendar';
+import { useAuth } from '@/lib/auth';
 import { EmailPreviewModal } from './EmailPreviewModal';
 import type { EventData, EventMetadata } from '@/hooks/useEvents';
 
@@ -202,15 +204,18 @@ function LocalityBadge({ locality }: { locality: EventLocality }) {
 /**
  * Date/time display component.
  * Shows formatted date with optional time and relative indicator.
+ * Times are displayed in the user's timezone (defaults to Central Time).
  */
 function DateTimeDisplay({
   date,
   time,
   showRelative = true,
+  timezone,
 }: {
   date: string;
   time?: string | null;
   showRelative?: boolean;
+  timezone?: string;
 }) {
   const daysFromNow = calculateDaysFromNow(date);
   const relativeDate = formatRelativeDate(daysFromNow);
@@ -219,6 +224,11 @@ function DateTimeDisplay({
   const isToday = daysFromNow === 0;
   const isTomorrow = daysFromNow === 1;
 
+  // Format time with user's timezone (defaults to Central Time)
+  const formattedTime = time
+    ? formatTime12h(time, { timezone: timezone || DEFAULT_TIMEZONE, date })
+    : null;
+
   return (
     <div className="flex items-center gap-2 text-sm">
       <Calendar className={`h-4 w-4 ${isToday ? 'text-green-500' : 'text-muted-foreground'}`} />
@@ -226,9 +236,9 @@ function DateTimeDisplay({
         <span className={`font-medium ${isPast ? 'text-muted-foreground' : ''}`}>
           {formattedDate}
         </span>
-        {time && (
+        {formattedTime && (
           <span className="text-muted-foreground ml-1.5">
-            at {formatTime12h(time)}
+            at {formattedTime}
           </span>
         )}
         {showRelative && (
@@ -372,13 +382,16 @@ function LocationDisplay({ location, locality }: { location: string; locality?: 
 /**
  * Compact event card for sidebar preview.
  * Shows minimal info: title, date, and locality badge.
+ * Times are displayed in the user's timezone.
  */
 function CompactEventCard({
   event,
   className,
+  timezone,
 }: {
   event: EventData;
   className?: string;
+  timezone?: string;
 }) {
   const daysFromNow = calculateDaysFromNow(event.date);
   const isToday = daysFromNow === 0;
@@ -389,6 +402,11 @@ function CompactEventCard({
     title: event.title,
     date: event.date,
   });
+
+  // Format time with user's timezone (defaults to Central Time)
+  const formattedTime = event.event_time
+    ? formatTime12h(event.event_time, { timezone: timezone || DEFAULT_TIMEZONE, date: event.date })
+    : null;
 
   return (
     <Link href={`/events?highlight=${event.id}`}>
@@ -419,8 +437,8 @@ function CompactEventCard({
                 ) : (
                   formatEventDate(event.date, { short: true })
                 )}
-                {event.event_time && (
-                  <span className="ml-1">at {formatTime12h(event.event_time)}</span>
+                {formattedTime && (
+                  <span className="ml-1">at {formattedTime}</span>
                 )}
               </p>
             </div>
@@ -494,6 +512,13 @@ export function EventCard({
   className,
 }: EventCardProps) {
   // ─────────────────────────────────────────────────────────────────────────────
+  // Get user timezone from auth context
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const { user } = useAuth();
+  const userTimezone = user?.timezone || DEFAULT_TIMEZONE;
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Local state for email preview modal
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -504,7 +529,7 @@ export function EventCard({
   // ─────────────────────────────────────────────────────────────────────────────
 
   if (variant === 'compact') {
-    return <CompactEventCard event={event} className={className} />;
+    return <CompactEventCard event={event} className={className} timezone={userTimezone} />;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -698,6 +723,7 @@ export function EventCard({
                 date={event.date}
                 time={event.event_time}
                 showRelative={!isToday}
+                timezone={userTimezone}
               />
               <LocalityBadge locality={getLocality(event)} />
             </div>
