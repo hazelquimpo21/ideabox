@@ -247,6 +247,19 @@ export async function GET(
       .order('created_at', { ascending: true });
 
     if (error) {
+      // Handle missing table gracefully (migration not yet applied)
+      if (error.code === 'PGRST205' || error.message.includes('schema cache')) {
+        logger.debug('user_event_states table not found, returning empty states', {
+          eventId: eventId.substring(0, 8),
+        });
+        return apiResponse({
+          eventId,
+          states: [],
+          records: [],
+          _note: 'Table not yet created - run migration 021_user_event_states.sql',
+        });
+      }
+
       logger.error('Failed to fetch event states', {
         eventId: eventId.substring(0, 8),
         error: error.message,
@@ -363,13 +376,21 @@ export async function POST(
     // ─────────────────────────────────────────────────────────────────────────────
     // Step 4: Check if state already exists
     // ─────────────────────────────────────────────────────────────────────────────
-    const { data: existingState } = await supabase
+    const { data: existingState, error: checkError } = await supabase
       .from('user_event_states')
       .select('id')
       .eq('user_id', user.id)
       .eq('email_id', eventId)
       .eq('state', state)
       .single();
+
+    // Handle missing table gracefully
+    if (checkError && (checkError.code === 'PGRST205' || checkError.message.includes('schema cache'))) {
+      logger.warn('user_event_states table not found - run migration 021', {
+        eventId: eventId.substring(0, 8),
+      });
+      return apiError('Event states feature not yet enabled - migration required', 503);
+    }
 
     if (existingState) {
       logger.warn('State already exists', {
@@ -394,6 +415,14 @@ export async function POST(
       .single();
 
     if (error) {
+      // Handle missing table gracefully
+      if (error.code === 'PGRST205' || error.message.includes('schema cache')) {
+        logger.warn('user_event_states table not found - run migration 021', {
+          eventId: eventId.substring(0, 8),
+        });
+        return apiError('Event states feature not yet enabled - migration required', 503);
+      }
+
       logger.error('Failed to insert event state', {
         eventId: eventId.substring(0, 8),
         state,
@@ -502,6 +531,14 @@ export async function DELETE(
       .single();
 
     if (error) {
+      // Handle missing table gracefully
+      if (error.code === 'PGRST205' || error.message.includes('schema cache')) {
+        logger.warn('user_event_states table not found - run migration 021', {
+          eventId: eventId.substring(0, 8),
+        });
+        return apiError('Event states feature not yet enabled - migration required', 503);
+      }
+
       // Check if it's a "not found" error vs actual error
       if (error.code === 'PGRST116') {
         logger.warn('State not found for deletion', {
