@@ -1046,6 +1046,174 @@ function AISettingsSection({ settings, onUpdate, isUpdating }: AISettingsSection
 }
 
 /**
+ * Dev Tools Section - Rescan Recent Emails
+ *
+ * Testing tool that forces re-analysis of already-analyzed emails.
+ * This clears previous analysis results and runs AI analysis fresh.
+ * Useful for:
+ * - Testing AI analyzer changes
+ * - Re-processing emails after updating user context
+ * - Debugging analysis issues
+ *
+ * @since January 2026
+ */
+function DevToolsSection() {
+  const { toast } = useToast();
+  const [emailCount, setEmailCount] = React.useState(50);
+  const [isRunning, setIsRunning] = React.useState(false);
+  const [lastResult, setLastResult] = React.useState<{
+    rescanned: number;
+    results: {
+      clearedCount: number;
+      successCount: number;
+      failureCount: number;
+      actionsCreated: number;
+      estimatedCost: number;
+      processingTimeMs: number;
+    };
+  } | null>(null);
+
+  const handleRescan = async () => {
+    setIsRunning(true);
+    setLastResult(null);
+
+    try {
+      const response = await fetch('/api/emails/rescan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxEmails: emailCount }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setLastResult(result);
+        toast({
+          title: 'Rescan complete',
+          description: `Re-analyzed ${result.rescanned} emails. ${result.results.actionsCreated} actions created.`,
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Rescan failed',
+          description: result.error || 'Could not complete rescan. Please try again.',
+        });
+      }
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const estimatedTime = emailCount <= 25 ? '~30 seconds' : emailCount <= 50 ? '~1-2 minutes' : '~2-3 minutes';
+  const estimatedCost = `~$${(emailCount * 0.0006).toFixed(2)}`;
+
+  return (
+    <Card className="border-amber-500/50 bg-amber-500/5">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-amber-600" />
+          Dev Tools: Rescan Emails
+        </CardTitle>
+        <CardDescription>
+          Force re-analysis of already-analyzed emails (clears previous results)
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm">
+          <p className="font-medium text-amber-700 dark:text-amber-400">Testing Only</p>
+          <p className="text-muted-foreground mt-1">
+            This will clear existing analysis results (category, summary, actions, extracted dates)
+            for your most recent emails and re-run AI analysis. Use this for testing analyzer changes
+            or debugging.
+          </p>
+        </div>
+
+        <div className="flex items-end gap-4">
+          <div className="flex-1 max-w-xs space-y-2">
+            <Label htmlFor="rescanEmailCount">Emails to rescan</Label>
+            <select
+              id="rescanEmailCount"
+              className="w-full h-10 px-3 py-2 text-sm border rounded-md bg-background"
+              value={emailCount}
+              onChange={(e) => setEmailCount(Number(e.target.value))}
+              disabled={isRunning}
+            >
+              <option value={10}>10 emails (Quick test)</option>
+              <option value={25}>25 emails</option>
+              <option value={50}>50 emails (Default)</option>
+              <option value={100}>100 emails (Max)</option>
+            </select>
+          </div>
+          <Button
+            onClick={handleRescan}
+            disabled={isRunning}
+            variant="outline"
+            className="gap-2 border-amber-500 text-amber-700 hover:bg-amber-500/10"
+          >
+            {isRunning ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Rescanning...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4" />
+                Rescan Emails
+              </>
+            )}
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span>Estimated time: {estimatedTime}</span>
+          <span>&middot;</span>
+          <span>Estimated cost: {estimatedCost}</span>
+        </div>
+
+        {/* Last Result Summary */}
+        {lastResult && (
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+              <Check className="h-4 w-4 text-green-500" />
+              Last Rescan Results
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <div className="text-2xl font-bold text-primary">{lastResult.results.clearedCount}</div>
+                <div className="text-xs text-muted-foreground">Cleared</div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <div className="text-2xl font-bold text-green-600">{lastResult.results.successCount}</div>
+                <div className="text-xs text-muted-foreground">Re-analyzed</div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <div className="text-2xl font-bold text-blue-600">{lastResult.results.actionsCreated}</div>
+                <div className="text-xs text-muted-foreground">Actions</div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <div className="text-2xl font-bold text-purple-600">${lastResult.results.estimatedCost.toFixed(4)}</div>
+                <div className="text-xs text-muted-foreground">Cost</div>
+              </div>
+            </div>
+            {lastResult.results.failureCount > 0 && (
+              <p className="text-xs text-destructive mt-2">
+                {lastResult.results.failureCount} emails failed to analyze
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * Re-run Analysis Section
  *
  * Allows users to trigger a new initial analysis with a chosen email count.
@@ -2263,6 +2431,7 @@ export default function SettingsPage() {
               isUpdating={isUpdating}
             />
             <RerunAnalysisSection />
+            <DevToolsSection />
           </TabsContent>
 
           {/* Cost Control Tab */}
