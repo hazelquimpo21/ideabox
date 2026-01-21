@@ -98,6 +98,9 @@ export async function GET(request: NextRequest) {
         direction: emailDirection,
       });
 
+      // Escape email for PostgREST filter syntax (handles @ and other special chars)
+      const escapedEmail = JSON.stringify(contactEmail);
+
       switch (emailDirection) {
         case 'received':
           // Emails received FROM the contact (they are the sender)
@@ -111,8 +114,9 @@ export async function GET(request: NextRequest) {
         case 'all':
         default:
           // Both sent and received - contact is either sender or recipient
+          // Use escaped email value for proper PostgREST filter syntax
           query = query.or(
-            `sender_email.eq.${contactEmail},to_addresses.cs.{${contactEmail}}`
+            `sender_email.eq.${escapedEmail},to_addresses.cs.{${escapedEmail}}`
           );
           break;
       }
