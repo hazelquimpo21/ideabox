@@ -107,9 +107,8 @@ export async function GET(request: NextRequest) {
           query = query.eq('sender_email', contactEmail);
           break;
         case 'sent':
-          // Emails sent TO the contact (user is sender, contact is in recipients)
-          // Check if contact email is in to_addresses array
-          query = query.contains('to_addresses', [contactEmail]);
+          // Emails sent TO the contact (user is sender, contact is recipient)
+          query = query.eq('recipient_email', contactEmail);
           break;
         case 'all':
         default:
@@ -147,7 +146,7 @@ export async function GET(request: NextRequest) {
         .from('emails')
         .select('*', { count: 'exact' })
         .eq('user_id', user.id)
-        .contains('to_addresses', [contactEmail])
+        .eq('recipient_email', contactEmail)
         .eq('is_archived', archived === true ? true : false);
 
       // Apply additional filters to both queries
@@ -285,11 +284,9 @@ export async function GET(request: NextRequest) {
     if (contactEmail && enrichedData.length > 0) {
       const normalizedContactEmail = contactEmail.toLowerCase();
       enrichedData = enrichedData.map((email) => {
-        // Check if contact is the sender (received) or in recipients (sent)
+        // Check if contact is the sender (received) or recipient (sent)
         const isSender = email.sender_email?.toLowerCase() === normalizedContactEmail;
-        const isRecipient = email.to_addresses?.some(
-          (addr: string) => addr.toLowerCase() === normalizedContactEmail
-        );
+        const isRecipient = email.recipient_email?.toLowerCase() === normalizedContactEmail;
 
         return {
           ...email,
