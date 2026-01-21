@@ -39,6 +39,9 @@ export type {
   UseEmailsReturn,
   EmailStats,
   EventPreviewData,
+  // NEW (Jan 2026): Stats types for the interactive filter bar
+  QuickActionStats,
+  CategoryStats,
 } from './useEmails';
 
 export { useActions, default as useActionsDefault } from './useActions';

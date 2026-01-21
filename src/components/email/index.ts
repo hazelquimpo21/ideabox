@@ -27,3 +27,10 @@ export type { EventPreviewProps } from './EventPreview';
 
 export { SyncStatusBanner, default as SyncStatusBannerDefault } from './SyncStatusBanner';
 export type { SyncStatusBannerProps, SyncStatus, SyncStatusInfo } from './SyncStatusBanner';
+
+export { InboxFilterBar, default as InboxFilterBarDefault } from './InboxFilterBar';
+export type {
+  InboxFilterBarProps,
+  QuickActionStats,
+  CategoryStats,
+} from './InboxFilterBar';

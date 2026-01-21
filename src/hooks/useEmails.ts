@@ -40,7 +40,7 @@
 import * as React from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
-import type { Email, EmailCategory } from '@/types/database';
+import type { Email, EmailCategory, QuickActionDb } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -58,10 +58,14 @@ const logger = createLogger('useEmails');
 
 /**
  * Options for filtering and paginating emails.
+ *
+ * ENHANCED (Jan 2026): Added quickAction filter for AI-powered action filtering.
  */
 export interface UseEmailsOptions {
-  /** Filter by email category */
+  /** Filter by email category (life-bucket) */
   category?: EmailCategory | 'all' | 'clients';
+  /** Filter by AI-suggested quick action (respond, review, calendar, etc.) */
+  quickAction?: QuickActionDb | null;
   /** Filter by client ID */
   clientId?: string;
   /** Maximum number of emails to fetch */
@@ -92,19 +96,61 @@ export interface EventPreviewData {
 }
 
 /**
+ * Quick action statistics for filter bar display.
+ * Counts emails by their AI-suggested quick action.
+ *
+ * ADDED (Jan 2026): For the new interactive filter bar.
+ */
+export interface QuickActionStats {
+  respond: number;
+  review: number;
+  calendar: number;
+  follow_up: number;
+  save: number;
+  archive: number;
+  unsubscribe: number;
+  none: number;
+}
+
+/**
+ * Category statistics for filter bar display.
+ * Counts emails by their life-bucket category.
+ *
+ * ADDED (Jan 2026): For the new interactive filter bar.
+ */
+export interface CategoryStats {
+  client_pipeline: number;
+  business_work_general: number;
+  personal_friends_family: number;
+  family_kids_school: number;
+  family_health_appointments: number;
+  finance: number;
+  shopping: number;
+  newsletters_general: number;
+  news_politics: number;
+  product_updates: number;
+  local: number;
+  travel: number;
+}
+
+/**
  * Email statistics for dashboard display.
+ *
+ * ENHANCED (Jan 2026): Added quickActionStats and categoryStats for filter bar.
  */
 export interface EmailStats {
   /** Total number of emails */
   total: number;
   /** Number of unread emails */
   unread: number;
-  /** Number of emails needing action */
-  actionRequired: number;
   /** Number of starred emails */
   starred: number;
-  /** Number of emails with events */
+  /** Number of emails with events (from has_event label) */
   events: number;
+  /** Counts by quick action type for filter bar */
+  quickActionStats: QuickActionStats;
+  /** Counts by category for filter bar */
+  categoryStats: CategoryStats;
 }
 
 /**
@@ -170,12 +216,41 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
   const [hasMore, setHasMore] = React.useState(true);
+
+  /**
+   * Email statistics state.
+   * ENHANCED (Jan 2026): Now includes quickActionStats and categoryStats
+   * for the new interactive filter bar.
+   */
   const [stats, setStats] = React.useState<EmailStats>({
     total: 0,
     unread: 0,
-    actionRequired: 0,
     starred: 0,
     events: 0,
+    quickActionStats: {
+      respond: 0,
+      review: 0,
+      calendar: 0,
+      follow_up: 0,
+      save: 0,
+      archive: 0,
+      unsubscribe: 0,
+      none: 0,
+    },
+    categoryStats: {
+      client_pipeline: 0,
+      business_work_general: 0,
+      personal_friends_family: 0,
+      family_kids_school: 0,
+      family_health_appointments: 0,
+      finance: 0,
+      shopping: 0,
+      newsletters_general: 0,
+      news_politics: 0,
+      product_updates: 0,
+      local: 0,
+      travel: 0,
+    },
   });
   const [eventData, setEventData] = React.useState<Map<string, EventPreviewData>>(new Map());
 
@@ -183,8 +258,10 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
   const supabase = React.useMemo(() => createClient(), []);
 
   // Memoize options to prevent unnecessary refetches
+  // ENHANCED (Jan 2026): Added quickAction for AI-powered filtering
   const {
     category = 'all',
+    quickAction = null,
     clientId,
     limit = DEFAULT_LIMIT,
     includeArchived = false,
@@ -200,6 +277,11 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
   /**
    * Fetches emails from Supabase with the current filters.
    * Called on mount and when filters change.
+   *
+   * ENHANCED (Jan 2026):
+   * - Added quickAction filtering for AI-powered triage
+   * - Calculate quickActionStats and categoryStats for filter bar
+   * - Event count now calculated from has_event label
    */
   const fetchEmails = React.useCallback(async () => {
     setIsLoading(true);
@@ -207,6 +289,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
 
     logger.start('Fetching emails', {
       category,
+      quickAction,
       clientId,
       limit,
       includeArchived,
@@ -243,6 +326,13 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         query = query.eq('category', category);
       }
 
+      // Quick action filtering (NEW Jan 2026)
+      // Filters by AI-suggested action type
+      if (quickAction) {
+        query = query.eq('quick_action', quickAction);
+        logger.debug('Applied quick action filter', { quickAction });
+      }
+
       // Client ID filter
       if (clientId) {
         query = query.eq('client_id', clientId);
@@ -259,20 +349,80 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       setEmails(data || []);
       setHasMore((data?.length || 0) >= limit);
 
-      // Calculate stats from fetched data (simplified - in production, use a separate stats query)
-      // REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
-      // - actionRequired now counts client_pipeline + business_work_general (work emails)
-      // - events now uses label detection from analysis (has_event label)
       const fetchedEmails = data || [];
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // STATS CALCULATION (ENHANCED Jan 2026)
+      // Calculate comprehensive stats for the filter bar
+      // ─────────────────────────────────────────────────────────────────────────
+
+      // Calculate quick action stats - count emails by quick_action field
+      const quickActionStats: QuickActionStats = {
+        respond: 0,
+        review: 0,
+        calendar: 0,
+        follow_up: 0,
+        save: 0,
+        archive: 0,
+        unsubscribe: 0,
+        none: 0,
+      };
+
+      // Calculate category stats - count emails by category field
+      const categoryStats: CategoryStats = {
+        client_pipeline: 0,
+        business_work_general: 0,
+        personal_friends_family: 0,
+        family_kids_school: 0,
+        family_health_appointments: 0,
+        finance: 0,
+        shopping: 0,
+        newsletters_general: 0,
+        news_politics: 0,
+        product_updates: 0,
+        local: 0,
+        travel: 0,
+      };
+
+      // Count events from labels array (has_event label)
+      let eventCount = 0;
+
+      for (const email of fetchedEmails) {
+        // Count quick actions
+        const qa = email.quick_action as QuickActionDb | null;
+        if (qa && qa in quickActionStats) {
+          quickActionStats[qa]++;
+        }
+
+        // Count categories
+        const cat = email.category as EmailCategory | null;
+        if (cat && cat in categoryStats) {
+          categoryStats[cat]++;
+        }
+
+        // Count events from labels array
+        // labels field contains strings like 'has_event', 'urgent', etc.
+        const labels = email.labels as string[] | null;
+        if (labels && Array.isArray(labels) && labels.includes('has_event')) {
+          eventCount++;
+        }
+      }
+
+      logger.debug('Stats calculated', {
+        total: count || fetchedEmails.length,
+        unread: fetchedEmails.filter((e) => !e.is_read).length,
+        events: eventCount,
+        quickActionStats,
+        categoryStats,
+      });
+
       setStats({
         total: count || fetchedEmails.length,
         unread: fetchedEmails.filter((e) => !e.is_read).length,
-        actionRequired: fetchedEmails.filter((e) =>
-          e.category === 'client_pipeline' || e.category === 'business_work_general'
-        ).length,
         starred: fetchedEmails.filter((e) => e.is_starred).length,
-        // Events are detected via analysis, not category - placeholder count
-        events: 0, // Will be populated from analysis data below
+        events: eventCount,
+        quickActionStats,
+        categoryStats,
       });
 
       // Fetch event data for emails with event analysis if requested
@@ -337,7 +487,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, category, clientId, limit, includeArchived, unreadOnly, starredOnly, includeEventData]);
+  }, [supabase, category, quickAction, clientId, limit, includeArchived, unreadOnly, starredOnly, includeEventData]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Load More (Pagination)
@@ -346,6 +496,8 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
   /**
    * Loads the next page of emails.
    * Uses offset-based pagination for simplicity.
+   *
+   * ENHANCED (Jan 2026): Added quickAction filtering support.
    */
   const loadMore = React.useCallback(async () => {
     if (!hasMore || isLoading) return;
@@ -378,6 +530,11 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         query = query.eq('category', category);
       }
 
+      // Quick action filtering (NEW Jan 2026)
+      if (quickAction) {
+        query = query.eq('quick_action', quickAction);
+      }
+
       if (clientId) {
         query = query.eq('client_id', clientId);
       }
@@ -408,6 +565,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     hasMore,
     isLoading,
     category,
+    quickAction,
     clientId,
     includeArchived,
     unreadOnly,
@@ -421,6 +579,9 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
   /**
    * Updates a single email in the local state.
    * Use for optimistic updates while the server request completes.
+   *
+   * ENHANCED (Jan 2026): Updates quickActionStats and categoryStats
+   * when relevant fields change.
    */
   const updateEmail = React.useCallback((id: string, updates: Partial<Email>) => {
     setEmails((prev) =>
@@ -428,20 +589,60 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     );
 
     // Update stats if relevant fields changed
-    // REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
-    if ('is_read' in updates || 'is_starred' in updates || 'category' in updates) {
+    // This recalculates affected stats for optimistic UI updates
+    if ('is_read' in updates || 'is_starred' in updates || 'category' in updates || 'quick_action' in updates) {
       setStats((prev) => {
         const updatedEmails = emails.map((email) =>
           email.id === id ? { ...email, ...updates } : email
         );
+
+        // Recalculate quick action stats
+        const quickActionStats: QuickActionStats = {
+          respond: 0,
+          review: 0,
+          calendar: 0,
+          follow_up: 0,
+          save: 0,
+          archive: 0,
+          unsubscribe: 0,
+          none: 0,
+        };
+
+        // Recalculate category stats
+        const categoryStats: CategoryStats = {
+          client_pipeline: 0,
+          business_work_general: 0,
+          personal_friends_family: 0,
+          family_kids_school: 0,
+          family_health_appointments: 0,
+          finance: 0,
+          shopping: 0,
+          newsletters_general: 0,
+          news_politics: 0,
+          product_updates: 0,
+          local: 0,
+          travel: 0,
+        };
+
+        for (const email of updatedEmails) {
+          const qa = email.quick_action as QuickActionDb | null;
+          if (qa && qa in quickActionStats) {
+            quickActionStats[qa]++;
+          }
+
+          const cat = email.category as EmailCategory | null;
+          if (cat && cat in categoryStats) {
+            categoryStats[cat]++;
+          }
+        }
+
         return {
           total: prev.total,
           unread: updatedEmails.filter((e) => !e.is_read).length,
-          actionRequired: updatedEmails.filter((e) =>
-            e.category === 'client_pipeline' || e.category === 'business_work_general'
-          ).length,
           starred: updatedEmails.filter((e) => e.is_starred).length,
-          events: prev.events, // Events are detected via analysis, keep existing count
+          events: prev.events, // Events are detected via labels, keep existing count
+          quickActionStats,
+          categoryStats,
         };
       });
     }

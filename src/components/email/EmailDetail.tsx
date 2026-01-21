@@ -26,7 +26,6 @@ import {
   Calendar,
   AlertCircle,
   Newspaper,
-  Tag,
   CheckCircle2,
   Building2,
   ExternalLink,
@@ -81,26 +80,55 @@ function formatDate(dateStr: string): string {
   });
 }
 
+/**
+ * Maps life-bucket email categories to badge display properties.
+ *
+ * REFACTORED (Jan 2026): Updated from action-focused categories to life-bucket categories.
+ * Each category represents an area of the user's life, not an action type.
+ *
+ * @param category - The email category from AI analysis
+ * @returns Badge variant, label, and icon for display
+ */
 function getCategoryBadge(category: EmailCategory | null): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
   label: string;
   icon: React.ReactNode;
 } {
   switch (category) {
-    case 'action_required':
-      return { variant: 'destructive', label: 'Action Required', icon: <AlertCircle className="h-3 w-3" /> };
-    case 'event':
-      return { variant: 'default', label: 'Event', icon: <Calendar className="h-3 w-3" /> };
-    case 'newsletter':
-      return { variant: 'secondary', label: 'Newsletter', icon: <Newspaper className="h-3 w-3" /> };
-    case 'promo':
-      return { variant: 'outline', label: 'Promo', icon: <Tag className="h-3 w-3" /> };
-    case 'admin':
-      return { variant: 'secondary', label: 'Admin', icon: <Mail className="h-3 w-3" /> };
-    case 'personal':
+    // Work & Business
+    case 'client_pipeline':
+      return { variant: 'default', label: 'Client', icon: <Building2 className="h-3 w-3" /> };
+    case 'business_work_general':
+      return { variant: 'secondary', label: 'Work', icon: <Building2 className="h-3 w-3" /> };
+
+    // Personal & Family
+    case 'personal_friends_family':
       return { variant: 'outline', label: 'Personal', icon: <User className="h-3 w-3" /> };
-    case 'noise':
-      return { variant: 'outline', label: 'Noise', icon: <Archive className="h-3 w-3" /> };
+    case 'family_kids_school':
+      return { variant: 'outline', label: 'Family/School', icon: <User className="h-3 w-3" /> };
+    case 'family_health_appointments':
+      return { variant: 'outline', label: 'Health', icon: <User className="h-3 w-3" /> };
+
+    // Finance & Shopping
+    case 'finance':
+      return { variant: 'secondary', label: 'Finance', icon: <Mail className="h-3 w-3" /> };
+    case 'shopping':
+      return { variant: 'outline', label: 'Shopping', icon: <Mail className="h-3 w-3" /> };
+
+    // Content & News
+    case 'newsletters_general':
+      return { variant: 'secondary', label: 'Newsletter', icon: <Newspaper className="h-3 w-3" /> };
+    case 'news_politics':
+      return { variant: 'secondary', label: 'News', icon: <Newspaper className="h-3 w-3" /> };
+    case 'product_updates':
+      return { variant: 'outline', label: 'Product Update', icon: <Mail className="h-3 w-3" /> };
+
+    // Location & Travel
+    case 'local':
+      return { variant: 'default', label: 'Local', icon: <Calendar className="h-3 w-3" /> };
+    case 'travel':
+      return { variant: 'outline', label: 'Travel', icon: <Calendar className="h-3 w-3" /> };
+
     default:
       return { variant: 'outline', label: 'Uncategorized', icon: <Mail className="h-3 w-3" /> };
   }

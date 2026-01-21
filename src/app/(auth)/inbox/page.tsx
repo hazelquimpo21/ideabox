@@ -29,8 +29,9 @@ import {
   DropdownMenuTrigger,
   useToast,
 } from '@/components/ui';
-import { SyncStatusBanner, EmailDetail, EventPreview } from '@/components/email';
+import { SyncStatusBanner, EmailDetail, EventPreview, InboxFilterBar } from '@/components/email';
 import { useEmails, type Email, type EmailCategory, type EventPreviewData } from '@/hooks';
+import type { QuickActionDb } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
 import {
@@ -39,7 +40,6 @@ import {
   AlertCircle,
   Calendar,
   Newspaper,
-  Tag,
   Archive,
   Star,
   MoreHorizontal,
@@ -51,6 +51,18 @@ import {
   Trash2,
   MailOpen,
   FolderInput,
+  // Life-bucket category icons (Jan 2026 refactor)
+  Briefcase,
+  Building2,
+  Users,
+  GraduationCap,
+  Heart,
+  DollarSign,
+  ShoppingBag,
+  Globe,
+  Wrench,
+  MapPin,
+  Plane,
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -82,41 +94,97 @@ function formatRelativeTime(dateStr: string): string {
   }
 }
 
+/**
+ * Maps life-bucket email categories to display information.
+ *
+ * REFACTORED (Jan 2026): Updated from action-focused categories to life-bucket categories.
+ * Each category represents an area of the user's life, not an action type.
+ * Actions are tracked separately via quick_action field and labels.
+ *
+ * @param category - The email category from AI analysis
+ * @returns Display variant, human-readable label, and icon component
+ */
 function getCategoryInfo(category: EmailCategory | null): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
   label: string;
   icon: React.ReactNode;
 } {
   switch (category) {
-    case 'action_required':
-      return { variant: 'destructive', label: 'Action Required', icon: <AlertCircle className="h-3 w-3" /> };
-    case 'event':
-      return { variant: 'default', label: 'Event', icon: <Calendar className="h-3 w-3" /> };
-    case 'newsletter':
+    // Work & Business
+    case 'client_pipeline':
+      return { variant: 'default', label: 'Client', icon: <Briefcase className="h-3 w-3" /> };
+    case 'business_work_general':
+      return { variant: 'secondary', label: 'Work', icon: <Building2 className="h-3 w-3" /> };
+
+    // Personal & Family
+    case 'personal_friends_family':
+      return { variant: 'outline', label: 'Personal', icon: <Users className="h-3 w-3" /> };
+    case 'family_kids_school':
+      return { variant: 'outline', label: 'Family/School', icon: <GraduationCap className="h-3 w-3" /> };
+    case 'family_health_appointments':
+      return { variant: 'outline', label: 'Health', icon: <Heart className="h-3 w-3" /> };
+
+    // Finance & Shopping
+    case 'finance':
+      return { variant: 'secondary', label: 'Finance', icon: <DollarSign className="h-3 w-3" /> };
+    case 'shopping':
+      return { variant: 'outline', label: 'Shopping', icon: <ShoppingBag className="h-3 w-3" /> };
+
+    // Content & News
+    case 'newsletters_general':
       return { variant: 'secondary', label: 'Newsletter', icon: <Newspaper className="h-3 w-3" /> };
-    case 'promo':
-      return { variant: 'outline', label: 'Promo', icon: <Tag className="h-3 w-3" /> };
-    case 'admin':
-      return { variant: 'secondary', label: 'Admin', icon: <Mail className="h-3 w-3" /> };
-    case 'personal':
-      return { variant: 'outline', label: 'Personal', icon: <Mail className="h-3 w-3" /> };
-    case 'noise':
-      return { variant: 'outline', label: 'Noise', icon: <Archive className="h-3 w-3" /> };
+    case 'news_politics':
+      return { variant: 'secondary', label: 'News', icon: <Globe className="h-3 w-3" /> };
+    case 'product_updates':
+      return { variant: 'outline', label: 'Product Update', icon: <Wrench className="h-3 w-3" /> };
+
+    // Location & Travel
+    case 'local':
+      return { variant: 'default', label: 'Local', icon: <MapPin className="h-3 w-3" /> };
+    case 'travel':
+      return { variant: 'outline', label: 'Travel', icon: <Plane className="h-3 w-3" /> };
+
     default:
       return { variant: 'outline', label: 'Uncategorized', icon: <Mail className="h-3 w-3" /> };
   }
 }
 
+/**
+ * Returns a human-readable label for email categories.
+ *
+ * REFACTORED (Jan 2026): Updated to life-bucket categories.
+ * Used for page titles, filter labels, and accessibility.
+ *
+ * @param category - The email category or 'all' for no filter
+ * @returns Human-readable category name
+ */
 function getCategoryLabel(category: EmailCategory | 'all' | null): string {
   switch (category) {
-    case 'action_required': return 'Action Required';
-    case 'event': return 'Events';
-    case 'newsletter': return 'Newsletters';
-    case 'promo': return 'Promotions';
-    case 'admin': return 'Admin';
-    case 'personal': return 'Personal';
-    case 'noise': return 'Noise';
-    default: return 'Inbox';
+    // Work & Business
+    case 'client_pipeline': return 'Clients';
+    case 'business_work_general': return 'Work';
+
+    // Personal & Family
+    case 'personal_friends_family': return 'Personal';
+    case 'family_kids_school': return 'Family & School';
+    case 'family_health_appointments': return 'Health';
+
+    // Finance & Shopping
+    case 'finance': return 'Finance';
+    case 'shopping': return 'Shopping';
+
+    // Content & News
+    case 'newsletters_general': return 'Newsletters';
+    case 'news_politics': return 'News';
+    case 'product_updates': return 'Product Updates';
+
+    // Location & Travel
+    case 'local': return 'Local';
+    case 'travel': return 'Travel';
+
+    case 'all':
+    default:
+      return 'Inbox';
   }
 }
 
@@ -314,20 +382,31 @@ function EmailListItem({
             <Star className="h-4 w-4 mr-2" />
             {email.is_starred ? 'Remove star' : 'Add star'}
           </DropdownMenuItem>
+          {/*
+            PLACEHOLDER BUTTONS (Jan 2026)
+            These features are planned but not yet implemented.
+            Grayed out with title hints to set user expectations.
+          */}
           <DropdownMenuItem
             onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground"
+            disabled
+            className="text-muted-foreground/50 cursor-not-allowed"
+            title="Coming soon - Manual category override"
           >
-            <FolderInput className="h-4 w-4 mr-2" />
+            <FolderInput className="h-4 w-4 mr-2 opacity-50" />
             Move to category...
+            <span className="ml-auto text-[10px] text-muted-foreground/40">Soon</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={(e) => e.stopPropagation()}
-            className="text-destructive"
+            disabled
+            className="text-muted-foreground/50 cursor-not-allowed"
+            title="Coming soon - Delete emails"
           >
-            <Trash2 className="h-4 w-4 mr-2" />
+            <Trash2 className="h-4 w-4 mr-2 opacity-50" />
             Delete
+            <span className="ml-auto text-[10px] text-muted-foreground/40">Soon</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -399,8 +478,21 @@ export default function InboxPage() {
   const { toast } = useToast();
   const supabase = React.useMemo(() => createClient(), []);
 
-  // Get category filter from URL
-  const categoryFilter = searchParams.get('category') as EmailCategory | null;
+  // Get category filter from URL (for direct navigation to category views)
+  const urlCategoryFilter = searchParams.get('category') as EmailCategory | null;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Filter State (ENHANCED Jan 2026)
+  // These control the interactive filter bar filters
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Active quick action filter (respond, review, calendar, etc.) */
+  const [quickActionFilter, setQuickActionFilter] = React.useState<QuickActionDb | null>(null);
+
+  /** Active category filter (life-bucket category or 'all') */
+  const [categoryFilter, setCategoryFilter] = React.useState<EmailCategory | 'all'>(
+    urlCategoryFilter || 'all'
+  );
 
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncSuccess, setSyncSuccess] = React.useState(false);
@@ -408,7 +500,27 @@ export default function InboxPage() {
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
   const [analyzingEmailId, setAnalyzingEmailId] = React.useState<string | null>(null);
 
-  // Fetch emails with category filter and event data
+  // Log filter changes for debugging
+  React.useEffect(() => {
+    logger.debug('Inbox filters changed', {
+      quickActionFilter,
+      categoryFilter,
+    });
+  }, [quickActionFilter, categoryFilter]);
+
+  // Sync URL category with state (when navigating directly to ?category=...)
+  React.useEffect(() => {
+    if (urlCategoryFilter && urlCategoryFilter !== categoryFilter) {
+      setCategoryFilter(urlCategoryFilter);
+      logger.debug('Category synced from URL', { urlCategoryFilter });
+    }
+  }, [urlCategoryFilter, categoryFilter]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Data Fetching
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Fetch emails with category and quick action filters
   const {
     emails,
     isLoading,
@@ -419,7 +531,8 @@ export default function InboxPage() {
     eventData,
   } = useEmails({
     limit: 50,
-    category: categoryFilter || 'all',
+    category: categoryFilter,
+    quickAction: quickActionFilter,
     includeEventData: true, // Fetch event preview data for event emails
   });
 
@@ -585,22 +698,52 @@ export default function InboxPage() {
     }
   }, [updateEmail, selectedEmail, toast, refetch]);
 
-  // Page title based on filter
-  const pageTitle = categoryFilter ? getCategoryLabel(categoryFilter) : 'Inbox';
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Page Title & Description
+  // Dynamically updates based on active filters
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const pageTitle = React.useMemo(() => {
+    if (quickActionFilter) {
+      // Show quick action in title when filtered
+      const actionLabels: Record<QuickActionDb, string> = {
+        respond: 'Needs Reply',
+        review: 'To Review',
+        calendar: 'Calendar Events',
+        follow_up: 'Follow Ups',
+        save: 'Saved',
+        archive: 'Archive',
+        unsubscribe: 'Unsubscribe',
+        none: 'Inbox',
+      };
+      return actionLabels[quickActionFilter] || 'Inbox';
+    }
+    if (categoryFilter && categoryFilter !== 'all') {
+      return getCategoryLabel(categoryFilter);
+    }
+    return 'Inbox';
+  }, [quickActionFilter, categoryFilter]);
+
+  const pageDescription = React.useMemo(() => {
+    if (quickActionFilter) {
+      return `Emails filtered by quick action: ${quickActionFilter.replace('_', ' ')}`;
+    }
+    if (categoryFilter && categoryFilter !== 'all') {
+      return `Emails categorized as ${getCategoryLabel(categoryFilter).toLowerCase()}`;
+    }
+    return 'Your unified email inbox with AI-powered categorization';
+  }, [quickActionFilter, categoryFilter]);
 
   return (
     <div>
       {/* Page Header */}
       <PageHeader
         title={pageTitle}
-        description={categoryFilter
-          ? `Emails categorized as ${getCategoryLabel(categoryFilter).toLowerCase()}`
-          : 'Your unified email inbox with AI-powered categorization'
-        }
+        description={pageDescription}
         breadcrumbs={[
           { label: 'Home', href: '/' },
           { label: 'Inbox', href: '/inbox' },
-          ...(categoryFilter ? [{ label: getCategoryLabel(categoryFilter) }] : []),
+          ...(categoryFilter && categoryFilter !== 'all' ? [{ label: getCategoryLabel(categoryFilter) }] : []),
         ]}
         actions={
           <Button
@@ -631,47 +774,34 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* Email Stats Banner */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-destructive" />
-              <span className="text-2xl font-bold">{stats.actionRequired}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Action Required</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-primary" />
-              <span className="text-2xl font-bold">{stats.total}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Total Emails</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <span className="text-2xl font-bold">{stats.unread}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Unread</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Star className="h-4 w-4 text-yellow-500" />
-              <span className="text-2xl font-bold">{stats.starred}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Starred</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* ═══════════════════════════════════════════════════════════════════════════
+          INBOX FILTER BAR (NEW Jan 2026)
+          Replaces the old stats cards with an interactive AI-powered filter bar:
+          - AI briefing (natural language summary of what needs attention)
+          - Quick action filters (Reply, Review, Calendar, Follow Up, Save)
+          - Category tabs (life-bucket categories with expandable secondary)
+      ═══════════════════════════════════════════════════════════════════════════ */}
+      <InboxFilterBar
+        totalEmails={stats.total}
+        unreadCount={stats.unread}
+        quickActionStats={stats.quickActionStats}
+        categoryStats={stats.categoryStats}
+        activeQuickAction={quickActionFilter}
+        activeCategory={categoryFilter}
+        onQuickActionChange={(action) => {
+          logger.info('Quick action filter changed via filter bar', { action });
+          setQuickActionFilter(action);
+        }}
+        onCategoryChange={(category) => {
+          logger.info('Category filter changed via filter bar', { category });
+          setCategoryFilter(category);
+          // Clear quick action when changing category for cleaner UX
+          setQuickActionFilter(null);
+        }}
+        upcomingEvents={stats.events}
+      />
 
-      {/* Sync Status Banner */}
+      {/* Sync Status Banner - shown when there are unanalyzed emails */}
       {!isLoading && emails.length > 0 && (
         <div className="mb-6">
           <SyncStatusBanner onSyncComplete={handleSyncComplete} compact />
