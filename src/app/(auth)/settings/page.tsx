@@ -76,9 +76,11 @@ import {
   Target,
   FolderKanban,
   Heart,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useSettings, useUserContext, useGmailAccounts, useSyncStatus } from '@/hooks';
+import { VipSuggestionsModal } from '@/components/contacts';
 import type { UserSettings } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1707,6 +1709,9 @@ function AboutMeSection() {
   const [projectInput, setProjectInput] = React.useState('');
   const [interestInput, setInterestInput] = React.useState('');
 
+  // VIP Suggestions Modal state
+  const [isVipModalOpen, setIsVipModalOpen] = React.useState(false);
+
   // Work days configuration
   const DAYS_OF_WEEK = [
     { value: 0, label: 'Sun' },
@@ -1868,11 +1873,24 @@ function AboutMeSection() {
       {/* VIP Contacts */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5" />
-            VIP Contacts
-          </CardTitle>
-          <CardDescription>Emails from these addresses get higher priority</CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5" />
+                VIP Contacts
+              </CardTitle>
+              <CardDescription>Emails from these addresses get higher priority</CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsVipModalOpen(true)}
+              className="flex items-center gap-1.5"
+            >
+              <Users className="h-4 w-4" />
+              Smart Import
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
@@ -2186,6 +2204,20 @@ function AboutMeSection() {
           </p>
         </CardContent>
       </Card>
+
+      {/* VIP Suggestions Modal */}
+      <VipSuggestionsModal
+        isOpen={isVipModalOpen}
+        onClose={() => setIsVipModalOpen(false)}
+        onVipsSelected={(count) => {
+          toast({
+            title: 'VIPs Added',
+            description: `${count} contacts marked as VIP and will be prioritized.`,
+          });
+          // Trigger a refresh of the context to show new VIPs
+          // The context will auto-refresh when the API updates user_context.vip_emails
+        }}
+      />
     </div>
   );
 }
