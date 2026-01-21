@@ -25,6 +25,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createServerClient } from '@/lib/supabase/server';
 import { requireAuth } from '@/lib/api/utils';
 import { createLogger } from '@/lib/utils/logger';
@@ -107,19 +108,25 @@ export async function GET(request: Request) {
       maxAge: 60 * 10, // 10 minutes - enough for OAuth flow
     });
 
-    // Store the original session tokens so we can restore after OAuth
+    // Store ALL Supabase auth cookies so we can restore them after OAuth
     // This prevents the user from being logged in as the new account
-    if (sessionData?.session) {
-      const sessionToStore = {
-        access_token: sessionData.session.access_token,
-        refresh_token: sessionData.session.refresh_token,
-      };
-      response.cookies.set(ORIGINAL_SESSION_COOKIE, JSON.stringify(sessionToStore), {
+    // Supabase uses cookies like: sb-<project-ref>-auth-token, sb-<project-ref>-auth-token.0, etc.
+    const allCookies = (await cookies()).getAll();
+    const supabaseAuthCookies = allCookies.filter(c =>
+      c.name.includes('-auth-token') || c.name.includes('sb-')
+    );
+
+    if (supabaseAuthCookies.length > 0) {
+      response.cookies.set(ORIGINAL_SESSION_COOKIE, JSON.stringify(supabaseAuthCookies), {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
         maxAge: 60 * 10, // 10 minutes
+      });
+      logger.debug('Stored original auth cookies for restoration', {
+        cookieCount: supabaseAuthCookies.length,
+        cookieNames: supabaseAuthCookies.map(c => c.name),
       });
     }
 

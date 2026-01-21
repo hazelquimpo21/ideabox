@@ -338,39 +338,27 @@ export async function GET(request: Request) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Step 5b: Restore original session if in add_account mode
+  // Step 5b: Prepare session restoration if in add_account mode
   // ─────────────────────────────────────────────────────────────────────────────
   // When adding an account, Supabase OAuth switches the session to the new user.
-  // We need to restore the original session so the user stays logged in as
-  // their original account, not the newly added Gmail account.
+  // We stored the original Supabase auth cookies before OAuth, and will restore
+  // them on the response to keep the user logged in as their original account.
 
+  let originalAuthCookies: Array<{ name: string; value: string }> = [];
   let sessionRestored = false;
+
   if (isAddAccountMode && originalUserIdFromCookie) {
     const originalSessionJson = cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value;
 
     if (originalSessionJson) {
       try {
-        const originalSession = JSON.parse(originalSessionJson);
-
-        if (originalSession.access_token && originalSession.refresh_token) {
-          // Restore the original session
-          const { error: restoreError } = await supabase.auth.setSession({
-            access_token: originalSession.access_token,
-            refresh_token: originalSession.refresh_token,
+        originalAuthCookies = JSON.parse(originalSessionJson);
+        if (Array.isArray(originalAuthCookies) && originalAuthCookies.length > 0) {
+          sessionRestored = true;
+          logger.info('Will restore original auth cookies', {
+            originalUserId: originalUserIdFromCookie.substring(0, 8),
+            cookieCount: originalAuthCookies.length,
           });
-
-          if (restoreError) {
-            logger.warn('Failed to restore original session', {
-              error: restoreError.message,
-              originalUserId: originalUserIdFromCookie.substring(0, 8),
-            });
-          } else {
-            sessionRestored = true;
-            logger.success('Restored original user session after add account', {
-              originalUserId: originalUserIdFromCookie.substring(0, 8),
-              newAccountEmail: user.email,
-            });
-          }
         }
       } catch (parseError) {
         logger.warn('Failed to parse original session cookie', {
@@ -429,9 +417,34 @@ export async function GET(request: Request) {
   // Create redirect response and set all collected cookies
   const response = NextResponse.redirect(`${origin}${redirectPath}`);
 
-  // Set cookies on response (this enables proper cookie chunking by @supabase/ssr)
-  for (const { name, value, options } of cookiesToSet) {
-    response.cookies.set(name, value, options);
+  if (isAddAccountMode && sessionRestored && originalAuthCookies.length > 0) {
+    // In add_account mode with session restoration:
+    // DON'T set the new session cookies (from exchangeCodeForSession)
+    // Instead, restore the ORIGINAL auth cookies to keep user logged in as original account
+    logger.info('Restoring original session cookies instead of new session', {
+      originalUserId: originalUserIdFromCookie?.substring(0, 8),
+      newSessionCookieCount: cookiesToSet.length,
+      originalCookieCount: originalAuthCookies.length,
+    });
+
+    for (const cookie of originalAuthCookies) {
+      response.cookies.set(cookie.name, cookie.value, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+      });
+    }
+
+    logger.success('Restored original user session after add account', {
+      originalUserId: originalUserIdFromCookie?.substring(0, 8),
+      newAccountEmail: user.email,
+    });
+  } else {
+    // Normal flow: set cookies from OAuth flow
+    for (const { name, value, options } of cookiesToSet) {
+      response.cookies.set(name, value, options);
+    }
   }
 
   // Clear the add_account cookies if they were used
