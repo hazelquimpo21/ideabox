@@ -82,6 +82,10 @@ import { ANALYZER_VERSION } from '@/services/analyzers/base-analyzer';
 import { toEmailInput } from '@/services/analyzers/types';
 import { getUserContext } from '@/services/user-context';
 import { contactService } from '@/services/contacts';
+import {
+  SenderTypeDetector,
+  type SenderTypeDetectionResult,
+} from '@/services/sync/sender-type-detector';
 import type { Email } from '@/types/database';
 import type {
   EmailInput,
@@ -162,6 +166,8 @@ interface ContactForEnrichment {
   email_count: number;
   extraction_confidence: number | null;
   last_extracted_at: string | null;
+  sender_type: string | null;
+  sender_type_confidence: number | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -212,6 +218,9 @@ export class EmailProcessor {
   /** Contact enricher analyzer - enriches contact info (selective, NEW Jan 2026) */
   private contactEnricher: ContactEnricherAnalyzer;
 
+  /** Sender type detector - classifies direct vs broadcast senders (NEW Jan 2026) */
+  private senderTypeDetector: SenderTypeDetector;
+
   /**
    * Creates a new EmailProcessor instance.
    *
@@ -230,6 +239,7 @@ export class EmailProcessor {
     this.eventDetector = new EventDetectorAnalyzer();
     this.dateExtractor = new DateExtractorAnalyzer();
     this.contactEnricher = new ContactEnricherAnalyzer();
+    this.senderTypeDetector = new SenderTypeDetector();
 
     logger.debug('EmailProcessor initialized', {
       categorizerEnabled: this.categorizer.isEnabled(),
@@ -238,6 +248,7 @@ export class EmailProcessor {
       eventDetectorEnabled: this.eventDetector.isEnabled(),
       dateExtractorEnabled: this.dateExtractor.isEnabled(),
       contactEnricherEnabled: this.contactEnricher.isEnabled(),
+      senderTypeDetector: 'enabled',
     });
   }
 
@@ -316,6 +327,7 @@ export class EmailProcessor {
 
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 0b: Upsert contact for sender
+    // Now includes sender type detection from email patterns (NEW Jan 2026)
     // ─────────────────────────────────────────────────────────────────────────
     let contact: ContactForEnrichment | null = null;
     if (opts.saveToDatabase) {
@@ -323,7 +335,8 @@ export class EmailProcessor {
         context.userId,
         emailInput.senderEmail,
         emailInput.senderName,
-        emailInput.date
+        emailInput.date,
+        emailInput // Pass full email for sender type detection
       );
     }
 
@@ -482,7 +495,7 @@ export class EmailProcessor {
           );
         }
 
-        // Update contact enrichment
+        // Update contact enrichment (includes sender type from AI analysis)
         if (
           contactEnrichmentResult &&
           contactEnrichmentResult.success &&
@@ -491,7 +504,8 @@ export class EmailProcessor {
         ) {
           await this.updateContactEnrichment(
             contact.id,
-            contactEnrichmentResult.data
+            contactEnrichmentResult.data,
+            contact // Pass existing contact for sender type comparison
           );
         }
       } catch (error) {
@@ -889,17 +903,23 @@ export class EmailProcessor {
    * - Contact record tracks: email count, first/last seen, relationship type
    * - This enables features: VIP prioritization, contact insights, email grouping
    *
+   * SENDER TYPE DETECTION (NEW Jan 2026):
+   * - Detects sender type from email headers and content patterns
+   * - Helps distinguish real contacts from newsletters/broadcasts
+   *
    * @param userId - User ID
    * @param email - Sender email address
    * @param name - Sender name (may be null)
    * @param emailDate - Email date for first/last seen tracking
+   * @param emailInput - Full email input for sender type detection
    * @returns Contact record or null if upsert failed
    */
   private async upsertContact(
     userId: string,
     email: string,
     name: string | null,
-    emailDate: string
+    emailDate: string,
+    emailInput?: EmailInput
   ): Promise<ContactForEnrichment | null> {
     // ─────────────────────────────────────────────────────────────────────────────
     // Input validation
@@ -915,6 +935,33 @@ export class EmailProcessor {
     const normalizedEmail = email.toLowerCase().trim();
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // SENDER TYPE DETECTION (NEW Jan 2026)
+    // Detect sender type from email patterns before upserting contact
+    // This provides initial classification that may be refined by AI later
+    // ─────────────────────────────────────────────────────────────────────────────
+    let senderTypeResult: SenderTypeDetectionResult | null = null;
+    if (emailInput) {
+      senderTypeResult = this.senderTypeDetector.detect({
+        senderEmail: normalizedEmail,
+        senderName: emailInput.senderName,
+        subject: emailInput.subject,
+        bodyText: emailInput.bodyText,
+        // Note: headers would be passed here if available in EmailInput
+      });
+
+      if (senderTypeResult.senderType !== 'unknown') {
+        logger.info('Sender type detected', {
+          email: normalizedEmail.substring(0, 30),
+          senderType: senderTypeResult.senderType,
+          broadcastSubtype: senderTypeResult.broadcastSubtype,
+          confidence: senderTypeResult.confidence,
+          source: senderTypeResult.source,
+          signals: senderTypeResult.signals.slice(0, 3),
+        });
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Log the email → contact linking operation
     // This is a key part of the data flow: emails are always linked to contacts
     // ─────────────────────────────────────────────────────────────────────────────
@@ -923,6 +970,7 @@ export class EmailProcessor {
       senderEmail: normalizedEmail.substring(0, 30),
       senderName: name?.substring(0, 20) || '(no name)',
       emailDate: emailDate.substring(0, 10),
+      detectedSenderType: senderTypeResult?.senderType ?? 'unknown',
       operation: 'email_to_contact_link',
     });
 
@@ -937,6 +985,11 @@ export class EmailProcessor {
         name,
         emailDate,
         isSent: false, // This is a received email
+        // Pass sender type detection results if available
+        senderType: senderTypeResult?.senderType !== 'unknown' ? senderTypeResult?.senderType : undefined,
+        broadcastSubtype: senderTypeResult?.broadcastSubtype,
+        senderTypeConfidence: senderTypeResult?.confidence,
+        senderTypeSource: senderTypeResult?.source,
       });
 
       if (!contactId) {
@@ -954,7 +1007,7 @@ export class EmailProcessor {
       const supabase = await createServerClient();
       const { data: contact, error: fetchError } = await supabase
         .from('contacts')
-        .select('id, email, email_count, extraction_confidence, last_extracted_at')
+        .select('id, email, email_count, extraction_confidence, last_extracted_at, sender_type, sender_type_confidence')
         .eq('id', contactId)
         .single();
 
@@ -973,6 +1026,7 @@ export class EmailProcessor {
         contactId: contact.id.substring(0, 8),
         email: contact.email.substring(0, 30),
         emailCount: contact.email_count,
+        senderType: contact.sender_type,
         needsEnrichment: shouldEnrichContact(contact),
         operation: 'email_contact_linked',
       });
@@ -1351,12 +1405,18 @@ export class EmailProcessor {
   /**
    * Updates contact enrichment data.
    *
+   * Includes sender type classification from AI analysis (NEW Jan 2026).
+   * AI analysis can provide higher-confidence sender type than pattern detection,
+   * so we update sender_type if AI confidence is higher.
+   *
    * @param contactId - Contact ID
    * @param enrichment - Enrichment data from ContactEnricher
+   * @param existingContact - Existing contact data for comparison
    */
   private async updateContactEnrichment(
     contactId: string,
-    enrichment: ContactEnrichmentResult['data']
+    enrichment: ContactEnrichmentResult['data'],
+    existingContact?: ContactForEnrichment | null
   ): Promise<void> {
     try {
       const supabase = await createServerClient();
@@ -1384,6 +1444,44 @@ export class EmailProcessor {
         updates.birthday_year_known = false;
       }
 
+      // ─────────────────────────────────────────────────────────────────────────
+      // SENDER TYPE UPDATE FROM AI ANALYSIS (NEW Jan 2026)
+      // AI analysis can provide higher-confidence sender type than pattern detection.
+      // Update sender_type if:
+      // 1. AI detected a sender type (not unknown), AND
+      // 2. AI confidence is higher than existing confidence, OR existing is unknown
+      // ─────────────────────────────────────────────────────────────────────────
+      if (enrichment.senderType && enrichment.senderType !== 'unknown') {
+        const existingConfidence = existingContact?.sender_type_confidence ?? 0;
+        const aiConfidence = enrichment.senderTypeConfidence ?? 0.5;
+        const existingSenderType = existingContact?.sender_type ?? 'unknown';
+
+        // Update if AI is more confident or existing is unknown
+        if (aiConfidence > existingConfidence || existingSenderType === 'unknown') {
+          updates.sender_type = enrichment.senderType;
+          updates.sender_type_confidence = aiConfidence;
+          updates.sender_type_source = 'ai_analysis';
+          updates.sender_type_detected_at = new Date().toISOString();
+
+          // Only set broadcast_subtype if sender_type is broadcast
+          if (enrichment.senderType === 'broadcast' && enrichment.broadcastSubtype) {
+            updates.broadcast_subtype = enrichment.broadcastSubtype;
+          } else {
+            updates.broadcast_subtype = null;
+          }
+
+          logger.info('Updating sender type from AI analysis', {
+            contactId: contactId.substring(0, 8),
+            previousType: existingSenderType,
+            newType: enrichment.senderType,
+            broadcastSubtype: enrichment.broadcastSubtype,
+            aiConfidence,
+            previousConfidence: existingConfidence,
+            reasoning: enrichment.senderTypeReasoning?.substring(0, 50),
+          });
+        }
+      }
+
       const { error } = await supabase
         .from('contacts')
         .update(updates)
@@ -1398,6 +1496,7 @@ export class EmailProcessor {
         logger.debug('Contact enrichment saved', {
           contactId,
           fieldsUpdated: Object.keys(updates).length,
+          senderTypeUpdated: !!updates.sender_type,
         });
       }
     } catch (error) {

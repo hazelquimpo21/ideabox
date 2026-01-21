@@ -17,6 +17,8 @@
  *   - isVip: Filter by VIP status (true/false)
  *   - isMuted: Filter by muted status (true/false)
  *   - relationshipType: Filter by relationship (client, colleague, etc.)
+ *   - senderType: Filter by sender type (direct, broadcast, cold_outreach, opportunity, unknown, all)
+ *   - broadcastSubtype: Filter by broadcast subtype (newsletter_author, company_newsletter, etc.)
  *   - search: Search by name or email
  *   - sortBy: Sort field (email_count, last_seen_at, name)
  *   - sortOrder: Sort direction (asc, desc)
@@ -40,9 +42,18 @@
  * List client contacts:
  *   GET /api/contacts?relationshipType=client
  *
+ * List real contacts only (filter out newsletters):
+ *   GET /api/contacts?senderType=direct
+ *
+ * List newsletters/subscriptions only:
+ *   GET /api/contacts?senderType=broadcast
+ *
+ * List Substack authors only:
+ *   GET /api/contacts?senderType=broadcast&broadcastSubtype=newsletter_author
+ *
  * @module app/api/contacts/route
- * @version 1.0.0
- * @since January 2026
+ * @version 2.0.0
+ * @since January 2026 (v2: Added sender type filtering)
  */
 
 import { NextRequest } from 'next/server';
@@ -91,7 +102,16 @@ export async function GET(request: NextRequest) {
       logger.warn('Invalid query parameters');
       return queryResult;
     }
-    const { isVip, isMuted, relationshipType, search, sortBy, sortOrder } = queryResult;
+    const {
+      isVip,
+      isMuted,
+      relationshipType,
+      search,
+      sortBy,
+      sortOrder,
+      senderType,
+      broadcastSubtype,
+    } = queryResult;
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Step 3: Get pagination parameters
@@ -121,6 +141,22 @@ export async function GET(request: NextRequest) {
     if (relationshipType) {
       query = query.eq('relationship_type', relationshipType);
       logger.debug('Filtering by relationship type', { relationshipType });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // SENDER TYPE FILTERING (NEW Jan 2026)
+    // Allows filtering contacts by type: direct (real contacts), broadcast
+    // (newsletters), cold_outreach, opportunity, or unknown
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (senderType && senderType !== 'all') {
+      query = query.eq('sender_type', senderType);
+      logger.debug('Filtering by sender type', { senderType });
+
+      // If filtering by broadcast, optionally filter by subtype
+      if (senderType === 'broadcast' && broadcastSubtype) {
+        query = query.eq('broadcast_subtype', broadcastSubtype);
+        logger.debug('Filtering by broadcast subtype', { broadcastSubtype });
+      }
     }
 
     // Apply text search on name and email
@@ -165,7 +201,14 @@ export async function GET(request: NextRequest) {
       count: data?.length || 0,
       total: count,
       userId: user.id.substring(0, 8),
-      filters: { isVip, isMuted, relationshipType, search: !!search },
+      filters: {
+        isVip,
+        isMuted,
+        relationshipType,
+        senderType: senderType ?? 'all',
+        broadcastSubtype,
+        search: !!search,
+      },
     });
 
     return paginatedResponse(

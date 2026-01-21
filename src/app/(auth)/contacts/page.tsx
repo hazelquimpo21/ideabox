@@ -46,7 +46,7 @@ import {
 } from '@/components/ui';
 import { useContacts } from '@/hooks/useContacts';
 import { SyncContactsButton, HistoricalSyncButton } from '@/components/contacts';
-import type { Contact, ContactRelationshipType, ContactStats } from '@/hooks/useContacts';
+import type { Contact, ContactRelationshipType, ContactStats, SenderType } from '@/hooks/useContacts';
 import {
   Users,
   Star,
@@ -64,6 +64,11 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
+  Newspaper,
+  UserCircle,
+  CircleHelp,
+  Megaphone,
+  Target,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
@@ -81,7 +86,49 @@ const logger = createLogger('ContactsPage');
 const PAGE_SIZE = 50;
 
 /**
- * Filter tabs for the contacts list.
+ * Primary sender type tabs for distinguishing contacts from subscriptions.
+ * These control the main view filter (NEW Jan 2026).
+ */
+const SENDER_TYPE_TABS = [
+  {
+    id: 'direct' as SenderType,
+    label: 'Contacts',
+    icon: UserCircle,
+    hint: 'Real people who know you',
+    statsKey: 'direct' as const,
+  },
+  {
+    id: 'broadcast' as SenderType,
+    label: 'Subscriptions',
+    icon: Newspaper,
+    hint: 'Newsletters and marketing',
+    statsKey: 'broadcast' as const,
+  },
+  {
+    id: 'cold_outreach' as SenderType,
+    label: 'Outreach',
+    icon: Megaphone,
+    hint: 'Cold emails and sales',
+    statsKey: 'cold_outreach' as const,
+  },
+  {
+    id: 'unknown' as SenderType,
+    label: 'Uncategorized',
+    icon: CircleHelp,
+    hint: 'Not yet classified',
+    statsKey: 'unknown' as const,
+  },
+  {
+    id: 'all' as SenderType,
+    label: 'All',
+    icon: Users,
+    hint: 'Show everyone',
+    statsKey: null,
+  },
+] as const;
+
+/**
+ * Filter tabs for the contacts list (secondary filters).
  * Each tab corresponds to a specific filter configuration.
  */
 const FILTER_TABS = [
@@ -115,6 +162,41 @@ const RELATIONSHIP_CONFIG: Record<
   recruiter: { label: 'Recruiter', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
   service: { label: 'Service', color: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300' },
   unknown: { label: 'Unknown', color: 'bg-gray-100 text-gray-500 dark:bg-gray-900/30 dark:text-gray-400' },
+};
+
+/**
+ * Sender type display configuration.
+ * Shows visual indicators for newsletters vs direct contacts.
+ */
+const SENDER_TYPE_CONFIG: Record<
+  string,
+  { label: string; color: string; icon: typeof Newspaper }
+> = {
+  direct: {
+    label: 'Contact',
+    color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    icon: UserCircle,
+  },
+  broadcast: {
+    label: 'Newsletter',
+    color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    icon: Newspaper,
+  },
+  cold_outreach: {
+    label: 'Outreach',
+    color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    icon: Megaphone,
+  },
+  opportunity: {
+    label: 'Opportunity',
+    color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
+    icon: Target,
+  },
+  unknown: {
+    label: 'Uncategorized',
+    color: 'bg-gray-100 text-gray-500 dark:bg-gray-900/30 dark:text-gray-400',
+    icon: CircleHelp,
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -209,6 +291,72 @@ function StatsCards({ stats, isLoading }: { stats: ContactStats; isLoading?: boo
 }
 
 /**
+ * Primary sender type tabs component.
+ * Allows switching between Contacts (direct) and Subscriptions (broadcast).
+ * Shows badge counts from stats.bySenderType.
+ */
+function SenderTypeTabs({
+  activeType,
+  onTypeChange,
+  stats,
+  isLoading,
+}: {
+  activeType: SenderType;
+  onTypeChange: (type: SenderType) => void;
+  stats: ContactStats;
+  isLoading?: boolean;
+}) {
+  return (
+    <div className="mb-6">
+      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
+        {SENDER_TYPE_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeType === tab.id;
+          const count = tab.statsKey ? stats.bySenderType[tab.statsKey] : stats.total;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onTypeChange(tab.id)}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+                transition-all duration-200
+                ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                }
+              `}
+              title={tab.hint}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+              {/* Badge count */}
+              {isLoading ? (
+                <Skeleton className="h-5 w-6 rounded-full" />
+              ) : (
+                <span
+                  className={`
+                    px-2 py-0.5 text-xs rounded-full font-medium tabular-nums
+                    ${
+                      isActive
+                        ? 'bg-primary-foreground/20 text-primary-foreground'
+                        : 'bg-muted text-muted-foreground'
+                    }
+                  `}
+                >
+                  {count.toLocaleString()}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Filter tabs and search bar component.
  */
 function ContactFilters({
@@ -296,6 +444,10 @@ function ContactCard({
   onToggleMuted: (id: string, e: React.MouseEvent) => void;
 }) {
   const relationshipConfig = RELATIONSHIP_CONFIG[contact.relationship_type] || RELATIONSHIP_CONFIG.unknown;
+  // Get sender type config with fallback to 'unknown' if not found
+  const senderKey = contact.sender_type && contact.sender_type !== 'all' ? contact.sender_type : 'unknown';
+  const senderTypeConfig = SENDER_TYPE_CONFIG[senderKey] ?? SENDER_TYPE_CONFIG.unknown;
+  const SenderTypeIcon = senderTypeConfig.icon;
 
   return (
     <Link href={`/contacts/${contact.id}`} className="block">
@@ -304,7 +456,7 @@ function ContactCard({
           <div className="flex items-start justify-between gap-4">
             {/* Contact info */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 {/* VIP indicator */}
                 {contact.is_vip && (
                   <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 shrink-0" />
@@ -315,10 +467,18 @@ function ContactCard({
                   {contact.name || contact.email.split('@')[0]}
                 </h3>
 
-                {/* Relationship badge */}
-                <Badge className={`text-xs shrink-0 ${relationshipConfig.color}`}>
-                  {relationshipConfig.label}
+                {/* Sender type badge (newsletter vs contact) */}
+                <Badge className={`text-xs shrink-0 ${senderTypeConfig.color}`}>
+                  <SenderTypeIcon className="h-3 w-3 mr-1" />
+                  {senderTypeConfig.label}
                 </Badge>
+
+                {/* Relationship badge (only show for direct contacts) */}
+                {contact.sender_type === 'direct' && contact.relationship_type !== 'unknown' && (
+                  <Badge className={`text-xs shrink-0 ${relationshipConfig.color}`}>
+                    {relationshipConfig.label}
+                  </Badge>
+                )}
 
                 {/* Muted indicator */}
                 {contact.is_muted && (
@@ -440,22 +600,51 @@ function ContactCardSkeleton() {
  */
 function EmptyState({
   activeTab,
+  activeSenderType,
   hasSearch,
   onSyncGoogle,
 }: {
   activeTab: string;
+  activeSenderType: SenderType;
   hasSearch?: boolean;
   onSyncGoogle?: () => void;
 }) {
-  const messages: Record<string, { title: string; description: string; icon: typeof Users; action?: string }> = {
-    all: {
-      title: hasSearch ? 'No matches found' : 'No contacts yet',
-      description: hasSearch
-        ? 'Try a different search term or clear the filter.'
-        : 'Sync your Google contacts or process some emails to see your network here.',
-      icon: hasSearch ? Search : Users,
-      action: hasSearch ? undefined : 'sync',
+  // Sender type specific messages
+  const senderTypeMessages: Record<SenderType, { title: string; description: string; icon: typeof Users }> = {
+    direct: {
+      title: 'No contacts yet',
+      description: 'Real people who send you emails will appear here. Sync or process emails to get started.',
+      icon: UserCircle,
     },
+    broadcast: {
+      title: 'No subscriptions detected',
+      description: 'Newsletter and marketing senders will appear here as you receive their emails.',
+      icon: Newspaper,
+    },
+    cold_outreach: {
+      title: 'No cold outreach emails',
+      description: 'Sales pitches, recruiters, and cold emails will be categorized here.',
+      icon: Megaphone,
+    },
+    opportunity: {
+      title: 'No opportunity sources',
+      description: 'Mailing lists like HARO where you might want to respond will show up here.',
+      icon: Target,
+    },
+    unknown: {
+      title: 'Nothing uncategorized',
+      description: 'All your senders have been classified. Nice work!',
+      icon: CircleHelp,
+    },
+    all: {
+      title: 'No contacts yet',
+      description: 'Sync your Google contacts or process some emails to see your network here.',
+      icon: Users,
+    },
+  };
+
+  // Secondary filter messages override sender type messages
+  const secondaryMessages: Record<string, { title: string; description: string; icon: typeof Users; action?: string }> = {
     vip: {
       title: 'No VIP contacts',
       description: 'Mark your most important contacts as VIP and they\'ll get priority in your inbox.',
@@ -468,8 +657,29 @@ function EmptyState({
     },
   };
 
-  const config = messages[activeTab] || messages.all;
+  // Use search message if searching
+  if (hasSearch) {
+    return (
+      <Card className="border-dashed border-2 bg-muted/5">
+        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Search className="h-7 w-7 text-muted-foreground" />
+          </div>
+          <CardTitle className="text-lg mb-2">No matches found</CardTitle>
+          <CardDescription className="max-w-sm">
+            Try a different search term or clear the filter.
+          </CardDescription>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Use secondary filter message if not 'all'
+  const config = activeTab !== 'all'
+    ? secondaryMessages[activeTab] || senderTypeMessages[activeSenderType]
+    : senderTypeMessages[activeSenderType];
   const Icon = config.icon;
+  const showSyncAction = activeSenderType === 'all' || activeSenderType === 'direct';
 
   return (
     <Card className="border-dashed border-2 bg-muted/5">
@@ -480,7 +690,7 @@ function EmptyState({
         <CardTitle className="text-lg mb-2">{config.title}</CardTitle>
         <CardDescription className="max-w-sm">{config.description}</CardDescription>
 
-        {config.action === 'sync' && onSyncGoogle && (
+        {showSyncAction && onSyncGoogle && (
           <Button
             variant="outline"
             size="sm"
@@ -556,6 +766,9 @@ export default function ContactsPage() {
   // Local State
   // ─────────────────────────────────────────────────────────────────────────────
 
+  // Primary filter: sender type (Contacts vs Subscriptions)
+  const [activeSenderType, setActiveSenderType] = React.useState<SenderType>('direct');
+  // Secondary filter: VIP/Muted
   const [activeTab, setActiveTab] = React.useState<string>('all');
   const [searchValue, setSearchValue] = React.useState('');
   const [sortBy, setSortBy] = React.useState<string>('last_seen_at');
@@ -571,20 +784,22 @@ export default function ContactsPage() {
   }, [searchValue]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Build filter options based on active tab
+  // Build filter options based on active sender type and secondary tab
   // ─────────────────────────────────────────────────────────────────────────────
 
   const filterOptions = React.useMemo(() => {
     const tabFilter = FILTER_TABS.find((t) => t.id === activeTab)?.filter || {};
     return {
       ...tabFilter,
+      // Primary filter: sender type (Contacts vs Subscriptions)
+      senderType: activeSenderType,
       search: debouncedSearch || undefined,
       sortBy: sortBy as 'email_count' | 'last_seen_at' | 'name',
       sortOrder: sortBy === 'name' ? 'asc' as const : 'desc' as const,
       page: initialPage,
       pageSize: PAGE_SIZE,
     };
-  }, [activeTab, debouncedSearch, sortBy, initialPage]);
+  }, [activeSenderType, activeTab, debouncedSearch, sortBy, initialPage]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Fetch contacts using the hook
@@ -643,6 +858,17 @@ export default function ContactsPage() {
   // ─────────────────────────────────────────────────────────────────────────────
   // Event Handlers
   // ─────────────────────────────────────────────────────────────────────────────
+
+  const handleSenderTypeChange = (type: SenderType) => {
+    logger.debug('Sender type changed', { from: activeSenderType, to: type });
+    setActiveSenderType(type);
+    // Reset secondary tab when changing sender type
+    setActiveTab('all');
+    // Reset to page 1
+    if (pagination.page !== 1) {
+      handlePageChange(1);
+    }
+  };
 
   const handleTabChange = (tab: string) => {
     logger.debug('Tab changed', { from: activeTab, to: tab });
@@ -703,7 +929,7 @@ export default function ContactsPage() {
       {/* Page Header */}
       <PageHeader
         title="Contacts"
-        description="Your network, organized. People you've exchanged emails with."
+        description="Your network, organized. Filter between real contacts and subscriptions."
         breadcrumbs={[
           { label: 'Home', href: '/' },
           { label: 'Contacts' },
@@ -747,7 +973,15 @@ export default function ContactsPage() {
       {/* Stats Cards - always show but with loading state */}
       <StatsCards stats={stats} isLoading={isLoading} />
 
-      {/* Filters */}
+      {/* Sender Type Tabs (Primary Filter) */}
+      <SenderTypeTabs
+        activeType={activeSenderType}
+        onTypeChange={handleSenderTypeChange}
+        stats={stats}
+        isLoading={isLoading}
+      />
+
+      {/* Secondary Filters (VIP/Muted) and Search */}
       <ContactFilters
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -772,6 +1006,7 @@ export default function ContactsPage() {
           // Empty state with context-aware messaging
           <EmptyState
             activeTab={activeTab}
+            activeSenderType={activeSenderType}
             hasSearch={!!debouncedSearch}
             onSyncGoogle={handleSyncFromEmptyState}
           />

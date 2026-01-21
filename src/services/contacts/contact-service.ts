@@ -97,6 +97,19 @@ export interface UpsertFromEmailParams {
   emailDate: string;
   /** Whether this is a sent email (user → contact) vs received (contact → user) */
   isSent?: boolean;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SENDER TYPE CLASSIFICATION (NEW Jan 2026)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Detected sender type: direct, broadcast, cold_outreach, opportunity */
+  senderType?: string;
+  /** Broadcast subtype if sender_type is broadcast */
+  broadcastSubtype?: string;
+  /** Confidence in sender type classification (0-1) */
+  senderTypeConfidence?: number;
+  /** How sender type was detected: header, email_pattern, ai_analysis, user_behavior */
+  senderTypeSource?: string;
 }
 
 /**
@@ -239,7 +252,17 @@ export class ContactService {
    * ```
    */
   async upsertFromEmail(params: UpsertFromEmailParams): Promise<string | null> {
-    const { userId, email, name, emailDate, isSent = false } = params;
+    const {
+      userId,
+      email,
+      name,
+      emailDate,
+      isSent = false,
+      senderType,
+      broadcastSubtype,
+      senderTypeConfidence,
+      senderTypeSource,
+    } = params;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Input validation
@@ -258,6 +281,8 @@ export class ContactService {
       email: normalizedEmail.substring(0, 30),
       hasName: !!name,
       isSent,
+      senderType: senderType ?? 'not_provided',
+      senderTypeConfidence: senderTypeConfidence ?? 'not_provided',
     });
 
     try {
@@ -265,8 +290,8 @@ export class ContactService {
 
       // ─────────────────────────────────────────────────────────────────────────
       // Call the database function for atomic upsert
-      // This function handles all the logic for incrementing counts and
-      // managing timestamps atomically
+      // This function handles all the logic for incrementing counts,
+      // managing timestamps atomically, and sender type classification
       // ─────────────────────────────────────────────────────────────────────────
       const { data, error } = await supabase.rpc('upsert_contact_from_email', {
         p_user_id: userId,
@@ -274,9 +299,46 @@ export class ContactService {
         p_name: name ?? null,
         p_email_date: emailDate,
         p_is_sent: isSent,
+        // Sender type classification (NEW Jan 2026)
+        // The DB function will handle these even if the columns don't exist yet
+        p_sender_type: senderType ?? null,
+        p_sender_type_confidence: senderTypeConfidence ?? null,
+        p_sender_type_source: senderTypeSource ?? null,
       });
 
       if (error) {
+        // Check if error is due to missing parameters (old function signature)
+        // In that case, retry without sender type params
+        if (error.message.includes('p_sender_type') || error.code === '42883') {
+          logger.debug('Retrying upsert without sender_type params (old DB function)', {
+            email: normalizedEmail.substring(0, 30),
+          });
+
+          const { data: fallbackData, error: fallbackError } = await supabase.rpc('upsert_contact_from_email', {
+            p_user_id: userId,
+            p_email: normalizedEmail,
+            p_name: name ?? null,
+            p_email_date: emailDate,
+            p_is_sent: isSent,
+          });
+
+          if (fallbackError) {
+            logger.error('Failed to upsert contact from email (fallback)', {
+              email: normalizedEmail.substring(0, 30),
+              errorCode: fallbackError.code,
+              errorMessage: fallbackError.message,
+            });
+            return null;
+          }
+
+          logger.debug('Contact upserted successfully (without sender_type)', {
+            contactId: fallbackData,
+            email: normalizedEmail.substring(0, 30),
+          });
+
+          return fallbackData as string;
+        }
+
         logger.error('Failed to upsert contact from email', {
           email: normalizedEmail.substring(0, 30),
           errorCode: error.code,
@@ -288,6 +350,7 @@ export class ContactService {
       logger.debug('Contact upserted successfully', {
         contactId: data,
         email: normalizedEmail.substring(0, 30),
+        senderType: senderType ?? 'not_classified',
       });
 
       return data as string;

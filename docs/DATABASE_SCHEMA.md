@@ -383,6 +383,145 @@ For events extracted by EventDetector, the `event_metadata` column contains:
 }
 ```
 
+### contacts (ENHANCED Jan 2026)
+Contact management with sender type classification.
+
+```sql
+CREATE TABLE contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- Core contact info
+  email TEXT NOT NULL,
+  name TEXT,
+  display_name TEXT, -- User override or extracted
+  avatar_url TEXT,
+
+  -- Communication stats
+  email_count INTEGER DEFAULT 0,
+  sent_count INTEGER DEFAULT 0,   -- Emails user sent TO this contact
+  received_count INTEGER DEFAULT 0, -- Emails user received FROM this contact
+  first_seen_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ,
+
+  -- ════════════════════════════════════════════════════════════════════════════
+  -- SENDER TYPE CLASSIFICATION (NEW Jan 2026)
+  -- ════════════════════════════════════════════════════════════════════════════
+  -- Distinguishes real contacts from newsletters/broadcasts
+
+  sender_type TEXT DEFAULT 'unknown',
+    -- 'direct': Real person who knows you
+    -- 'broadcast': Newsletter/marketing sender
+    -- 'cold_outreach': Cold email from stranger
+    -- 'opportunity': HARO-style mailing list
+    -- 'unknown': Not yet classified
+
+  broadcast_subtype TEXT,
+    -- Only for sender_type='broadcast':
+    -- 'newsletter_author': Substack, personal blog
+    -- 'company_newsletter': Company marketing
+    -- 'digest_service': LinkedIn digest, GitHub notifications
+    -- 'transactional': Receipts, noreply addresses
+
+  sender_type_confidence DECIMAL(3,2),
+  sender_type_detected_at TIMESTAMPTZ,
+  sender_type_source TEXT,
+    -- 'header': List-Unsubscribe detected
+    -- 'email_pattern': @substack.com, noreply@
+    -- 'ai_analysis': ContactEnricher determined
+    -- 'user_behavior': User replied = direct
+    -- 'manual': User override
+
+  -- ════════════════════════════════════════════════════════════════════════════
+
+  -- Relationship & enrichment
+  relationship_type TEXT DEFAULT 'unknown',
+    -- client, colleague, vendor, friend, family, recruiter, service, networking, unknown
+    -- NOTE: Only meaningful when sender_type='direct'
+  company TEXT,
+  job_title TEXT,
+  phone TEXT,
+  linkedin_url TEXT,
+  extraction_confidence DECIMAL(3,2),
+  last_extracted_at TIMESTAMPTZ,
+
+  -- User flags
+  is_vip BOOLEAN DEFAULT FALSE,
+  is_muted BOOLEAN DEFAULT FALSE,
+  is_archived BOOLEAN DEFAULT FALSE,
+
+  -- Google integration
+  google_resource_name TEXT,
+  google_labels TEXT[],
+  is_google_starred BOOLEAN DEFAULT FALSE,
+  google_synced_at TIMESTAMPTZ,
+
+  -- Import tracking
+  import_source TEXT DEFAULT 'email', -- email, google, manual
+  notes TEXT,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(user_id, email)
+);
+
+-- Core indexes
+CREATE INDEX idx_contacts_user_id ON contacts(user_id);
+CREATE INDEX idx_contacts_email ON contacts(email);
+
+-- Sender type indexes (NEW Jan 2026)
+CREATE INDEX idx_contacts_sender_type ON contacts(user_id, sender_type);
+CREATE INDEX idx_contacts_broadcast ON contacts(user_id, sender_type, broadcast_subtype)
+  WHERE sender_type = 'broadcast';
+CREATE INDEX idx_contacts_direct ON contacts(user_id, last_seen_at DESC)
+  WHERE sender_type = 'direct';
+
+-- RLS Policies
+ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own contacts"
+  ON contacts FOR ALL
+  USING (auth.uid() = user_id);
+```
+
+#### Sender Type Classification Flow
+
+```
+Email Received
+      │
+      ▼
+┌─────────────────────────────────────────────────────┐
+│ 1. Header Detection (highest confidence)            │
+│    - List-Unsubscribe header? → broadcast           │
+│    - ESP headers (Mailchimp, etc)? → broadcast      │
+└───────────────────┬─────────────────────────────────┘
+                    │ no match
+                    ▼
+┌─────────────────────────────────────────────────────┐
+│ 2. Email Pattern Detection                          │
+│    - @substack.com → broadcast/newsletter_author    │
+│    - noreply@ → broadcast/transactional             │
+│    - newsletter@ → broadcast/company_newsletter     │
+└───────────────────┬─────────────────────────────────┘
+                    │ no match
+                    ▼
+┌─────────────────────────────────────────────────────┐
+│ 3. AI Analysis (ContactEnricher)                    │
+│    - Analyze content for broadcast signals          │
+│    - Check for unsubscribe links, "view in browser" │
+│    - Detect cold outreach patterns                  │
+└───────────────────┬─────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────────┐
+│ 4. User Behavior Signal (ongoing)                   │
+│    - User replied to them? → upgrade to 'direct'    │
+│    - User marked as VIP? → likely 'direct'          │
+└─────────────────────────────────────────────────────┘
+```
+
 ## Phase 2 Tables
 
 ### urls

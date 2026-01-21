@@ -10,6 +10,71 @@ This document explains:
 2. How emails are linked to contacts
 3. How Google Contacts import works
 4. How VIP suggestions work during onboarding
+5. **NEW (Jan 2026)**: How sender type classification works
+
+---
+
+## Sender Type Classification (NEW Jan 2026)
+
+### The Problem
+
+Not every email sender is a "contact" in the traditional sense. Newsletter authors, company updates,
+and marketing emails create contact records, but the user doesn't have a personal relationship with
+them. This clutters the contacts list.
+
+### The Solution: sender_type
+
+We classify each contact by **HOW they communicate** (sender_type), separate from **WHO they are**
+(relationship_type):
+
+| sender_type | Description | Examples |
+|-------------|-------------|----------|
+| `direct` | Real person who knows you | Colleague, client, friend, family |
+| `broadcast` | One-to-many sender (newsletters) | Substack author, company newsletter |
+| `cold_outreach` | Targeted but no relationship | Sales emails, recruiters, PR pitches |
+| `opportunity` | Mailing list with optional response | HARO, job boards, community asks |
+| `unknown` | Not yet classified | New contacts pending analysis |
+
+### Detection Flow
+
+```
+Email arrives → SenderTypeDetector runs
+                       │
+          ┌────────────┼────────────────────────────────┐
+          ▼            ▼                                ▼
+     [Headers]    [Email Pattern]                  [AI Analysis]
+
+     List-Unsubscribe   @substack.com               Analyze content for:
+     ESP headers        noreply@                    - Unsubscribe links
+                        newsletter@                 - "View in browser"
+                                                    - Generic vs personal
+          │                  │                             │
+          └──────────────────┴─────────────────────────────┘
+                                    │
+                                    ▼
+                            contact.sender_type = 'broadcast' (example)
+```
+
+### User Behavior Signals
+
+The system continuously learns from user behavior:
+- **User replies to contact** → Upgrade to `sender_type = 'direct'`
+- **User marks as VIP** → Strong signal for `direct`
+- **User never opens emails** → May suggest reclassification
+
+### UI Impact
+
+- **Contacts page** defaults to `sender_type = 'direct'` (real contacts)
+- **Subscriptions tab** shows `sender_type = 'broadcast'`
+- **Stats API** returns counts by sender_type for tab badges
+
+### API
+
+```
+GET /api/contacts?senderType=direct        # Real contacts only
+GET /api/contacts?senderType=broadcast     # Newsletters/subscriptions
+GET /api/contacts?senderType=all           # All contacts
+```
 
 ---
 
@@ -79,16 +144,20 @@ Every email processed by IdeaBox is linked to a contact:
 
 ### Contact Upsert Function
 
-The `upsert_contact_from_email` database function (migration 012) handles atomic upsert:
+The `upsert_contact_from_email` database function (migration 012, updated 024) handles atomic upsert:
 
 ```sql
--- Called for every email processed
+-- Called for every email processed (ENHANCED Jan 2026 with sender_type)
 SELECT upsert_contact_from_email(
   p_user_id := 'user-uuid',
   p_email := 'sender@example.com',
   p_name := 'John Doe',
   p_email_date := '2026-01-15T10:00:00Z',
-  p_is_sent := false  -- received email
+  p_is_sent := false,  -- received email
+  -- NEW (Jan 2026): Sender type classification
+  p_sender_type := 'broadcast',
+  p_sender_type_confidence := 0.95,
+  p_sender_type_source := 'email_pattern'
 );
 ```
 
@@ -98,6 +167,10 @@ This function:
 - Updates `last_seen_at` to email date
 - Updates `first_seen_at` if earlier than existing
 - Updates `name` only if we don't have one (preserves better names)
+- **(NEW Jan 2026)** Sets/updates `sender_type` with smart rules:
+  - If user replies → automatically becomes `direct`
+  - If new classification has higher confidence → update
+  - Never overwrite `manual` source (user override)
 
 ### Why Link Every Email?
 

@@ -372,6 +372,7 @@ export type UserContextOnboardingInput = z.infer<typeof userContextOnboardingSch
 /**
  * Valid contact relationship types.
  * Describes the nature of the relationship between user and contact.
+ * NOTE: Only meaningful when sender_type is 'direct'.
  */
 export const contactRelationshipTypeSchema = z.enum([
   'client',
@@ -386,10 +387,49 @@ export const contactRelationshipTypeSchema = z.enum([
 export type ContactRelationshipType = z.infer<typeof contactRelationshipTypeSchema>;
 
 /**
+ * Sender type classification (NEW Jan 2026).
+ *
+ * Distinguishes real contacts from newsletters/broadcasts:
+ * - direct: Real person who knows you (colleague, client, friend)
+ * - broadcast: Newsletter/marketing sender (Substack, company updates)
+ * - cold_outreach: Unknown person reaching out (sales, recruiter)
+ * - opportunity: Mailing list with optional response (HARO, job boards)
+ * - unknown: Not yet classified
+ * - all: Return all sender types (no filter)
+ */
+export const senderTypeSchema = z.enum([
+  'direct',
+  'broadcast',
+  'cold_outreach',
+  'opportunity',
+  'unknown',
+  'all',
+]);
+
+export type SenderType = z.infer<typeof senderTypeSchema>;
+
+/**
+ * Broadcast subtypes for more specific newsletter classification.
+ */
+export const broadcastSubtypeSchema = z.enum([
+  'newsletter_author',   // Individual creator (Substack, personal blog)
+  'company_newsletter',  // Company marketing/updates
+  'digest_service',      // LinkedIn digest, GitHub notifications
+  'transactional',       // Receipts, confirmations, noreply
+]);
+
+export type BroadcastSubtype = z.infer<typeof broadcastSubtypeSchema>;
+
+/**
  * Contact list query parameters.
  *
  * @example
  * GET /api/contacts?isVip=true&search=acme&limit=20
+ *
+ * @example Filter by sender type (NEW Jan 2026)
+ * GET /api/contacts?senderType=direct          # Real contacts only
+ * GET /api/contacts?senderType=broadcast       # Newsletters/subscriptions only
+ * GET /api/contacts?senderType=all             # All contacts
  */
 export const contactQuerySchema = paginationSchema.extend({
   isVip: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
@@ -398,6 +438,23 @@ export const contactQuerySchema = paginationSchema.extend({
   search: z.string().min(1).max(100).optional(),
   sortBy: z.enum(['email_count', 'last_seen_at', 'name']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SENDER TYPE FILTERING (NEW Jan 2026)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /**
+   * Filter by sender type:
+   * - 'direct': Real contacts who know you
+   * - 'broadcast': Newsletter/marketing senders
+   * - 'cold_outreach': Cold emails from strangers
+   * - 'opportunity': HARO-style mailing lists
+   * - 'unknown': Not yet classified
+   * - 'all': No sender type filter (return all)
+   *
+   * Default: undefined (returns all - backward compatible)
+   */
+  senderType: senderTypeSchema.optional(),
+  /** Filter by broadcast subtype (only when senderType=broadcast) */
+  broadcastSubtype: broadcastSubtypeSchema.optional(),
 });
 
 export type ContactQueryParams = z.infer<typeof contactQuerySchema>;

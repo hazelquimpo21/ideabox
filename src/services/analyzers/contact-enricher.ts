@@ -1,7 +1,9 @@
 /**
  * Contact Enricher Analyzer
  *
- * Extracts contact metadata from email signatures and content.
+ * Extracts contact metadata from email signatures and content, AND classifies
+ * the sender type to distinguish real contacts from newsletters/broadcasts.
+ *
  * This analyzer runs SELECTIVELY - only on contacts that need enrichment.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -22,6 +24,7 @@
  * EXTRACTED FIELDS
  * ═══════════════════════════════════════════════════════════════════════════════
  *
+ * Contact Information:
  * - company: Company name from signature or email context
  * - jobTitle: Job title or role
  * - phone: Phone number from signature
@@ -30,6 +33,27 @@
  * - birthday: Birthday if mentioned (MM-DD format)
  * - workAnniversary: Work anniversary date
  * - source: Where the data came from (signature, email_body, both)
+ *
+ * Sender Type Classification (NEW Jan 2026):
+ * - senderType: direct, broadcast, cold_outreach, opportunity, unknown
+ * - broadcastSubtype: newsletter_author, company_newsletter, digest_service, transactional
+ * - senderTypeConfidence: 0-1 confidence in classification
+ * - senderTypeReasoning: Why this classification was chosen
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * SENDER TYPE CLASSIFICATION
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * The sender_type field solves a key problem: newsletters appearing as contacts.
+ *
+ * - sender_type: HOW does this person communicate? (one-to-one vs one-to-many)
+ * - relationship_type: WHO is this person? (only meaningful for 'direct' senders)
+ *
+ * Types:
+ * - direct: Real person who knows you (colleague, client, friend)
+ * - broadcast: Newsletter/marketing sender (Substack, company updates)
+ * - cold_outreach: Unknown person reaching out (sales, recruiter, PR)
+ * - opportunity: Mailing list with optional response (HARO, job boards)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE EXAMPLE
@@ -48,6 +72,9 @@
  *       company: result.data.company,
  *       job_title: result.data.jobTitle,
  *       relationship_type: result.data.relationshipType,
+ *       sender_type: result.data.senderType,
+ *       broadcast_subtype: result.data.broadcastSubtype,
+ *       sender_type_confidence: result.data.senderTypeConfidence,
  *       extraction_confidence: result.data.confidence,
  *       last_extracted_at: new Date(),
  *     });
@@ -56,8 +83,8 @@
  * ```
  *
  * @module services/analyzers/contact-enricher
- * @version 1.0.0
- * @since January 2026
+ * @version 2.0.0
+ * @since January 2026 (v2: Added sender type classification)
  */
 
 import { BaseAnalyzer } from './base-analyzer';
@@ -67,10 +94,12 @@ import type {
   ContactEnrichmentData,
   ContactEnrichmentResult,
   ContactRelationshipType,
+  SenderType,
+  BroadcastSubtype,
   EmailInput,
   UserContext,
 } from './types';
-import { RELATIONSHIP_TYPES } from './types';
+import { RELATIONSHIP_TYPES, SENDER_TYPES, BROADCAST_SUBTYPES } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -93,8 +122,60 @@ const FUNCTION_DESCRIPTION =
 
 /**
  * System prompt for contact enrichment.
+ * Updated January 2026 to include sender type classification.
  */
-const SYSTEM_PROMPT = `You are a contact information extraction specialist. Your job is to extract professional details about the email sender from their email signature and email content.
+const SYSTEM_PROMPT = `You are a contact information extraction specialist. Your job is to:
+1. Extract professional details about the email sender from their signature and content
+2. Classify the SENDER TYPE - whether this is a real contact or a newsletter/broadcast sender
+
+═══════════════════════════════════════════════════════════════════════════════
+SENDER TYPE CLASSIFICATION (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+Determine HOW this sender communicates - this is different from WHO they are.
+
+SENDER TYPES:
+- direct: Real person who knows the recipient personally
+  • Signs of DIRECT contact:
+    - References shared context, history, or mutual connections
+    - Expects or invites a reply
+    - Uses recipient's name naturally (not template like "Hi {{first_name}}")
+    - Writes with personal tone, irregular timing
+    - Email feels one-to-one, written specifically for recipient
+
+- broadcast: Newsletter, marketing, or notification sender (one-to-many)
+  • Signs of BROADCAST:
+    - "View in browser" link present
+    - Unsubscribe link in footer
+    - Generic content not personalized to recipient
+    - Regular cadence (weekly, daily newsletter)
+    - Template merge tags visible or obvious
+    - Copyright footer, privacy policy links
+    - Sent via marketing platform (Mailchimp, Substack, etc.)
+  • IMPORTANT: Even if sender name looks personal (e.g., "Sarah from Acme"),
+    if newsletter signals are present, classify as BROADCAST.
+  • broadcast_subtype options:
+    - newsletter_author: Individual creator (Substack, personal blog)
+    - company_newsletter: Company marketing/updates
+    - digest_service: LinkedIn digest, GitHub notifications, aggregators
+    - transactional: Receipts, confirmations, noreply@ addresses
+
+- cold_outreach: Unknown person reaching out cold (targeted but no relationship)
+  • Signs of COLD OUTREACH:
+    - First contact, no prior relationship
+    - Wants something (sale, partnership, hire, PR)
+    - "I noticed you...", "I came across your...", "Quick question..."
+    - Scheduling requests from strangers
+    - Recruiter first contact, sales pitch
+
+- opportunity: Mailing list where response is optional but possible
+  • Signs of OPPORTUNITY LIST:
+    - Sent to a group (HARO, community board, job list)
+    - Could respond but not expected to
+    - "Looking for sources...", "Call for submissions"
+    - Journalist queries, RFPs
+
+- unknown: Cannot determine from content (leave for behavioral signals)
 
 ═══════════════════════════════════════════════════════════════════════════════
 FIELDS TO EXTRACT
@@ -120,7 +201,7 @@ FIELDS TO EXTRACT
    - Extract the full LinkedIn profile URL
    - Examples: "https://linkedin.com/in/johnsmith"
 
-5. RELATIONSHIP TYPE
+5. RELATIONSHIP TYPE (only meaningful for sender_type="direct")
    - Infer from: Email tone, content, context
    - Types:
      - client: They are paying or might pay for services
@@ -132,6 +213,7 @@ FIELDS TO EXTRACT
      - service: Service provider (bank, utility, support)
      - networking: Professional contact, potential opportunity
      - unknown: Cannot determine
+   - NOTE: For broadcast/cold_outreach senders, relationship_type should be "unknown"
 
 6. BIRTHDAY (rare)
    - Only if explicitly mentioned in the email
@@ -173,10 +255,17 @@ Track where you found the information:
 CONFIDENCE GUIDELINES
 ═══════════════════════════════════════════════════════════════════════════════
 
+For enrichment data:
 - 0.9+: Clear signature with explicit info
 - 0.7-0.9: Signature present but some inference needed
 - 0.5-0.7: No signature, inferred from context
 - <0.5: Highly uncertain, mostly guessing
+
+For sender_type:
+- 0.9+: Multiple clear signals (unsubscribe + view in browser + generic content)
+- 0.7-0.9: Strong signals present (unsubscribe link OR clearly personal tone)
+- 0.5-0.7: Some signals but ambiguous
+- <0.5: Cannot determine reliably
 
 Be conservative - only extract what you're reasonably confident about.
 Leave fields empty rather than guessing wrong.`;
@@ -187,6 +276,7 @@ Leave fields empty rather than guessing wrong.`;
 
 /**
  * OpenAI function schema for structured output.
+ * Updated January 2026 to include sender type classification.
  */
 const FUNCTION_SCHEMA: FunctionSchema = {
   name: FUNCTION_NAME,
@@ -228,7 +318,7 @@ const FUNCTION_SCHEMA: FunctionSchema = {
       relationship_type: {
         type: 'string',
         enum: RELATIONSHIP_TYPES as unknown as string[],
-        description: 'Inferred relationship type',
+        description: 'Inferred relationship type (only meaningful for direct sender_type)',
       },
 
       // Birthday
@@ -250,15 +340,47 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Where the information was found',
       },
 
-      // Confidence
+      // Confidence in enrichment data
       confidence: {
         type: 'number',
         minimum: 0,
         maximum: 1,
         description: 'Confidence in the extracted information (0-1)',
       },
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // SENDER TYPE CLASSIFICATION (NEW Jan 2026)
+      // ═══════════════════════════════════════════════════════════════════════
+
+      // Sender type classification
+      sender_type: {
+        type: 'string',
+        enum: SENDER_TYPES as unknown as string[],
+        description: 'How this sender communicates: direct (real contact), broadcast (newsletter/marketing), cold_outreach (unsolicited but targeted), opportunity (mailing list with optional response), unknown',
+      },
+
+      // Broadcast subtype (only when sender_type is broadcast)
+      broadcast_subtype: {
+        type: 'string',
+        enum: BROADCAST_SUBTYPES as unknown as string[],
+        description: 'For broadcast senders: newsletter_author, company_newsletter, digest_service, transactional',
+      },
+
+      // Confidence in sender type classification
+      sender_type_confidence: {
+        type: 'number',
+        minimum: 0,
+        maximum: 1,
+        description: 'Confidence in the sender_type classification (0-1)',
+      },
+
+      // Reasoning for sender type
+      sender_type_reasoning: {
+        type: 'string',
+        description: 'Brief explanation of why this sender_type was chosen (e.g., "Has unsubscribe link and generic content")',
+      },
     },
-    required: ['has_enrichment', 'source', 'confidence'],
+    required: ['has_enrichment', 'source', 'confidence', 'sender_type', 'sender_type_confidence'],
   },
 };
 
@@ -356,9 +478,24 @@ export class ContactEnricherAnalyzer extends BaseAnalyzer<ContactEnrichmentData>
 
   /**
    * Normalizes the OpenAI response to match our TypeScript interface.
+   * Updated January 2026 to include sender type fields.
    */
   private normalizeResponse(rawData: Record<string, unknown>): ContactEnrichmentData {
+    // Extract sender type data
+    const senderType = rawData.sender_type as SenderType | undefined;
+    const broadcastSubtype = rawData.broadcast_subtype as BroadcastSubtype | undefined;
+
+    // Log sender type detection for debugging
+    this.logger.debug('Contact enrichment result', {
+      hasEnrichment: Boolean(rawData.has_enrichment),
+      senderType,
+      broadcastSubtype,
+      senderTypeConfidence: rawData.sender_type_confidence,
+      senderTypeReasoning: rawData.sender_type_reasoning,
+    });
+
     return {
+      // Original enrichment fields
       hasEnrichment: Boolean(rawData.has_enrichment),
       company: rawData.company as string | undefined,
       jobTitle: rawData.job_title as string | undefined,
@@ -369,6 +506,12 @@ export class ContactEnricherAnalyzer extends BaseAnalyzer<ContactEnrichmentData>
       workAnniversary: rawData.work_anniversary as string | undefined,
       source: (rawData.source as 'signature' | 'email_body' | 'both') || 'email_body',
       confidence: (rawData.confidence as number) || 0.5,
+
+      // Sender type classification (NEW Jan 2026)
+      senderType: senderType || 'unknown',
+      broadcastSubtype: senderType === 'broadcast' ? broadcastSubtype : undefined,
+      senderTypeConfidence: (rawData.sender_type_confidence as number) || 0.5,
+      senderTypeReasoning: rawData.sender_type_reasoning as string | undefined,
     };
   }
 }

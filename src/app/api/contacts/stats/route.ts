@@ -7,16 +7,26 @@
  * GET /api/contacts/stats
  *   Returns:
  *   {
- *     total: number,           // All contacts
- *     vip: number,            // VIP contacts
- *     muted: number,          // Muted contacts
- *     clients: number,        // Contacts with relationship_type = 'client'
- *     lastGoogleSync: string | null,  // Last Google contacts sync timestamp
- *     needsEnrichment: number // Contacts awaiting AI enrichment
+ *     total: number,                    // All contacts
+ *     vip: number,                      // VIP contacts
+ *     muted: number,                    // Muted contacts
+ *     clients: number,                  // Contacts with relationship_type = 'client'
+ *     lastGoogleSync: string | null,    // Last Google contacts sync timestamp
+ *     // ═══════════════════════════════════════════════════════════════════════════
+ *     // SENDER TYPE STATS (NEW Jan 2026)
+ *     // ═══════════════════════════════════════════════════════════════════════════
+ *     bySenderType: {
+ *       direct: number,                 // Real contacts who know you
+ *       broadcast: number,              // Newsletter/marketing senders
+ *       cold_outreach: number,          // Cold emails
+ *       opportunity: number,            // HARO-style mailing lists
+ *       unknown: number,                // Not yet classified
+ *     }
  *   }
  *
  * @module app/api/contacts/stats/route
- * @since January 2026
+ * @version 2.0.0
+ * @since January 2026 (v2: Added sender type stats)
  */
 
 import { NextResponse } from 'next/server';
@@ -58,6 +68,12 @@ export async function GET() {
       mutedResult,
       clientsResult,
       lastSyncResult,
+      // Sender type stats (NEW Jan 2026)
+      directResult,
+      broadcastResult,
+      coldOutreachResult,
+      opportunityResult,
+      unknownResult,
     ] = await Promise.all([
       // Total contacts
       supabase
@@ -94,6 +110,46 @@ export async function GET() {
         .order('contacts_synced_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle(),
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // SENDER TYPE COUNTS (NEW Jan 2026)
+      // These power the tab badges in the contacts UI
+      // ═══════════════════════════════════════════════════════════════════════════
+
+      // Direct contacts (real people who know you)
+      supabase
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('sender_type', 'direct'),
+
+      // Broadcast senders (newsletters, marketing)
+      supabase
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('sender_type', 'broadcast'),
+
+      // Cold outreach (sales, recruiters)
+      supabase
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('sender_type', 'cold_outreach'),
+
+      // Opportunity lists (HARO, etc.)
+      supabase
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('sender_type', 'opportunity'),
+
+      // Unknown/not classified yet
+      supabase
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .or('sender_type.eq.unknown,sender_type.is.null'),
     ]);
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -106,9 +162,24 @@ export async function GET() {
       muted: mutedResult.count || 0,
       clients: clientsResult.count || 0,
       lastGoogleSync: lastSyncResult.data?.contacts_synced_at || null,
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // SENDER TYPE STATS (NEW Jan 2026)
+      // Powers the contacts page tabs (Contacts, Subscriptions, etc.)
+      // ═══════════════════════════════════════════════════════════════════════════
+      bySenderType: {
+        direct: directResult.count || 0,
+        broadcast: broadcastResult.count || 0,
+        cold_outreach: coldOutreachResult.count || 0,
+        opportunity: opportunityResult.count || 0,
+        unknown: unknownResult.count || 0,
+      },
     };
 
-    logger.debug('Contact stats retrieved', stats);
+    logger.debug('Contact stats retrieved', {
+      ...stats,
+      bySenderType: stats.bySenderType,
+    });
 
     return NextResponse.json(stats);
   } catch (error) {
