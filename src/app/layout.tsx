@@ -112,13 +112,8 @@ export const metadata: Metadata = {
   },
   // App-specific
   applicationName: 'IdeaBox',
-  appleWebApp: {
-    // Note: 'capable' removed as it generates deprecated apple-mobile-web-app-capable meta tag
-    // Modern PWA detection uses manifest.json instead
-    statusBarStyle: 'default',
-    title: 'IdeaBox',
-  },
-  // Manifest for PWA
+  // Note: appleWebApp removed as it generates deprecated apple-mobile-web-app-capable meta tag
+  // PWA functionality is handled by manifest.json instead
   manifest: '/manifest.json',
 };
 
