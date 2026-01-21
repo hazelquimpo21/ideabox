@@ -377,23 +377,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
           case 'INITIAL_SESSION':
             // This fires on page load with current session state
             if (session?.user) {
-              await updateUserState(session.user);
+              // Set user immediately with basic info to unblock UI
+              const basicUser = mapToAuthUser(session.user, null, false);
+              setUser(basicUser);
+              setIsLoading(false);
               logger.success('Auth initialized with existing session', {
                 userId: session.user.id
               });
+              // Defer profile fetch to avoid blocking auth callback
+              // Supabase auth has internal locks that can cause deadlocks
+              // when making auth-related calls inside onAuthStateChange
+              setTimeout(() => {
+                if (mounted) {
+                  updateUserState(session.user);
+                }
+              }, 0);
             } else {
               setUser(null);
+              setIsLoading(false);
               logger.success('Auth initialized (no session)');
             }
-            setIsLoading(false);
             break;
 
           case 'SIGNED_IN':
           case 'TOKEN_REFRESHED':
             if (session?.user) {
-              await updateUserState(session.user);
+              // Set user immediately, defer profile fetch
+              const basicUser = mapToAuthUser(session.user, null, false);
+              setUser(basicUser);
+              setIsLoading(false);
+              setTimeout(() => {
+                if (mounted) {
+                  updateUserState(session.user);
+                }
+              }, 0);
+            } else {
+              setIsLoading(false);
             }
-            setIsLoading(false);
             break;
 
           case 'SIGNED_OUT':
@@ -404,16 +424,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
           case 'USER_UPDATED':
             if (session?.user) {
-              await updateUserState(session.user);
+              // Defer profile fetch for user updates as well
+              setTimeout(() => {
+                if (mounted) {
+                  updateUserState(session.user);
+                }
+              }, 0);
             }
             break;
 
           default:
             // Handle other events
             if (session?.user) {
-              await updateUserState(session.user);
+              const basicUser = mapToAuthUser(session.user, null, false);
+              setUser(basicUser);
+              setIsLoading(false);
+              setTimeout(() => {
+                if (mounted) {
+                  updateUserState(session.user);
+                }
+              }, 0);
+            } else {
+              setIsLoading(false);
             }
-            setIsLoading(false);
         }
       }
     );
