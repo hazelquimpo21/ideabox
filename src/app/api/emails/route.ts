@@ -90,6 +90,9 @@ export async function GET(request: NextRequest) {
     // ─────────────────────────────────────────────────────────────────────────────
     // Apply contact email and direction filters (for CRM contact detail page)
     // ─────────────────────────────────────────────────────────────────────────────
+    // For the "all" direction, we need to handle this specially because the
+    // PostgREST or() filter has issues with email addresses containing special chars
+    let useSpecialAllQuery = false;
     if (contactEmail) {
       const emailDirection = direction || 'all';
 
@@ -97,9 +100,6 @@ export async function GET(request: NextRequest) {
         contactEmail,
         direction: emailDirection,
       });
-
-      // Escape email for PostgREST filter syntax (handles @ and other special chars)
-      const escapedEmail = JSON.stringify(contactEmail);
 
       switch (emailDirection) {
         case 'received':
@@ -113,13 +113,123 @@ export async function GET(request: NextRequest) {
           break;
         case 'all':
         default:
-          // Both sent and received - contact is either sender or recipient
-          // Use escaped email value for proper PostgREST filter syntax
-          query = query.or(
-            `sender_email.eq.${escapedEmail},to_addresses.cs.{${escapedEmail}}`
-          );
+          // For "all" direction, we'll do two separate queries and merge
+          // This avoids the problematic or() filter with array contains
+          useSpecialAllQuery = true;
           break;
       }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Handle "all" direction with two separate queries (more robust)
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (useSpecialAllQuery && contactEmail) {
+      // Build base query options for both queries
+      const baseFilters = {
+        user_id: user.id,
+        is_archived: archived === true ? true : false,
+        ...(category && { category }),
+        ...(clientId && { client_id: clientId }),
+        ...(unread !== undefined && { is_read: !unread }),
+        ...(starred !== undefined && { is_starred: starred }),
+      };
+
+      // Query 1: Emails received FROM the contact
+      let receivedQuery = supabase
+        .from('emails')
+        .select('*', { count: 'exact' })
+        .eq('user_id', user.id)
+        .eq('sender_email', contactEmail)
+        .eq('is_archived', archived === true ? true : false);
+
+      // Query 2: Emails sent TO the contact
+      let sentQuery = supabase
+        .from('emails')
+        .select('*', { count: 'exact' })
+        .eq('user_id', user.id)
+        .contains('to_addresses', [contactEmail])
+        .eq('is_archived', archived === true ? true : false);
+
+      // Apply additional filters to both queries
+      if (category) {
+        receivedQuery = receivedQuery.eq('category', category);
+        sentQuery = sentQuery.eq('category', category);
+      }
+      if (clientId) {
+        receivedQuery = receivedQuery.eq('client_id', clientId);
+        sentQuery = sentQuery.eq('client_id', clientId);
+      }
+      if (unread !== undefined) {
+        receivedQuery = receivedQuery.eq('is_read', !unread);
+        sentQuery = sentQuery.eq('is_read', !unread);
+      }
+      if (starred !== undefined) {
+        receivedQuery = receivedQuery.eq('is_starred', starred);
+        sentQuery = sentQuery.eq('is_starred', starred);
+      }
+      if (search) {
+        receivedQuery = receivedQuery.or(`subject.ilike.%${search}%,snippet.ilike.%${search}%`);
+        sentQuery = sentQuery.or(`subject.ilike.%${search}%,snippet.ilike.%${search}%`);
+      }
+
+      // Execute both queries in parallel
+      const [receivedResult, sentResult] = await Promise.all([
+        receivedQuery.order('date', { ascending: false }),
+        sentQuery.order('date', { ascending: false }),
+      ]);
+
+      if (receivedResult.error) {
+        logger.error('Received query failed', { error: receivedResult.error.message });
+        return apiError('Failed to fetch emails', 500);
+      }
+      if (sentResult.error) {
+        logger.error('Sent query failed', { error: sentResult.error.message });
+        return apiError('Failed to fetch emails', 500);
+      }
+
+      // Merge and deduplicate by email ID
+      const emailMap = new Map();
+      const receivedEmails = receivedResult.data || [];
+      const sentEmails = sentResult.data || [];
+
+      // Add received emails first
+      for (const email of receivedEmails) {
+        emailMap.set(email.id, { ...email, direction: 'received' });
+      }
+      // Add sent emails (may overwrite if same email is in both - which is unlikely)
+      for (const email of sentEmails) {
+        if (!emailMap.has(email.id)) {
+          emailMap.set(email.id, { ...email, direction: 'sent' });
+        }
+      }
+
+      // Convert to array and sort by date descending
+      let mergedEmails = Array.from(emailMap.values());
+      mergedEmails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Calculate total count (approximate - may have duplicates counted twice)
+      const totalCount = (receivedResult.count || 0) + (sentResult.count || 0) -
+        (mergedEmails.length < receivedEmails.length + sentEmails.length ?
+          receivedEmails.length + sentEmails.length - mergedEmails.length : 0);
+
+      // Apply pagination to merged results
+      const paginatedEmails = mergedEmails.slice(offset, offset + limit);
+
+      logger.success('Emails fetched (all direction)', {
+        received: receivedEmails.length,
+        sent: sentEmails.length,
+        merged: mergedEmails.length,
+        paginated: paginatedEmails.length,
+        total: totalCount,
+        userId: user.id,
+      });
+
+      return paginatedResponse(
+        paginatedEmails,
+        pagination,
+        mergedEmails.length, // Use actual merged count for accurate pagination
+        request.url
+      );
     }
 
     // Legacy sender filter (for backwards compatibility with inbox?sender=)
