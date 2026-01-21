@@ -5,15 +5,6 @@
  * This sync is metadata-only (no email bodies) and does not use AI analysis,
  * resulting in zero OpenAI costs.
  *
- * ═══════════════════════════════════════════════════════════════════════════════
- * FEATURES
- * ═══════════════════════════════════════════════════════════════════════════════
- * - One-click historical email sync
- * - Configurable time range (3-36 months)
- * - Progress shown in dialog
- * - Shows contact stats impact
- * - Resumable if interrupted
- *
  * @module components/contacts/HistoricalSyncButton
  * @version 1.0.0
  * @since January 2026
@@ -34,9 +25,11 @@ import {
   DialogTitle,
   DialogTrigger,
   Label,
-  RadioGroup,
-  RadioGroupItem,
-  Progress,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui';
 import {
   History,
@@ -145,7 +138,7 @@ export function HistoricalSyncButton({
   // ─────────────────────────────────────────────────────────────────────────────
 
   const alreadySynced = React.useMemo(() => {
-    return accountStatuses.every((a) => a.status === 'completed');
+    return accountStatuses.length > 0 && accountStatuses.every((a) => a.status === 'completed');
   }, [accountStatuses]);
 
   const totalEmailsSynced = React.useMemo(() => {
@@ -242,6 +235,11 @@ export function HistoricalSyncButton({
     return 'Sync History';
   };
 
+  // Get current selection label
+  const selectedOption = HISTORICAL_SYNC_OPTIONS.monthsBackChoices.find(
+    (o) => o.value.toString() === monthsBack
+  );
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────────
@@ -308,7 +306,13 @@ export function HistoricalSyncButton({
         {/* Syncing state */}
         {syncState === 'syncing' && (
           <div className="space-y-4 py-4">
-            <Progress value={progress} className="h-2" />
+            {/* Simple progress bar */}
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{statusMessage}</span>
@@ -351,28 +355,31 @@ export function HistoricalSyncButton({
           <div className="space-y-4 py-4">
             <div className="space-y-3">
               <Label>How far back should we sync?</Label>
-              <RadioGroup value={monthsBack} onValueChange={setMonthsBack}>
-                {HISTORICAL_SYNC_OPTIONS.monthsBackChoices.map((option) => (
-                  <div key={option.value} className="flex items-center space-x-3">
-                    <RadioGroupItem
-                      value={option.value.toString()}
-                      id={`months-${option.value}`}
-                    />
-                    <Label
-                      htmlFor={`months-${option.value}`}
-                      className="flex-1 cursor-pointer"
-                    >
-                      <span className="font-medium">{option.label}</span>
-                      {option.recommended && (
-                        <span className="ml-2 text-xs text-primary">(Recommended)</span>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        {option.description}
-                      </p>
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
+              <Select value={monthsBack} onValueChange={setMonthsBack}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {selectedOption?.label || 'Select time range'}
+                    {selectedOption?.recommended && ' (Recommended)'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {HISTORICAL_SYNC_OPTIONS.monthsBackChoices.map((option) => (
+                    <SelectItem key={option.value} value={option.value.toString()}>
+                      <div className="flex flex-col">
+                        <span>
+                          {option.label}
+                          {option.recommended && (
+                            <span className="ml-2 text-xs text-primary">(Recommended)</span>
+                          )}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {option.description}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground space-y-1">
