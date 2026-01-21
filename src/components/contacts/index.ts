@@ -7,3 +7,4 @@
  */
 
 export { VipSuggestionsModal } from './VipSuggestionsModal';
+export { SyncContactsButton } from './SyncContactsButton';

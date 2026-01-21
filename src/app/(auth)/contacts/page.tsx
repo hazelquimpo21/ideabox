@@ -41,8 +41,10 @@ import {
   Button,
   Input,
   Skeleton,
+  useToast,
 } from '@/components/ui';
 import { useContacts } from '@/hooks/useContacts';
+import { SyncContactsButton } from '@/components/contacts';
 import type { Contact, ContactRelationshipType, ContactStats } from '@/hooks/useContacts';
 import {
   Users,
@@ -61,6 +63,8 @@ import {
   Filter,
   ArrowUpDown,
   ChevronDown,
+  TrendingUp,
+  Sparkles,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
@@ -144,46 +148,60 @@ function formatRelativeTime(dateString: string | null): string {
 
 /**
  * Stats cards showing contact statistics.
+ * Shows totals with subtle animations and helpful context.
  */
-function StatsCards({ stats }: { stats: ContactStats }) {
+function StatsCards({ stats, isLoading }: { stats: ContactStats; isLoading?: boolean }) {
+  const statItems = [
+    {
+      icon: Users,
+      value: stats.total,
+      label: 'Total Contacts',
+      color: 'text-muted-foreground',
+      hint: 'People you\'ve emailed',
+    },
+    {
+      icon: Star,
+      value: stats.vip,
+      label: 'VIP Contacts',
+      color: 'text-yellow-500',
+      hint: 'Priority inbox',
+    },
+    {
+      icon: Building2,
+      value: stats.clients,
+      label: 'Clients',
+      color: 'text-blue-500',
+      hint: 'Business relationships',
+    },
+    {
+      icon: VolumeX,
+      value: stats.muted,
+      label: 'Muted',
+      color: 'text-gray-500',
+      hint: 'Hidden from inbox',
+    },
+  ];
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="text-2xl font-bold">{stats.total}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Total Contacts</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <Star className="h-4 w-4 text-yellow-500" />
-            <span className="text-2xl font-bold">{stats.vip}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">VIP Contacts</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-blue-500" />
-            <span className="text-2xl font-bold">{stats.clients}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Clients</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <VolumeX className="h-4 w-4 text-gray-500" />
-            <span className="text-2xl font-bold">{stats.muted}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Muted</p>
-        </CardContent>
-      </Card>
+      {statItems.map((item) => (
+        <Card key={item.label} className="hover:border-primary/20 transition-colors group">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <item.icon className={`h-4 w-4 ${item.color}`} />
+              {isLoading ? (
+                <Skeleton className="h-7 w-12" />
+              ) : (
+                <span className="text-2xl font-bold tabular-nums">{item.value}</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{item.label}</p>
+            <p className="text-[10px] text-muted-foreground/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {item.hint}
+            </p>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -419,33 +437,61 @@ function ContactCardSkeleton() {
 
 /**
  * Empty state when no contacts match filters.
+ * Provides helpful context and actions based on the current filter.
  */
-function EmptyState({ activeTab }: { activeTab: string }) {
-  const messages: Record<string, { title: string; description: string }> = {
+function EmptyState({
+  activeTab,
+  hasSearch,
+  onSyncGoogle,
+}: {
+  activeTab: string;
+  hasSearch?: boolean;
+  onSyncGoogle?: () => void;
+}) {
+  const messages: Record<string, { title: string; description: string; icon: typeof Users; action?: string }> = {
     all: {
-      title: 'No contacts yet',
-      description: 'Contacts will appear here as you receive and process emails.',
+      title: hasSearch ? 'No matches found' : 'No contacts yet',
+      description: hasSearch
+        ? 'Try a different search term or clear the filter.'
+        : 'Sync your Google contacts or process some emails to see your network here.',
+      icon: hasSearch ? Search : Users,
+      action: hasSearch ? undefined : 'sync',
     },
     vip: {
       title: 'No VIP contacts',
-      description: 'Mark important contacts as VIP to see them here.',
+      description: 'Mark your most important contacts as VIP and they\'ll get priority in your inbox.',
+      icon: Star,
     },
     muted: {
       title: 'No muted contacts',
-      description: 'Muted contacts will appear here.',
+      description: 'Mute contacts to hide their emails from your inbox. Great for newsletters!',
+      icon: VolumeX,
     },
   };
 
-  const { title, description } = messages[activeTab] || messages.all;
+  const config = messages[activeTab] || messages.all;
+  const Icon = config.icon;
 
   return (
-    <Card className="border-dashed">
+    <Card className="border-dashed border-2 bg-muted/5">
       <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-          <Users className="h-6 w-6 text-muted-foreground" />
+        <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Icon className="h-7 w-7 text-muted-foreground" />
         </div>
-        <CardTitle className="text-lg mb-2">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardTitle className="text-lg mb-2">{config.title}</CardTitle>
+        <CardDescription className="max-w-sm">{config.description}</CardDescription>
+
+        {config.action === 'sync' && onSyncGoogle && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSyncGoogle}
+            className="mt-4 gap-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            Import from Google
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -536,9 +582,20 @@ export default function ContactsPage() {
     loadMore,
     hasMore,
     stats,
+    refreshStats,
     toggleVip,
     toggleMuted,
   } = useContacts(filterOptions);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Handle sync completion - refresh both contacts and stats
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const handleSyncComplete = React.useCallback(() => {
+    logger.info('Google sync complete, refreshing data');
+    refetch();
+    refreshStats();
+  }, [refetch, refreshStats]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Event Handlers
@@ -569,6 +626,18 @@ export default function ContactsPage() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Sync handler for empty state
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const handleSyncFromEmptyState = async () => {
+    // Trigger the sync button programmatically - we'll use a ref
+    const syncButton = document.querySelector('[data-sync-button]') as HTMLButtonElement;
+    if (syncButton) {
+      syncButton.click();
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -577,30 +646,45 @@ export default function ContactsPage() {
       {/* Page Header */}
       <PageHeader
         title="Contacts"
-        description="People you've exchanged emails with, automatically organized."
+        description="Your network, organized. People you've exchanged emails with."
         breadcrumbs={[
           { label: 'Home', href: '/' },
           { label: 'Contacts' },
         ]}
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isLoading}
-            className="gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <SyncContactsButton
+              onSyncComplete={handleSyncComplete}
+              variant="default"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isLoading}
+              title="Refresh contact list"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         }
       />
 
       {/* Error Banner */}
       {error && <ErrorBanner error={error} onRetry={refetch} />}
 
-      {/* Stats Cards */}
-      {!isLoading && <StatsCards stats={stats} />}
+      {/* Last sync indicator */}
+      {stats.lastGoogleSync && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4">
+          <Clock className="h-3 w-3" />
+          <span>
+            Google synced {formatRelativeTime(stats.lastGoogleSync)}
+          </span>
+        </div>
+      )}
+
+      {/* Stats Cards - always show but with loading state */}
+      <StatsCards stats={stats} isLoading={isLoading} />
 
       {/* Filters */}
       <ContactFilters
@@ -624,11 +708,26 @@ export default function ContactsPage() {
             <ContactCardSkeleton />
           </>
         ) : contacts.length === 0 ? (
-          // Empty state
-          <EmptyState activeTab={activeTab} />
+          // Empty state with context-aware messaging
+          <EmptyState
+            activeTab={activeTab}
+            hasSearch={!!debouncedSearch}
+            onSyncGoogle={handleSyncFromEmptyState}
+          />
         ) : (
           // Contact cards
           <>
+            {/* Results summary */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground pb-2">
+              <span>
+                {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
+                {debouncedSearch && ` matching "${debouncedSearch}"`}
+              </span>
+              {hasMore && (
+                <span className="text-xs">Scroll for more</span>
+              )}
+            </div>
+
             {contacts.map((contact) => (
               <ContactCard
                 key={contact.id}
@@ -640,9 +739,10 @@ export default function ContactsPage() {
 
             {/* Load More Button */}
             {hasMore && (
-              <div className="flex justify-center pt-4">
+              <div className="flex justify-center pt-4 pb-8">
                 <Button variant="outline" onClick={loadMore} className="gap-2">
-                  Load More
+                  <TrendingUp className="h-4 w-4" />
+                  Load More Contacts
                 </Button>
               </div>
             )}
