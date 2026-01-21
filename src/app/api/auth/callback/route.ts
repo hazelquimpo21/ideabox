@@ -32,6 +32,9 @@ import { cookies } from 'next/headers';
 import { createLogger, logAuth } from '@/lib/utils/logger';
 import { gmailWatchService } from '@/lib/gmail/watch-service';
 import { ADD_ACCOUNT_COOKIE, ORIGINAL_SESSION_COOKIE } from '@/app/api/auth/connect-account/route';
+
+// Cookie name for add_scope flow (from add-contacts-scope route)
+const ADD_SCOPE_COOKIE = 'ideabox_add_scope_user_id';
 import { ADD_GMAIL_COOKIE, OAUTH_STATE_COOKIE } from '@/app/api/auth/add-gmail-account/route';
 import type { Database, TableInsert } from '@/types/database';
 import { createServerClient as createSupabaseServer } from '@/lib/supabase/server';
@@ -99,6 +102,7 @@ export async function GET(request: Request) {
   // This is more reliable than URL params which may not survive OAuth redirects
   const cookieStore = await cookies();
   const addAccountCookieValue = cookieStore.get(ADD_ACCOUNT_COOKIE)?.value ?? null;
+  const addScopeCookieValue = cookieStore.get(ADD_SCOPE_COOKIE)?.value ?? null;
   const originalSessionCookieValue = cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value ?? null;
 
   // DEBUG: Log ALL cookies to understand what's being sent
@@ -116,6 +120,10 @@ export async function GET(request: Request) {
   // The cookie is the reliable source of truth since we set it ourselves
   // The URL param may get lost during the OAuth redirect chain through external systems
   const isAddAccountMode = !!addAccountCookieValue || modeParam === 'add_account';
+
+  // Check if this is "add scope" mode (adding contacts permission)
+  const isAddScopeMode = !!addScopeCookieValue || modeParam === 'add_scope';
+  const returnToPath = searchParams.get('returnTo') || '/contacts';
 
   logger.start('Processing OAuth callback', {
     hasCode: !!code,
@@ -556,7 +564,14 @@ export async function GET(request: Request) {
 
   let redirectPath: string;
 
-  if (isAddAccountMode && originalUserIdFromCookie) {
+  if (isAddScopeMode) {
+    // "Add scope" mode - redirect back to contacts (or returnTo path)
+    redirectPath = `${returnToPath}?scope_added=true`;
+    logger.success('Add scope flow complete - contacts permission granted', {
+      userId: user.id.substring(0, 8),
+      email: user.email,
+    });
+  } else if (isAddAccountMode && originalUserIdFromCookie) {
     // "Add account" mode - redirect back to settings with success message
     redirectPath = '/settings?tab=account&account_added=true';
     logger.success('Add account flow complete', {
@@ -650,6 +665,24 @@ export async function GET(request: Request) {
   // Clear the add_account cookies if they were used
   if (isAddAccountMode) {
     response.cookies.set(ADD_ACCOUNT_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 0, // Delete the cookie
+    });
+    response.cookies.set(ORIGINAL_SESSION_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 0, // Delete the cookie
+    });
+  }
+
+  // Clear the add_scope cookies if they were used
+  if (isAddScopeMode) {
+    response.cookies.set(ADD_SCOPE_COOKIE, '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
