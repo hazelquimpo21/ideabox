@@ -189,3 +189,14 @@ export {
   type TabsTriggerProps,
   type TabsContentProps,
 } from './tabs';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PAGINATION COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export {
+  Pagination,
+  usePaginationInfo,
+  type PaginationProps,
+  type PaginationInfo,
+} from './pagination';

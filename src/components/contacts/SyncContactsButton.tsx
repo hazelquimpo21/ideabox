@@ -2,16 +2,19 @@
  * Sync Contacts Button Component
  *
  * A smart button that allows users to sync their Google contacts at any time.
- * Shows sync status, progress, and results with friendly feedback.
+ * Integrates with the ContactsSyncStatusContext to show progress in the global banner.
  *
- * Features:
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * FEATURES
+ * ═══════════════════════════════════════════════════════════════════════════════
  * - One-click sync from Google
+ * - Progress shown in global SyncStatusBanner
  * - Visual feedback during sync
  * - Success/error states with helpful messages
- * - Shows last sync time
  * - Handles missing permissions gracefully
  *
  * @module components/contacts/SyncContactsButton
+ * @version 2.0.0
  * @since January 2026
  */
 
@@ -29,6 +32,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import { useContactsSyncStatus } from '@/lib/contexts/sync-status-context';
 import { createLogger } from '@/lib/utils/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -57,7 +61,7 @@ export interface SyncResult {
   errors: string[];
 }
 
-type SyncState = 'idle' | 'syncing' | 'success' | 'error' | 'needs-permission';
+type LocalSyncState = 'idle' | 'success' | 'error' | 'needs-permission';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
@@ -68,23 +72,45 @@ export function SyncContactsButton({
   variant = 'default',
   className = '',
 }: SyncContactsButtonProps) {
-  const [syncState, setSyncState] = React.useState<SyncState>('idle');
+  // ─────────────────────────────────────────────────────────────────────────────
+  // State and Context
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const [localState, setLocalState] = React.useState<LocalSyncState>('idle');
   const [lastResult, setLastResult] = React.useState<SyncResult | null>(null);
   const { toast } = useToast();
 
-  // Reset success state after a delay
+  // Get sync status from context - provides global progress tracking
+  const {
+    isActive: isSyncing,
+    startSync,
+    completeSync,
+    failSync,
+  } = useContactsSyncStatus();
+
+  // Reset success/error state after a delay
   React.useEffect(() => {
-    if (syncState === 'success' || syncState === 'error') {
-      const timer = setTimeout(() => setSyncState('idle'), 3000);
+    if (localState === 'success' || localState === 'error') {
+      const timer = setTimeout(() => setLocalState('idle'), 3000);
       return () => clearTimeout(timer);
     }
-  }, [syncState]);
+  }, [localState]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Sync Handler
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const handleSync = async () => {
-    if (syncState === 'syncing') return;
+    // Don't start new sync if one is already in progress
+    if (isSyncing) {
+      logger.debug('Sync already in progress, ignoring request');
+      return;
+    }
 
-    setSyncState('syncing');
     logger.start('Syncing Google contacts');
+
+    // Start sync in context - this shows the banner
+    await startSync('contacts');
 
     try {
       const response = await fetch('/api/contacts/import-google', {
@@ -96,10 +122,13 @@ export function SyncContactsButton({
         }),
       });
 
+      // Handle permission issues
       if (response.status === 403) {
         const data = await response.json();
         if (data.needsReauthorization) {
-          setSyncState('needs-permission');
+          setLocalState('needs-permission');
+          failSync('Contacts permission not granted');
+
           toast({
             title: 'Permission needed',
             description: 'Please grant contacts access to sync from Google.',
@@ -125,9 +154,16 @@ export function SyncContactsButton({
 
       const result: SyncResult = await response.json();
       setLastResult(result);
-      setSyncState('success');
+      setLocalState('success');
 
-      // Show friendly feedback
+      // Complete sync in context - this updates the banner
+      completeSync({
+        imported: result.imported,
+        skipped: result.skipped,
+        errors: result.errors,
+      });
+
+      // Show friendly feedback via toast
       if (result.imported > 0) {
         toast({
           title: 'Contacts synced!',
@@ -148,12 +184,17 @@ export function SyncContactsButton({
       logger.success('Google contacts synced', {
         imported: result.imported,
         starred: result.starred,
+        skipped: result.skipped,
       });
 
       onSyncComplete?.(result);
     } catch (error) {
-      setSyncState('error');
+      setLocalState('error');
       const message = error instanceof Error ? error.message : 'Unknown error';
+
+      // Fail sync in context
+      failSync(message);
+
       logger.error('Failed to sync contacts', { error: message });
 
       toast({
@@ -165,13 +206,15 @@ export function SyncContactsButton({
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Render based on variant
+  // Render Helpers
   // ─────────────────────────────────────────────────────────────────────────────
 
   const getIcon = () => {
-    switch (syncState) {
-      case 'syncing':
-        return <Loader2 className="h-4 w-4 animate-spin" />;
+    if (isSyncing) {
+      return <Loader2 className="h-4 w-4 animate-spin" />;
+    }
+
+    switch (localState) {
       case 'success':
         return <Check className="h-4 w-4 text-green-500" />;
       case 'error':
@@ -184,9 +227,11 @@ export function SyncContactsButton({
   };
 
   const getLabel = () => {
-    switch (syncState) {
-      case 'syncing':
-        return 'Syncing...';
+    if (isSyncing) {
+      return 'Syncing...';
+    }
+
+    switch (localState) {
       case 'success':
         return lastResult?.imported ? `+${lastResult.imported}` : 'Synced';
       case 'error':
@@ -198,6 +243,10 @@ export function SyncContactsButton({
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────────
+
   // Compact variant - icon only with title tooltip
   if (variant === 'compact') {
     return (
@@ -205,9 +254,10 @@ export function SyncContactsButton({
         variant="ghost"
         size="icon"
         onClick={handleSync}
-        disabled={syncState === 'syncing'}
+        disabled={isSyncing}
         className={className}
         title="Sync contacts from Google"
+        data-sync-button
       >
         {getIcon()}
       </Button>
@@ -221,13 +271,14 @@ export function SyncContactsButton({
         <Button
           variant="outline"
           onClick={handleSync}
-          disabled={syncState === 'syncing'}
+          disabled={isSyncing}
           className="gap-2"
+          data-sync-button
         >
           {getIcon()}
           <span>{getLabel()}</span>
         </Button>
-        {lastResult && syncState === 'success' && (
+        {lastResult && localState === 'success' && (
           <span className="text-xs text-muted-foreground">
             {lastResult.imported} new, {lastResult.starred} starred
           </span>
@@ -242,8 +293,9 @@ export function SyncContactsButton({
       variant="outline"
       size="sm"
       onClick={handleSync}
-      disabled={syncState === 'syncing'}
+      disabled={isSyncing}
       className={`gap-2 ${className}`}
+      data-sync-button
     >
       {getIcon()}
       <span>{getLabel()}</span>

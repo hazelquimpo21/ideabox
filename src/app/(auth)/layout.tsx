@@ -26,8 +26,9 @@
 import * as React from 'react';
 import { useAuth } from '@/lib/auth';
 import { ProtectedRoute } from '@/components/auth';
-import { Navbar, Sidebar } from '@/components/layout';
+import { Navbar, Sidebar, SyncStatusBanner } from '@/components/layout';
 import { useSidebarData, useSyncStatus } from '@/hooks';
+import { ContactsSyncStatusProvider } from '@/lib/contexts/sync-status-context';
 import { createLogger } from '@/lib/utils/logger';
 import { useToast } from '@/components/ui';
 
@@ -125,44 +126,49 @@ export default function AuthLayout({
 
   return (
     <ProtectedRoute requireOnboarding>
-      <div className="min-h-screen bg-background">
-        {/* Navbar */}
-        <Navbar
-          user={user ? {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            avatarUrl: user.avatarUrl,
-          } : null}
-          syncStatus={{
-            isSyncing,
-            lastSyncAt: lastSyncAt || null,
-          }}
-          onSearch={handleSearch}
-          onSync={handleSync}
-          onLogout={handleLogout}
-          onMenuToggle={toggleSidebar}
-        />
-
-        {/* Main Content Area */}
-        <div className="flex">
-          {/* Sidebar */}
-          <Sidebar
-            isOpen={isSidebarOpen}
-            onClose={closeSidebar}
-            categoryCounts={categoryCounts}
-            clients={clients}
-            upcomingEvents={upcomingEvents}
+      <ContactsSyncStatusProvider>
+        <div className="min-h-screen bg-background">
+          {/* Navbar */}
+          <Navbar
+            user={user ? {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              avatarUrl: user.avatarUrl,
+            } : null}
+            syncStatus={{
+              isSyncing,
+              lastSyncAt: lastSyncAt || null,
+            }}
+            onSearch={handleSearch}
+            onSync={handleSync}
+            onLogout={handleLogout}
+            onMenuToggle={toggleSidebar}
           />
 
-          {/* Page Content */}
-          <main className="flex-1 min-h-[calc(100vh-64px)]">
-            <div className="container py-6 px-4 md:px-6 lg:px-8 max-w-7xl">
-              {children}
-            </div>
-          </main>
+          {/* Sync Status Banner - shows during Google contacts import */}
+          <SyncStatusBanner />
+
+          {/* Main Content Area */}
+          <div className="flex">
+            {/* Sidebar */}
+            <Sidebar
+              isOpen={isSidebarOpen}
+              onClose={closeSidebar}
+              categoryCounts={categoryCounts}
+              clients={clients}
+              upcomingEvents={upcomingEvents}
+            />
+
+            {/* Page Content */}
+            <main className="flex-1 min-h-[calc(100vh-64px)]">
+              <div className="container py-6 px-4 md:px-6 lg:px-8 max-w-7xl">
+                {children}
+              </div>
+            </main>
+          </div>
         </div>
-      </div>
+      </ContactsSyncStatusProvider>
     </ProtectedRoute>
   );
 }

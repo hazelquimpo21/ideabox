@@ -63,7 +63,17 @@ export async function GET(request: NextRequest) {
     // Validate query parameters
     const queryResult = validateQuery(request, emailQuerySchema);
     if (queryResult instanceof Response) return queryResult;
-    const { category, clientId, unread, starred, archived, search } = queryResult;
+    const {
+      category,
+      clientId,
+      unread,
+      starred,
+      archived,
+      search,
+      contactEmail,
+      direction,
+      sender,
+    } = queryResult;
 
     // Get pagination parameters
     const pagination = getPagination(request);
@@ -77,7 +87,46 @@ export async function GET(request: NextRequest) {
       .order('date', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    // Apply filters
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Apply contact email and direction filters (for CRM contact detail page)
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (contactEmail) {
+      const emailDirection = direction || 'all';
+
+      logger.debug('Filtering by contact email', {
+        contactEmail,
+        direction: emailDirection,
+      });
+
+      switch (emailDirection) {
+        case 'received':
+          // Emails received FROM the contact (they are the sender)
+          query = query.eq('sender_email', contactEmail);
+          break;
+        case 'sent':
+          // Emails sent TO the contact (user is sender, contact is in recipients)
+          // Check if contact email is in to_addresses array
+          query = query.contains('to_addresses', [contactEmail]);
+          break;
+        case 'all':
+        default:
+          // Both sent and received - contact is either sender or recipient
+          query = query.or(
+            `sender_email.eq.${contactEmail},to_addresses.cs.{${contactEmail}}`
+          );
+          break;
+      }
+    }
+
+    // Legacy sender filter (for backwards compatibility with inbox?sender=)
+    if (sender && !contactEmail) {
+      logger.debug('Filtering by sender (legacy)', { sender });
+      query = query.ilike('sender_email', `%${sender}%`);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Apply standard filters
+    // ─────────────────────────────────────────────────────────────────────────────
     if (category) {
       query = query.eq('category', category);
     }
@@ -114,14 +163,41 @@ export async function GET(request: NextRequest) {
       return apiError('Failed to fetch emails', 500);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Enrich emails with direction field when filtering by contactEmail
+    // This allows the UI to show sent/received badges in the "all" view
+    // ─────────────────────────────────────────────────────────────────────────────
+    let enrichedData = data || [];
+    if (contactEmail && enrichedData.length > 0) {
+      const normalizedContactEmail = contactEmail.toLowerCase();
+      enrichedData = enrichedData.map((email) => {
+        // Check if contact is the sender (received) or in recipients (sent)
+        const isSender = email.sender_email?.toLowerCase() === normalizedContactEmail;
+        const isRecipient = email.to_addresses?.some(
+          (addr: string) => addr.toLowerCase() === normalizedContactEmail
+        );
+
+        return {
+          ...email,
+          direction: isSender ? 'received' : isRecipient ? 'sent' : 'unknown',
+        };
+      });
+
+      logger.debug('Enriched emails with direction', {
+        total: enrichedData.length,
+        received: enrichedData.filter((e) => e.direction === 'received').length,
+        sent: enrichedData.filter((e) => e.direction === 'sent').length,
+      });
+    }
+
     logger.success('Emails fetched', {
-      count: data?.length || 0,
+      count: enrichedData.length,
       total: count,
       userId: user.id,
     });
 
     return paginatedResponse(
-      data || [],
+      enrichedData,
       pagination,
       count || 0,
       request.url

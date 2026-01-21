@@ -58,10 +58,23 @@ export const emailCategorySchema = z.enum([
 ]);
 
 /**
+ * Email direction type for contact-based filtering.
+ * - 'all': Both sent and received emails
+ * - 'received': Only emails received from the contact
+ * - 'sent': Only emails sent to the contact
+ */
+export const emailDirectionSchema = z.enum(['all', 'received', 'sent']);
+
+export type EmailDirection = z.infer<typeof emailDirectionSchema>;
+
+/**
  * Email list query parameters.
  *
  * @example
  * GET /api/emails?category=action_required&unread=true&limit=20
+ *
+ * @example Filter by contact email and direction
+ * GET /api/emails?contactEmail=john@example.com&direction=all
  */
 export const emailQuerySchema = paginationSchema.extend({
   category: emailCategorySchema.optional(),
@@ -70,6 +83,11 @@ export const emailQuerySchema = paginationSchema.extend({
   starred: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
   archived: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
   search: z.string().min(1).max(100).optional(),
+  // ─── Contact email filtering (for CRM contact detail page) ───────────────────
+  contactEmail: z.string().email().optional(),
+  direction: emailDirectionSchema.optional(),
+  // ─── Sender filtering (legacy - use contactEmail + direction instead) ────────
+  sender: z.string().optional(),
 });
 
 export type EmailQueryParams = z.infer<typeof emailQuerySchema>;

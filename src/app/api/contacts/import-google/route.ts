@@ -48,6 +48,7 @@ import { requireAuth } from '@/lib/api/utils';
 import { TokenManager } from '@/lib/gmail/token-manager';
 import { contactService } from '@/services/contacts';
 import { createLogger } from '@/lib/utils/logger';
+import { updateSyncProgress } from '../sync-progress/route';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Step 4: Import contacts from each account
+    // Step 4: Initialize progress tracking
     // ─────────────────────────────────────────────────────────────────────────────
     const tokenManager = new TokenManager(supabase);
     let totalImported = 0;
@@ -133,10 +134,39 @@ export async function POST(request: NextRequest) {
     let totalSkipped = 0;
     const allErrors: string[] = [];
 
-    for (const account of accounts) {
+    // Initialize progress in database for polling
+    await updateSyncProgress(supabase, user.id, {
+      status: 'in_progress',
+      type: 'contacts',
+      progress: 0,
+      imported: 0,
+      estimatedTotal: maxContacts * accounts.length,
+      skipped: 0,
+      message: `Starting import from ${accounts.length} account(s)...`,
+      startedAt: new Date().toISOString(),
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Step 5: Import contacts from each account
+    // ─────────────────────────────────────────────────────────────────────────────
+    for (let i = 0; i < accounts.length; i++) {
+      const account = accounts[i];
+      const accountProgress = Math.round((i / accounts.length) * 100);
+
       logger.info('Importing contacts from account', {
         accountId: account.id.substring(0, 8),
         email: account.email,
+        accountIndex: i + 1,
+        totalAccounts: accounts.length,
+      });
+
+      // Update progress with current account
+      await updateSyncProgress(supabase, user.id, {
+        progress: accountProgress,
+        imported: totalImported,
+        skipped: totalSkipped,
+        currentAccount: account.email,
+        message: `Importing from ${account.email}...`,
       });
 
       try {
@@ -156,6 +186,15 @@ export async function POST(request: NextRequest) {
         totalStarred += result.starred;
         totalSkipped += result.skipped;
         allErrors.push(...result.errors);
+
+        // Update progress after account completes
+        const completedProgress = Math.round(((i + 1) / accounts.length) * 100);
+        await updateSyncProgress(supabase, user.id, {
+          progress: completedProgress,
+          imported: totalImported,
+          skipped: totalSkipped,
+          message: `Imported ${result.imported} contacts from ${account.email}`,
+        });
 
         logger.info('Account import complete', {
           accountId: account.id.substring(0, 8),
@@ -178,17 +217,34 @@ export async function POST(request: NextRequest) {
           });
           allErrors.push(`${account.email}: ${message}`);
         }
+
+        // Update progress even on error
+        await updateSyncProgress(supabase, user.id, {
+          progress: Math.round(((i + 1) / accounts.length) * 100),
+          imported: totalImported,
+          skipped: totalSkipped,
+          message: `Error importing from ${account.email}`,
+        });
       }
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Step 5: Check if any imports succeeded
+    // Step 6: Check if any imports succeeded
     // ─────────────────────────────────────────────────────────────────────────────
     if (totalImported === 0 && allErrors.length > 0) {
       // All accounts failed - check if it's a permission issue
       const isPermissionIssue = allErrors.some(
         (e) => e.includes('permission') || e.includes('scope')
       );
+
+      // Mark progress as error
+      await updateSyncProgress(supabase, user.id, {
+        status: 'error',
+        progress: 100,
+        message: isPermissionIssue ? 'Contacts permission not granted' : 'Import failed',
+        error: allErrors.join('; '),
+        completedAt: new Date().toISOString(),
+      });
 
       if (isPermissionIssue) {
         logger.info('Contacts permission not available');
@@ -201,6 +257,18 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Step 7: Mark progress as complete
+    // ─────────────────────────────────────────────────────────────────────────────
+    await updateSyncProgress(supabase, user.id, {
+      status: 'completed',
+      progress: 100,
+      imported: totalImported,
+      skipped: totalSkipped,
+      message: `Imported ${totalImported} contacts${totalSkipped ? `, skipped ${totalSkipped}` : ''}`,
+      completedAt: new Date().toISOString(),
+    });
 
     logger.success('Google contacts import complete', {
       userId: user.id.substring(0, 8),
@@ -219,6 +287,23 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Error importing Google contacts', { error: message });
+
+    // Try to mark progress as error (may fail if auth issue)
+    try {
+      const supabase = await createServerClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await updateSyncProgress(supabase, user.id, {
+          status: 'error',
+          progress: 0,
+          message: 'Import failed',
+          error: message,
+          completedAt: new Date().toISOString(),
+        });
+      }
+    } catch {
+      // Ignore - we're already in error handling
+    }
 
     return NextResponse.json(
       { error: 'Failed to import contacts' },
