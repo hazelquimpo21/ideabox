@@ -146,6 +146,7 @@ export type {
   UseEventsOptions,
   UseEventsReturn,
   EventData,
+  EventMetadata,
   GroupedEvents,
   EventStats,
   EventsSummary,
