@@ -20,17 +20,31 @@
  */
 
 /**
- * Email categories (action-focused).
- * "client" is NOT a category - client relationship is tracked via client_id.
+ * Email categories (life-bucket focused).
+ *
+ * These categories represent different areas of the user's life, not actions.
+ * Actions are tracked separately via the `actions` table.
+ *
+ * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
+ * This allows emails to be organized by what part of the user's life they touch,
+ * while action tracking remains a separate concern.
+ *
+ * The AI analyzer uses human-eye inference to categorize - it considers sender
+ * context, domain patterns, and content to make smart categorization decisions.
  */
 export type EmailCategory =
-  | 'action_required'
-  | 'event'
-  | 'newsletter'
-  | 'promo'
-  | 'admin'
-  | 'personal'
-  | 'noise';
+  | 'newsletters_general'           // Substacks, digests, curated content
+  | 'news_politics'                 // News outlets, political updates
+  | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
+  | 'local'                         // Community events, neighborhood, local orgs
+  | 'shopping'                      // Orders, shipping, deals, retail
+  | 'travel'                        // Flights, hotels, bookings, trip info
+  | 'finance'                       // Bills, banking, investments, receipts
+  | 'family_kids_school'            // School emails, activities, kid logistics
+  | 'family_health_appointments'    // Medical, appointments, family scheduling
+  | 'client_pipeline'               // Direct client correspondence, project work
+  | 'business_work_general'         // Team/internal, industry stuff, professional
+  | 'personal_friends_family';      // Social, relationships, personal correspondence
 
 /**
  * Action types that can be extracted from emails.
@@ -680,10 +694,22 @@ export type QuickActionDb =
   | 'none';
 
 /**
- * Event location type.
+ * Event format type - describes how attendees participate.
  * Stored in event_detection JSONB as location_type.
  */
 export type EventLocationTypeDb = 'in_person' | 'virtual' | 'hybrid' | 'unknown';
+
+/**
+ * Event locality type - describes where the event is relative to the user.
+ * Stored in event_detection JSONB as event_locality.
+ *
+ * ADDED (Jan 2026): Helps users understand if travel is required.
+ * - local: Event is in or near the user's metro area
+ * - out_of_town: Event requires travel to another city
+ * - virtual: Event is online-only (no physical location)
+ * - null: Unknown or not applicable
+ */
+export type EventLocalityDb = 'local' | 'out_of_town' | 'virtual' | null;
 
 /**
  * Categorization JSONB structure.
@@ -727,16 +753,21 @@ export interface ClientTaggingJsonb {
 
 /**
  * Event detection JSONB structure.
- * Only present when category === 'event'.
+ * Only present when email contains an event.
  * Added Jan 2026 for calendar integration.
+ *
+ * ENHANCED (Jan 2026): Added event_locality field to distinguish between
+ * local events, out-of-town events, and virtual events.
  */
 export interface EventDetectionJsonb {
   has_event: boolean;
   event_title: string;
-  event_date: string;
-  event_time?: string;
-  event_end_time?: string;
+  event_date: string;           // Start date (required) - ISO YYYY-MM-DD
+  event_time?: string;          // Start time - HH:MM 24-hour format
+  event_end_date?: string;      // End date (for multi-day events) - ISO YYYY-MM-DD
+  event_end_time?: string;      // End time - HH:MM 24-hour format
   location_type: EventLocationTypeDb;
+  event_locality?: EventLocalityDb;  // NEW: local, out_of_town, virtual
   location?: string;
   registration_deadline?: string;
   rsvp_required: boolean;
@@ -744,6 +775,10 @@ export interface EventDetectionJsonb {
   organizer?: string;
   cost?: string;
   additional_details?: string;
+  /** Is this a key date (deadline, registration date) rather than an event? */
+  is_key_date?: boolean;
+  /** Type of key date if applicable */
+  key_date_type?: 'registration_deadline' | 'open_house' | 'deadline' | 'release_date' | 'other';
   confidence: number;
 }
 

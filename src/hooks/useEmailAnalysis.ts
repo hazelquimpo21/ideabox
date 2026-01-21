@@ -65,7 +65,10 @@ export interface ClientTaggingResult {
 
 /**
  * Event detection result from AI analyzer.
- * Only present when email category is 'event'.
+ * Present when email has the `has_event` label (since Jan 2026, events are
+ * no longer a primary category but detected via labels).
+ *
+ * ENHANCED (Jan 2026): Added locality, multi-day support, and key date detection.
  */
 export interface EventDetectionResult {
   hasEvent: boolean;
@@ -73,7 +76,11 @@ export interface EventDetectionResult {
   eventDate: string;
   eventTime?: string;
   eventEndTime?: string;
+  /** End date for multi-day events (NEW Jan 2026) */
+  eventEndDate?: string;
   locationType: 'in_person' | 'virtual' | 'hybrid' | 'unknown';
+  /** Event locality relative to user (NEW Jan 2026) */
+  eventLocality?: 'local' | 'out_of_town' | 'virtual' | null;
   location?: string;
   registrationDeadline?: string;
   rsvpRequired: boolean;
@@ -85,6 +92,10 @@ export interface EventDetectionResult {
   eventSummary?: string;
   /** 2-4 key bullet points about the event */
   keyPoints?: string[];
+  /** Whether this is a key date vs full event (NEW Jan 2026) */
+  isKeyDate?: boolean;
+  /** Type of key date if isKeyDate is true (NEW Jan 2026) */
+  keyDateType?: 'registration_deadline' | 'open_house' | 'deadline' | 'release_date' | 'other';
   confidence: number;
 }
 

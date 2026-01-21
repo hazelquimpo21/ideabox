@@ -260,20 +260,28 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       setHasMore((data?.length || 0) >= limit);
 
       // Calculate stats from fetched data (simplified - in production, use a separate stats query)
+      // REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
+      // - actionRequired now counts client_pipeline + business_work_general (work emails)
+      // - events now uses label detection from analysis (has_event label)
       const fetchedEmails = data || [];
       setStats({
         total: count || fetchedEmails.length,
         unread: fetchedEmails.filter((e) => !e.is_read).length,
-        actionRequired: fetchedEmails.filter((e) => e.category === 'action_required').length,
+        actionRequired: fetchedEmails.filter((e) =>
+          e.category === 'client_pipeline' || e.category === 'business_work_general'
+        ).length,
         starred: fetchedEmails.filter((e) => e.is_starred).length,
-        events: fetchedEmails.filter((e) => e.category === 'event').length,
+        // Events are detected via analysis, not category - placeholder count
+        events: 0, // Will be populated from analysis data below
       });
 
-      // Fetch event data for event emails if requested
+      // Fetch event data for emails with event analysis if requested
+      // REFACTORED (Jan 2026): Events are detected via has_event label, not category.
+      // We need to fetch analysis data to find emails with events.
       if (includeEventData) {
-        const eventEmailIds = fetchedEmails
-          .filter((e) => e.category === 'event')
-          .map((e) => e.id);
+        // Fetch event detection data for all emails (filter will be done server-side)
+        const emailIds = fetchedEmails.map((e) => e.id);
+        const eventEmailIds = emailIds; // Fetch all, filter based on event_detection presence
 
         if (eventEmailIds.length > 0) {
           logger.debug('Fetching event data for event emails', { count: eventEmailIds.length });
@@ -420,6 +428,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     );
 
     // Update stats if relevant fields changed
+    // REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
     if ('is_read' in updates || 'is_starred' in updates || 'category' in updates) {
       setStats((prev) => {
         const updatedEmails = emails.map((email) =>
@@ -428,9 +437,11 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         return {
           total: prev.total,
           unread: updatedEmails.filter((e) => !e.is_read).length,
-          actionRequired: updatedEmails.filter((e) => e.category === 'action_required').length,
+          actionRequired: updatedEmails.filter((e) =>
+            e.category === 'client_pipeline' || e.category === 'business_work_general'
+          ).length,
           starred: updatedEmails.filter((e) => e.is_starred).length,
-          events: updatedEmails.filter((e) => e.category === 'event').length,
+          events: prev.events, // Events are detected via analysis, keep existing count
         };
       });
     }

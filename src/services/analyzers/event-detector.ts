@@ -1,32 +1,48 @@
 /**
  * Event Detector Analyzer
  *
- * Extracts rich event details from emails categorized as 'event'.
+ * Extracts rich event details from emails with the `has_event` label.
  * This analyzer enables calendar integration and event management.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * DESIGN PHILOSOPHY
+ * DESIGN PHILOSOPHY (REFACTORED Jan 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * This analyzer ONLY runs when category === 'event' (determined by Categorizer).
- * This conditional execution saves tokens:
- * - Events are ~5-10% of emails
- * - Running on all emails would be wasteful
- * - Categorizer is fast and cheap; event details are more expensive
+ * This analyzer runs when the `has_event` LABEL is present (not category).
+ * Since categories are now life-buckets, events can appear in any category:
+ * - local (community events)
+ * - family_kids_school (school events)
+ * - business_work_general (conferences)
+ * - client_pipeline (client meetings)
+ *
+ * The `has_event` label is set by the categorizer when an event is detected.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * EXTRACTED FIELDS
  * ═══════════════════════════════════════════════════════════════════════════════
  *
+ * Core fields:
  * - eventTitle: Name of the event
- * - eventDate: Date in ISO format (YYYY-MM-DD)
+ * - eventDate: Start date in ISO format (YYYY-MM-DD)
  * - eventTime: Start time (HH:MM, 24-hour)
+ * - eventEndDate: End date for multi-day events
  * - eventEndTime: End time if known
- * - locationType: in_person | virtual | hybrid | unknown
+ *
+ * Location fields:
+ * - locationType: in_person | virtual | hybrid | unknown (format)
+ * - eventLocality: local | out_of_town | virtual (NEW - relative to user)
  * - location: Physical address or video link
+ *
+ * Registration fields:
  * - registrationDeadline: RSVP deadline if mentioned
  * - rsvpRequired: Whether RSVP is needed
  * - rsvpUrl: Link to register/RSVP
+ *
+ * Key date fields (NEW):
+ * - isKeyDate: Whether this is a key date vs full event
+ * - keyDateType: registration_deadline | open_house | deadline | etc.
+ *
+ * Other fields:
  * - organizer: Who's hosting
  * - cost: Price info ("Free", "$25", etc.)
  * - additionalDetails: Any other relevant info
@@ -40,22 +56,21 @@
  *
  * const detector = new EventDetectorAnalyzer();
  *
- * // Only run if email is categorized as 'event'
- * if (categorizationResult.data.category === 'event') {
- *   const result = await detector.analyze(email);
+ * // Only run if email has the 'has_event' label
+ * if (categorizationResult.data.labels.includes('has_event')) {
+ *   const result = await detector.analyze(email, userContext);
  *
  *   if (result.success) {
- *     console.log(result.data.eventTitle);    // 'Milwaukee Tech Meetup'
- *     console.log(result.data.eventDate);     // '2026-01-25'
- *     console.log(result.data.eventTime);     // '18:00'
- *     console.log(result.data.locationType);  // 'in_person'
- *     console.log(result.data.location);      // '123 Main St, Milwaukee, WI'
+ *     console.log(result.data.eventTitle);      // 'Milwaukee Tech Meetup'
+ *     console.log(result.data.eventDate);       // '2026-01-25'
+ *     console.log(result.data.eventLocality);   // 'local'
+ *     console.log(result.data.isKeyDate);       // false
  *   }
  * }
  * ```
  *
  * @module services/analyzers/event-detector
- * @version 1.0.0
+ * @version 2.0.0
  * @since January 2026
  */
 
@@ -66,6 +81,8 @@ import type {
   EventDetectionData,
   EventDetectionResult,
   EventLocationType,
+  EventLocality,
+  KeyDateType,
   EmailInput,
   UserContext,
 } from './types';
@@ -88,51 +105,115 @@ const FUNCTION_DESCRIPTION =
   'Extracts detailed event information from an email for calendar integration';
 
 /**
- * Valid location types.
+ * Valid location types (format - how people participate).
  * Must match EventLocationType in types.ts.
  */
 const LOCATION_TYPES = ['in_person', 'virtual', 'hybrid', 'unknown'] as const;
+
+/**
+ * Valid event locality types (where relative to user).
+ * NEW (Jan 2026): Helps users understand if travel is required.
+ */
+const EVENT_LOCALITIES = ['local', 'out_of_town', 'virtual'] as const;
+
+/**
+ * Valid key date types (for non-event important dates).
+ * NEW (Jan 2026): Things like registration deadlines, open houses.
+ */
+const KEY_DATE_TYPES = ['registration_deadline', 'open_house', 'deadline', 'release_date', 'other'] as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * System prompt for event detection.
+ * Builds the system prompt for event detection.
+ * Now includes user location context for locality detection.
  *
- * This prompt is crafted to:
- * 1. Extract all relevant event details accurately
- * 2. Parse dates/times into consistent formats
- * 3. Identify location type (in-person vs virtual)
- * 4. Capture registration requirements
- * 5. Be conservative about missing information
+ * REFACTORED (Jan 2026): Added locality and key date detection.
  */
-const SYSTEM_PROMPT = `You are an event extraction specialist and personal assistant. Your job is to extract detailed event information AND present it in a way that helps busy users quickly understand what they need to know.
+function buildSystemPrompt(context?: UserContext): string {
+  const userLocation = context?.locationMetro || context?.locationCity || 'unknown';
+
+  return `You are an event extraction specialist and personal assistant. Your job is to extract detailed event information AND present it in a way that helps busy users quickly understand what they need to know.
+
+═══════════════════════════════════════════════════════════════════════════════
+USER CONTEXT
+═══════════════════════════════════════════════════════════════════════════════
+
+User's location: ${userLocation}
+(Use this to determine if events are local, out of town, or virtual)
 
 ═══════════════════════════════════════════════════════════════════════════════
 YOUR MISSION
 ═══════════════════════════════════════════════════════════════════════════════
 
-Extract event details AND write a concise, assistant-style summary with key points.
+1. Extract event details (date, time, location, etc.)
+2. Determine if this is a FULL EVENT or a KEY DATE (deadline, open house date)
+3. Determine EVENT LOCALITY (local to user, out of town, or virtual)
+4. Write a concise, assistant-style summary with key points
+
 Think: "What would a smart assistant tell me about this event in 10 seconds?"
+
+═══════════════════════════════════════════════════════════════════════════════
+KEY DATE vs FULL EVENT (NEW!)
+═══════════════════════════════════════════════════════════════════════════════
+
+Some emails mention important DATES but not full EVENTS to attend. Distinguish:
+
+FULL EVENT (is_key_date = false):
+- Something you attend or participate in
+- Has a location (physical or virtual)
+- Examples: meetup, conference, meeting, party, webinar, class
+
+KEY DATE (is_key_date = true):
+- An important date to remember, but not something you "attend"
+- Examples: registration deadline, open house date, release date, enrollment deadline
+- Set key_date_type to: registration_deadline, open_house, deadline, release_date, other
+
+Examples:
+- "Tech Conference on Jan 25 at the Convention Center" → FULL EVENT
+- "Registration deadline: Jan 20" → KEY DATE (registration_deadline)
+- "School open house dates: Jan 15 and Feb 12" → KEY DATE (open_house)
+- "Product launch date: March 1" → KEY DATE (release_date)
+
+═══════════════════════════════════════════════════════════════════════════════
+EVENT LOCALITY (NEW!)
+═══════════════════════════════════════════════════════════════════════════════
+
+Determine where the event is RELATIVE TO THE USER:
+
+- "local": Event is in or near ${userLocation}
+  - Same city or nearby suburb
+  - Within reasonable driving distance (< 1 hour)
+
+- "out_of_town": Event requires travel to another city
+  - Different city/metro area
+  - Would require flight, hotel, or significant drive
+
+- "virtual": Event is online only
+  - Automatically set if location_type is "virtual"
+  - Webinars, Zoom calls, online courses
+
+Examples (assuming user is in Milwaukee):
+- "Milwaukee Tech Meetup" → local
+- "Shorewood Library event" → local (suburb of Milwaukee)
+- "Chicago conference" → out_of_town
+- "TechCrunch Disrupt in San Francisco" → out_of_town
+- "Zoom webinar" → virtual
 
 ═══════════════════════════════════════════════════════════════════════════════
 EVENT SUMMARY (one sentence - REQUIRED!)
 ═══════════════════════════════════════════════════════════════════════════════
 
 Write ONE sentence that tells the user everything they need to know at a glance.
-Format: "[Event name] on [Day Date] at [Time] ([location type]). [Cost]. [RSVP info if needed]."
+Format: "[Event name] on [Day Date] at [Time] ([locality]). [Cost]. [RSVP info if needed]."
 
 GOOD EXAMPLES:
-- "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (in-person). Free. RSVP by Jan 23."
-- "Q1 Planning Call on Mon Jan 27 at 10am (virtual via Zoom). No RSVP needed."
-- "Client dinner at Fancy Restaurant on Thu Jan 30 at 7pm. RSVP to Sarah by Monday."
+- "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (local, in-person). Free. RSVP by Jan 23."
+- "TechCrunch Disrupt on Sep 15-17 in SF (out of town). $1,500. Early bird ends Aug 1."
 - "Webinar: Cloud Security 101 on Fri at 2pm (virtual). Free, registration required."
-- "Annual company picnic on Sat Feb 15, 11am-4pm at Lakefront Park. Bring your family!"
-
-BAD EXAMPLES (too vague or wordy):
-- "There's an event coming up" (no details!)
-- "You're invited to attend a networking event" (when? where?)
+- "KEY DATE: School registration deadline is Jan 20."
 
 ═══════════════════════════════════════════════════════════════════════════════
 KEY POINTS (2-4 bullet points - REQUIRED!)
@@ -141,102 +222,74 @@ KEY POINTS (2-4 bullet points - REQUIRED!)
 Create 2-4 concise bullet points with the most important information.
 Each point should be scannable in 2 seconds.
 
-ALWAYS include (in this priority order):
+For FULL EVENTS include:
 1. When: Date and time (e.g., "Sat Jan 25, 6-8pm")
-2. Where: Location type + place (e.g., "In-person: 123 Main St" or "Virtual: Zoom")
-3. Cost: If mentioned (e.g., "Free" or "$25/person")
+2. Where: Locality + location (e.g., "Local: Tech Hub, Milwaukee" or "Out of town: SF Convention Center")
+3. Cost: If mentioned
 4. Action needed: RSVP deadline or registration requirement
 
-GOOD KEY POINTS:
-- ["Sat Jan 25, 6-8pm", "In-person at Tech Hub", "Free", "RSVP by Jan 23"]
-- ["Mon Jan 27, 10-11am", "Virtual (Zoom)", "No registration needed"]
-- ["$50/person", "Dress code: Business casual", "RSVP to Sarah"]
+For KEY DATES include:
+1. What: The deadline or date type
+2. When: The date
+3. Action needed: What to do before that date
 
 ═══════════════════════════════════════════════════════════════════════════════
 DATE AND TIME EXTRACTION
 ═══════════════════════════════════════════════════════════════════════════════
 
-- event_date: Extract the date in ISO format (YYYY-MM-DD)
+- event_date: Start date in ISO format (YYYY-MM-DD)
   - "January 25, 2026" → "2026-01-25"
-  - "1/25/26" → "2026-01-25"
   - "next Friday" → calculate based on email date
-  - If multiple dates, use the first/main event date
 
-- event_time: Extract start time in 24-hour format (HH:MM)
+- event_time: Start time in 24-hour format (HH:MM)
   - "6:00 PM" → "18:00"
-  - "2:30 PM" → "14:30"
-  - "10am" → "10:00"
-  - Leave empty if no specific time mentioned
+  - Leave empty if no specific time
 
-- event_end_time: Extract end time if mentioned
-  - "6-8 PM" → start "18:00", end "20:00"
-  - Leave empty if not specified
+- event_end_date: End date for multi-day events (YYYY-MM-DD)
+  - "Jan 25-27" → end_date "2026-01-27"
+  - Leave empty for single-day events
+
+- event_end_time: End time in 24-hour format (HH:MM)
+  - "6-8 PM" → end_time "20:00"
 
 ═══════════════════════════════════════════════════════════════════════════════
 LOCATION EXTRACTION
 ═══════════════════════════════════════════════════════════════════════════════
 
-- location_type: Determine if event is:
-  - "in_person": Physical location required (office, venue, restaurant)
-  - "virtual": Online only (Zoom, Google Meet, Teams, webinar)
-  - "hybrid": Both in-person and virtual options
-  - "unknown": Can't determine from email
+- location_type (format - how people participate):
+  - "in_person": Physical location required
+  - "virtual": Online only (Zoom, webinar)
+  - "hybrid": Both options available
+  - "unknown": Can't determine
 
-- location: Extract the actual location
-  - Physical address: "123 Main St, Milwaukee, WI 53211"
-  - Video link: "https://zoom.us/j/123456789"
-  - Meeting room: "Conference Room B, 3rd Floor"
-  - If multiple, provide the primary one
+- location: The actual address or link
+  - Physical: "123 Main St, Milwaukee, WI 53211"
+  - Virtual: "https://zoom.us/j/123456789"
 
 ═══════════════════════════════════════════════════════════════════════════════
 REGISTRATION AND RSVP
 ═══════════════════════════════════════════════════════════════════════════════
 
 - rsvp_required: Is registration/RSVP needed?
-  - Look for: "RSVP", "register", "sign up", "limited seats", "reserve"
-  - true if registration seems required
-  - false if open event or no registration mentioned
-
-- registration_deadline: When is the RSVP due?
-  - Extract deadline if mentioned
-  - Format as ISO date (YYYY-MM-DD)
-
+- registration_deadline: RSVP deadline (ISO date)
 - rsvp_url: Registration link if provided
-  - Extract any signup/registration URLs
 
 ═══════════════════════════════════════════════════════════════════════════════
 OTHER DETAILS
 ═══════════════════════════════════════════════════════════════════════════════
 
-- event_title: Name/title of the event
-  - Use the actual event name, not subject line
-  - "Milwaukee Tech Meetup: AI in Production"
-  - "Q1 Planning Session"
-  - "Sarah's Birthday Party"
-
-- organizer: Who is hosting/organizing
-  - Company name, person name, or organization
-  - "MKE Tech Community", "John Smith", "Marketing Team"
-
-- cost: Price information if mentioned
-  - "Free"
-  - "$25"
-  - "Members free, $10 for guests"
-  - Leave empty if not mentioned
-
-- additional_details: Any other important info
-  - Parking instructions
-  - Dress code
-  - What to bring
-  - Special requirements
+- event_title: Name of the event (or description of key date)
+- organizer: Who is hosting
+- cost: Price info ("Free", "$25", etc.)
+- additional_details: Parking, dress code, what to bring
 
 ═══════════════════════════════════════════════════════════════════════════════
 CONFIDENCE
 ═══════════════════════════════════════════════════════════════════════════════
 
-- Be conservative: if you're unsure about a field, leave it empty
-- Set confidence based on how clearly the event details are stated
-- Lower confidence if: date ambiguous, location unclear, time not specified`;
+- Be conservative: if unsure about a field, leave it empty
+- Lower confidence if: date ambiguous, location unclear, locality uncertain`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FUNCTION SCHEMA
@@ -244,6 +297,8 @@ CONFIDENCE
 
 /**
  * OpenAI function schema for structured output.
+ *
+ * REFACTORED (Jan 2026): Added event_locality, event_end_date, is_key_date, key_date_type.
  *
  * This schema defines exactly what JSON structure OpenAI should return.
  * All fields match the EventDetectionData interface.
@@ -257,19 +312,32 @@ const FUNCTION_SCHEMA: FunctionSchema = {
       // Whether event was detected (should always be true)
       has_event: {
         type: 'boolean',
-        description: 'Whether this email contains a detectable event (should be true)',
+        description: 'Whether this email contains a detectable event or key date (should be true)',
+      },
+
+      // Whether this is a key date vs full event (NEW)
+      is_key_date: {
+        type: 'boolean',
+        description: 'True if this is a KEY DATE (deadline, open house) rather than a full event to attend',
+      },
+
+      // Key date type if applicable (NEW)
+      key_date_type: {
+        type: 'string',
+        enum: KEY_DATE_TYPES as unknown as string[],
+        description: 'Type of key date: registration_deadline, open_house, deadline, release_date, other',
       },
 
       // Event title
       event_title: {
         type: 'string',
-        description: 'Name/title of the event',
+        description: 'Name/title of the event or description of the key date',
       },
 
-      // Date in ISO format
+      // Start date in ISO format
       event_date: {
         type: 'string',
-        description: 'Event date in ISO format (YYYY-MM-DD)',
+        description: 'Event start date in ISO format (YYYY-MM-DD)',
       },
 
       // Start time in 24-hour format
@@ -278,17 +346,30 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Event start time in 24-hour format (HH:MM)',
       },
 
+      // End date for multi-day events (NEW)
+      event_end_date: {
+        type: 'string',
+        description: 'Event end date for multi-day events in ISO format (YYYY-MM-DD)',
+      },
+
       // End time if known
       event_end_time: {
         type: 'string',
         description: 'Event end time in 24-hour format (HH:MM) if known',
       },
 
-      // Location type
+      // Location type (format)
       location_type: {
         type: 'string',
         enum: LOCATION_TYPES as unknown as string[],
-        description: 'Type of location: in_person, virtual, hybrid, or unknown',
+        description: 'Format of event: in_person, virtual, hybrid, or unknown',
+      },
+
+      // Event locality relative to user (NEW)
+      event_locality: {
+        type: 'string',
+        enum: EVENT_LOCALITIES as unknown as string[],
+        description: 'Where event is relative to user: local (nearby), out_of_town (requires travel), virtual',
       },
 
       // Physical or virtual location
@@ -333,19 +414,19 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Any other relevant event details (parking, dress code, etc.)',
       },
 
-      // Event summary (NEW - assistant-style)
+      // Event summary (assistant-style)
       event_summary: {
         type: 'string',
-        description: 'One-sentence assistant-style summary. Example: "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (in-person). Free. RSVP by Jan 23."',
+        description: 'One-sentence summary. Include locality. Example: "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (local, in-person). Free."',
       },
 
-      // Key points (NEW - bullet points)
+      // Key points (bullet points)
       key_points: {
         type: 'array',
         items: { type: 'string' },
         minItems: 2,
         maxItems: 4,
-        description: '2-4 concise bullet points: when, where, cost, action needed. Example: ["Sat Jan 25, 6-8pm", "In-person at Tech Hub", "Free", "RSVP by Jan 23"]',
+        description: '2-4 concise bullet points. For events: when, where (with locality), cost, action. For key dates: what, when, action.',
       },
 
       // Confidence
@@ -356,7 +437,7 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Confidence in the extraction accuracy (0-1)',
       },
     },
-    required: ['has_event', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence', 'event_summary', 'key_points'],
+    required: ['has_event', 'is_key_date', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence', 'event_summary', 'key_points'],
   },
 };
 
@@ -368,11 +449,19 @@ const FUNCTION_SCHEMA: FunctionSchema = {
  * Event Detector Analyzer
  *
  * Extracts rich event details from emails for calendar integration.
- * This analyzer should ONLY run when category === 'event'.
+ * This analyzer runs when the `has_event` LABEL is present.
+ *
+ * REFACTORED (Jan 2026):
+ * - Now uses `has_event` label instead of category check
+ * - Added event locality (local, out_of_town, virtual)
+ * - Added key date detection (deadlines, open houses)
+ * - Added multi-day event support (eventEndDate)
  *
  * Features:
  * - Parses dates/times into consistent formats
  * - Identifies location type (in-person, virtual, hybrid)
+ * - Determines locality relative to user (local, out_of_town, virtual)
+ * - Distinguishes key dates from full events
  * - Extracts registration requirements and deadlines
  * - Captures cost and organizer information
  *
@@ -380,19 +469,19 @@ const FUNCTION_SCHEMA: FunctionSchema = {
  * ```typescript
  * const detector = new EventDetectorAnalyzer();
  *
- * // Only run if categorized as event
- * if (category === 'event') {
- *   const result = await detector.analyze(email);
+ * // Only run if email has 'has_event' label
+ * if (labels.includes('has_event')) {
+ *   const result = await detector.analyze(email, userContext);
  *
  *   if (result.success) {
- *     // Create calendar event
- *     await createCalendarEvent({
- *       title: result.data.eventTitle,
- *       date: result.data.eventDate,
- *       time: result.data.eventTime,
- *       location: result.data.location,
- *       isVirtual: result.data.locationType === 'virtual',
- *     });
+ *     if (result.data.isKeyDate) {
+ *       // Handle key date (deadline, open house)
+ *       console.log(`Key date: ${result.data.eventTitle} on ${result.data.eventDate}`);
+ *     } else {
+ *       // Handle full event
+ *       console.log(`Event: ${result.data.eventTitle}`);
+ *       console.log(`Locality: ${result.data.eventLocality}`); // local, out_of_town, virtual
+ *     }
  *   }
  * }
  * ```
@@ -417,13 +506,21 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
+   * User context for locality detection.
+   * Stored here so getSystemPrompt can access it.
+   */
+  private currentContext?: UserContext;
+
+  /**
    * Analyzes an email and extracts event details.
    *
    * IMPORTANT: This analyzer should only be called when the email
-   * has been categorized as 'event' by the Categorizer.
+   * has the `has_event` label (detected by the Categorizer).
+   *
+   * REFACTORED (Jan 2026): Now uses user context for locality detection.
    *
    * @param email - Email data to analyze
-   * @param _context - User context (not used by event detector)
+   * @param context - User context (used for locality detection)
    * @returns Event detection result with all extracted fields
    *
    * @example
@@ -436,20 +533,19 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
    *   date: '2026-01-15T10:00:00Z',
    *   snippet: 'Join us for our January meetup on January 25th at 6pm...',
    *   bodyText: 'Milwaukee Tech Meetup: AI in Production...',
-   * });
+   * }, { locationMetro: 'Milwaukee, WI' });
    *
    * // result.data:
    * // {
    * //   hasEvent: true,
+   * //   isKeyDate: false,
    * //   eventTitle: 'Milwaukee Tech Meetup: AI in Production',
    * //   eventDate: '2026-01-25',
    * //   eventTime: '18:00',
    * //   locationType: 'in_person',
+   * //   eventLocality: 'local',  // NEW
    * //   location: '123 Main St, Milwaukee, WI 53211',
    * //   rsvpRequired: true,
-   * //   rsvpUrl: 'https://mketech.org/rsvp',
-   * //   organizer: 'MKE Tech Community',
-   * //   cost: 'Free',
    * //   confidence: 0.95,
    * // }
    * ```
@@ -458,13 +554,14 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
     email: EmailInput,
     context?: UserContext
   ): Promise<EventDetectionResult> {
-    // Note: context is not used by event detector
-    void context;
+    // Store context for use in getSystemPrompt
+    this.currentContext = context;
 
-    // Log that this is a conditional analyzer
-    this.logger.debug('Running event detection (only for event-categorized emails)', {
+    // Log with context info for debugging
+    this.logger.debug('Running event detection (for emails with has_event label)', {
       emailId: email.id,
       subject: email.subject?.substring(0, 50),
+      userLocation: context?.locationMetro || context?.locationCity || 'unknown',
     });
 
     // Use the base class executeAnalysis which handles all common logic
@@ -475,6 +572,9 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
     if (result.success) {
       result.data = this.normalizeResponse(result.data);
     }
+
+    // Clear context after use
+    this.currentContext = undefined;
 
     return result;
   }
@@ -500,21 +600,23 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
   /**
    * Returns the system prompt for event detection.
    *
+   * REFACTORED (Jan 2026): Now uses user context for locality detection.
+   *
    * The prompt instructs the AI to:
    * - Extract dates in ISO format
    * - Extract times in 24-hour format
-   * - Identify location type
+   * - Identify location type (format)
+   * - Determine event locality (local, out_of_town, virtual)
+   * - Distinguish key dates from full events
    * - Capture registration requirements
    * - Be conservative about missing info
    *
-   * @param _context - User context (not used by event detector)
+   * @param context - User context (used for locality detection)
    * @returns System prompt string
    */
   getSystemPrompt(context?: UserContext): string {
-    // Note: context is not used by event detector
-    // Could be extended to include user's timezone for date interpretation
-    void context;
-    return SYSTEM_PROMPT;
+    // Use stored context if available (from analyze call), otherwise use passed context
+    return buildSystemPrompt(this.currentContext || context);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -524,6 +626,8 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
   /**
    * Normalizes the OpenAI response to match our TypeScript interface.
    *
+   * REFACTORED (Jan 2026): Added eventLocality, eventEndDate, isKeyDate, keyDateType.
+   *
    * OpenAI returns snake_case property names from the function schema,
    * but our interface uses camelCase. This method converts between them.
    *
@@ -531,6 +635,13 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
    * @returns Normalized data (camelCase)
    */
   private normalizeResponse(rawData: Record<string, unknown>): EventDetectionData {
+    // Determine event locality - auto-set to 'virtual' if location type is virtual
+    let eventLocality = rawData.event_locality as EventLocality | undefined;
+    const locationType = (rawData.location_type as EventLocationType) || 'unknown';
+    if (locationType === 'virtual' && !eventLocality) {
+      eventLocality = 'virtual';
+    }
+
     return {
       // Core event fields
       hasEvent: Boolean(rawData.has_event),
@@ -541,8 +652,12 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
       eventTime: rawData.event_time as string | undefined,
       eventEndTime: rawData.event_end_time as string | undefined,
 
+      // Multi-day event support (NEW Jan 2026)
+      eventEndDate: rawData.event_end_date as string | undefined,
+
       // Location fields
-      locationType: (rawData.location_type as EventLocationType) || 'unknown',
+      locationType,
+      eventLocality,  // NEW Jan 2026: local, out_of_town, virtual
       location: rawData.location as string | undefined,
 
       // Registration fields
@@ -555,9 +670,13 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
       cost: rawData.cost as string | undefined,
       additionalDetails: rawData.additional_details as string | undefined,
 
-      // Assistant-style summary and key points (NEW Jan 2026)
+      // Assistant-style summary and key points
       eventSummary: rawData.event_summary as string | undefined,
       keyPoints: rawData.key_points as string[] | undefined,
+
+      // Key date fields (NEW Jan 2026)
+      isKeyDate: Boolean(rawData.is_key_date),
+      keyDateType: rawData.key_date_type as KeyDateType | undefined,
 
       // Confidence
       confidence: (rawData.confidence as number) || 0.5,

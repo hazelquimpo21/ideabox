@@ -16,18 +16,27 @@
 
 /**
  * All possible email categories in IdeaBox.
- * Categories are action-focused (what the user needs to do), not sender-focused.
+ * Categories are life-bucket focused (what part of life this email touches).
  *
- * @note "client" is NOT a category - client relationship is tracked via client_id
+ * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
+ * Actions are now tracked separately via the `actions` table.
+ *
+ * The AI analyzer uses human-eye inference to categorize - it considers sender
+ * context, domain patterns, and content to make smart categorization decisions.
  */
 export type EmailCategory =
-  | 'action_required' // Needs response, decision, or action from user
-  | 'event' // Calendar-worthy with date/time/location
-  | 'newsletter' // Informational content, digests, regular publications
-  | 'promo' // Marketing, promotional, sales content
-  | 'admin' // Receipts, confirmations, automated notifications
-  | 'personal' // Personal correspondence (friends, family)
-  | 'noise'; // Low value, safe to ignore or bulk archive
+  | 'newsletters_general'           // Substacks, digests, curated content
+  | 'news_politics'                 // News outlets, political updates
+  | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
+  | 'local'                         // Community events, neighborhood, local orgs
+  | 'shopping'                      // Orders, shipping, deals, retail
+  | 'travel'                        // Flights, hotels, bookings, trip info
+  | 'finance'                       // Bills, banking, investments, receipts
+  | 'family_kids_school'            // School emails, activities, kid logistics
+  | 'family_health_appointments'    // Medical, appointments, family scheduling
+  | 'client_pipeline'               // Direct client correspondence, project work
+  | 'business_work_general'         // Team/internal, industry stuff, professional
+  | 'personal_friends_family';      // Social, relationships, personal correspondence
 
 /**
  * Display configuration for each category.
@@ -43,56 +52,93 @@ export interface CategoryDisplayConfig {
 
 /**
  * Category display configurations keyed by category.
+ *
+ * REFACTORED (Jan 2026): Updated for life-bucket categories.
  */
 export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
-  action_required: {
-    label: 'Action Required',
-    icon: '🔴',
-    color: 'text-red-600',
-    bgColor: 'bg-red-50',
-    description: 'Emails that need your response or action',
-  },
-  event: {
-    label: 'Events',
-    icon: '📅',
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
-    description: 'Calendar-worthy events and invitations',
-  },
-  newsletter: {
-    label: 'Newsletters',
+  newsletters_general: {
+    label: 'Newsletters - General',
     icon: '📰',
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-50',
-    description: 'Informational content and digests',
+    description: 'Substacks, digests, and curated content',
   },
-  promo: {
-    label: 'Promotions',
+  news_politics: {
+    label: 'News & Politics',
+    icon: '🗞️',
+    color: 'text-slate-700',
+    bgColor: 'bg-slate-100',
+    description: 'News outlets and political updates',
+  },
+  product_updates: {
+    label: 'Product Updates',
+    icon: '📦',
+    color: 'text-indigo-600',
+    bgColor: 'bg-indigo-50',
+    description: 'Tech products and services you subscribe to',
+  },
+  local: {
+    label: 'Local',
+    icon: '📍',
+    color: 'text-teal-600',
+    bgColor: 'bg-teal-50',
+    description: 'Community events, neighborhood, local orgs',
+  },
+  shopping: {
+    label: 'Shopping',
     icon: '🛒',
     color: 'text-orange-600',
     bgColor: 'bg-orange-50',
-    description: 'Marketing and promotional emails',
+    description: 'Orders, shipping, deals, and retail',
   },
-  admin: {
-    label: 'Admin',
-    icon: '📋',
-    color: 'text-slate-600',
-    bgColor: 'bg-slate-50',
-    description: 'Receipts, confirmations, notifications',
+  travel: {
+    label: 'Travel',
+    icon: '✈️',
+    color: 'text-sky-600',
+    bgColor: 'bg-sky-50',
+    description: 'Flights, hotels, bookings, and trip info',
   },
-  personal: {
+  finance: {
+    label: 'Finance',
+    icon: '💰',
+    color: 'text-green-700',
+    bgColor: 'bg-green-50',
+    description: 'Bills, banking, investments, and receipts',
+  },
+  family_kids_school: {
+    label: 'Family - Kids & School',
+    icon: '🎒',
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-50',
+    description: 'School emails, activities, kid logistics',
+  },
+  family_health_appointments: {
+    label: 'Family - Health',
+    icon: '🏥',
+    color: 'text-rose-600',
+    bgColor: 'bg-rose-50',
+    description: 'Medical, appointments, family scheduling',
+  },
+  client_pipeline: {
+    label: 'Client Pipeline',
+    icon: '💼',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-50',
+    description: 'Direct client correspondence and project work',
+  },
+  business_work_general: {
+    label: 'Business/Work',
+    icon: '🏢',
+    color: 'text-violet-600',
+    bgColor: 'bg-violet-50',
+    description: 'Team, industry, and professional emails',
+  },
+  personal_friends_family: {
     label: 'Personal',
-    icon: '👤',
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
-    description: 'Personal correspondence',
-  },
-  noise: {
-    label: 'Noise',
-    icon: '🔇',
-    color: 'text-gray-500',
-    bgColor: 'bg-gray-50',
-    description: 'Low-value emails safe to archive',
+    icon: '👥',
+    color: 'text-pink-600',
+    bgColor: 'bg-pink-50',
+    description: 'Friends, family, and personal correspondence',
   },
 };
 

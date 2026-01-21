@@ -10,6 +10,8 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  * - Event title with date/time display
  * - Location type indicator (in-person, virtual, hybrid)
+ * - Event locality indicator (local, out of town, virtual) - NEW Jan 2026
+ * - Key date support (deadlines, open houses) - NEW Jan 2026
  * - Interactive location (map link or video link)
  * - RSVP deadline with urgency indicator
  * - Add to Google Calendar button
@@ -17,7 +19,7 @@
  * - Cost and organizer info
  *
  * @module components/email/EventDetailsCard
- * @version 1.0.0
+ * @version 2.0.0
  * @since January 2026
  */
 
@@ -38,6 +40,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   HelpCircle,
+  Plane,
+  Home,
+  Globe,
+  FileText,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import {
@@ -76,7 +82,7 @@ export interface EventDetailsCardProps {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Location type badge with icon.
+ * Location type badge with icon (format - how people participate).
  */
 function LocationTypeBadge({ type }: { type: EventDetectionResult['locationType'] }) {
   const config = {
@@ -108,6 +114,65 @@ function LocationTypeBadge({ type }: { type: EventDetectionResult['locationType'
     <Badge variant="outline" className={`gap-1 border-0 ${className}`}>
       <Icon className="h-3 w-3" />
       {label}
+    </Badge>
+  );
+}
+
+/**
+ * Event locality badge (NEW Jan 2026) - where relative to user.
+ */
+function LocalityBadge({ locality }: { locality?: EventDetectionResult['eventLocality'] }) {
+  if (!locality) return null;
+
+  const config = {
+    local: {
+      icon: Home,
+      label: 'Local',
+      className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    },
+    out_of_town: {
+      icon: Plane,
+      label: 'Out of Town',
+      className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    },
+    virtual: {
+      icon: Globe,
+      label: 'Online',
+      className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+    },
+  };
+
+  const localityConfig = config[locality];
+  if (!localityConfig) return null;
+
+  const { icon: Icon, label, className } = localityConfig;
+
+  return (
+    <Badge variant="outline" className={`gap-1 border-0 ${className}`}>
+      <Icon className="h-3 w-3" />
+      {label}
+    </Badge>
+  );
+}
+
+/**
+ * Key date type badge (NEW Jan 2026) - for deadlines, open houses, etc.
+ */
+function KeyDateBadge({ keyDateType }: { keyDateType?: EventDetectionResult['keyDateType'] }) {
+  if (!keyDateType) return null;
+
+  const labelMap: Record<string, string> = {
+    registration_deadline: 'Registration Deadline',
+    open_house: 'Open House',
+    deadline: 'Deadline',
+    release_date: 'Release Date',
+    other: 'Key Date',
+  };
+
+  return (
+    <Badge variant="outline" className="gap-1 border-0 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+      <FileText className="h-3 w-3" />
+      {labelMap[keyDateType] || 'Key Date'}
     </Badge>
   );
 }
@@ -253,9 +318,10 @@ export function EventDetailsCard({
     return null;
   }
 
-  // Format event display data
+  // Format event display data - handle multi-day events
   const displayData = formatEventDisplay(event.eventDate, event.eventTime, event.eventEndTime);
   const eventDaysAway = calculateDaysFromNow(event.eventDate);
+  const isMultiDay = event.eventEndDate && event.eventEndDate !== event.eventDate;
 
   // Generate Google Calendar link
   const calendarLink = generateGoogleCalendarLink({
@@ -294,16 +360,31 @@ export function EventDetailsCard({
     return (
       <div className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5 mt-1.5">
         <Calendar className="h-3.5 w-3.5 text-green-600 dark:text-green-400 shrink-0" />
+        {/* Show key date indicator for key dates */}
+        {event.isKeyDate && (
+          <span className="text-amber-600 dark:text-amber-400 font-medium">
+            {event.keyDateType === 'registration_deadline' ? 'Reg. Deadline:' : 'Key Date:'}
+          </span>
+        )}
         <span className="font-medium">
           {formatEventDate(event.eventDate, { short: true })}
         </span>
+        {/* Show end date for multi-day events */}
+        {event.eventEndDate && event.eventEndDate !== event.eventDate && (
+          <span className="text-muted-foreground">
+            - {formatEventDate(event.eventEndDate, { short: true })}
+          </span>
+        )}
         {event.eventTime && (
           <>
             <span className="text-muted-foreground">•</span>
             <span>{formatTime12h(event.eventTime)}</span>
           </>
         )}
-        <LocationTypeBadge type={event.locationType} />
+        {/* Show locality badge for regular events (NEW Jan 2026) */}
+        {!event.isKeyDate && event.eventLocality && <LocalityBadge locality={event.eventLocality} />}
+        {/* Show location type if not virtual and not a key date */}
+        {!event.isKeyDate && event.locationType !== 'virtual' && <LocationTypeBadge type={event.locationType} />}
         {event.registrationDeadline && (
           <>
             <span className="text-muted-foreground">•</span>
@@ -325,10 +406,15 @@ export function EventDetailsCard({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
             <Calendar className="h-4 w-4" />
-            Event Details
+            {event.isKeyDate ? 'Key Date' : 'Event Details'}
           </div>
           <div className="flex items-center gap-2">
-            <LocationTypeBadge type={event.locationType} />
+            {/* Show key date type badge for key dates */}
+            {event.isKeyDate && <KeyDateBadge keyDateType={event.keyDateType} />}
+            {/* Show locality badge for regular events (NEW Jan 2026) */}
+            {!event.isKeyDate && event.eventLocality && <LocalityBadge locality={event.eventLocality} />}
+            {/* Show location type for non-virtual events */}
+            {!event.isKeyDate && event.locationType !== 'virtual' && <LocationTypeBadge type={event.locationType} />}
             {event.cost && <CostBadge cost={event.cost} />}
           </div>
         </div>
@@ -372,13 +458,23 @@ export function EventDetailsCard({
             <Calendar className="h-5 w-5 text-green-600 dark:text-green-400" />
           </div>
           <div>
-            <p className="font-medium">{displayData.dateDisplay}</p>
+            <p className="font-medium">
+              {displayData.dateDisplay}
+              {/* Show end date for multi-day events */}
+              {isMultiDay && (
+                <span className="text-muted-foreground font-normal">
+                  {' '}- {formatEventDate(event.eventEndDate!, { short: false })}
+                </span>
+              )}
+            </p>
             {displayData.timeDisplay && (
               <p className="text-sm text-muted-foreground">{displayData.timeDisplay}</p>
             )}
             <p className="text-xs text-muted-foreground mt-0.5">
               {eventDaysAway === 0 ? (
-                <span className="text-green-600 dark:text-green-400 font-medium">Happening today!</span>
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  {event.isKeyDate ? 'Today!' : 'Happening today!'}
+                </span>
               ) : eventDaysAway > 0 ? (
                 displayData.relativeDate
               ) : (
