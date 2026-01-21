@@ -41,6 +41,23 @@ export interface SidebarClient {
 }
 
 /**
+ * Individual event data for sidebar preview cards.
+ * Minimal data needed for compact display.
+ */
+export interface UpcomingEvent {
+  /** Unique event identifier */
+  id: string;
+  /** Event title */
+  title: string;
+  /** Event date (YYYY-MM-DD format) */
+  date: string;
+  /** Event time (HH:MM format, optional) */
+  time?: string;
+  /** Days until event (0 = today, 1 = tomorrow, etc.) */
+  daysUntil: number;
+}
+
+/**
  * Upcoming events summary for sidebar display.
  */
 export interface UpcomingEventsSummary {
@@ -50,6 +67,8 @@ export interface UpcomingEventsSummary {
   nextEventDate?: string;
   /** Days until next event */
   daysUntilNext?: number;
+  /** Preview events for sidebar cards (max 3) */
+  previewEvents?: UpcomingEvent[];
 }
 
 /**
@@ -115,9 +134,10 @@ export function useSidebarData(): UseSidebarDataReturn {
           .limit(10),
 
         // Get upcoming events from extracted_dates table
+        // Fetch id, title, date, event_time for preview cards
         supabase
           .from('extracted_dates')
-          .select('date')
+          .select('id, title, date, event_time')
           .eq('user_id', user.id)
           .eq('date_type', 'event')
           .eq('is_hidden', false)
@@ -181,25 +201,43 @@ export function useSidebarData(): UseSidebarDataReturn {
         const nextEventDate = nextEvent.date;
 
         // Calculate days until next event
-        const eventDate = new Date(nextEventDate + 'T00:00:00');
         const todayDate = new Date();
         todayDate.setHours(0, 0, 0, 0);
-        const diffMs = eventDate.getTime() - todayDate.getTime();
-        const daysUntilNext = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+        const calculateDaysUntil = (dateStr: string): number => {
+          const eventDate = new Date(dateStr + 'T00:00:00');
+          const diffMs = eventDate.getTime() - todayDate.getTime();
+          return Math.round(diffMs / (1000 * 60 * 60 * 24));
+        };
+
+        const daysUntilNext = calculateDaysUntil(nextEventDate);
+
+        // Build preview events for sidebar cards (first 3)
+        const previewEvents: UpcomingEvent[] = upcomingEventsResult.data
+          .slice(0, 3)
+          .map((event) => ({
+            id: event.id,
+            title: event.title || 'Untitled Event',
+            date: event.date,
+            time: event.event_time || undefined,
+            daysUntil: calculateDaysUntil(event.date),
+          }));
 
         setUpcomingEvents({
           count: upcomingEventsResult.data.length,
           nextEventDate,
           daysUntilNext,
+          previewEvents,
         });
 
         logger.debug('Upcoming events processed', {
           count: upcomingEventsResult.data.length,
           nextEventDate,
           daysUntilNext,
+          previewCount: previewEvents.length,
         });
       } else {
-        setUpcomingEvents({ count: 0 });
+        setUpcomingEvents({ count: 0, previewEvents: [] });
       }
 
       logger.success('Sidebar data fetched');
