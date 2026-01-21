@@ -69,12 +69,14 @@ export async function runAIAnalysis(
     userId,
   });
 
-  // Get unanalyzed emails
+  // Get unanalyzed emails (exclude failed ones to avoid retry loops)
+  // Per DECISIONS.md: "When AI analysis fails, mark email as unanalyzable. Do NOT retry on next sync."
   const { data: emails, error: emailsError } = await supabase
     .from('emails')
     .select('*')
     .eq('user_id', userId)
     .is('analyzed_at', null)
+    .is('analysis_error', null) // Exclude emails that previously failed analysis
     .eq('is_archived', false)
     .order('date', { ascending: false })
     .limit(maxEmails);

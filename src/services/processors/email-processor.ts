@@ -485,6 +485,41 @@ export class EmailProcessor {
         });
         errors.push({ analyzer: 'database', error: errorMessage });
       }
+    } else if (opts.saveToDatabase && !success) {
+      // ─────────────────────────────────────────────────────────────────────────
+      // Mark email as failed (per DECISIONS.md: "Do NOT retry on next sync")
+      // ─────────────────────────────────────────────────────────────────────────
+      try {
+        const supabase = await createServerClient();
+        const errorSummary = errors
+          .map((e) => `${e.analyzer}: ${e.error}`)
+          .join('; ')
+          .substring(0, 500); // Truncate to fit in column
+
+        const { error: updateError } = await supabase
+          .from('emails')
+          .update({
+            analysis_error: errorSummary || 'All analyzers failed',
+          })
+          .eq('id', emailInput.id);
+
+        if (updateError) {
+          logger.warn('Failed to mark email as analysis_error', {
+            emailId: emailInput.id,
+            error: updateError.message,
+          });
+        } else {
+          logger.info('Marked email as analysis failed (will not retry)', {
+            emailId: emailInput.id,
+            errorSummary,
+          });
+        }
+      } catch (error) {
+        logger.warn('Failed to mark email as analysis_error', {
+          emailId: emailInput.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
