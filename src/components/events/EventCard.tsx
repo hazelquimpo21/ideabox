@@ -13,20 +13,28 @@
  * - Relative date display (Today, Tomorrow, In X days)
  * - Location with map/video link
  * - RSVP deadline with urgency indicator
- * - Add to Calendar button
+ * - Add to Calendar button with tracking
+ * - Dismiss event (hide from view)
+ * - Save to Maybe (watch list)
+ * - View original email in modal
  * - Link to source email
  * - Compact variant for sidebar preview
+ * - Optimistic UI updates with pending indicators
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * ```tsx
- * // Full card for Events page
+ * // Full card for Events page with state management
  * <EventCard
  *   event={eventData}
- *   onAcknowledge={handleAcknowledge}
+ *   onDismiss={handleDismiss}
+ *   onSaveToMaybe={handleSaveToMaybe}
  *   onAddToCalendar={handleAddToCalendar}
+ *   isMaybe={hasState(event.id, 'maybe')}
+ *   isSavedToCalendar={hasState(event.id, 'saved_to_calendar')}
+ *   isPending={isStatePending(event.id)}
  * />
  *
  * // Compact card for sidebar preview
@@ -34,8 +42,8 @@
  * ```
  *
  * @module components/events/EventCard
- * @version 1.0.0
- * @since January 2026
+ * @version 2.0.0
+ * @since January 2026 - Added dismiss, maybe, calendar tracking, email modal
  */
 
 'use client';
@@ -45,17 +53,21 @@ import Link from 'next/link';
 import { Card, CardContent, Button, Badge } from '@/components/ui';
 import {
   Calendar,
-  Clock,
   MapPin,
   Video,
   ExternalLink,
   CalendarPlus,
+  CalendarCheck,
   Check,
   Mail,
   Home,
   Plane,
   Globe,
   ChevronRight,
+  X,
+  Star,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import {
@@ -64,8 +76,8 @@ import {
   formatTime12h,
   calculateDaysFromNow,
   formatRelativeDate,
-  getDeadlineUrgency,
 } from '@/lib/utils/calendar';
+import { EmailPreviewModal } from './EmailPreviewModal';
 import type { EventData, EventMetadata } from '@/hooks/useEvents';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -122,10 +134,20 @@ export interface EventCardProps {
   event: EventData;
   /** Card display variant */
   variant?: 'default' | 'compact';
-  /** Callback when event is acknowledged/done */
-  onAcknowledge?: (eventId: string) => void;
-  /** Callback when Add to Calendar is clicked */
-  onAddToCalendar?: (event: EventData) => void;
+  /** Callback when event is dismissed */
+  onDismiss?: (eventId: string) => Promise<void>;
+  /** Callback when event is saved to maybe list */
+  onSaveToMaybe?: (eventId: string) => Promise<void>;
+  /** Callback when event is removed from maybe list */
+  onRemoveFromMaybe?: (eventId: string) => Promise<void>;
+  /** Callback when Add to Calendar is clicked (tracks the save) */
+  onAddToCalendar?: (eventId: string) => Promise<void>;
+  /** Whether event is in maybe list */
+  isMaybe?: boolean;
+  /** Whether event has been saved to calendar */
+  isSavedToCalendar?: boolean;
+  /** Whether a state operation is pending */
+  isPending?: boolean;
   /** Whether to show source email info */
   showSourceEmail?: boolean;
   /** Additional CSS class */
@@ -371,16 +393,28 @@ function CompactEventCard({
  * - Date/time with relative indicator
  * - Location with map/video link
  * - Locality badge (Local/Out of Town/Virtual)
- * - Add to Calendar action
+ * - Add to Calendar action (with tracking)
+ * - Dismiss button (hide event)
+ * - Maybe button (watch list)
+ * - View original email in modal
  * - Link to source email
+ *
+ * State indicators:
+ * - isMaybe: Shows star indicator, enables "remove from maybe"
+ * - isSavedToCalendar: Shows checkmark on calendar button
+ * - isPending: Shows loading spinner during state operations
  *
  * @example
  * ```tsx
  * // Full card with all features
  * <EventCard
  *   event={eventData}
- *   onAcknowledge={handleAcknowledge}
- *   showSourceEmail
+ *   onDismiss={handleDismiss}
+ *   onSaveToMaybe={handleSaveToMaybe}
+ *   onAddToCalendar={handleAddToCalendar}
+ *   isMaybe={hasState(event.id, 'maybe')}
+ *   isSavedToCalendar={hasState(event.id, 'saved_to_calendar')}
+ *   isPending={isStatePending(event.id)}
  * />
  *
  * // Compact card for sidebar
@@ -390,11 +424,22 @@ function CompactEventCard({
 export function EventCard({
   event,
   variant = 'default',
-  onAcknowledge,
+  onDismiss,
+  onSaveToMaybe,
+  onRemoveFromMaybe,
   onAddToCalendar,
+  isMaybe = false,
+  isSavedToCalendar = false,
+  isPending = false,
   showSourceEmail = true,
   className,
 }: EventCardProps) {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Local state for email preview modal
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const [showEmailModal, setShowEmailModal] = React.useState(false);
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Compact variant - delegate to specialized component
   // ─────────────────────────────────────────────────────────────────────────────
@@ -411,7 +456,9 @@ export function EventCard({
     eventId: event.id.substring(0, 8),
     title: event.title,
     date: event.date,
-    hasSourceEmail: !!event.emails,
+    isMaybe,
+    isSavedToCalendar,
+    isPending,
   });
 
   const daysFromNow = calculateDaysFromNow(event.date);
@@ -428,214 +475,334 @@ export function EventCard({
 
   /**
    * Handle Add to Calendar click.
-   * Opens Google Calendar in new tab and triggers optional callback.
+   * Opens Google Calendar in new tab and tracks the save.
    */
-  const handleAddToCalendar = () => {
+  const handleAddToCalendar = async () => {
     logger.info('Add to Calendar clicked', {
       eventId: event.id.substring(0, 8),
       title: event.title,
+      alreadySaved: isSavedToCalendar,
     });
 
+    // Open Google Calendar in new tab
     window.open(calendarLink, '_blank', 'noopener,noreferrer');
 
-    if (onAddToCalendar) {
-      onAddToCalendar(event);
+    // Track the calendar save (only if not already saved)
+    if (onAddToCalendar && !isSavedToCalendar) {
+      try {
+        await onAddToCalendar(event.id);
+        logger.success('Calendar save tracked', { eventId: event.id.substring(0, 8) });
+      } catch (error) {
+        logger.error('Failed to track calendar save', {
+          eventId: event.id.substring(0, 8),
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        // Don't block the user - calendar still opened
+      }
     }
   };
 
   /**
-   * Handle Done/Acknowledge click.
+   * Handle Dismiss click.
+   * Hides the event from the list.
    */
-  const handleAcknowledge = () => {
-    if (onAcknowledge) {
-      logger.info('Event acknowledged', {
+  const handleDismiss = async () => {
+    if (!onDismiss) return;
+
+    logger.info('Dismiss clicked', { eventId: event.id.substring(0, 8) });
+
+    try {
+      await onDismiss(event.id);
+      logger.success('Event dismissed', { eventId: event.id.substring(0, 8) });
+    } catch (error) {
+      logger.error('Failed to dismiss event', {
         eventId: event.id.substring(0, 8),
-        title: event.title,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
-      onAcknowledge(event.id);
     }
   };
 
+  /**
+   * Handle Maybe click.
+   * Toggles the event's maybe state.
+   */
+  const handleMaybeToggle = async () => {
+    logger.info('Maybe toggle clicked', {
+      eventId: event.id.substring(0, 8),
+      currentlyMaybe: isMaybe,
+    });
+
+    try {
+      if (isMaybe && onRemoveFromMaybe) {
+        await onRemoveFromMaybe(event.id);
+        logger.success('Removed from maybe', { eventId: event.id.substring(0, 8) });
+      } else if (!isMaybe && onSaveToMaybe) {
+        await onSaveToMaybe(event.id);
+        logger.success('Saved to maybe', { eventId: event.id.substring(0, 8) });
+      }
+    } catch (error) {
+      logger.error('Failed to toggle maybe state', {
+        eventId: event.id.substring(0, 8),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Handle View Email click.
+   * Opens the email preview modal.
+   */
+  const handleViewEmail = () => {
+    logger.info('View email clicked', { eventId: event.id.substring(0, 8) });
+    setShowEmailModal(true);
+  };
+
   return (
-    <Card
-      className={`
-        transition-all
-        ${isToday ? 'border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-950/10' : ''}
-        ${isPast ? 'opacity-60' : ''}
-        ${event.is_acknowledged ? 'opacity-50' : ''}
-        ${className || ''}
-      `}
-    >
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* Header: Title and badges */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <h3
-                className={`
-                  font-semibold text-base leading-tight
-                  ${event.is_acknowledged ? 'line-through text-muted-foreground' : ''}
-                `}
-              >
-                {event.title}
-              </h3>
+    <>
+      <Card
+        className={`
+          transition-all relative
+          ${isToday ? 'border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-950/10' : ''}
+          ${isPast ? 'opacity-60' : ''}
+          ${isMaybe ? 'border-yellow-300 dark:border-yellow-700' : ''}
+          ${className || ''}
+        `}
+      >
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* Pending indicator overlay */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {isPending && (
+          <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10 rounded-lg">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
 
-              {/* Description if available */}
-              {event.description && (
-                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                  {event.description}
-                </p>
-              )}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* Maybe indicator badge */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {isMaybe && (
+          <div className="absolute -top-1.5 -right-1.5 z-10">
+            <div className="bg-yellow-400 dark:bg-yellow-500 rounded-full p-1 shadow-sm">
+              <Star className="h-3 w-3 text-white fill-white" />
             </div>
-
-            {/* Today indicator */}
-            {isToday && !isPast && (
-              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-0 shrink-0">
-                Today
-              </Badge>
-            )}
           </div>
+        )}
 
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* Date, Time, and Locality */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          <div className="flex items-center justify-between gap-2">
-            <DateTimeDisplay
-              date={event.date}
-              time={event.event_time}
-              showRelative={!isToday}
-            />
-            <LocalityBadge locality={getLocality(event)} />
-          </div>
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {/* Header: Title, badges, and dismiss button */}
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-base leading-tight">
+                  {event.title}
+                </h3>
 
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* Location (from event_metadata) */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {getEventMetadata(event)?.location && (
-            <LocationDisplay location={getEventMetadata(event)!.location!} />
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* RSVP and Cost Info (from event_metadata) */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {(() => {
-            const meta = getEventMetadata(event);
-            if (!meta) return null;
-
-            const showRsvp = meta.rsvpRequired || meta.rsvpDeadline || meta.rsvpUrl;
-            const showCost = meta.cost;
-
-            if (!showRsvp && !showCost) return null;
-
-            return (
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                {/* Cost badge */}
-                {showCost && (
-                  <Badge
-                    variant="outline"
-                    className={`text-xs ${
-                      meta.cost?.toLowerCase() === 'free'
-                        ? 'border-green-300 text-green-700 dark:border-green-700 dark:text-green-300'
-                        : 'border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-300'
-                    }`}
-                  >
-                    {meta.cost}
-                  </Badge>
-                )}
-
-                {/* RSVP indicator */}
-                {meta.rsvpRequired && (
-                  <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
-                    RSVP Required
-                  </Badge>
-                )}
-
-                {/* RSVP deadline */}
-                {meta.rsvpDeadline && (
-                  <span className="text-xs text-muted-foreground">
-                    RSVP by {formatEventDate(meta.rsvpDeadline, { short: true })}
-                  </span>
-                )}
-
-                {/* RSVP link */}
-                {meta.rsvpUrl && (
-                  <a
-                    href={meta.rsvpUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
-                    onClick={() => logger.info('RSVP link clicked', { eventId: event.id.substring(0, 8) })}
-                  >
-                    Register
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+                {/* Description if available */}
+                {event.description && (
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    {event.description}
+                  </p>
                 )}
               </div>
-            );
-          })()}
 
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* Source email info */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {showSourceEmail && event.emails && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
-              <Mail className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                From: {event.emails.sender_name || event.emails.sender_email}
-              </span>
-              {event.email_id && (
-                <Link
-                  href={`/inbox?email=${event.email_id}`}
-                  className="text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-                >
-                  View email
-                </Link>
-              )}
-            </div>
-          )}
+              {/* Right side: Today badge and dismiss */}
+              <div className="flex items-center gap-1 shrink-0">
+                {isToday && !isPast && (
+                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-0">
+                    Today
+                  </Badge>
+                )}
 
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* Actions */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-2">
-              {/* Add to Calendar */}
-              <Button
-                variant="default"
-                size="sm"
-                className="gap-1.5 bg-green-600 hover:bg-green-700 h-8"
-                onClick={handleAddToCalendar}
-              >
-                <CalendarPlus className="h-3.5 w-3.5" />
-                Add to Calendar
-              </Button>
-
-              {/* Mark as Done (if not already) */}
-              {!event.is_acknowledged && onAcknowledge && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 h-8"
-                  onClick={handleAcknowledge}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  Done
-                </Button>
-              )}
+                {/* Dismiss button */}
+                {onDismiss && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={handleDismiss}
+                    disabled={isPending}
+                    title="Dismiss event"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
 
-            {/* VIP indicator from contact */}
-            {event.contacts?.is_vip && (
-              <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-300">
-                VIP Contact
-              </Badge>
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {/* Date, Time, and Locality */}
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            <div className="flex items-center justify-between gap-2">
+              <DateTimeDisplay
+                date={event.date}
+                time={event.event_time}
+                showRelative={!isToday}
+              />
+              <LocalityBadge locality={getLocality(event)} />
+            </div>
+
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {/* Location (from event_metadata) */}
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {getEventMetadata(event)?.location && (
+              <LocationDisplay location={getEventMetadata(event)!.location!} />
             )}
+
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {/* RSVP and Cost Info (from event_metadata) */}
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {(() => {
+              const meta = getEventMetadata(event);
+              if (!meta) return null;
+
+              const showRsvp = meta.rsvpRequired || meta.rsvpDeadline || meta.rsvpUrl;
+              const showCost = meta.cost;
+
+              if (!showRsvp && !showCost) return null;
+
+              return (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  {/* Cost badge */}
+                  {showCost && (
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${
+                        meta.cost?.toLowerCase() === 'free'
+                          ? 'border-green-300 text-green-700 dark:border-green-700 dark:text-green-300'
+                          : 'border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-300'
+                      }`}
+                    >
+                      {meta.cost}
+                    </Badge>
+                  )}
+
+                  {/* RSVP indicator */}
+                  {meta.rsvpRequired && (
+                    <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
+                      RSVP Required
+                    </Badge>
+                  )}
+
+                  {/* RSVP deadline */}
+                  {meta.rsvpDeadline && (
+                    <span className="text-xs text-muted-foreground">
+                      RSVP by {formatEventDate(meta.rsvpDeadline, { short: true })}
+                    </span>
+                  )}
+
+                  {/* RSVP link */}
+                  {meta.rsvpUrl && (
+                    <a
+                      href={meta.rsvpUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+                      onClick={() => logger.info('RSVP link clicked', { eventId: event.id.substring(0, 8) })}
+                    >
+                      Register
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {/* Source email info with View Email button */}
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {showSourceEmail && event.emails && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
+                <Mail className="h-3 w-3 shrink-0" />
+                <span className="truncate flex-1">
+                  From: {event.emails.sender_name || event.emails.sender_email}
+                </span>
+                {event.email_id && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700"
+                    onClick={handleViewEmail}
+                  >
+                    <Eye className="h-3 w-3" />
+                    View email
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            {/* Actions */}
+            {/* ─────────────────────────────────────────────────────────────────── */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-2">
+                {/* Add to Calendar */}
+                <Button
+                  variant={isSavedToCalendar ? 'outline' : 'default'}
+                  size="sm"
+                  className={`gap-1.5 h-8 ${
+                    isSavedToCalendar
+                      ? 'border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-300'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                  onClick={handleAddToCalendar}
+                  disabled={isPending}
+                >
+                  {isSavedToCalendar ? (
+                    <>
+                      <CalendarCheck className="h-3.5 w-3.5" />
+                      Added
+                    </>
+                  ) : (
+                    <>
+                      <CalendarPlus className="h-3.5 w-3.5" />
+                      Add to Calendar
+                    </>
+                  )}
+                </Button>
+
+                {/* Maybe / Watch List button */}
+                {(onSaveToMaybe || onRemoveFromMaybe) && (
+                  <Button
+                    variant={isMaybe ? 'default' : 'outline'}
+                    size="sm"
+                    className={`gap-1.5 h-8 ${
+                      isMaybe
+                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                        : 'hover:border-yellow-300 hover:text-yellow-700'
+                    }`}
+                    onClick={handleMaybeToggle}
+                    disabled={isPending}
+                    title={isMaybe ? 'Remove from maybe list' : 'Save to maybe list'}
+                  >
+                    <Star className={`h-3.5 w-3.5 ${isMaybe ? 'fill-current' : ''}`} />
+                    {isMaybe ? 'Saved' : 'Maybe'}
+                  </Button>
+                )}
+              </div>
+
+              {/* VIP indicator from contact */}
+              {event.contacts?.is_vip && (
+                <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-300">
+                  VIP Contact
+                </Badge>
+              )}
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* Email Preview Modal */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      <EmailPreviewModal
+        emailId={event.email_id}
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        title="Original Email"
+      />
+    </>
   );
 }
 

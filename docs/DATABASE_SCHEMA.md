@@ -760,6 +760,96 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- SELECT cron.schedule('cleanup-old-logs', '0 3 * * *', 'SELECT cleanup_old_logs()');
 ```
 
+### user_event_states
+User decisions about events (dismiss, maybe, saved to calendar).
+Separate from AI analysis to keep user preferences distinct from generated data.
+
+```sql
+CREATE TABLE user_event_states (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email_id UUID NOT NULL REFERENCES emails(id) ON DELETE CASCADE,
+
+  -- State: 'dismissed', 'maybe', 'saved_to_calendar'
+  state TEXT NOT NULL CHECK (state IN ('dismissed', 'maybe', 'saved_to_calendar')),
+
+  -- Optional notes (for future use)
+  notes TEXT,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  -- One state per user per email per state type
+  UNIQUE(user_id, email_id, state)
+);
+
+CREATE INDEX idx_user_event_states_user_id ON user_event_states(user_id);
+CREATE INDEX idx_user_event_states_email_id ON user_event_states(email_id);
+CREATE INDEX idx_user_event_states_user_state ON user_event_states(user_id, state);
+CREATE INDEX idx_user_event_states_lookup ON user_event_states(user_id, email_id, state);
+
+-- RLS Policies
+ALTER TABLE user_event_states ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own event states"
+  ON user_event_states FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own event states"
+  ON user_event_states FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own event states"
+  ON user_event_states FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own event states"
+  ON user_event_states FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Helper function: Check if event has a specific state
+CREATE OR REPLACE FUNCTION has_event_state(
+  p_user_id UUID,
+  p_email_id UUID,
+  p_state TEXT
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM user_event_states
+    WHERE user_id = p_user_id
+      AND email_id = p_email_id
+      AND state = p_state
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Helper function: Get all states for an event
+CREATE OR REPLACE FUNCTION get_event_states(
+  p_user_id UUID,
+  p_email_id UUID
+)
+RETURNS TEXT[] AS $$
+BEGIN
+  RETURN ARRAY(
+    SELECT state FROM user_event_states
+    WHERE user_id = p_user_id
+      AND email_id = p_email_id
+    ORDER BY state
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+#### State Values
+
+| State | Description | UI Effect |
+|-------|-------------|-----------|
+| `dismissed` | User doesn't want to see this event | Event hidden from list unless showDismissed=true |
+| `maybe` | User is interested but not committed | Event shows star badge, appears in Maybe filter |
+| `saved_to_calendar` | User added to their calendar | Calendar button shows "Added" with checkmark |
+
 ## Migration Files Structure
 
 ```
@@ -773,6 +863,8 @@ supabase/migrations/
   007_api_usage_logs.sql          # api_usage_logs (for cost tracking)
   008_rls_policies.sql            # All RLS policies
   009_functions_triggers.sql      # Helper functions + cleanup function
+  ...
+  021_user_event_states.sql       # Event dismiss/maybe/calendar tracking (NEW Jan 2026)
 
   # Phase 2 migrations
   101_urls_table.sql

@@ -18,11 +18,13 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * - Chronological event cards grouped by time period
- * - Quick stats banner (total, today, this week)
- * - Add to Calendar integration
- * - Link to source emails
+ * - Quick stats banner (total, today, this week, maybe, saved)
+ * - Add to Calendar integration with tracking
+ * - Dismiss events (hide from view)
+ * - Save to Maybe (watch list)
+ * - View original email in modal
  * - Toggle to show past events
- * - Acknowledge (mark as done) functionality
+ * - Filter to show only Maybe events
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * ROUTE
@@ -33,10 +35,11 @@
  * Query params:
  *   - highlight: Event ID to scroll to and highlight
  *   - showPast: 'true' to include past events
+ *   - filter: 'maybe' to show only maybe events
  *
  * @module app/(auth)/events/page
- * @version 1.0.0
- * @since January 2026
+ * @version 2.0.0
+ * @since January 2026 - Added dismiss, maybe, calendar tracking, email modal
  */
 
 'use client';
@@ -55,7 +58,7 @@ import {
 } from '@/components/ui';
 import { EventCard } from '@/components/events';
 import { useEvents } from '@/hooks/useEvents';
-import type { EventData, GroupedEvents, EventStats } from '@/hooks/useEvents';
+import type { EventData, EventStats, EventState } from '@/hooks/useEvents';
 import {
   Calendar,
   CalendarDays,
@@ -66,6 +69,8 @@ import {
   ChevronRight,
   History,
   PartyPopper,
+  Star,
+  CalendarPlus,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
@@ -87,7 +92,7 @@ function StatsBanner({ stats }: { stats: EventStats }) {
   logger.debug('Rendering StatsBanner', stats);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
       {/* Total Events */}
       <Card>
         <CardContent className="pt-4">
@@ -123,14 +128,27 @@ function StatsBanner({ stats }: { stats: EventStats }) {
         </CardContent>
       </Card>
 
-      {/* Upcoming */}
+      {/* Maybe List */}
+      <Card className={stats.maybe > 0 ? 'border-yellow-200 bg-yellow-50/50 dark:border-yellow-900 dark:bg-yellow-950/20' : ''}>
+        <CardContent className="pt-4">
+          <div className="flex items-center gap-2">
+            <Star className={`h-4 w-4 ${stats.maybe > 0 ? 'text-yellow-500' : 'text-muted-foreground'}`} />
+            <span className={`text-2xl font-bold ${stats.maybe > 0 ? 'text-yellow-600 dark:text-yellow-400' : ''}`}>
+              {stats.maybe}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Maybe</p>
+        </CardContent>
+      </Card>
+
+      {/* Saved to Calendar */}
       <Card>
         <CardContent className="pt-4">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-purple-500" />
-            <span className="text-2xl font-bold">{stats.upcoming}</span>
+            <CalendarPlus className="h-4 w-4 text-purple-500" />
+            <span className="text-2xl font-bold">{stats.savedToCalendar}</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Upcoming</p>
+          <p className="text-xs text-muted-foreground mt-1">Saved</p>
         </CardContent>
       </Card>
     </div>
@@ -188,7 +206,7 @@ function EventGroupHeader({
 
 /**
  * Event group component.
- * Renders a collapsible group of event cards.
+ * Renders a collapsible group of event cards with full state management.
  */
 function EventGroup({
   title,
@@ -197,7 +215,12 @@ function EventGroup({
   iconColor,
   isHighlighted,
   highlightedEventId,
-  onAcknowledge,
+  onDismiss,
+  onSaveToMaybe,
+  onRemoveFromMaybe,
+  onAddToCalendar,
+  hasState,
+  isStatePending,
 }: {
   title: string;
   events: EventData[];
@@ -205,7 +228,12 @@ function EventGroup({
   iconColor: string;
   isHighlighted?: boolean;
   highlightedEventId?: string | null;
-  onAcknowledge: (id: string) => void;
+  onDismiss: (id: string) => Promise<void>;
+  onSaveToMaybe: (id: string) => Promise<void>;
+  onRemoveFromMaybe: (id: string) => Promise<void>;
+  onAddToCalendar: (id: string) => Promise<void>;
+  hasState: (id: string, state: EventState) => boolean;
+  isStatePending: (id: string) => boolean;
 }) {
   // Start collapsed if this is the "Later" or past group with many events
   const [isCollapsed, setIsCollapsed] = React.useState(
@@ -257,7 +285,13 @@ function EventGroup({
             >
               <EventCard
                 event={event}
-                onAcknowledge={onAcknowledge}
+                onDismiss={onDismiss}
+                onSaveToMaybe={onSaveToMaybe}
+                onRemoveFromMaybe={onRemoveFromMaybe}
+                onAddToCalendar={onAddToCalendar}
+                isMaybe={hasState(event.id, 'maybe')}
+                isSavedToCalendar={hasState(event.id, 'saved_to_calendar')}
+                isPending={isStatePending(event.id)}
                 showSourceEmail
               />
             </div>
@@ -298,19 +332,30 @@ function EventCardSkeleton() {
  * Empty state when no events exist.
  * Shows a friendly message encouraging users that events will appear here.
  */
-function EmptyState({ showPast }: { showPast: boolean }) {
+function EmptyState({ showPast, filterByMaybe }: { showPast: boolean; filterByMaybe: boolean }) {
   return (
     <Card className="border-dashed">
       <CardContent className="flex flex-col items-center justify-center py-12 text-center">
         <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
-          <PartyPopper className="h-8 w-8 text-green-600 dark:text-green-400" />
+          {filterByMaybe ? (
+            <Star className="h-8 w-8 text-yellow-500" />
+          ) : (
+            <PartyPopper className="h-8 w-8 text-green-600 dark:text-green-400" />
+          )}
         </div>
         <CardTitle className="text-lg mb-2">
-          {showPast ? 'No events found' : 'No upcoming events'}
+          {filterByMaybe
+            ? 'No events in your Maybe list'
+            : showPast
+            ? 'No events found'
+            : 'No upcoming events'
+          }
         </CardTitle>
         <CardDescription className="max-w-sm">
-          Events from your emails will appear here as they are detected.
-          This includes meetups, webinars, appointments, and other gatherings.
+          {filterByMaybe
+            ? 'Click the "Maybe" button on events to save them to your watch list.'
+            : 'Events from your emails will appear here as they are detected. This includes meetups, webinars, appointments, and other gatherings.'
+          }
         </CardDescription>
       </CardContent>
     </Card>
@@ -354,9 +399,13 @@ function ErrorBanner({
  *
  * Features:
  * - Events grouped by time period (Today, Tomorrow, This Week, etc.)
- * - Quick stats banner
- * - Add to Calendar functionality
+ * - Quick stats banner with maybe and saved counts
+ * - Dismiss events (hide from view)
+ * - Save to Maybe (watch list)
+ * - Add to Calendar with tracking
+ * - View original email in modal
  * - Toggle to show past events
+ * - Filter to show only Maybe events
  * - Highlight specific event via URL param
  */
 export default function EventsPage() {
@@ -367,15 +416,17 @@ export default function EventsPage() {
   const searchParams = useSearchParams();
   const highlightedEventId = searchParams.get('highlight');
   const showPastParam = searchParams.get('showPast') === 'true';
+  const filterParam = searchParams.get('filter');
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Local State
   // ─────────────────────────────────────────────────────────────────────────────
 
   const [showPast, setShowPast] = React.useState(showPastParam);
+  const [filterByMaybe, setFilterByMaybe] = React.useState(filterParam === 'maybe');
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Fetch events using the hook
+  // Fetch events using the hook with state management
   // ─────────────────────────────────────────────────────────────────────────────
 
   const {
@@ -387,9 +438,15 @@ export default function EventsPage() {
     loadMore,
     hasMore,
     stats,
-    acknowledge,
+    dismiss,
+    saveToMaybe,
+    removeState,
+    trackCalendarSave,
+    hasState,
+    isStatePending,
   } = useEvents({
     includePast: showPast,
+    filterByState: filterByMaybe ? 'maybe' : undefined,
   });
 
   logger.debug('Events page state', {
@@ -397,7 +454,9 @@ export default function EventsPage() {
     hasError: !!error,
     eventCount: events.length,
     showPast,
+    filterByMaybe,
     highlightedEventId: highlightedEventId?.substring(0, 8),
+    stats,
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -420,16 +479,81 @@ export default function EventsPage() {
   // Event Handlers
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const handleAcknowledge = async (eventId: string) => {
-    logger.start('Acknowledge event', { eventId: eventId.substring(0, 8) });
-    await acknowledge(eventId);
-    logger.success('Event acknowledged', { eventId: eventId.substring(0, 8) });
+  /**
+   * Handle dismiss action for an event.
+   */
+  const handleDismiss = async (eventId: string) => {
+    logger.start('Dismiss event', { eventId: eventId.substring(0, 8) });
+    try {
+      await dismiss(eventId);
+      logger.success('Event dismissed', { eventId: eventId.substring(0, 8) });
+    } catch (error) {
+      logger.error('Failed to dismiss event', {
+        eventId: eventId.substring(0, 8),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Handle save to maybe action for an event.
+   */
+  const handleSaveToMaybe = async (eventId: string) => {
+    logger.start('Save to maybe', { eventId: eventId.substring(0, 8) });
+    try {
+      await saveToMaybe(eventId);
+      logger.success('Saved to maybe', { eventId: eventId.substring(0, 8) });
+    } catch (error) {
+      logger.error('Failed to save to maybe', {
+        eventId: eventId.substring(0, 8),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Handle remove from maybe action for an event.
+   */
+  const handleRemoveFromMaybe = async (eventId: string) => {
+    logger.start('Remove from maybe', { eventId: eventId.substring(0, 8) });
+    try {
+      await removeState(eventId, 'maybe');
+      logger.success('Removed from maybe', { eventId: eventId.substring(0, 8) });
+    } catch (error) {
+      logger.error('Failed to remove from maybe', {
+        eventId: eventId.substring(0, 8),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Handle add to calendar action for an event.
+   */
+  const handleAddToCalendar = async (eventId: string) => {
+    logger.start('Track calendar save', { eventId: eventId.substring(0, 8) });
+    try {
+      await trackCalendarSave(eventId);
+      logger.success('Calendar save tracked', { eventId: eventId.substring(0, 8) });
+    } catch (error) {
+      logger.error('Failed to track calendar save', {
+        eventId: eventId.substring(0, 8),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      // Don't throw - this is a background operation
+    }
   };
 
   const handleTogglePast = () => {
     const newShowPast = !showPast;
     logger.info('Toggle show past events', { showPast: newShowPast });
     setShowPast(newShowPast);
+  };
+
+  const handleToggleMaybeFilter = () => {
+    const newFilterByMaybe = !filterByMaybe;
+    logger.info('Toggle maybe filter', { filterByMaybe: newFilterByMaybe });
+    setFilterByMaybe(newFilterByMaybe);
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -486,20 +610,34 @@ export default function EventsPage() {
           {isLoading ? (
             <Skeleton className="h-4 w-32" />
           ) : (
-            `${events.length} event${events.length !== 1 ? 's' : ''}`
+            `${events.length} event${events.length !== 1 ? 's' : ''}${filterByMaybe ? ' in Maybe list' : ''}`
           )}
         </div>
 
-        {/* Show Past Events Toggle */}
-        <Button
-          variant={showPast ? 'secondary' : 'outline'}
-          size="sm"
-          onClick={handleTogglePast}
-          className="gap-2"
-        >
-          <History className="h-3.5 w-3.5" />
-          {showPast ? 'Hide Past' : 'Show Past'}
-        </Button>
+        {/* Filter buttons */}
+        <div className="flex items-center gap-2">
+          {/* Maybe Filter Toggle */}
+          <Button
+            variant={filterByMaybe ? 'default' : 'outline'}
+            size="sm"
+            onClick={handleToggleMaybeFilter}
+            className={`gap-2 ${filterByMaybe ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : ''}`}
+          >
+            <Star className={`h-3.5 w-3.5 ${filterByMaybe ? 'fill-current' : ''}`} />
+            Maybe
+          </Button>
+
+          {/* Show Past Events Toggle */}
+          <Button
+            variant={showPast ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={handleTogglePast}
+            className="gap-2"
+          >
+            <History className="h-3.5 w-3.5" />
+            {showPast ? 'Hide Past' : 'Show Past'}
+          </Button>
+        </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────── */}
@@ -521,7 +659,7 @@ export default function EventsPage() {
         </div>
       ) : !hasAnyEvents ? (
         // ─── Empty State ───────────────────────────────────────────────────────
-        <EmptyState showPast={showPast} />
+        <EmptyState showPast={showPast} filterByMaybe={filterByMaybe} />
       ) : (
         // ─── Event Groups ──────────────────────────────────────────────────────
         <>
@@ -533,7 +671,12 @@ export default function EventsPage() {
               icon={History}
               iconColor="text-gray-500"
               highlightedEventId={highlightedEventId}
-              onAcknowledge={handleAcknowledge}
+              onDismiss={handleDismiss}
+              onSaveToMaybe={handleSaveToMaybe}
+              onRemoveFromMaybe={handleRemoveFromMaybe}
+              onAddToCalendar={handleAddToCalendar}
+              hasState={hasState}
+              isStatePending={isStatePending}
             />
           )}
 
@@ -545,7 +688,12 @@ export default function EventsPage() {
             iconColor="text-green-500"
             isHighlighted={groupedEvents.today.length > 0}
             highlightedEventId={highlightedEventId}
-            onAcknowledge={handleAcknowledge}
+            onDismiss={handleDismiss}
+            onSaveToMaybe={handleSaveToMaybe}
+            onRemoveFromMaybe={handleRemoveFromMaybe}
+            onAddToCalendar={handleAddToCalendar}
+            hasState={hasState}
+            isStatePending={isStatePending}
           />
 
           {/* Tomorrow */}
@@ -555,7 +703,12 @@ export default function EventsPage() {
             icon={Calendar}
             iconColor="text-blue-500"
             highlightedEventId={highlightedEventId}
-            onAcknowledge={handleAcknowledge}
+            onDismiss={handleDismiss}
+            onSaveToMaybe={handleSaveToMaybe}
+            onRemoveFromMaybe={handleRemoveFromMaybe}
+            onAddToCalendar={handleAddToCalendar}
+            hasState={hasState}
+            isStatePending={isStatePending}
           />
 
           {/* This Week */}
@@ -565,7 +718,12 @@ export default function EventsPage() {
             icon={CalendarDays}
             iconColor="text-purple-500"
             highlightedEventId={highlightedEventId}
-            onAcknowledge={handleAcknowledge}
+            onDismiss={handleDismiss}
+            onSaveToMaybe={handleSaveToMaybe}
+            onRemoveFromMaybe={handleRemoveFromMaybe}
+            onAddToCalendar={handleAddToCalendar}
+            hasState={hasState}
+            isStatePending={isStatePending}
           />
 
           {/* Next Week */}
@@ -575,7 +733,12 @@ export default function EventsPage() {
             icon={CalendarDays}
             iconColor="text-orange-500"
             highlightedEventId={highlightedEventId}
-            onAcknowledge={handleAcknowledge}
+            onDismiss={handleDismiss}
+            onSaveToMaybe={handleSaveToMaybe}
+            onRemoveFromMaybe={handleRemoveFromMaybe}
+            onAddToCalendar={handleAddToCalendar}
+            hasState={hasState}
+            isStatePending={isStatePending}
           />
 
           {/* Later */}
@@ -585,7 +748,12 @@ export default function EventsPage() {
             icon={Calendar}
             iconColor="text-gray-500"
             highlightedEventId={highlightedEventId}
-            onAcknowledge={handleAcknowledge}
+            onDismiss={handleDismiss}
+            onSaveToMaybe={handleSaveToMaybe}
+            onRemoveFromMaybe={handleRemoveFromMaybe}
+            onAddToCalendar={handleAddToCalendar}
+            hasState={hasState}
+            isStatePending={isStatePending}
           />
 
           {/* ─── Load More ────────────────────────────────────────────────────── */}

@@ -743,7 +743,77 @@ toast({
 
 ## Recent Changes (January 21, 2026)
 
-### Session 10 (Current) - Events Page Enhancement
+### Session 11 (Current) - Event State Management & Email Preview
+
+Comprehensive event management with dismiss, maybe list, calendar tracking, and email preview modal.
+
+**New Features:**
+
+1. **Dismiss Events** - Hide events you're not interested in
+2. **Save to Maybe** - Watch list for events you're unsure about
+3. **Track Calendar Saves** - Know which events you've added to calendar
+4. **View Original Email** - Modal to peek at source email without leaving Events page
+
+**Database Changes:**
+
+- **NEW: `user_event_states` table** (`supabase/migrations/021_user_event_states.sql`)
+  - Stores user decisions: `dismissed`, `maybe`, `saved_to_calendar`
+  - Separate from AI analysis (keeps preferences distinct from generated data)
+  - Full RLS policies and indexes
+  - Helper functions: `has_event_state()`, `get_event_states()`
+
+**New API Endpoints:**
+
+- **GET `/api/events/[id]/state`** - Get all states for an event
+- **POST `/api/events/[id]/state`** - Add a state (dismiss, maybe, calendar)
+- **DELETE `/api/events/[id]/state`** - Remove a state (un-dismiss, etc.)
+
+**New/Updated Components:**
+
+- **EmailPreviewModal** (`src/components/events/EmailPreviewModal.tsx`, ~400 lines) - NEW
+  - Fetches email on-demand when modal opens
+  - Shows loading skeleton, error state with retry
+  - Displays full email: sender, subject, date, body (HTML sanitized)
+  - Link to view in Gmail for additional actions
+
+- **EventCard** (`src/components/events/EventCard.tsx`) - ENHANCED
+  - Dismiss button (X icon) to hide event
+  - Maybe button (⭐ icon) for watch list
+  - Add to Calendar now tracks the save
+  - "Added" badge when saved to calendar
+  - "View email" button opens EmailPreviewModal
+  - Pending indicator during state operations
+  - Star badge for events in Maybe list
+
+- **useEvents Hook** (`src/hooks/useEvents.ts`) - ENHANCED
+  - State management: `dismiss()`, `saveToMaybe()`, `trackCalendarSave()`, `removeState()`
+  - State checking: `hasState()`, `isStatePending()`
+  - Optimistic UI updates with rollback on failure
+  - Filter by state: `filterByState: 'maybe'`
+  - New stats: `maybe`, `savedToCalendar` counts
+
+- **Events Page** (`src/app/(auth)/events/page.tsx`) - ENHANCED
+  - Stats banner now shows Maybe and Saved counts
+  - "Maybe" filter button to show only watch list
+  - All EventCards wired to state management functions
+  - Empty state for empty Maybe list
+
+**Files Changed:**
+- `supabase/migrations/021_user_event_states.sql` - NEW
+- `src/app/api/events/[id]/state/route.ts` - NEW
+- `src/components/events/EmailPreviewModal.tsx` - NEW
+- `src/components/events/index.ts` - Added EmailPreviewModal export
+- `src/components/events/EventCard.tsx` - Enhanced with state management
+- `src/hooks/useEvents.ts` - Enhanced with state functions
+- `src/app/(auth)/events/page.tsx` - Enhanced with state UI
+
+**Documentation:**
+- `docs/DATABASE_SCHEMA.md` - Added user_event_states table
+- `docs/IMPLEMENTATION_STATUS.md` - This file
+
+---
+
+### Session 10 - Events Page Enhancement
 
 A dedicated Events page with friendly event cards, replacing the category-based filter approach.
 

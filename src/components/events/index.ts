@@ -22,3 +22,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export { EventCard, type EventCardProps } from './EventCard';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL PREVIEW MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { EmailPreviewModal, type EmailPreviewModalProps } from './EmailPreviewModal';
