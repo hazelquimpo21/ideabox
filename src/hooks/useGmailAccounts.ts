@@ -40,8 +40,12 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { createLogger } from '@/lib/utils/logger';
 import type { GmailAccount } from '@/types/database';
+
+const logger = createLogger('useGmailAccounts');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -190,25 +194,84 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Use client-side Supabase directly (same as useSyncStatus) for reliable auth
+  const supabase = useMemo(() => createClient(), []);
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Fetch Accounts
   // ─────────────────────────────────────────────────────────────────────────────
 
   const refetch = useCallback(async () => {
+    logger.debug('Fetching Gmail accounts from database');
+
     try {
       setError(null);
-      const response = await fetch('/api/gmail/accounts');
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to fetch accounts');
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+      if (userError) {
+        logger.error('Failed to get current user', { error: userError.message });
+        throw userError;
       }
 
-      const data = await response.json();
+      if (!user) {
+        logger.warn('No authenticated user found');
+        setError('Not authenticated');
+        return;
+      }
 
-      // Transform and sort accounts (primary first, then by creation date)
-      const rawAccounts: GmailAccountWithCount[] = data.accounts || [];
-      const sortedAccounts = rawAccounts.sort(
+      logger.debug('Fetching accounts for user', { userId: user.id.substring(0, 8) });
+
+      // Fetch accounts (excluding sensitive token fields)
+      const { data: rawAccounts, error: accountsError } = await supabase
+        .from('gmail_accounts')
+        .select(`
+          id,
+          email,
+          display_name,
+          last_sync_at,
+          sync_enabled,
+          created_at,
+          updated_at
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (accountsError) {
+        logger.error('Failed to fetch Gmail accounts', {
+          userId: user.id.substring(0, 8),
+          error: accountsError.message,
+        });
+        throw new Error(accountsError.message);
+      }
+
+      // Get email counts per account
+      const accountsWithCounts = await Promise.all(
+        (rawAccounts || []).map(async (account) => {
+          const { count } = await supabase
+            .from('emails')
+            .select('*', { count: 'exact', head: true })
+            .eq('gmail_account_id', account.id);
+
+          return {
+            ...account,
+            email_count: count || 0,
+          } as GmailAccountWithCount;
+        })
+      );
+
+      // Get latest sync log for status info
+      const { data: latestSyncData } = await supabase
+        .from('sync_logs')
+        .select('status, completed_at, emails_fetched, emails_analyzed, error_message, duration_ms')
+        .eq('user_id', user.id)
+        .order('completed_at', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .single();
+
+      // Sort and transform accounts (primary first = first created)
+      const sortedAccounts = accountsWithCounts.sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
@@ -218,14 +281,19 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
       );
 
       setAccounts(displayAccounts);
-      setLatestSync(data.latestSync || null);
+      setLatestSync(latestSyncData || null);
+
+      logger.success('Gmail accounts fetched', {
+        userId: user.id.substring(0, 8),
+        count: displayAccounts.length,
+      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to fetch accounts';
       setError(message);
-      console.error('Failed to fetch Gmail accounts:', err);
+      logger.error('Failed to fetch Gmail accounts', { error: message });
     }
-  }, []);
+  }, [supabase]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Disconnect Account
@@ -234,27 +302,59 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
   const disconnectAccount = useCallback(
     async (accountId: string): Promise<boolean> => {
       try {
-        const response = await fetch(`/api/gmail/accounts/${accountId}`, {
-          method: 'DELETE',
-        });
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('Not authenticated');
+        }
 
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to disconnect account');
+        // Check account count - cannot disconnect only account
+        const { count: accountCount } = await supabase
+          .from('gmail_accounts')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+
+        if (accountCount === 1) {
+          throw new Error('Cannot disconnect your only account. Add another account first.');
+        }
+
+        // Check if this is the primary account (first created)
+        const { data: firstAccount } = await supabase
+          .from('gmail_accounts')
+          .select('id')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (firstAccount?.id === accountId) {
+          throw new Error('Cannot disconnect your primary account. Disconnect other accounts first.');
+        }
+
+        // Delete the account (cascade will remove associated emails)
+        const { error: deleteError } = await supabase
+          .from('gmail_accounts')
+          .delete()
+          .eq('id', accountId)
+          .eq('user_id', user.id);
+
+        if (deleteError) {
+          throw new Error(deleteError.message);
         }
 
         // Remove from local state
         setAccounts((prev) => prev.filter((a) => a.id !== accountId));
+        logger.success('Gmail account disconnected', { accountId: accountId.substring(0, 8) });
         return true;
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to disconnect account';
         setError(message);
-        console.error('Failed to disconnect Gmail account:', err);
+        logger.error('Failed to disconnect Gmail account', { error: message });
         return false;
       }
     },
-    []
+    [supabase]
   );
 
   // ─────────────────────────────────────────────────────────────────────────────
