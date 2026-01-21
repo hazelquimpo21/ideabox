@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       .from('gmail_accounts')
       .select('id, email, access_token, refresh_token, token_expiry')
       .eq('user_id', user.id)
-      .eq('is_active', true);
+      .eq('sync_enabled', true);
 
     if (accountId) {
       query = query.eq('id', accountId);
