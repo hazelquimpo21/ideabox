@@ -1,19 +1,21 @@
 /**
- * EmailCard Component for Category Cards View
+ * EmailCard Component for Category Cards View (Enhanced)
  *
- * Displays a single email as a compact card with AI-generated summary.
+ * Displays a single email as a compact card with AI-generated intelligence.
  * Designed for the Kanban-style category view where emails are grouped
  * by category in vertical "piles".
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * FEATURES
+ * FEATURES (Enhanced Jan 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
- * - Shows AI-generated summary prominently (the main value proposition)
+ * - AI-generated summary prominently displayed
+ * - Expandable key points section
+ * - Urgency score indicator (visual)
+ * - Quick action badge(s) from analysis
+ * - Topics/tags display
  * - Compact sender and subject display
- * - Quick action badge showing what AI recommends
- * - Unread indicator
+ * - Unread indicator + Star toggle
  * - Click to view full email details
- * - Star toggle
  *
  * @module components/categories/EmailCard
  */
@@ -22,11 +24,31 @@
 
 import * as React from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Star, Mail, MailOpen, Clock, Reply, Calendar, BookmarkCheck, Archive } from 'lucide-react';
+import {
+  Star,
+  Mail,
+  MailOpen,
+  Clock,
+  Reply,
+  Calendar,
+  BookmarkCheck,
+  Archive,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+} from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils/cn';
+import { createLogger } from '@/lib/utils/logger';
+import { EmailKeyPoints } from './EmailKeyPoints';
 import type { Email, QuickActionDb } from '@/types/database';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('EmailCard');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -41,6 +63,10 @@ export interface EmailCardProps {
   onToggleStar?: (email: Email) => void;
   /** Whether the card is currently selected */
   isSelected?: boolean;
+  /** Show enhanced features (key points, urgency, topics) */
+  enhanced?: boolean;
+  /** Default expanded state for key points */
+  defaultExpanded?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -98,12 +124,44 @@ const QUICK_ACTION_CONFIG: Record<QuickActionDb, {
   },
 };
 
+/**
+ * Get urgency styling based on score
+ */
+function getUrgencyStyle(score: number | null | undefined): {
+  className: string;
+  label: string;
+  show: boolean;
+} {
+  if (!score || score < 3) {
+    return { className: '', label: '', show: false };
+  }
+  if (score >= 8) {
+    return {
+      className: 'text-red-600 dark:text-red-400',
+      label: 'Urgent',
+      show: true,
+    };
+  }
+  if (score >= 5) {
+    return {
+      className: 'text-amber-600 dark:text-amber-400',
+      label: 'Important',
+      show: true,
+    };
+  }
+  return {
+    className: 'text-yellow-600 dark:text-yellow-400',
+    label: 'Moderate',
+    show: true,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Displays an email as a compact card with AI summary.
+ * Displays an email as a compact card with AI intelligence.
  *
  * @example
  * ```tsx
@@ -111,6 +169,7 @@ const QUICK_ACTION_CONFIG: Record<QuickActionDb, {
  *   email={email}
  *   onClick={(e) => setSelectedEmail(e)}
  *   onToggleStar={(e) => handleStar(e)}
+ *   enhanced
  * />
  * ```
  */
@@ -119,7 +178,15 @@ export function EmailCard({
   onClick,
   onToggleStar,
   isSelected = false,
+  enhanced = true,
+  defaultExpanded = false,
 }: EmailCardProps) {
+  // ───────────────────────────────────────────────────────────────────────────
+  // State
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const [isExpanded, setIsExpanded] = React.useState(defaultExpanded);
+
   // ───────────────────────────────────────────────────────────────────────────
   // Derived State
   // ───────────────────────────────────────────────────────────────────────────
@@ -133,18 +200,44 @@ export function EmailCard({
     ? formatDistanceToNow(new Date(email.date), { addSuffix: true })
     : '';
 
+  const urgencyStyle = getUrgencyStyle(email.urgency_score);
+  const hasKeyPoints = enhanced && email.key_points && email.key_points.length > 0;
+  const hasTopics = enhanced && email.topics && email.topics.length > 0;
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Debug Logging
+  // ───────────────────────────────────────────────────────────────────────────
+
+  React.useEffect(() => {
+    logger.debug('Rendering email card', {
+      emailId: email.id,
+      isRead: email.is_read,
+      hasKeyPoints: !!email.key_points?.length,
+      hasUrgencyScore: !!email.urgency_score,
+      urgencyScore: email.urgency_score,
+    });
+  }, [email]);
+
   // ───────────────────────────────────────────────────────────────────────────
   // Handlers
   // ───────────────────────────────────────────────────────────────────────────
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    logger.info('Email card clicked', { emailId: email.id });
     onClick?.(email);
   };
 
   const handleStarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    logger.info('Star toggled', { emailId: email.id, wasStarred: email.is_starred });
     onToggleStar?.(email);
+  };
+
+  const handleExpandToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
+    logger.debug('Card expansion toggled', { emailId: email.id, isExpanded: !isExpanded });
   };
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -163,7 +256,9 @@ export function EmailCard({
         isSelected && 'ring-2 ring-primary shadow-md',
       )}
     >
-      {/* Header: Sender + Time + Star */}
+      {/* ─────────────────────────────────────────────────────────────────────
+          HEADER: Sender + Urgency + Time + Star
+      ───────────────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {/* Unread indicator */}
@@ -180,6 +275,17 @@ export function EmailCard({
           )}>
             {senderName}
           </span>
+
+          {/* Urgency indicator (enhanced mode) */}
+          {enhanced && urgencyStyle.show && (
+            <Badge
+              variant="outline"
+              className={cn('text-[10px] px-1 py-0', urgencyStyle.className)}
+            >
+              <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
+              {email.urgency_score}/10
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -201,10 +307,27 @@ export function EmailCard({
               )}
             />
           </button>
+
+          {/* Expand/collapse toggle (if has key points) */}
+          {hasKeyPoints && (
+            <button
+              onClick={handleExpandToggle}
+              className="p-1 hover:bg-muted rounded-sm transition-colors"
+              aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Subject */}
+      {/* ─────────────────────────────────────────────────────────────────────
+          SUBJECT
+      ───────────────────────────────────────────────────────────────────── */}
       <h4 className={cn(
         'text-sm mb-2 line-clamp-1',
         !email.is_read && 'font-medium',
@@ -212,14 +335,60 @@ export function EmailCard({
         {email.subject || '(No subject)'}
       </h4>
 
-      {/* AI Summary - The main feature! */}
-      {email.summary && (
-        <p className="text-sm text-muted-foreground line-clamp-2 mb-2 italic">
-          &ldquo;{email.summary}&rdquo;
+      {/* ─────────────────────────────────────────────────────────────────────
+          AI SUMMARY / GIST
+      ───────────────────────────────────────────────────────────────────── */}
+      {(email.gist || email.summary) && (
+        <p className={cn(
+          'text-sm text-muted-foreground mb-2 italic',
+          isExpanded ? 'line-clamp-none' : 'line-clamp-2'
+        )}>
+          &ldquo;{email.gist || email.summary}&rdquo;
         </p>
       )}
 
-      {/* Footer: Quick Action Badge */}
+      {/* ─────────────────────────────────────────────────────────────────────
+          KEY POINTS (Enhanced, Expandable)
+      ───────────────────────────────────────────────────────────────────── */}
+      {hasKeyPoints && isExpanded && (
+        <div className="mt-2 pt-2 border-t border-dashed">
+          <EmailKeyPoints
+            points={email.key_points!}
+            maxVisible={3}
+            compact
+            defaultExpanded
+          />
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────
+          TOPICS / TAGS (Enhanced)
+      ───────────────────────────────────────────────────────────────────── */}
+      {hasTopics && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {email.topics!.slice(0, 3).map((topic, index) => (
+            <Badge
+              key={`topic-${index}-${topic}`}
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 bg-muted/50"
+            >
+              {topic}
+            </Badge>
+          ))}
+          {email.topics!.length > 3 && (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 text-muted-foreground"
+            >
+              +{email.topics!.length - 3}
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────
+          FOOTER: Quick Action Badge
+      ───────────────────────────────────────────────────────────────────── */}
       {actionConfig && quickAction !== 'none' && quickAction !== 'archive' && (
         <div className="flex items-center justify-between mt-2 pt-2 border-t">
           <Badge
@@ -229,6 +398,16 @@ export function EmailCard({
             {ActionIcon && <ActionIcon className="h-3 w-3" />}
             {actionConfig.label}
           </Badge>
+
+          {/* Relationship signal indicator (enhanced) */}
+          {enhanced && email.relationship_signal === 'negative' && (
+            <span
+              className="text-amber-500 text-xs"
+              title="This sender may need extra attention"
+            >
+              😟
+            </span>
+          )}
         </div>
       )}
     </Card>

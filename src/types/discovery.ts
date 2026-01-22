@@ -194,6 +194,9 @@ export interface SenderInfo {
 /**
  * Summary of emails in a single category.
  * Powers the category cards on the Discovery Dashboard.
+ *
+ * ENHANCED (Jan 2026): Added intelligence fields for urgency, health,
+ * and actionable items to surface AI-analyzed data more prominently.
  */
 export interface CategorySummary {
   /** The category this summary represents */
@@ -215,6 +218,55 @@ export interface CategorySummary {
     title: string;
     date: string; // ISO date string
   };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ENHANCED INTELLIGENCE FIELDS (Jan 2026)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Array of urgency scores (0-10) for emails in this category */
+  urgencyScores?: number[];
+
+  /** Top actionable items that need attention */
+  needsAttention?: NeedsAttentionItem[];
+
+  /** Aggregated relationship health signals */
+  healthSummary?: {
+    positive: number;
+    neutral: number;
+    negative: number;
+  };
+
+  /** AI-generated briefing (2-3 sentences summarizing category status) */
+  briefing?: string;
+
+  /** Upcoming deadlines in this category */
+  upcomingDeadlines?: {
+    title: string;
+    date: string;
+    emailId: string;
+    senderName?: string;
+  }[];
+}
+
+/**
+ * Item that needs user attention in a category.
+ * Used in the "Needs Attention" section of enhanced category cards.
+ */
+export interface NeedsAttentionItem {
+  /** Email ID this item relates to */
+  emailId: string;
+  /** Title/description of what needs attention */
+  title: string;
+  /** Type of attention needed */
+  actionType: 'respond' | 'review' | 'decide' | 'schedule' | 'follow_up' | 'other';
+  /** Sender name */
+  senderName: string;
+  /** Company or client name if known */
+  company?: string;
+  /** Deadline date if applicable */
+  deadline?: string;
+  /** Urgency score (0-10) */
+  urgency: number;
 }
 
 /**

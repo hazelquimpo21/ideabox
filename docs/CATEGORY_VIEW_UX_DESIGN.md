@@ -3,7 +3,18 @@
 > **Created:** January 22, 2026
 > **Author:** Claude (UX/UI Design Review)
 > **Branch:** `claude/design-category-view-fd8Ez`
-> **Status:** Design Proposal - Ready for Review
+> **Status:** Phase 1 & 2 Implemented - Ready for Testing
+
+---
+
+## Implementation Status
+
+| Phase | Feature | Status | Notes |
+|-------|---------|--------|-------|
+| Phase 1 | Enhanced Category Cards | ✅ Implemented | Urgency dots, AI briefing, needs attention, health indicator |
+| Phase 2 | Enhanced Email Rows | ✅ Implemented | Key points, urgency score, topics, relationship signals |
+| Phase 3 | Category Intelligence Bar | ⏳ API Ready | `/api/categories/[category]/intelligence` endpoint done |
+| Phase 4 | Focus Mode | ❌ Not Started | Future enhancement |
 
 ---
 
