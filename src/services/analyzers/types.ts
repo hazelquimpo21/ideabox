@@ -974,6 +974,321 @@ export interface ContactEnrichmentData {
 export type ContactEnrichmentResult = AnalyzerResult<ContactEnrichmentData>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CONTENT DIGEST TYPES (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Link types for extracted URLs.
+ * Helps users understand what a link leads to without clicking.
+ */
+export const LINK_TYPES = [
+  'article',       // News article, blog post, documentation
+  'registration',  // Event registration, signup form
+  'document',      // PDF, doc, spreadsheet to review
+  'video',         // YouTube, Vimeo, video content
+  'product',       // Product page, feature announcement
+  'tool',          // App, SaaS tool, software
+  'social',        // Social media profile/post
+  'unsubscribe',   // Unsubscribe link (low-value but notable)
+  'other',         // Other link types
+] as const;
+
+export type LinkType = typeof LINK_TYPES[number];
+
+/**
+ * Content types for email classification.
+ * More granular than category - describes the structure of the content.
+ */
+export const CONTENT_TYPES = [
+  'single_topic',       // Email about one main thing (product update, request, etc.)
+  'multi_topic_digest', // Newsletter with multiple stories/items
+  'curated_links',      // Link roundup, reading list
+  'personal_update',    // Personal correspondence, life update
+  'transactional',      // Receipt, confirmation, notification
+] as const;
+
+export type ContentType = typeof CONTENT_TYPES[number];
+
+/**
+ * An extracted link with context.
+ * Helps users decide which links are worth clicking.
+ */
+export interface ExtractedLink {
+  /**
+   * The URL itself.
+   */
+  url: string;
+
+  /**
+   * Type of content the link leads to.
+   */
+  type: LinkType;
+
+  /**
+   * Title or label for the link.
+   * Example: "How to use auto-layout 5.0"
+   */
+  title: string;
+
+  /**
+   * Brief description of why this link matters.
+   * Example: "Full tutorial with examples"
+   */
+  description: string;
+
+  /**
+   * Whether this link is the main content of the email.
+   * True for: the article a newsletter is sharing, the registration link for an event.
+   * False for: related links, social follow links, tracking links.
+   */
+  isMainContent: boolean;
+}
+
+/**
+ * A key point extracted from the email.
+ * These are the "what you need to know" bullet points.
+ */
+export interface KeyPoint {
+  /**
+   * The key point itself - a concise, informative statement.
+   * Example: "Figma released auto-layout 5.0 with text wrapping support"
+   */
+  point: string;
+
+  /**
+   * Why this point might be relevant to the user (optional).
+   * Example: "Matches your interest in AI"
+   * Only included for multi-topic digests when matching user interests.
+   */
+  relevance?: string;
+}
+
+/**
+ * Result data from the content digest analyzer.
+ *
+ * This analyzer extracts the SUBSTANCE of an email:
+ * - What is this email actually about? (gist)
+ * - What are the key takeaways? (keyPoints)
+ * - What links are worth knowing about? (links)
+ *
+ * Think of this as having an eager assistant read the email and brief you.
+ *
+ * DESIGN PHILOSOPHY:
+ * - Gist is conversational: "Figma shipped auto-layout 5.0..."
+ * - Key points are specific: include names, dates, numbers, not vague summaries
+ * - Links are filtered: only include ones worth clicking, not tracking pixels
+ * - For newsletters: highlight items matching user interests
+ */
+export interface ContentDigestData {
+  /**
+   * One-two sentence briefing about the email content.
+   * Written like an assistant telling you what the email is about.
+   *
+   * TONE: Conversational, specific, helpful.
+   *
+   * Examples:
+   * - "Figma shipped auto-layout 5.0 - the big thing is text wrapping finally
+   *    works properly. Rolling out to everyone this week."
+   * - "Today's Morning Brew covers the Fed rate decision, Apple's AI features,
+   *    and a deep dive on Costco's hot dog strategy."
+   * - "Sarah from Acme is checking in about the Q1 proposal and wants to know
+   *    your availability for a call next week."
+   */
+  gist: string;
+
+  /**
+   * 2-5 key points - the substance of the email.
+   * Each point should be scannable in 2 seconds.
+   *
+   * GOOD key points are SPECIFIC:
+   * - "Figma released auto-layout 5.0 with text wrapping and min/max widths"
+   * - "Rolling out Monday Jan 27 to all plans including free tier"
+   * - "Breaking change: existing fixed-width text may need adjustment"
+   *
+   * BAD key points are VAGUE:
+   * - "Product update announcement"
+   * - "New features available"
+   * - "Important information included"
+   */
+  keyPoints: KeyPoint[];
+
+  /**
+   * Links extracted from the email with context.
+   * Only includes links worth knowing about - not tracking pixels or generic footers.
+   *
+   * Prioritized by value:
+   * 1. Main content links (isMainContent: true)
+   * 2. Actionable links (registration, documents to review)
+   * 3. Supplementary content (related articles, videos)
+   */
+  links: ExtractedLink[];
+
+  /**
+   * Type of content structure.
+   * Helps UI decide how to display the digest.
+   *
+   * - single_topic: One main thing (show gist prominently)
+   * - multi_topic_digest: Multiple stories (show key points as list)
+   * - curated_links: Link collection (emphasize link list)
+   * - personal_update: Personal email (de-emphasize, more private)
+   * - transactional: Receipt/notification (minimal display)
+   */
+  contentType: ContentType;
+
+  /**
+   * For multi_topic_digest: which topics match user interests.
+   * Helps highlight relevant items in newsletters.
+   * Example: ["AI", "TypeScript"] when user has those interests.
+   */
+  topicsHighlighted?: string[];
+
+  /**
+   * Confidence in the content extraction (0-1).
+   */
+  confidence: number;
+}
+
+/**
+ * Full result from the content digest analyzer.
+ */
+export type ContentDigestResult = AnalyzerResult<ContentDigestData>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENHANCED ACTION EXTRACTOR TYPES (Multi-Action Support - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * A single action item extracted from an email.
+ * Used in the new multi-action format.
+ */
+export interface ActionItem {
+  /**
+   * Type of action required.
+   */
+  type: ActionType;
+
+  /**
+   * Short title for the action.
+   * Example: "Review Q1 proposal"
+   */
+  title: string;
+
+  /**
+   * Detailed description of what needs to be done (optional).
+   */
+  description?: string;
+
+  /**
+   * Deadline if mentioned (ISO 8601 or relative like "Friday").
+   */
+  deadline?: string;
+
+  /**
+   * Priority within this email (1 = highest).
+   * Used to order actions from the same email.
+   */
+  priority: number;
+
+  /**
+   * Estimated time to complete in minutes.
+   */
+  estimatedMinutes?: number;
+
+  /**
+   * The text in the email that triggered this action.
+   * Helps with debugging and user verification.
+   * Example: "Please review by Friday"
+   */
+  sourceLine?: string;
+
+  /**
+   * Confidence in this specific action extraction (0-1).
+   */
+  confidence: number;
+}
+
+/**
+ * Enhanced action extraction data with multi-action support.
+ *
+ * BACKWARDS COMPATIBLE: Old single-action fields are still populated
+ * from the primary (first) action for code that hasn't migrated yet.
+ *
+ * NEW BEHAVIOR (Jan 2026):
+ * - Multiple actions extracted into `actions` array
+ * - Each action has its own priority, deadline, and confidence
+ * - `urgencyScore` reflects the highest urgency across all actions
+ */
+export interface EnhancedActionExtractionData {
+  /**
+   * Whether this email requires any action from the user.
+   * True if at least one action was found.
+   */
+  hasAction: boolean;
+
+  /**
+   * Array of action items found in the email.
+   * Ordered by priority (1 = most important first).
+   * Empty array if hasAction is false.
+   */
+  actions: ActionItem[];
+
+  /**
+   * Index of the primary (most important) action in the actions array.
+   * Usually 0, but may differ if priorities are reordered.
+   */
+  primaryActionIndex: number;
+
+  /**
+   * Highest urgency score across all actions (1-10).
+   * - 1-3: Can wait a week or more
+   * - 4-6: Should be done this week
+   * - 7-8: Should be done in 1-2 days
+   * - 9-10: Urgent, needs immediate attention
+   */
+  urgencyScore: number;
+
+  /**
+   * Overall confidence in the action extraction (0-1).
+   */
+  confidence: number;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LEGACY FIELDS (for backwards compatibility)
+  // These mirror the primary action for code that expects the old format.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * @deprecated Use actions[primaryActionIndex].type instead
+   * Type of the primary action. 'none' if hasAction is false.
+   */
+  actionType: ActionType;
+
+  /**
+   * @deprecated Use actions[primaryActionIndex].title instead
+   * Title of the primary action.
+   */
+  actionTitle?: string;
+
+  /**
+   * @deprecated Use actions[primaryActionIndex].description instead
+   * Description of the primary action.
+   */
+  actionDescription?: string;
+
+  /**
+   * @deprecated Use actions[primaryActionIndex].deadline instead
+   * Deadline of the primary action.
+   */
+  deadline?: string;
+
+  /**
+   * @deprecated Use actions[primaryActionIndex].estimatedMinutes instead
+   * Time estimate for the primary action.
+   */
+  estimatedMinutes?: number;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // AGGREGATED ANALYSIS TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -981,24 +1296,32 @@ export type ContactEnrichmentResult = AnalyzerResult<ContactEnrichmentData>;
  * Combined analysis data from all analyzers.
  * This is stored in the email_analyses table.
  *
- * STRUCTURE (REFACTORED Jan 2026):
+ * STRUCTURE (ENHANCED Jan 2026):
  * - categorization: Always runs (life-bucket classification + summary + labels)
- * - actionExtraction: Always runs (detailed action info)
+ * - contentDigest: Always runs (gist, key points, links extraction) [NEW]
+ * - actionExtraction: Always runs (now supports multiple actions) [ENHANCED]
  * - clientTagging: Always runs (client linking)
  * - dateExtraction: Always runs (timeline intelligence)
  * - eventDetection: Only runs when `has_event` label is present
  * - contactEnrichment: Selective (only for contacts needing enrichment)
- *
- * Future analyzers (Phase 2+):
- * - urlExtraction: Extract and categorize URLs
- * - contentOpportunity: Tweet ideas, networking opportunities
  */
 export interface AggregatedAnalysis {
   /** Categorization results (always present if analysis succeeded) */
   categorization?: CategorizationData;
 
-  /** Action extraction results (always present if analysis succeeded) */
-  actionExtraction?: ActionExtractionData;
+  /**
+   * Content digest results (NEW Jan 2026).
+   * Always runs. Extracts gist, key points, and links for quick scanning.
+   * Think of this as having an assistant read the email and brief you.
+   */
+  contentDigest?: ContentDigestData;
+
+  /**
+   * Action extraction results (ENHANCED Jan 2026).
+   * Now supports multiple actions per email.
+   * Legacy single-action fields still populated for backwards compatibility.
+   */
+  actionExtraction?: ActionExtractionData | EnhancedActionExtractionData;
 
   /** Client tagging results (always present if analysis succeeded) */
   clientTagging?: ClientTaggingData;
@@ -1011,7 +1334,7 @@ export interface AggregatedAnalysis {
 
   /**
    * Event detection results.
-   * Only present when category === 'event'.
+   * Only present when `has_event` label is present.
    * Contains rich event details for calendar integration.
    */
   eventDetection?: EventDetectionData;
@@ -1052,6 +1375,7 @@ export interface EmailProcessingResult {
    */
   results: {
     categorization?: CategorizationResult;
+    contentDigest?: ContentDigestResult;
     actionExtraction?: ActionExtractionResult;
     clientTagging?: ClientTaggingResult;
     dateExtraction?: DateExtractionResult;

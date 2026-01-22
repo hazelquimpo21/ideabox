@@ -108,15 +108,14 @@ export type ActionType = typeof ACTION_TYPES[number];
  * Analyzer configurations.
  * Each analyzer has its own tuned settings.
  *
- * ARCHITECTURE:
+ * ARCHITECTURE (ENHANCED Jan 2026):
  * - categorizer: Always runs first (determines category + summary + quickAction)
- * - actionExtractor: Always runs (detailed action info)
+ * - contentDigest: Always runs (extracts gist, key points, links) [NEW]
+ * - actionExtractor: Always runs (now supports multiple actions) [ENHANCED]
  * - clientTagger: Always runs (client linking)
- * - eventDetector: Conditionally runs when category === 'event'
- *
- * Future analyzers (Phase 2+):
- * - urlExtractor: Extract and categorize URLs
- * - contentOpportunity: Tweet ideas, networking opportunities
+ * - dateExtractor: Always runs (timeline intelligence)
+ * - eventDetector: Conditionally runs when `has_event` label present
+ * - contactEnricher: Selectively runs for contacts needing enrichment
  */
 export const analyzerConfig = {
   /**
@@ -132,7 +131,26 @@ export const analyzerConfig = {
   } satisfies AnalyzerConfig,
 
   /**
+   * Content Digest: Extracts substance of email (gist, key points, links).
+   * NEW (Jan 2026): Enables users to understand emails without reading them.
+   *
+   * Think of this as having an eager assistant read the email and brief you:
+   * - Gist: 1-2 sentence conversational summary of content
+   * - Key Points: 2-5 specific, scannable bullet points
+   * - Links: Extracted URLs with type and context
+   *
+   * Runs on ALL emails. Higher token count for detailed extraction.
+   */
+  contentDigest: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.3, // Slightly higher for natural gist writing
+    maxTokens: 700,   // Needs room for gist + multiple key points + links
+  } satisfies AnalyzerConfig,
+
+  /**
    * Action Extractor: Identifies if/what action is needed.
+   * ENHANCED (Jan 2026): Now supports multiple actions per email.
    * Slightly higher temperature for nuanced action descriptions.
    */
   actionExtractor: {
