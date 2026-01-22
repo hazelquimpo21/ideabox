@@ -1,74 +1,180 @@
 /**
- * CategoryCard Component
+ * CategoryCard Component (Enhanced)
  *
  * Displays a summary card for a single email category on the Discovery Dashboard.
- * Shows count, top senders, sample subjects, and category-specific insights.
+ * Now includes AI-powered intelligence: urgency indicators, briefings,
+ * actionable items, and relationship health.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * FEATURES
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * - Category icon, label, and counts
+ * - Urgency dots showing critical/high/medium urgency items
+ * - AI briefing with natural language status summary
+ * - "Needs Attention" section with top actionable items
+ * - Relationship health indicator
+ * - Top senders and sample subjects
+ * - Category-specific enhancements (events, finance, etc.)
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * USAGE
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * ```tsx
+ * <CategoryCard
+ *   summary={{
+ *     category: 'client_pipeline',
+ *     count: 37,
+ *     unreadCount: 12,
+ *     urgencyScores: [9, 8, 6, 4],
+ *     briefing: "3 clients waiting for responses...",
+ *     needsAttention: [...],
+ *     healthSummary: { positive: 5, neutral: 10, negative: 2 },
+ *   }}
+ * />
+ * ```
  *
  * @module components/discover/CategoryCard
  */
 
 'use client';
 
+import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { formatDistanceToNow, isPast, parseISO } from 'date-fns';
+import { ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { CATEGORY_DISPLAY } from '@/types/discovery';
-import type { CategorySummary } from '@/types/discovery';
+import type { CategorySummary, NeedsAttentionItem } from '@/types/discovery';
+import { UrgencyIndicator } from '@/components/categories/UrgencyIndicator';
+import { RelationshipHealth } from '@/components/categories/RelationshipHealth';
+import { cn } from '@/lib/utils/cn';
+import { createLogger } from '@/lib/utils/logger';
 
-// =============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('CategoryCard');
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
-// =============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export interface CategoryCardProps {
   /** Category summary data */
   summary: CategorySummary;
   /** Whether to show as compact (fewer details) */
   compact?: boolean;
+  /** Whether to show enhanced intelligence sections (default: true) */
+  enhanced?: boolean;
   /** Custom click handler (overrides default navigation) */
   onClick?: (category: CategorySummary) => void;
 }
 
-// =============================================================================
-// COMPONENT
-// =============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Displays a category summary card.
- *
- * @example
- * ```tsx
- * <CategoryCard
- *   summary={{
- *     category: 'action_required',
- *     count: 12,
- *     unreadCount: 8,
- *     topSenders: [...],
- *     sampleSubjects: [...],
- *     insight: '3 are urgent',
- *     urgentCount: 3,
- *   }}
- * />
- * ```
+ * Format a deadline date for display
+ */
+function formatDeadline(dateStr: string | undefined): string | null {
+  if (!dateStr) return null;
+
+  try {
+    const date = parseISO(dateStr);
+    if (isPast(date)) {
+      return 'Overdue';
+    }
+    return formatDistanceToNow(date, { addSuffix: false });
+  } catch (err) {
+    logger.warn('Failed to parse deadline date', { dateStr, error: String(err) });
+    return null;
+  }
+}
+
+/**
+ * Get deadline indicator styling based on urgency
+ */
+function getDeadlineStyle(dateStr: string | undefined, urgency: number): {
+  icon: string;
+  className: string;
+} {
+  if (!dateStr) {
+    return { icon: '💬', className: 'text-muted-foreground' };
+  }
+
+  try {
+    const date = parseISO(dateStr);
+    if (isPast(date)) {
+      return { icon: '⚠️', className: 'text-red-600 dark:text-red-400 font-medium' };
+    }
+    if (urgency >= 8) {
+      return { icon: '🔴', className: 'text-red-600 dark:text-red-400' };
+    }
+    if (urgency >= 5) {
+      return { icon: '⏰', className: 'text-amber-600 dark:text-amber-400' };
+    }
+    return { icon: '📅', className: 'text-muted-foreground' };
+  } catch {
+    return { icon: '💬', className: 'text-muted-foreground' };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Displays a category summary card with AI intelligence.
  */
 export function CategoryCard({
   summary,
   compact = false,
+  enhanced = true,
   onClick,
 }: CategoryCardProps) {
   const router = useRouter();
   const display = CATEGORY_DISPLAY[summary.category];
 
   // ───────────────────────────────────────────────────────────────────────────
+  // Debug Logging
+  // ───────────────────────────────────────────────────────────────────────────
+
+  React.useEffect(() => {
+    logger.debug('Rendering category card', {
+      category: summary.category,
+      count: summary.count,
+      unreadCount: summary.unreadCount,
+      hasUrgencyScores: !!summary.urgencyScores?.length,
+      hasNeedsAttention: !!summary.needsAttention?.length,
+      hasBriefing: !!summary.briefing,
+      hasHealthSummary: !!summary.healthSummary,
+    });
+  }, [summary]);
+
+  // ───────────────────────────────────────────────────────────────────────────
   // Handlers
   // ───────────────────────────────────────────────────────────────────────────
 
   const handleClick = () => {
+    logger.info('Category card clicked', { category: summary.category });
     if (onClick) {
       onClick(summary);
     } else {
-      // Navigate to inbox filtered by this category
       router.push(`/inbox?category=${summary.category}`);
     }
+  };
+
+  const handleNeedsAttentionClick = (item: NeedsAttentionItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    logger.info('Needs attention item clicked', {
+      emailId: item.emailId,
+      actionType: item.actionType,
+    });
+    router.push(`/inbox/${item.emailId}`);
   };
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -78,10 +184,10 @@ export function CategoryCard({
   if (summary.count === 0) {
     return (
       <Card
-        className={`
-          relative overflow-hidden opacity-60 cursor-default
-          ${display.bgColor}
-        `}
+        className={cn(
+          'relative overflow-hidden opacity-60 cursor-default',
+          display.bgColor
+        )}
       >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -95,7 +201,9 @@ export function CategoryCard({
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <p className="text-xs text-muted-foreground">{summary.insight}</p>
+          <p className="text-xs text-muted-foreground">
+            {summary.insight || 'No emails in this category'}
+          </p>
         </CardContent>
       </Card>
     );
@@ -107,21 +215,26 @@ export function CategoryCard({
 
   return (
     <Card
-      className={`
-        relative overflow-hidden cursor-pointer
-        transition-all duration-200
-        hover:shadow-md hover:scale-[1.02]
-        ${display.bgColor}
-      `}
+      className={cn(
+        'relative overflow-hidden cursor-pointer',
+        'transition-all duration-200',
+        'hover:shadow-md hover:scale-[1.02]',
+        display.bgColor
+      )}
       onClick={handleClick}
     >
-      {/* Header */}
+      {/* ─────────────────────────────────────────────────────────────────────
+          HEADER: Category icon, name, counts, urgency dots
+      ───────────────────────────────────────────────────────────────────── */}
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
+          {/* Category icon and label */}
           <div className="flex items-center gap-2">
             <span className="text-2xl">{display.icon}</span>
             <h3 className="font-semibold text-sm">{display.label}</h3>
           </div>
+
+          {/* Counts and urgency */}
           <div className="flex items-center gap-2">
             {/* Unread badge */}
             {summary.unreadCount > 0 && (
@@ -130,21 +243,110 @@ export function CategoryCard({
               </Badge>
             )}
             {/* Total count */}
-            <Badge variant="secondary" className={`text-xs ${display.color}`}>
+            <Badge variant="secondary" className={cn('text-xs', display.color)}>
               {summary.count}
             </Badge>
           </div>
         </div>
+
+        {/* Urgency indicator row (enhanced mode) */}
+        {enhanced && summary.urgencyScores && summary.urgencyScores.length > 0 && (
+          <div className="flex items-center justify-end mt-1">
+            <UrgencyIndicator
+              scores={summary.urgencyScores}
+              maxDots={4}
+              showLabel
+              compact
+            />
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="pt-0 space-y-3">
-        {/* Insight */}
-        <p className={`text-sm font-medium ${display.color}`}>
-          {summary.insight}
-        </p>
+        {/* ─────────────────────────────────────────────────────────────────────
+            AI BRIEFING: Natural language summary (enhanced mode)
+        ───────────────────────────────────────────────────────────────────── */}
+        {enhanced && summary.briefing ? (
+          <div className="rounded-md bg-white/50 dark:bg-black/10 p-2 border border-white/20">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+              AI Briefing
+            </p>
+            <p className={cn('text-sm', display.color)}>
+              {summary.briefing}
+            </p>
+          </div>
+        ) : (
+          /* Fallback to basic insight */
+          <p className={cn('text-sm font-medium', display.color)}>
+            {summary.insight}
+          </p>
+        )}
 
-        {/* Urgent indicator for action_required */}
-        {summary.urgentCount && summary.urgentCount > 0 && (
+        {/* ─────────────────────────────────────────────────────────────────────
+            NEEDS ATTENTION: Top actionable items (enhanced mode)
+        ───────────────────────────────────────────────────────────────────── */}
+        {enhanced && summary.needsAttention && summary.needsAttention.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+              Needs Attention
+            </p>
+            <div className="space-y-1">
+              {summary.needsAttention.slice(0, 3).map((item, index) => {
+                const deadlineText = formatDeadline(item.deadline);
+                const deadlineStyle = getDeadlineStyle(item.deadline, item.urgency);
+
+                return (
+                  <button
+                    key={`attention-${index}-${item.emailId}`}
+                    onClick={(e) => handleNeedsAttentionClick(item, e)}
+                    className={cn(
+                      'w-full flex items-center gap-2 p-1.5 rounded text-left',
+                      'hover:bg-white/50 dark:hover:bg-black/10 transition-colors',
+                      'text-xs'
+                    )}
+                  >
+                    {/* Deadline/urgency indicator */}
+                    <span className={cn('w-12 shrink-0', deadlineStyle.className)}>
+                      {deadlineStyle.icon} {deadlineText || '—'}
+                    </span>
+
+                    {/* Action title */}
+                    <span className="flex-1 truncate font-medium">
+                      {item.title}
+                    </span>
+
+                    {/* Sender */}
+                    <span className="text-muted-foreground truncate max-w-[80px]">
+                      {item.senderName}
+                      {item.company && `, ${item.company}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────────────
+            HEALTH SUMMARY: Relationship signals (enhanced mode)
+        ───────────────────────────────────────────────────────────────────── */}
+        {enhanced && summary.healthSummary && (
+          <div className="pt-1 border-t border-white/20">
+            <RelationshipHealth
+              positive={summary.healthSummary.positive}
+              neutral={summary.healthSummary.neutral}
+              negative={summary.healthSummary.negative}
+              variant="compact"
+            />
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────────────
+            LEGACY SECTIONS: Urgent count, upcoming event
+        ───────────────────────────────────────────────────────────────────── */}
+
+        {/* Urgent indicator for action_required (legacy mode only) */}
+        {!enhanced && summary.urgentCount && summary.urgentCount > 0 && (
           <div className="flex items-center gap-1 text-red-600">
             <span className="text-xs">⚡</span>
             <span className="text-xs font-medium">
@@ -153,7 +355,7 @@ export function CategoryCard({
           </div>
         )}
 
-        {/* Upcoming event for events */}
+        {/* Upcoming event for events category */}
         {summary.upcomingEvent && (
           <div className="text-xs bg-white/50 rounded px-2 py-1">
             <span className="text-muted-foreground">Next: </span>
@@ -161,14 +363,16 @@ export function CategoryCard({
           </div>
         )}
 
-        {/* Top Senders (unless compact) */}
+        {/* ─────────────────────────────────────────────────────────────────────
+            TOP SENDERS (unless compact)
+        ───────────────────────────────────────────────────────────────────── */}
         {!compact && summary.topSenders.length > 0 && (
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Top senders:</p>
             <div className="flex flex-wrap gap-1">
               {summary.topSenders.slice(0, 3).map((sender, i) => (
                 <Badge
-                  key={i}
+                  key={`sender-${i}-${sender.email}`}
                   variant="outline"
                   className="text-xs bg-white/50"
                 >
@@ -184,12 +388,14 @@ export function CategoryCard({
           </div>
         )}
 
-        {/* Sample Subjects (unless compact) */}
-        {!compact && summary.sampleSubjects.length > 0 && (
+        {/* ─────────────────────────────────────────────────────────────────────
+            SAMPLE SUBJECTS (unless compact, non-enhanced mode)
+        ───────────────────────────────────────────────────────────────────── */}
+        {!compact && !enhanced && summary.sampleSubjects.length > 0 && (
           <div className="space-y-1 mt-2">
             {summary.sampleSubjects.slice(0, 2).map((subject, i) => (
               <p
-                key={i}
+                key={`subject-${i}`}
                 className="text-xs text-muted-foreground truncate"
                 title={subject}
               >
@@ -198,18 +404,37 @@ export function CategoryCard({
             ))}
           </div>
         )}
+
+        {/* ─────────────────────────────────────────────────────────────────────
+            FOOTER: View All button (enhanced mode)
+        ───────────────────────────────────────────────────────────────────── */}
+        {enhanced && (
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn('text-xs gap-1', display.color)}
+              onClick={handleClick}
+            >
+              View All {summary.count}
+              <ChevronRight className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
       </CardContent>
 
-      {/* Click indicator */}
-      <div className="absolute bottom-2 right-2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-        Click to view →
-      </div>
+      {/* Click indicator (non-enhanced mode) */}
+      {!enhanced && (
+        <div className="absolute bottom-2 right-2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+          Click to view →
+        </div>
+      )}
     </Card>
   );
 }
 
-// =============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS
-// =============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export default CategoryCard;

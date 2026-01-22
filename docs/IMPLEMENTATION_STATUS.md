@@ -1,8 +1,8 @@
 # IdeaBox - Implementation Status
 
-> **Last Updated:** January 21, 2026
-> **Current Phase:** Phase 1 - Core Features Complete + Events Page Enhancement
-> **Branch:** `claude/plan-event-cards-sidebar-6BOBV`
+> **Last Updated:** January 22, 2026
+> **Current Phase:** Phase 1 - Core Features Complete + Enhanced Category View
+> **Branch:** `claude/design-category-view-fd8Ez`
 
 ## Overview
 
@@ -745,9 +745,103 @@ toast({
 
 ---
 
+## Recent Changes (January 22, 2026)
+
+### Session 13 (Current) - Enhanced Category View with AI Intelligence
+
+Comprehensive UX/UI enhancement to the category view, surfacing rich AI-analyzed data that was previously hidden. The category cards now show urgency indicators, AI briefings, actionable items, and relationship health.
+
+**Design Document:**
+
+- **`docs/CATEGORY_VIEW_UX_DESIGN.md`** - Full UX design specification with wireframes
+
+**New Components** (`src/components/categories/`):
+
+| Component | Lines | Description |
+|-----------|-------|-------------|
+| `UrgencyIndicator.tsx` | ~200 | Visual dots showing urgency levels (red/orange/yellow), animated pulse for critical |
+| `RelationshipHealth.tsx` | ~250 | Aggregated relationship signals (positive/neutral/negative), bar and badge variants |
+| `EmailKeyPoints.tsx` | ~180 | Expandable key points section with progressive disclosure |
+| `EmailActions.tsx` | ~280 | Action buttons for all detected actions, not just primary. Icon and color per action type |
+| `index.ts` | ~25 | Barrel export for all enhanced components |
+
+**Enhanced Components:**
+
+- **CategoryCard** (`src/components/discover/CategoryCard.tsx`) - ENHANCED
+  - NEW: Urgency indicator dots in header
+  - NEW: AI briefing section with natural language summary
+  - NEW: "Needs Attention" section showing top 3 actionable items
+  - NEW: Health summary with relationship signals
+  - NEW: "View All" button footer
+  - NEW: `enhanced` prop to toggle enhanced features (default: true)
+  - Comprehensive logging throughout
+
+- **EmailCard** (`src/components/categories/EmailCard.tsx`) - ENHANCED
+  - NEW: Urgency score badge (color-coded by level)
+  - NEW: Expand/collapse toggle for key points
+  - NEW: Expandable key points section
+  - NEW: Topics/tags display
+  - NEW: Relationship signal indicator (😟 for negative)
+  - NEW: Gist field support (in addition to summary)
+  - NEW: `enhanced` and `defaultExpanded` props
+  - Comprehensive logging throughout
+
+**New API Endpoint:**
+
+- **GET `/api/categories/[category]/intelligence`** - Aggregated category intelligence
+  - Returns: urgencyScores[], needsAttention[], healthSummary, briefing, upcomingDeadlines
+  - Generates natural language briefing from email analysis data
+  - Aggregates relationship signals across category
+
+**Type Extensions:**
+
+- **`CategorySummary`** (`src/types/discovery.ts`) - ENHANCED
+  - NEW: `urgencyScores: number[]` - Array of urgency scores for indicator dots
+  - NEW: `needsAttention: NeedsAttentionItem[]` - Top actionable items
+  - NEW: `healthSummary: { positive, neutral, negative }` - Relationship health
+  - NEW: `briefing: string` - AI-generated natural language summary
+  - NEW: `upcomingDeadlines` - Upcoming deadline dates
+
+- **`NeedsAttentionItem`** (`src/types/discovery.ts`) - NEW
+  - Fields: emailId, title, actionType, senderName, company, deadline, urgency
+
+- **`Email`** (`src/types/database.ts`) - ENHANCED
+  - NEW: `gist: string | null` - Short content briefing
+  - NEW: `key_points: string[] | null` - Extracted key points
+  - NEW: `urgency_score: number | null` - Urgency score (0-10)
+  - NEW: `relationship_signal` - Relationship health signal
+
+**Key Features:**
+
+- ✅ Urgency dots with color coding (🔴 critical, 🟠 high, 🟡 medium)
+- ✅ Animated pulse for critical items
+- ✅ AI briefing with natural language summaries
+- ✅ "Needs Attention" section with top actionable items
+- ✅ Relationship health aggregation
+- ✅ Expandable key points in email cards
+- ✅ Topics/tags display
+- ✅ Category intelligence API endpoint
+- ✅ Comprehensive logging for troubleshooting
+- ✅ Backward compatible with `enhanced={false}` prop
+
+**Files Created/Changed:**
+- `docs/CATEGORY_VIEW_UX_DESIGN.md` - NEW (design document)
+- `src/components/categories/UrgencyIndicator.tsx` - NEW
+- `src/components/categories/RelationshipHealth.tsx` - NEW
+- `src/components/categories/EmailKeyPoints.tsx` - NEW
+- `src/components/categories/EmailActions.tsx` - NEW
+- `src/components/categories/index.ts` - ENHANCED
+- `src/components/discover/CategoryCard.tsx` - ENHANCED
+- `src/components/categories/EmailCard.tsx` - ENHANCED
+- `src/types/discovery.ts` - ENHANCED
+- `src/types/database.ts` - ENHANCED
+- `src/app/api/categories/[category]/intelligence/route.ts` - NEW
+
+---
+
 ## Recent Changes (January 21, 2026)
 
-### Session 12 (Current) - Contacts Display & Sync Improvements
+### Session 12 - Contacts Display & Sync Improvements
 
 Comprehensive improvements to the contacts area: pagination for 50+ contacts, sync progress UX, and CRM-style contact detail page.
 

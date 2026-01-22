@@ -242,6 +242,11 @@ export interface Database {
           labels: string[] | null;
           client_id: string | null;
           project_tags: string[] | null;
+          // Enhanced display fields (Jan 2026)
+          gist: string | null;
+          key_points: string[] | null;
+          urgency_score: number | null;
+          relationship_signal: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           is_read: boolean;
           is_archived: boolean;
           is_starred: boolean;
@@ -274,6 +279,10 @@ export interface Database {
           labels?: string[] | null;
           client_id?: string | null;
           project_tags?: string[] | null;
+          gist?: string | null;
+          key_points?: string[] | null;
+          urgency_score?: number | null;
+          relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           is_read?: boolean;
           is_archived?: boolean;
           is_starred?: boolean;
@@ -306,6 +315,10 @@ export interface Database {
           labels?: string[] | null;
           client_id?: string | null;
           project_tags?: string[] | null;
+          gist?: string | null;
+          key_points?: string[] | null;
+          urgency_score?: number | null;
+          relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           is_read?: boolean;
           is_archived?: boolean;
           is_starred?: boolean;
