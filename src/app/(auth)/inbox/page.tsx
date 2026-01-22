@@ -12,6 +12,7 @@
 // @ts-nocheck - Supabase type generation issue with client-side updates
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout';
 import {
   Card,
@@ -51,6 +52,7 @@ import {
   Trash2,
   MailOpen,
   FolderInput,
+  LayoutGrid,
   // Life-bucket category icons (Jan 2026 refactor)
   Briefcase,
   Building2,
@@ -746,22 +748,33 @@ export default function InboxPage() {
           ...(categoryFilter && categoryFilter !== 'all' ? [{ label: getCategoryLabel(categoryFilter) }] : []),
         ]}
         actions={
-          <Button
-            variant={syncSuccess ? 'default' : 'outline'}
-            size="sm"
-            className={`gap-2 transition-colors ${syncSuccess ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
-            onClick={handleSync}
-            disabled={isSyncing}
-          >
-            {isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : syncSuccess ? (
-              <CheckCircle2 className="h-4 w-4" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            {isSyncing ? 'Syncing...' : syncSuccess ? 'Synced!' : 'Sync'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Category Cards View Toggle */}
+            <Link href="/inbox/categories">
+              <Button variant="outline" size="sm" className="gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                <span className="hidden sm:inline">Category View</span>
+              </Button>
+            </Link>
+
+            {/* Sync Button */}
+            <Button
+              variant={syncSuccess ? 'default' : 'outline'}
+              size="sm"
+              className={`gap-2 transition-colors ${syncSuccess ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
+              onClick={handleSync}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : syncSuccess ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {isSyncing ? 'Syncing...' : syncSuccess ? 'Synced!' : 'Sync'}
+            </Button>
+          </div>
         }
       />
 
