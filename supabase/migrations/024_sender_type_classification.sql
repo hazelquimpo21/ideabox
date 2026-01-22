@@ -252,6 +252,11 @@ COMMENT ON FUNCTION classify_sender_type_from_email IS
 -- STEP 7: Update upsert_contact_from_email to include sender_type hints
 -- ═══════════════════════════════════════════════════════════════════════════════
 
+-- Drop the old 5-parameter version from migration 012 to avoid function overloading conflict
+-- PostgreSQL treats different parameter counts as different functions, so we must explicitly
+-- drop the old signature before creating the enhanced version with sender_type parameters
+DROP FUNCTION IF EXISTS upsert_contact_from_email(UUID, TEXT, TEXT, TIMESTAMPTZ, BOOLEAN);
+
 CREATE OR REPLACE FUNCTION upsert_contact_from_email(
   p_user_id UUID,
   p_email TEXT,
