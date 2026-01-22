@@ -4,26 +4,28 @@
  * Re-exports all analyzer classes and utilities for convenient importing.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * AVAILABLE ANALYZERS
+ * AVAILABLE ANALYZERS (ENHANCED Jan 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * 1. CategorizerAnalyzer - Classifies emails by action needed + summary + quickAction + labels
- * 2. ActionExtractorAnalyzer - Extracts action details from emails
- * 3. ClientTaggerAnalyzer - Links emails to known clients
- * 4. EventDetectorAnalyzer - Extracts rich event details (runs only for event category)
- * 5. DateExtractorAnalyzer - Extracts timeline dates (deadlines, payments, birthdays)
- * 6. ContactEnricherAnalyzer - Enriches contact info (runs selectively)
+ * 2. ContentDigestAnalyzer - Extracts gist, key points, links (NEW Jan 2026)
+ * 3. ActionExtractorAnalyzer - Extracts action details (ENHANCED: multi-action support)
+ * 4. ClientTaggerAnalyzer - Links emails to known clients
+ * 5. EventDetectorAnalyzer - Extracts rich event details (runs only for event category)
+ * 6. DateExtractorAnalyzer - Extracts timeline dates (deadlines, payments, birthdays)
+ * 7. ContactEnricherAnalyzer - Enriches contact info (runs selectively)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * ANALYZER EXECUTION FLOW
+ * ANALYZER EXECUTION FLOW (ENHANCED Jan 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * 1. Categorizer runs first (always) → determines category, summary, quickAction, labels
- * 2. ActionExtractor runs (always) → extracts detailed action info
- * 3. ClientTagger runs (always) → links to known clients
- * 4. DateExtractor runs (always) → extracts timeline dates for Hub
- * 5. EventDetector runs (conditional) → only when category === 'event'
- * 6. ContactEnricher runs (selective) → only for contacts needing enrichment
+ * 1. Categorizer runs (always) → determines category, summary, quickAction, labels
+ * 2. ContentDigest runs (always) → extracts gist, key points, links (NEW)
+ * 3. ActionExtractor runs (always) → extracts MULTIPLE action items (ENHANCED)
+ * 4. ClientTagger runs (always) → links to known clients
+ * 5. DateExtractor runs (always) → extracts timeline dates for Hub
+ * 6. EventDetector runs (conditional) → only when `has_event` label present
+ * 7. ContactEnricher runs (selective) → only for contacts needing enrichment
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE EXAMPLES
@@ -33,6 +35,7 @@
  * // Import individual analyzers
  * import {
  *   CategorizerAnalyzer,
+ *   ContentDigestAnalyzer,
  *   ActionExtractorAnalyzer,
  *   EventDetectorAnalyzer,
  *   DateExtractorAnalyzer,
@@ -42,6 +45,7 @@
  * // Import singleton instances
  * import {
  *   categorizer,
+ *   contentDigestAnalyzer,
  *   actionExtractor,
  *   clientTagger,
  *   eventDetector,
@@ -52,6 +56,7 @@
  * // Import types
  * import type {
  *   CategorizationResult,
+ *   ContentDigestResult,
  *   ActionExtractionResult,
  *   EventDetectionResult,
  *   DateExtractionResult,
@@ -66,8 +71,8 @@
  * ```
  *
  * @module services/analyzers
- * @version 1.2.0
- * @since January 2026 - Added DateExtractor, ContactEnricher, labels
+ * @version 2.0.0
+ * @since January 2026 - Added ContentDigest, enhanced ActionExtractor with multi-action
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -83,7 +88,13 @@ export { BaseAnalyzer, ANALYZER_VERSION } from './base-analyzer';
 // Categorizer - classifies emails by action needed
 export { CategorizerAnalyzer, categorizer } from './categorizer';
 
-// Action Extractor - extracts action details
+// Content Digest - extracts gist, key points, links (NEW Jan 2026)
+export {
+  ContentDigestAnalyzer,
+  contentDigestAnalyzer,
+} from './content-digest';
+
+// Action Extractor - extracts action details (ENHANCED: multi-action support)
 export { ActionExtractorAnalyzer, actionExtractor } from './action-extractor';
 
 // Client Tagger - links emails to clients
@@ -131,9 +142,19 @@ export type {
   CategorizationData,
   CategorizationResult,
 
-  // Action extractor types
+  // Content digest types (NEW Jan 2026)
+  ContentDigestData,
+  ContentDigestResult,
+  KeyPoint,
+  ExtractedLink,
+  LinkType,
+  ContentType,
+
+  // Action extractor types (ENHANCED: multi-action support)
   ActionExtractionData,
   ActionExtractionResult,
+  EnhancedActionExtractionData,
+  ActionItem,
 
   // Client tagger types
   ClientTaggingData,
@@ -160,7 +181,13 @@ export type {
 } from './types';
 
 // Re-export constants
-export { EMAIL_LABELS, DATE_TYPES, RELATIONSHIP_TYPES } from './types';
+export {
+  EMAIL_LABELS,
+  DATE_TYPES,
+  RELATIONSHIP_TYPES,
+  LINK_TYPES,
+  CONTENT_TYPES,
+} from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UTILITY FUNCTIONS

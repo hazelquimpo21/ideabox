@@ -70,6 +70,7 @@
 import { createLogger, logAI } from '@/lib/utils/logger';
 import { createServerClient } from '@/lib/supabase/server';
 import { CategorizerAnalyzer } from '@/services/analyzers/categorizer';
+import { ContentDigestAnalyzer } from '@/services/analyzers/content-digest';
 import { ActionExtractorAnalyzer } from '@/services/analyzers/action-extractor';
 import { ClientTaggerAnalyzer } from '@/services/analyzers/client-tagger';
 import { EventDetectorAnalyzer } from '@/services/analyzers/event-detector';
@@ -91,6 +92,7 @@ import type {
   EmailInput,
   UserContext,
   CategorizationResult,
+  ContentDigestResult,
   ActionExtractionResult,
   ClientTaggingResult,
   EventDetectionResult,
@@ -203,7 +205,10 @@ export class EmailProcessor {
   /** Categorizer analyzer - determines category, summary, quickAction, labels */
   private categorizer: CategorizerAnalyzer;
 
-  /** Action extractor analyzer - extracts detailed action info */
+  /** Content digest analyzer - extracts gist, key points, links (NEW Jan 2026) */
+  private contentDigest: ContentDigestAnalyzer;
+
+  /** Action extractor analyzer - extracts detailed action info (ENHANCED: multi-action) */
   private actionExtractor: ActionExtractorAnalyzer;
 
   /** Client tagger analyzer - links emails to known clients */
@@ -227,13 +232,14 @@ export class EmailProcessor {
    * Initializes all analyzers. Each analyzer checks its own
    * enabled status from config when running.
    *
-   * ANALYZER EXECUTION FLOW:
-   * 1. Categorizer, ActionExtractor, ClientTagger, DateExtractor run in PARALLEL
-   * 2. EventDetector runs AFTER categorizer IF category === 'event'
+   * ANALYZER EXECUTION FLOW (ENHANCED Jan 2026):
+   * 1. Categorizer, ContentDigest, ActionExtractor, ClientTagger, DateExtractor run in PARALLEL
+   * 2. EventDetector runs AFTER categorizer IF `has_event` label present
    * 3. ContactEnricher runs AFTER all if contact needs enrichment
    */
   constructor() {
     this.categorizer = new CategorizerAnalyzer();
+    this.contentDigest = new ContentDigestAnalyzer();
     this.actionExtractor = new ActionExtractorAnalyzer();
     this.clientTagger = new ClientTaggerAnalyzer();
     this.eventDetector = new EventDetectorAnalyzer();
@@ -243,6 +249,7 @@ export class EmailProcessor {
 
     logger.debug('EmailProcessor initialized', {
       categorizerEnabled: this.categorizer.isEnabled(),
+      contentDigestEnabled: this.contentDigest.isEnabled(),
       actionExtractorEnabled: this.actionExtractor.isEnabled(),
       clientTaggerEnabled: this.clientTagger.isEnabled(),
       eventDetectorEnabled: this.eventDetector.isEnabled(),
@@ -342,8 +349,9 @@ export class EmailProcessor {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // PHASE 1: Run core analyzers in parallel
+    // ENHANCED (Jan 2026): Now includes ContentDigest for gist/key points/links
     // ═══════════════════════════════════════════════════════════════════════════
-    const [categorizationResult, actionResult, clientResult, dateResult] =
+    const [categorizationResult, contentDigestResult, actionResult, clientResult, dateResult] =
       await this.runCoreAnalyzers(emailInput, enrichedContext, opts);
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -389,6 +397,7 @@ export class EmailProcessor {
     // ═══════════════════════════════════════════════════════════════════════════
     const aggregatedAnalysis = this.aggregateResults(
       categorizationResult,
+      contentDigestResult,
       actionResult,
       clientResult,
       dateResult,
@@ -399,6 +408,7 @@ export class EmailProcessor {
     // Collect errors from all analyzers
     const errors = this.collectErrors(
       categorizationResult,
+      contentDigestResult,
       actionResult,
       clientResult,
       dateResult,
@@ -418,6 +428,7 @@ export class EmailProcessor {
       analysis: aggregatedAnalysis,
       results: {
         categorization: categorizationResult,
+        contentDigest: contentDigestResult,
         actionExtraction: actionResult,
         clientTagging: clientResult,
         dateExtraction: dateResult,
@@ -452,7 +463,8 @@ export class EmailProcessor {
         if (categorizationResult.success) {
           await this.updateEmailAnalysisFields(
             emailInput.id,
-            categorizationResult.data
+            categorizationResult.data,
+            contentDigestResult.success ? contentDigestResult.data : undefined
           );
         }
 
@@ -573,7 +585,16 @@ export class EmailProcessor {
       summary: aggregatedAnalysis.categorization?.summary?.substring(0, 50),
       quickAction: aggregatedAnalysis.categorization?.quickAction,
       labels: aggregatedAnalysis.categorization?.labels?.slice(0, 3),
+      // Content digest (NEW Jan 2026)
+      gistLength: aggregatedAnalysis.contentDigest?.gist?.length ?? 0,
+      keyPointsCount: aggregatedAnalysis.contentDigest?.keyPoints?.length ?? 0,
+      linksCount: aggregatedAnalysis.contentDigest?.links?.length ?? 0,
+      contentType: aggregatedAnalysis.contentDigest?.contentType,
+      // Actions (ENHANCED: now multi-action)
       hasAction: aggregatedAnalysis.actionExtraction?.hasAction,
+      actionCount: 'actions' in (aggregatedAnalysis.actionExtraction ?? {})
+        ? (aggregatedAnalysis.actionExtraction as { actions?: unknown[] })?.actions?.length ?? 0
+        : aggregatedAnalysis.actionExtraction?.hasAction ? 1 : 0,
       clientMatch: aggregatedAnalysis.clientTagging?.clientMatch,
       datesFound: aggregatedAnalysis.dateExtraction?.dates?.length ?? 0,
       hasEvent: aggregatedAnalysis.eventDetection?.hasEvent ?? false,
@@ -592,18 +613,19 @@ export class EmailProcessor {
   /**
    * Runs all core analyzers in parallel.
    *
-   * Core analyzers run on EVERY email:
+   * Core analyzers run on EVERY email (ENHANCED Jan 2026):
    * - Categorizer: Determines category, summary, quickAction, labels
-   * - ActionExtractor: Extracts detailed action info
+   * - ContentDigest: Extracts gist, key points, links (NEW)
+   * - ActionExtractor: Extracts detailed action info (now multi-action)
    * - ClientTagger: Links to known clients
-   * - DateExtractor: Extracts timeline dates (NEW Jan 2026)
+   * - DateExtractor: Extracts timeline dates
    *
    * Uses Promise.allSettled to ensure all analyzers run even if some fail.
    *
    * @param email - Email to analyze
    * @param context - User context
    * @param opts - Processing options
-   * @returns Tuple of [categorization, action, client, date] results
+   * @returns Tuple of [categorization, contentDigest, action, client, date] results
    */
   private async runCoreAnalyzers(
     email: EmailInput,
@@ -612,6 +634,7 @@ export class EmailProcessor {
   ): Promise<
     [
       CategorizationResult,
+      ContentDigestResult,
       ActionExtractionResult,
       ClientTaggingResult,
       DateExtractionResult
@@ -621,6 +644,7 @@ export class EmailProcessor {
       emailId: email.id,
       analyzers: [
         'Categorizer',
+        this.contentDigest.isEnabled() ? 'ContentDigest' : '(ContentDigest disabled)',
         'ActionExtractor',
         'ClientTagger',
         opts.enableDateExtraction ? 'DateExtractor' : '(DateExtractor disabled)',
@@ -630,9 +654,29 @@ export class EmailProcessor {
     // Build array of analyzer promises
     const analyzerPromises: Promise<unknown>[] = [
       this.categorizer.analyze(email, context),
-      this.actionExtractor.analyze(email, context),
-      this.clientTagger.analyze(email, context),
     ];
+
+    // Add ContentDigest if enabled (NEW Jan 2026)
+    if (this.contentDigest.isEnabled()) {
+      analyzerPromises.push(this.contentDigest.analyze(email, context));
+    } else {
+      // Push a placeholder promise that resolves to a "skipped" result
+      analyzerPromises.push(
+        Promise.resolve({
+          success: true,
+          data: { gist: '', keyPoints: [], links: [], contentType: 'single_topic', confidence: 0 },
+          confidence: 0,
+          tokensUsed: 0,
+          processingTimeMs: 0,
+        } as ContentDigestResult)
+      );
+    }
+
+    // Add remaining core analyzers
+    analyzerPromises.push(
+      this.actionExtractor.analyze(email, context),
+      this.clientTagger.analyze(email, context)
+    );
 
     // Add DateExtractor if enabled
     if (opts.enableDateExtraction && this.dateExtractor.isEnabled()) {
@@ -658,20 +702,24 @@ export class EmailProcessor {
       results[0],
       'Categorizer'
     );
-    const actionResult = this.extractResult<ActionExtractionResult>(
+    const contentDigestResult = this.extractResult<ContentDigestResult>(
       results[1],
+      'ContentDigest'
+    );
+    const actionResult = this.extractResult<ActionExtractionResult>(
+      results[2],
       'ActionExtractor'
     );
     const clientResult = this.extractResult<ClientTaggingResult>(
-      results[2],
+      results[3],
       'ClientTagger'
     );
     const dateResult = this.extractResult<DateExtractionResult>(
-      results[3],
+      results[4],
       'DateExtractor'
     );
 
-    return [categorizationResult, actionResult, clientResult, dateResult];
+    return [categorizationResult, contentDigestResult, actionResult, clientResult, dateResult];
   }
 
   /**
@@ -789,9 +837,11 @@ export class EmailProcessor {
 
   /**
    * Aggregates results from all analyzers into a single object.
+   * ENHANCED (Jan 2026): Now includes contentDigest.
    */
   private aggregateResults(
     categorization: CategorizationResult,
+    contentDigest: ContentDigestResult,
     action: ActionExtractionResult,
     client: ClientTaggingResult,
     date: DateExtractionResult,
@@ -801,6 +851,7 @@ export class EmailProcessor {
     // Calculate totals
     const totalTokensUsed =
       categorization.tokensUsed +
+      contentDigest.tokensUsed +
       action.tokensUsed +
       client.tokensUsed +
       date.tokensUsed +
@@ -809,6 +860,7 @@ export class EmailProcessor {
 
     const totalProcessingTimeMs =
       categorization.processingTimeMs +
+      contentDigest.processingTimeMs +
       action.processingTimeMs +
       client.processingTimeMs +
       date.processingTimeMs +
@@ -818,6 +870,7 @@ export class EmailProcessor {
     return {
       // Include data from successful analyzers only
       categorization: categorization.success ? categorization.data : undefined,
+      contentDigest: contentDigest.success ? contentDigest.data : undefined,
       actionExtraction: action.success ? action.data : undefined,
       clientTagging: client.success ? client.data : undefined,
       dateExtraction: date.success ? date.data : undefined,
@@ -837,9 +890,11 @@ export class EmailProcessor {
 
   /**
    * Collects errors from all analyzers.
+   * ENHANCED (Jan 2026): Now includes contentDigest.
    */
   private collectErrors(
     categorization: CategorizationResult,
+    contentDigest: ContentDigestResult,
     action: ActionExtractionResult,
     client: ClientTaggingResult,
     date: DateExtractionResult,
@@ -850,6 +905,9 @@ export class EmailProcessor {
 
     if (!categorization.success && categorization.error) {
       errors.push({ analyzer: 'Categorizer', error: categorization.error });
+    }
+    if (!contentDigest.success && contentDigest.error) {
+      errors.push({ analyzer: 'ContentDigest', error: contentDigest.error });
     }
     if (!action.success && action.error) {
       errors.push({ analyzer: 'ActionExtractor', error: action.error });
@@ -1045,6 +1103,7 @@ export class EmailProcessor {
 
   /**
    * Saves analysis results to the email_analyses table.
+   * ENHANCED (Jan 2026): Now includes content_digest and multi-action support.
    */
   private async saveAnalysis(
     emailId: string,
@@ -1071,10 +1130,48 @@ export class EmailProcessor {
           }
         : null,
 
-      // Action extraction
+      // Content digest (NEW Jan 2026: gist, key points, links)
+      content_digest: analysis.contentDigest
+        ? {
+            gist: analysis.contentDigest.gist,
+            key_points: analysis.contentDigest.keyPoints?.map(kp => ({
+              point: kp.point,
+              relevance: kp.relevance,
+            })),
+            links: analysis.contentDigest.links?.map(link => ({
+              url: link.url,
+              type: link.type,
+              title: link.title,
+              description: link.description,
+              is_main_content: link.isMainContent,
+            })),
+            content_type: analysis.contentDigest.contentType,
+            topics_highlighted: analysis.contentDigest.topicsHighlighted,
+            confidence: analysis.contentDigest.confidence,
+          }
+        : null,
+
+      // Action extraction (ENHANCED Jan 2026: multi-action support)
       action_extraction: analysis.actionExtraction
         ? {
             has_action: analysis.actionExtraction.hasAction,
+            // NEW: Multi-action array (if present)
+            actions: 'actions' in analysis.actionExtraction
+              ? analysis.actionExtraction.actions?.map(action => ({
+                  type: action.type,
+                  title: action.title,
+                  description: action.description,
+                  deadline: action.deadline,
+                  priority: action.priority,
+                  estimated_minutes: action.estimatedMinutes,
+                  source_line: action.sourceLine,
+                  confidence: action.confidence,
+                }))
+              : undefined,
+            primary_action_index: 'primaryActionIndex' in analysis.actionExtraction
+              ? analysis.actionExtraction.primaryActionIndex
+              : 0,
+            // LEGACY: Single action fields (for backwards compatibility)
             action_type: analysis.actionExtraction.actionType,
             title: analysis.actionExtraction.actionTitle,
             description: analysis.actionExtraction.actionDescription,
@@ -1557,34 +1654,53 @@ export class EmailProcessor {
    * list views can display summary, quick_action, etc. without joining
    * to email_analyses.
    *
-   * Fields updated:
+   * Fields updated (ENHANCED Jan 2026):
    * - category: Primary action-focused category
    * - summary: One-sentence assistant-style summary
    * - quick_action: Suggested triage action
    * - labels: Secondary classification labels
    * - topics: AI-extracted topic keywords
+   * - gist: Content briefing from ContentDigest (NEW)
+   * - key_points: Key bullet points from ContentDigest (NEW)
    */
   private async updateEmailAnalysisFields(
     emailId: string,
-    categorization: CategorizationResult['data']
+    categorization: CategorizationResult['data'],
+    contentDigest?: ContentDigestResult['data']
   ): Promise<void> {
     const supabase = await createServerClient();
 
+    // Build update object
+    const updates: Record<string, unknown> = {
+      category: categorization.category,
+      summary: categorization.summary || null,
+      quick_action: categorization.quickAction || null,
+      labels: categorization.labels || null,
+      topics: categorization.topics || null,
+    };
+
+    // Add content digest fields if available (NEW Jan 2026)
+    if (contentDigest) {
+      updates.gist = contentDigest.gist || null;
+      updates.key_points = contentDigest.keyPoints?.map(kp => kp.point) || null;
+
+      logger.debug('Adding content digest fields to email', {
+        emailId,
+        gistLength: contentDigest.gist?.length ?? 0,
+        keyPointsCount: contentDigest.keyPoints?.length ?? 0,
+      });
+    }
+
     const { error } = await supabase
       .from('emails')
-      .update({
-        category: categorization.category,
-        summary: categorization.summary || null,
-        quick_action: categorization.quickAction || null,
-        labels: categorization.labels || null,
-        topics: categorization.topics || null,
-      })
+      .update(updates)
       .eq('id', emailId);
 
     if (error) {
       logger.warn('Failed to update email analysis fields', {
         emailId,
         category: categorization.category,
+        hasContentDigest: !!contentDigest,
         error: error.message,
       });
     }

@@ -211,87 +211,199 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 
 ---
 
-### 2. Action Extractor Analyzer
+### 2. Action Extractor Analyzer (ENHANCED Jan 2026: Multi-Action Support)
 
 **Purpose:** Determine if email requires action and extract details
 
-**Function Schema:**
+> **ENHANCED (Jan 2026):** Now extracts MULTIPLE action items per email. Many emails contain more than one request:
+> "Can you review the proposal by Friday? Also send headshot. And book travel."
+> This email has THREE actions. The enhanced extractor finds ALL of them.
+
+**Function Schema (Multi-Action):**
 ```typescript
 {
-  name: 'extract_action',
-  description: 'Determines if email requires action and extracts action details',
+  name: 'extract_actions',
+  description: 'Extracts ALL action items from an email with priority and deadline information',
   parameters: {
     type: 'object',
     properties: {
       has_action: {
         type: 'boolean',
-        description: 'Whether this email requires any action from the user',
+        description: 'Whether this email requires ANY action from the user',
       },
-      action_type: {
-        type: 'string',
-        enum: ['respond', 'review', 'create', 'schedule', 'decide', 'none'],
-        description: 'Type of action required',
+      actions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['respond', 'review', 'create', 'schedule', 'decide'] },
+            title: { type: 'string', description: 'Short title. E.g., "Review Q1 proposal"' },
+            description: { type: 'string' },
+            deadline: { type: 'string', description: 'ISO 8601 or relative like "Friday"' },
+            priority: { type: 'integer', description: 'Priority within email (1 = most important)' },
+            estimated_minutes: { type: 'integer' },
+            source_line: { type: 'string', description: 'Text that triggered this action' },
+            confidence: { type: 'number' },
+          },
+          required: ['type', 'title', 'priority', 'confidence'],
+        },
+        maxItems: 10,
       },
-      action_title: {
-        type: 'string',
-        description: 'Short title for the action (e.g., "Reply to client about timeline")',
-      },
-      action_description: {
-        type: 'string',
-        description: 'Detailed description of what needs to be done',
+      primary_action_index: {
+        type: 'integer',
+        description: 'Index of most important action (usually 0)',
       },
       urgency_score: {
         type: 'integer',
         minimum: 1,
         maximum: 10,
-        description: 'How urgent is this action (1=low, 10=critical)',
-      },
-      deadline: {
-        type: 'string',
-        format: 'date-time',
-        description: 'Deadline for this action if mentioned in email (ISO 8601)',
-      },
-      estimated_minutes: {
-        type: 'integer',
-        description: 'Estimated minutes to complete this action',
+        description: 'HIGHEST urgency across all actions',
       },
       confidence: {
         type: 'number',
         minimum: 0,
         maximum: 1,
-        description: 'Confidence in this extraction',
       },
     },
-    required: ['has_action', 'action_type', 'confidence'],
+    required: ['has_action', 'actions', 'urgency_score', 'confidence'],
   },
 }
 ```
 
+**Output Example (Multi-Action):**
+```json
+{
+  "has_action": true,
+  "actions": [
+    { "type": "review", "title": "Review Q1 proposal", "deadline": "Friday", "priority": 1, "confidence": 0.95 },
+    { "type": "respond", "title": "Send headshot for conference", "priority": 2, "confidence": 0.90 },
+    { "type": "create", "title": "Book travel", "priority": 3, "confidence": 0.85 }
+  ],
+  "primary_action_index": 0,
+  "urgency_score": 7,
+  "confidence": 0.92
+}
+```
+
+**Backwards Compatibility:**
+Legacy fields (`actionType`, `actionTitle`, etc.) are still populated from the primary action.
+Existing code continues to work without changes.
+
 **System Prompt:**
 ```
-You are an action extraction specialist. Determine if this email requires any action from the user.
+You are an action extraction specialist. Find ALL action items in an email.
 
 Look for:
-- Questions that need answers
-- Requests for feedback, review, or approval
-- Tasks assigned to the user
-- Decisions that need to be made
-- Meetings/calls that need scheduling
-- Documents that need to be created or reviewed
+- Direct requests: "Can you...", "Please...", "Would you..."
+- Questions that need answers: "What do you think?", "Which option?"
+- Review requests: "Take a look at...", "Check out...", "Review..."
+- Soft requests: "Don't forget to...", "Remember to..."
 
-Be conservative: not every email requires action. FYI emails, pure informational content, 
-and automated notifications typically don't require action.
+"Review" IS an action - if someone asks you to look at something, extract it.
+
+Be conservative: not every email requires action. FYI emails, newsletters,
+automated notifications typically don't require action.
 
 For urgency scoring:
 - 1-3: Can wait a week or more
 - 4-6: Should be done this week
 - 7-8: Should be done in next 1-2 days
 - 9-10: Urgent, needs immediate attention
-
-Estimate time realistically: simple reply = 5 min, complex task = 30+ min
 ```
 
 **Cost:** ~$0.0002 per email (GPT-4.1-mini)
+
+---
+
+### 2b. Content Digest Analyzer (NEW Jan 2026)
+
+**Purpose:** Extract the SUBSTANCE of an email - what it's actually about, key points, and notable links
+
+> Think of this as having an eager assistant read every email and brief you on what you need to know - without reading it yourself.
+
+**Runs:** Always (PHASE 1, parallel with core analyzers)
+
+**What It Extracts:**
+- **Gist**: 1-2 sentence conversational briefing (like an assistant telling you what the email is about)
+- **Key Points**: 2-5 specific, scannable bullet points with real details (names, dates, numbers)
+- **Links**: Notable URLs with type and context (filtered for value, not tracking pixels)
+- **Content Type**: single_topic, multi_topic_digest, curated_links, personal_update, transactional
+
+**Function Schema:**
+```typescript
+{
+  name: 'extract_content_digest',
+  description: 'Extracts gist, key points, and notable links for quick email scanning',
+  parameters: {
+    type: 'object',
+    properties: {
+      gist: {
+        type: 'string',
+        description: 'One-two sentence conversational briefing. Include specifics.',
+      },
+      key_points: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            point: { type: 'string', description: 'Specific, scannable key point' },
+            relevance: { type: 'string', description: 'Why this matters to user (optional)' },
+          },
+          required: ['point'],
+        },
+        minItems: 2,
+        maxItems: 5,
+      },
+      links: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+            type: { type: 'string', enum: ['article', 'registration', 'document', 'video', 'product', 'tool', 'social', 'unsubscribe', 'other'] },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            is_main_content: { type: 'boolean' },
+          },
+          required: ['url', 'type', 'title', 'description', 'is_main_content'],
+        },
+        maxItems: 10,
+      },
+      content_type: {
+        type: 'string',
+        enum: ['single_topic', 'multi_topic_digest', 'curated_links', 'personal_update', 'transactional'],
+      },
+      topics_highlighted: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'For newsletters: which topics match user interests',
+      },
+      confidence: { type: 'number', minimum: 0, maximum: 1 },
+    },
+    required: ['gist', 'key_points', 'links', 'content_type', 'confidence'],
+  },
+}
+```
+
+**Output Examples:**
+
+| Email Type | Gist | Key Points |
+|------------|------|------------|
+| Product Update | "Figma shipped auto-layout 5.0 - text wrapping finally works, plus min/max widths. Rolling out this week." | ["Text wrapping in auto-layout frames", "New min/max width properties", "Rolling out Monday Jan 27"] |
+| Newsletter | "Today's Morning Brew covers the Fed rate decision, Apple's AI features, and Costco's hot dog strategy." | [{"point": "Fed held rates at 5.25%"}, {"point": "Apple Intelligence in iOS 18.4", "relevance": "Matches your AI interest"}] |
+| Client Email | "Sarah from Acme is checking in about Q1 proposal - needs review by Friday and wants to schedule a call." | ["Review proposal by Friday", "Schedule call next week"] |
+
+**Relationship with EventDetector:**
+For event emails, BOTH run:
+- ContentDigest: "Speaker is Jane from Google, topic is AI in Production" (content substance)
+- EventDetector: "Sat Jan 25 at 6pm, local, free, RSVP required" (event logistics)
+
+**Database Storage:**
+- `email_analyses.content_digest` JSONB: Full extraction results
+- `emails.gist` TEXT: Denormalized for fast list display
+- `emails.key_points` TEXT[]: Denormalized for fast list display
+
+**Cost:** ~$0.00018 per email (GPT-4.1-mini)
 
 ---
 
@@ -912,63 +1024,70 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 
 ---
 
-## Analyzer Execution Flow (Jan 2026)
+## Analyzer Execution Flow (ENHANCED Jan 2026)
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        EMAIL PROCESSING PIPELINE                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  PHASE 1: Core Analyzers (run in parallel)                                  │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐     │
-│  │ Categorizer │   │   Action    │   │   Client    │   │    Date     │     │
-│  │             │   │  Extractor  │   │   Tagger    │   │  Extractor  │     │
-│  │ + category  │   │             │   │             │   │             │     │
-│  │ + labels    │   │             │   │             │   │ deadlines,  │     │
-│  │   has_event │   │             │   │             │   │ payments    │     │
-│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘     │
-│         │                 │                 │                 │             │
-│         └────────────┬────┴────────────────┴────────────────┘             │
-│                      │                                                      │
-│                      ▼                                                      │
-│  PHASE 2: Conditional Analyzers                                            │
-│              ┌───────────────┐                                              │
-│              │ labels include│                                              │
-│              │  'has_event'? │                                              │
-│              └───────┬───────┘                                              │
-│                      │                                                      │
-│           ┌─────────┴─────────┐                                            │
-│           │ YES               │ NO                                          │
-│           ▼                   ▼                                             │
-│    ┌─────────────┐     ┌───────────┐                                       │
-│    │    Event    │     │   Skip    │                                       │
-│    │  Detector   │     │  (save $) │                                       │
-│    │             │     └───────────┘                                       │
-│    │ + locality  │                                                          │
-│    │ + location  │                                                          │
-│    │ + RSVP info │                                                          │
-│    └──────┬──────┘                                                          │
-│           │                                                                  │
-│           ▼                                                                  │
-│  PHASE 3: Save Results                                                      │
-│  ┌───────────────────────────────────────────────────────────────────────┐ │
-│  │                                                                       │ │
-│  │  ┌─────────────────┐                  ┌─────────────────────────┐    │ │
-│  │  │ email_analyses  │                  │    extracted_dates       │    │ │
-│  │  │                 │                  │                          │    │ │
-│  │  │ - categorization│                  │ DateExtractor results:   │    │ │
-│  │  │ - actions       │                  │ - date_type: deadline,   │    │ │
-│  │  │ - client        │                  │   payment_due, etc.      │    │ │
-│  │  │ - event_detect- │                  │                          │    │ │
-│  │  │   ion (JSONB)   │                  │ EventDetector results:   │    │ │
-│  │  │                 │                  │ - date_type: 'event'     │    │ │
-│  │  └─────────────────┘                  │ - event_metadata (JSONB) │    │ │
-│  │                                       │   locality, location,    │    │ │
-│  │                                       │   RSVP, cost, etc.       │    │ │
-│  │                                       └─────────────────────────┘    │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                        EMAIL PROCESSING PIPELINE (ENHANCED Jan 2026)                      │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                          │
+│  PHASE 1: Core Analyzers (run in parallel)                                               │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       │
+│  │ Categorizer │ │  Content    │ │   Action    │ │   Client    │ │    Date     │       │
+│  │             │ │   Digest    │ │  Extractor  │ │   Tagger    │ │  Extractor  │       │
+│  │ + category  │ │  (NEW)      │ │ (ENHANCED)  │ │             │ │             │       │
+│  │ + labels    │ │ + gist      │ │ + MULTIPLE  │ │             │ │ deadlines,  │       │
+│  │ + summary   │ │ + keyPoints │ │   actions!  │ │             │ │ payments    │       │
+│  │   has_event │ │ + links     │ │ + priority  │ │             │ │             │       │
+│  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘       │
+│         │               │               │               │               │               │
+│         └───────────────┴───────────────┴───────────────┴───────────────┘               │
+│                                         │                                                │
+│                                         ▼                                                │
+│  PHASE 2: Conditional Analyzers                                                          │
+│              ┌───────────────┐                                                           │
+│              │ labels include│                                                           │
+│              │  'has_event'? │                                                           │
+│              └───────┬───────┘                                                           │
+│                      │                                                                   │
+│           ┌─────────┴─────────┐                                                         │
+│           │ YES               │ NO                                                       │
+│           ▼                   ▼                                                          │
+│    ┌─────────────┐     ┌───────────┐                                                    │
+│    │    Event    │     │   Skip    │                                                    │
+│    │  Detector   │     │  (save $) │                                                    │
+│    │             │     └───────────┘                                                    │
+│    │ + locality  │                                                                       │
+│    │ + location  │     Note: ContentDigest extracts CONTENT substance                   │
+│    │ + RSVP info │           EventDetector extracts EVENT logistics                     │
+│    └──────┬──────┘           Both run for event emails - complementary!                 │
+│           │                                                                              │
+│           ▼                                                                              │
+│  PHASE 3: Save Results                                                                   │
+│  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
+│  │                                                                                   │  │
+│  │  ┌─────────────────────────┐              ┌─────────────────────────┐            │  │
+│  │  │ email_analyses (JSONB)  │              │    extracted_dates      │            │  │
+│  │  │                         │              │                         │            │  │
+│  │  │ - categorization        │              │ DateExtractor results:  │            │  │
+│  │  │ - content_digest (NEW)  │              │ - deadlines, payments   │            │  │
+│  │  │ - action_extraction     │              │                         │            │  │
+│  │  │   (now multi-action!)   │              │ EventDetector results:  │            │  │
+│  │  │ - client_tagging        │              │ - date_type: 'event'    │            │  │
+│  │  │ - event_detection       │              │ - event_metadata        │            │  │
+│  │  └─────────────────────────┘              └─────────────────────────┘            │  │
+│  │                                                                                   │  │
+│  │  ┌─────────────────────────┐                                                     │  │
+│  │  │ emails table (denorm)   │                                                     │  │
+│  │  │                         │                                                     │  │
+│  │  │ + gist (NEW)            │   ← Fast list display without JOIN                  │  │
+│  │  │ + key_points (NEW)      │                                                     │  │
+│  │  │ + summary               │                                                     │  │
+│  │  │ + category, labels      │                                                     │  │
+│  │  └─────────────────────────┘                                                     │  │
+│  └───────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Event Data Flow (Jan 2026 Update)
