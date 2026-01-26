@@ -1,6 +1,6 @@
 # Gmail Email Sending - Implementation Guide
 
-> **Status:** In Progress
+> **Status:** Phase 1-3 Complete (Core Implementation)
 > **Last Updated:** 2026-01-26
 > **Author:** Claude AI Assistant
 
@@ -726,12 +726,244 @@ Location: `/src/lib/gmail/__tests__/gmail-send-service.test.ts`
 
 ---
 
+## Deployment
+
+### Edge Functions Deployment
+
+Deploy all three background Edge Functions:
+
+```bash
+# Deploy scheduled email sender
+supabase functions deploy send-scheduled-emails
+
+# Deploy campaign processor
+supabase functions deploy campaign-processor
+
+# Deploy follow-up checker
+supabase functions deploy follow-up-checker
+```
+
+### Required Environment Variables
+
+Set these in your Supabase project:
+
+```bash
+# For Edge Functions
+supabase secrets set GOOGLE_CLIENT_ID="your-google-client-id"
+supabase secrets set GOOGLE_CLIENT_SECRET="your-google-client-secret"
+supabase secrets set APP_URL="https://your-app-url.com"
+```
+
+### Cron Job Setup
+
+Set up pg_cron jobs to invoke the Edge Functions (run in Supabase SQL editor):
+
+```sql
+-- Enable pg_cron and pg_net extensions
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Send scheduled emails every minute
+SELECT cron.schedule(
+  'send-scheduled-emails',
+  '* * * * *',
+  $$SELECT net.http_post(
+    url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-scheduled-emails',
+    headers := '{"Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
+  )$$
+);
+
+-- Process campaigns every minute
+SELECT cron.schedule(
+  'process-campaigns',
+  '* * * * *',
+  $$SELECT net.http_post(
+    url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/campaign-processor',
+    headers := '{"Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
+  )$$
+);
+
+-- Check follow-ups every hour
+SELECT cron.schedule(
+  'check-follow-ups',
+  '0 * * * *',
+  $$SELECT net.http_post(
+    url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/follow-up-checker',
+    headers := '{"Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
+  )$$
+);
+```
+
+### Database Migration
+
+Run the email sending migration:
+
+```bash
+supabase db push
+```
+
+Or apply manually:
+
+```bash
+psql "$DATABASE_URL" -f supabase/migrations/026_email_sending.sql
+```
+
+---
+
+## Notes for Next Developer
+
+### What's Implemented (Phase 1-3)
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Database schema | ✅ Complete | `supabase/migrations/026_email_sending.sql` |
+| Gmail send service | ✅ Complete | `src/lib/gmail/gmail-send-service.ts` |
+| OAuth send scope flow | ✅ Complete | `src/app/api/auth/add-send-scope/route.ts` |
+| Email send API | ✅ Complete | `src/app/api/emails/send/route.ts` |
+| Outbox API | ✅ Complete | `src/app/api/emails/outbox/route.ts` |
+| Templates API | ✅ Complete | `src/app/api/templates/route.ts` |
+| Tracking pixel | ✅ Complete | `src/app/api/tracking/open/[trackingId]/route.ts` |
+| Quota API | ✅ Complete | `src/app/api/settings/send-quota/route.ts` |
+| ComposeEmail UI | ✅ Complete | `src/components/email/ComposeEmail.tsx` |
+| Sent/Outbox page | ✅ Complete | `src/app/(auth)/sent/page.tsx` |
+| Scheduled emails job | ✅ Complete | `supabase/functions/send-scheduled-emails/index.ts` |
+| Campaign processor job | ✅ Complete | `supabase/functions/campaign-processor/index.ts` |
+| Follow-up checker job | ✅ Complete | `supabase/functions/follow-up-checker/index.ts` |
+
+### What Needs Work (Phase 4+)
+
+1. **Campaign Builder UI** - `/src/components/campaigns/CampaignBuilder.tsx`
+   - Recipient import (CSV paste or contact selection)
+   - Merge field mapping UI
+   - Campaign preview with sample recipient
+   - Start/pause/cancel controls
+
+2. **Campaign API Routes**
+   - `POST /api/campaigns` - Create campaign
+   - `POST /api/campaigns/[id]/start` - Start campaign
+   - `POST /api/campaigns/[id]/pause` - Pause campaign
+   - `GET /api/campaigns/[id]` - Get campaign with stats
+
+3. **Campaign Recipients Table**
+   - Need to add `email_campaign_recipients` table to migration
+   - Currently campaigns use JSONB `recipients` field
+   - For better tracking, split into proper relation table
+
+4. **Templates Page UI** - `/src/app/(auth)/templates/page.tsx`
+   - Template list with categories
+   - Template editor modal
+   - Merge field insertion helper
+
+5. **Reply Detection**
+   - Modify email sync to extract `In-Reply-To` header
+   - Match against `outbound_emails.gmail_message_id`
+   - Update `has_reply` flag
+
+6. **Analytics Dashboard**
+   - Open rates, click rates (once implemented)
+   - Campaign performance charts
+   - Follow-up effectiveness
+
+### Key Technical Details
+
+**MIME Message Building:**
+- Uses RFC 2822 format
+- Subject encoded with UTF-8 base64 (`=?UTF-8?B?...?=`)
+- Multipart/alternative with plain text and HTML parts
+- URL-safe base64 for Gmail API (`-` instead of `+`, `_` instead of `/`)
+
+**Token Refresh:**
+- All Edge Functions check token expiry with 5-minute buffer
+- Refresh via Google OAuth token endpoint
+- Update database with new token and expiry
+
+**Throttling Strategy:**
+- Campaign processor sends max 2 emails per minute per campaign
+- 25-second delay between emails
+- Fits within 1-minute cron interval
+
+**Follow-up Conditions:**
+- `no_reply` - Email opened but no reply (most common)
+- `no_open` - Email not opened
+- `always` - Always follow up after delay
+
+### Database Functions
+
+These helper functions are created by the migration:
+
+```sql
+-- Check if user can send (quota + send scope)
+can_send_email(p_user_id UUID, p_gmail_account_id UUID) RETURNS BOOLEAN
+
+-- Increment daily send count
+increment_send_count(p_user_id UUID) RETURNS BOOLEAN
+
+-- Get remaining quota for today
+get_remaining_quota(p_user_id UUID) RETURNS INTEGER
+
+-- Get scheduled emails ready to send
+get_scheduled_emails_to_send(p_limit INTEGER) RETURNS SETOF outbound_emails
+
+-- Record open event with deduplication
+record_email_open(
+  p_tracking_id UUID,
+  p_ip_address INET,
+  p_user_agent TEXT,
+  p_device_type TEXT,
+  p_email_client TEXT
+) RETURNS BOOLEAN
+```
+
+### Common Issues
+
+1. **"Token has been expired or revoked"**
+   - User may have revoked access
+   - Need to re-authenticate Gmail account
+
+2. **"Insufficient Permission" on send**
+   - User hasn't granted `gmail.send` scope
+   - Redirect to `/api/auth/add-send-scope`
+
+3. **Emails not sending on schedule**
+   - Check pg_cron is enabled
+   - Verify cron job is created
+   - Check Edge Function logs in Supabase dashboard
+
+4. **Tracking pixel blocked**
+   - Gmail's image proxy may cache
+   - Some email clients block remote images
+   - This is expected - tracking won't be 100%
+
+### Testing Tips
+
+1. **Test send scope flow:**
+   - Remove `has_send_scope` from a Gmail account
+   - Try to send - should prompt for authorization
+
+2. **Test scheduling:**
+   - Schedule an email for 2 minutes ahead
+   - Watch Edge Function logs
+
+3. **Test quota:**
+   - Set `quota_limit` to 2 for your user
+   - Try to send 3 emails
+
+4. **Test tracking:**
+   - Send email with tracking enabled
+   - Open in incognito (to avoid Gmail proxy)
+   - Check `email_open_events` table
+
+---
+
 ## Future Enhancements
 
-- [ ] Click tracking (wrap links)
-- [ ] Attachment support
+- [ ] Click tracking (wrap links with redirect)
+- [ ] Attachment support (up to 25MB via Gmail API)
 - [ ] A/B testing for campaigns
 - [ ] Unsubscribe management
-- [ ] Bounce detection
+- [ ] Bounce detection via Gmail API
 - [ ] Advanced analytics dashboard
 - [ ] Email scheduling optimization (best time to send)
+- [ ] Campaign recipient table (split from JSONB)
+- [ ] Rich text editor (TipTap or similar)
+- [ ] Contact autocomplete in ComposeEmail
