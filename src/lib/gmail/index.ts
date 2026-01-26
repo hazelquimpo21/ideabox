@@ -76,6 +76,18 @@ export {
   type WatchOperationResult,
 } from './watch-service';
 
+// Send service for outbound emails
+export {
+  GmailSendService,
+  createGmailSendService,
+  mergeTemplate,
+  extractMergeFields,
+  validateMergeData,
+  type SendEmailOptions,
+  type SendResult,
+  type SendErrorCode,
+} from './gmail-send-service';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ERRORS
 // ═══════════════════════════════════════════════════════════════════════════════
