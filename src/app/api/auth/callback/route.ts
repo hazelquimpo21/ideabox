@@ -35,6 +35,8 @@ import { ADD_ACCOUNT_COOKIE, ORIGINAL_SESSION_COOKIE } from '@/app/api/auth/conn
 
 // Cookie name for add_scope flow (from add-contacts-scope route)
 const ADD_SCOPE_COOKIE = 'ideabox_add_scope_user_id';
+// Cookie name for add_send_scope flow (from add-send-scope route)
+const ADD_SEND_SCOPE_COOKIE = 'ideabox_add_send_scope_user_id';
 import { ADD_GMAIL_COOKIE, OAUTH_STATE_COOKIE } from '@/app/api/auth/add-gmail-account/route';
 import type { Database, TableInsert } from '@/types/database';
 import { createServerClient as createSupabaseServer } from '@/lib/supabase/server';
@@ -103,6 +105,7 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const addAccountCookieValue = cookieStore.get(ADD_ACCOUNT_COOKIE)?.value ?? null;
   const addScopeCookieValue = cookieStore.get(ADD_SCOPE_COOKIE)?.value ?? null;
+  const addSendScopeCookieValue = cookieStore.get(ADD_SEND_SCOPE_COOKIE)?.value ?? null;
   const originalSessionCookieValue = cookieStore.get(ORIGINAL_SESSION_COOKIE)?.value ?? null;
 
   // DEBUG: Log ALL cookies to understand what's being sent
@@ -123,6 +126,8 @@ export async function GET(request: Request) {
 
   // Check if this is "add scope" mode (adding contacts permission)
   const isAddScopeMode = !!addScopeCookieValue || modeParam === 'add_scope';
+  // Check if this is "add send scope" mode (adding gmail.send permission)
+  const isAddSendScopeMode = !!addSendScopeCookieValue || modeParam === 'add_send_scope';
   const returnToPath = searchParams.get('returnTo') || '/contacts';
 
   logger.start('Processing OAuth callback', {
@@ -410,7 +415,35 @@ export async function GET(request: Request) {
         targetUserId: targetUserId.substring(0, 8),
         email: user.email,
         isAddAccountMode,
+        isAddSendScopeMode,
       });
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Update has_send_scope if this was a send scope addition flow
+      // ─────────────────────────────────────────────────────────────────────────
+      if (isAddSendScopeMode) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: sendScopeError } = await (supabase as any)
+          .from('gmail_accounts')
+          .update({
+            has_send_scope: true,
+            send_scope_granted_at: new Date().toISOString(),
+          })
+          .eq('user_id', targetUserId)
+          .eq('email', user.email);
+
+        if (sendScopeError) {
+          logger.warn('Failed to update has_send_scope flag', {
+            targetUserId: targetUserId.substring(0, 8),
+            error: sendScopeError.message,
+          });
+        } else {
+          logger.success('Updated gmail_accounts with send scope', {
+            targetUserId: targetUserId.substring(0, 8),
+            email: user.email,
+          });
+        }
+      }
 
       // ─────────────────────────────────────────────────────────────────────────
       // Start Gmail watch for push notifications (if enabled)
@@ -564,7 +597,14 @@ export async function GET(request: Request) {
 
   let redirectPath: string;
 
-  if (isAddScopeMode) {
+  if (isAddSendScopeMode) {
+    // "Add send scope" mode - redirect back to returnTo path with success
+    redirectPath = `${returnToPath}?send_scope_added=true`;
+    logger.success('Add send scope flow complete - gmail.send permission granted', {
+      userId: user.id.substring(0, 8),
+      email: user.email,
+    });
+  } else if (isAddScopeMode) {
     // "Add scope" mode - redirect back to contacts (or returnTo path)
     redirectPath = `${returnToPath}?scope_added=true`;
     logger.success('Add scope flow complete - contacts permission granted', {
@@ -683,6 +723,24 @@ export async function GET(request: Request) {
   // Clear the add_scope cookies if they were used
   if (isAddScopeMode) {
     response.cookies.set(ADD_SCOPE_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 0, // Delete the cookie
+    });
+    response.cookies.set(ORIGINAL_SESSION_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 0, // Delete the cookie
+    });
+  }
+
+  // Clear the add_send_scope cookies if they were used
+  if (isAddSendScopeMode) {
+    response.cookies.set(ADD_SEND_SCOPE_COOKIE, '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

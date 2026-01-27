@@ -132,11 +132,14 @@ AI-powered email processing system with specialized analyzers that:
 
 ## Non-Goals (For Now)
 - Not replacing Gmail (it's an intelligence layer)
-- Not handling email composition (for now)
 - Not doing AI-generated responses
 - Not processing attachments in Phase 1
 - Not supporting email providers other than Gmail
 - Not a CRM (though has CRM-like features)
+
+> **Note (Jan 2026):** Email composition/sending via Gmail API has been added.
+> Features include: send, schedule, tracking, mail merge, follow-up automation.
+> See `docs/GMAIL_SENDING_IMPLEMENTATION.md` for details.
 
 ## Design Principles
 1. **Modular First**: Every component standalone and replaceable

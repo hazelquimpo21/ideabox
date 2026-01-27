@@ -68,13 +68,21 @@ ideabox/
 │   │   ├── content/              # Content library (Phase 2)
 │   │   ├── events/               # Events calendar (Phase 2)
 │   │   ├── actions/              # Action/to-do list
+│   │   ├── sent/                 # Sent/Outbox view (email sending)
 │   │   └── settings/
 │   ├── api/                      # API routes
 │   │   ├── auth/                 # Gmail OAuth callbacks
 │   │   ├── emails/               # Email CRUD operations
 │   │   │   ├── sync/route.ts     # Trigger email sync
+│   │   │   ├── send/route.ts     # Send/schedule emails
+│   │   │   ├── outbox/route.ts   # List sent/scheduled emails
 │   │   │   ├── [id]/route.ts     # Single email operations
 │   │   │   └── categorize/route.ts
+│   │   ├── templates/            # Email templates
+│   │   │   ├── route.ts          # List/create templates
+│   │   │   └── [id]/route.ts     # Single template operations
+│   │   ├── tracking/             # Email open tracking
+│   │   │   └── open/[trackingId]/route.ts
 │   │   ├── actions/              # Action item operations
 │   │   ├── clients/              # Client CRUD
 │   │   ├── analyzers/            # Trigger analysis jobs
@@ -349,7 +357,7 @@ MAX_BODY_CHARS=16000
 ### 2. Gmail OAuth
 - Tokens encrypted at rest (Supabase handles this)
 - Refresh tokens stored securely
-- Scopes: gmail.readonly, gmail.modify (for labels)
+- Scopes: gmail.readonly, gmail.modify, gmail.send (see GMAIL_SENDING_IMPLEMENTATION.md)
 
 ### 3. API Routes
 - All routes check authentication
