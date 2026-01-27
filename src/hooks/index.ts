@@ -168,3 +168,31 @@ export type {
   UserContextUpdate,
   UseUserContextReturn,
 } from './useUserContext';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL CAMPAIGNS & TEMPLATES HOOKS (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useCampaigns, default as useCampaignsDefault } from './useCampaigns';
+export type {
+  UseCampaignsOptions,
+  UseCampaignsReturn,
+  Campaign,
+  CampaignWithStats,
+  CampaignStatus,
+  CampaignRecipient,
+  CampaignStats,
+  CampaignPreview,
+  CreateCampaignData,
+  FollowUpConfig,
+} from './useCampaigns';
+
+export { useTemplates, default as useTemplatesDefault } from './useTemplates';
+export type {
+  UseTemplatesOptions,
+  UseTemplatesReturn,
+  Template,
+  TemplateStats,
+  CreateTemplateData,
+  UpdateTemplateData,
+} from './useTemplates';

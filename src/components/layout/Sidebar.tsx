@@ -58,6 +58,9 @@ import {
   CalendarDays,  // Timeline page - represents date-based timeline view
   // ─── Events Page Enhancement (Jan 2026) ────────────────────────────────────
   CalendarCheck, // For event cards in sidebar
+  // ─── Gmail Campaign Management (Jan 2026) ──────────────────────────────────
+  Send,          // Campaigns page - represents email outreach campaigns
+  FileText,      // Templates page - represents email template management
 } from 'lucide-react';
 
 import { createLogger } from '@/lib/utils/logger';
@@ -202,6 +205,20 @@ const mainNavItems: NavItem[] = [
     label: 'Clients',
     href: '/clients',
     icon: Users,
+  },
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Gmail Campaign Management: January 2026
+  // Campaign builder and template management for bulk email outreach.
+  // ─────────────────────────────────────────────────────────────────────────────
+  {
+    label: 'Campaigns',
+    href: '/campaigns',
+    icon: Send,
+  },
+  {
+    label: 'Templates',
+    href: '/templates',
+    icon: FileText,
   },
   // ─────────────────────────────────────────────────────────────────────────────
   // Email Intelligence P6: Contact & Timeline Navigation
