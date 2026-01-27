@@ -351,3 +351,73 @@ export async function requireAuth(
 
   return user;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENHANCED RESPONSE HELPERS (with error codes)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Standard API response structure with error code support.
+ */
+export interface ApiResponseWithCode<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  code?: string;
+  meta?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+    hasMore?: boolean;
+  };
+}
+
+/**
+ * Creates a successful JSON response.
+ *
+ * @param data - Response data
+ * @param status - HTTP status code (default: 200)
+ * @returns NextResponse with JSON body
+ *
+ * @example
+ * ```typescript
+ * return createApiSuccess({ campaign: {...} });
+ * return createApiSuccess({ id: '123' }, 201);
+ * ```
+ */
+export function createApiSuccess<T>(
+  data: T,
+  status = 200
+): NextResponse<ApiResponseWithCode<T>> {
+  return NextResponse.json(
+    { success: true, data },
+    { status }
+  );
+}
+
+/**
+ * Creates an error JSON response with optional error code.
+ *
+ * @param message - Error message
+ * @param status - HTTP status code (default: 400)
+ * @param code - Machine-readable error code (e.g., 'VALIDATION_ERROR', 'NOT_FOUND')
+ * @returns NextResponse with error body
+ *
+ * @example
+ * ```typescript
+ * return createApiError('Campaign not found', 404, 'NOT_FOUND');
+ * return createApiError('Invalid request', 400, 'VALIDATION_ERROR');
+ * ```
+ */
+export function createApiError(
+  message: string,
+  status = 400,
+  code?: string
+): NextResponse<ApiResponseWithCode<never>> {
+  logger.error(`API Error: ${message}`, { status, code });
+
+  return NextResponse.json(
+    { success: false, error: message, code },
+    { status }
+  );
+}
