@@ -1,7 +1,8 @@
 # Gmail Campaigns - Phase 4+ Implementation Plan
 
-> **Status:** Planning
+> **Status:** Phase 4-5 Complete, Phase 6-7 Pending
 > **Created:** 2026-01-27
+> **Last Updated:** 2026-01-27
 > **Target:** Complete Campaign Builder, Templates UI, Reply Detection, Analytics
 
 ## Overview
@@ -10,9 +11,25 @@ This document outlines the implementation plan for the remaining Gmail email sen
 
 ---
 
-## Current State Summary
+## Implementation Status Summary
 
-### What's Already Built (Phases 1-3)
+| Phase | Component | Status |
+|-------|-----------|--------|
+| 1-3 | Core Infrastructure | ✅ Complete |
+| 4.1 | Campaign API Routes | ✅ Complete |
+| 4.2 | Campaign Builder UI | ✅ Complete |
+| 4.3 | Campaigns List Page | ✅ Complete |
+| 4.4 | Campaign Detail Page | ✅ Complete |
+| 5.1 | Templates List Page | ✅ Complete |
+| 5.2 | Template Editor Modal | ✅ Complete |
+| 6 | Reply Detection | ⏳ Pending |
+| 7 | Analytics Dashboard | ⏳ Pending |
+
+---
+
+## What's Been Built (Phases 1-5)
+
+### Core Infrastructure (Phases 1-3) - Previously Complete
 
 | Component | Location | Status |
 |-----------|----------|--------|
@@ -26,482 +43,210 @@ This document outlines the implementation plan for the remaining Gmail email sen
 | Sent/Outbox page | `src/app/(auth)/sent/page.tsx` | ✅ Complete |
 | Background jobs (3) | `supabase/functions/` | ✅ Complete |
 
----
+### Campaign Management (Phase 4-5) - Just Completed
 
-## Phase 4: Campaign Builder & API
-
-### 4.1 Campaign API Routes
-
-**Location:** `src/app/api/campaigns/`
-
-#### Routes to Create:
-
-```
-GET    /api/campaigns              - List all campaigns
-POST   /api/campaigns              - Create new campaign
-GET    /api/campaigns/[id]         - Get campaign with stats
-PATCH  /api/campaigns/[id]         - Update campaign (draft only)
-DELETE /api/campaigns/[id]         - Delete campaign
-POST   /api/campaigns/[id]/start   - Start/resume campaign
-POST   /api/campaigns/[id]/pause   - Pause campaign
-POST   /api/campaigns/[id]/cancel  - Cancel campaign
-POST   /api/campaigns/[id]/preview - Preview merged email
-GET    /api/campaigns/[id]/emails  - Get campaign's sent emails
-```
-
-#### Request/Response Examples:
-
-**POST /api/campaigns**
-```json
-{
-  "name": "January Newsletter",
-  "description": "Monthly product updates",
-  "accountId": "uuid",
-  "subjectTemplate": "{{first_name}}, check out our January updates",
-  "bodyHtmlTemplate": "<p>Hi {{first_name}},</p><p>Here's what's new...</p>",
-  "recipients": [
-    { "email": "john@example.com", "first_name": "John", "company": "Acme" },
-    { "email": "jane@example.com", "first_name": "Jane", "company": "TechCo" }
-  ],
-  "throttleSeconds": 25,
-  "followUp": {
-    "enabled": true,
-    "condition": "no_reply",
-    "delayHours": 48,
-    "subject": "Following up - {{first_name}}",
-    "bodyHtml": "<p>Hi {{first_name}}, just checking in...</p>"
-  },
-  "scheduledAt": "2026-01-28T09:00:00Z"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "campaign-uuid",
-    "status": "draft",
-    "totalRecipients": 2,
-    "createdAt": "2026-01-27T..."
-  }
-}
-```
-
-#### Implementation Details:
-
-1. **Route: `src/app/api/campaigns/route.ts`**
-   - GET: List campaigns with pagination, filter by status
-   - POST: Create campaign, validate recipients, extract merge fields
-
-2. **Route: `src/app/api/campaigns/[id]/route.ts`**
-   - GET: Return campaign with aggregated stats
-   - PATCH: Update only if status is 'draft'
-   - DELETE: Only allow for draft/cancelled campaigns
-
-3. **Route: `src/app/api/campaigns/[id]/start/route.ts`**
-   - POST: Transition status from draft/scheduled/paused to in_progress
-   - Set started_at timestamp
-   - Validate user has quota remaining
-
-4. **Route: `src/app/api/campaigns/[id]/pause/route.ts`**
-   - POST: Transition status from in_progress to paused
-   - Set paused_at timestamp
-   - Store current_index for resuming
-
-5. **Route: `src/app/api/campaigns/[id]/cancel/route.ts`**
-   - POST: Transition status to cancelled
-   - Prevent further sends
-
-6. **Route: `src/app/api/campaigns/[id]/preview/route.ts`**
-   - POST: Merge template with sample recipient data
-   - Return preview HTML for UI display
-
-7. **Route: `src/app/api/campaigns/[id]/emails/route.ts`**
-   - GET: List outbound_emails for this campaign
-   - Include open/reply stats per email
+| Component | Location | Status |
+|-----------|----------|--------|
+| Campaign API Routes | `src/app/api/campaigns/` | ✅ Complete |
+| useCampaigns hook | `src/hooks/useCampaigns.ts` | ✅ Complete |
+| useTemplates hook | `src/hooks/useTemplates.ts` | ✅ Complete |
+| Campaigns list page | `src/app/(auth)/campaigns/page.tsx` | ✅ Complete |
+| Campaign builder wizard | `src/app/(auth)/campaigns/new/page.tsx` | ✅ Complete |
+| Campaign detail page | `src/app/(auth)/campaigns/[id]/page.tsx` | ✅ Complete |
+| Templates list page | `src/app/(auth)/templates/page.tsx` | ✅ Complete |
+| Sidebar navigation | `src/components/layout/Sidebar.tsx` | ✅ Updated |
+| API utilities | `src/lib/api/utils.ts` | ✅ Updated |
 
 ---
 
-### 4.2 Campaign Builder UI
+## Files Created/Modified in Phase 4-5
 
-**Location:** `src/components/campaigns/CampaignBuilder.tsx`
-
-#### Component Structure:
+### API Routes Created
 
 ```
-CampaignBuilder/
-├── CampaignBuilder.tsx          - Main container (stepper/wizard)
-├── CampaignNameStep.tsx         - Name, description, account selection
-├── RecipientImportStep.tsx      - CSV import or contact selection
-├── TemplateEditorStep.tsx       - Subject/body with merge field helper
-├── SettingsStep.tsx             - Throttling, follow-up config
-├── ReviewStep.tsx               - Preview and confirmation
-└── index.ts                     - Barrel exports
+src/app/api/campaigns/
+├── route.ts                    # GET list, POST create
+└── [id]/
+    ├── route.ts                # GET single, PATCH update, DELETE
+    ├── start/route.ts          # POST start campaign
+    ├── pause/route.ts          # POST pause campaign
+    ├── cancel/route.ts         # POST cancel campaign
+    ├── preview/route.ts        # POST preview merged email
+    └── emails/route.ts         # GET list campaign emails
 ```
 
-#### Features:
-
-**Step 1: Campaign Info**
-- Campaign name (required)
-- Description (optional)
-- Gmail account selector
-- Template selector (optional, pre-fill subject/body)
-
-**Step 2: Recipients**
-- **CSV Import:**
-  - Textarea for paste (or file upload)
-  - Parse CSV with header detection
-  - Column mapping UI (map CSV columns to merge fields)
-  - Preview parsed recipients table
-  - Validation (email format, required fields)
-
-- **Contact Selection:**
-  - Search contacts from database
-  - Filter by tags, recent, VIPs
-  - Multi-select checkboxes
-  - Auto-fill merge data from contact profile
-
-**Step 3: Email Content**
-- Subject line input with merge field buttons
-- Rich text body editor (or Textarea for HTML)
-- Merge field palette: `{{first_name}}`, `{{last_name}}`, etc.
-- Insert merge field at cursor
-- Live preview with sample recipient data
-
-**Step 4: Settings**
-- Throttle delay (15s, 25s, 45s, 60s)
-- Schedule start time (optional)
-- Follow-up configuration:
-  - Enable/disable
-  - Condition selector
-  - Delay hours
-  - Follow-up subject/body
-
-**Step 5: Review & Launch**
-- Campaign summary
-- Recipient count
-- Email preview (merged with first recipient)
-- Estimated send completion time
-- "Save as Draft" or "Start Campaign" buttons
-
-#### UI Mockup (ASCII):
+### UI Pages Created
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Create Campaign                                                    [X]  │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ● Info  ━━━○ Recipients  ━━━○ Content  ━━━○ Settings  ━━━○ Review     │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  Campaign Name *                                                 │   │
-│  │  ┌─────────────────────────────────────────────────────────┐     │   │
-│  │  │ January Newsletter                                      │     │   │
-│  │  └─────────────────────────────────────────────────────────┘     │   │
-│  │                                                                  │   │
-│  │  Description                                                     │   │
-│  │  ┌─────────────────────────────────────────────────────────┐     │   │
-│  │  │ Monthly product updates for subscribers                 │     │   │
-│  │  └─────────────────────────────────────────────────────────┘     │   │
-│  │                                                                  │   │
-│  │  Send From                                                       │   │
-│  │  ┌─────────────────────────────────────────────────┐ [▼]         │   │
-│  │  │ john@example.com                                │             │   │
-│  │  └─────────────────────────────────────────────────┘             │   │
-│  │                                                                  │   │
-│  │  Use Template (optional)                                         │   │
-│  │  ┌─────────────────────────────────────────────────┐ [▼]         │   │
-│  │  │ Select a template...                            │             │   │
-│  │  └─────────────────────────────────────────────────┘             │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                         │
-│                                          [Cancel]  [Next →]             │
-└─────────────────────────────────────────────────────────────────────────┘
+src/app/(auth)/
+├── campaigns/
+│   ├── page.tsx               # Campaigns list with stats cards
+│   ├── new/page.tsx           # 5-step campaign builder wizard
+│   └── [id]/page.tsx          # Campaign detail with progress
+└── templates/
+    └── page.tsx               # Templates list with editor modal
+```
+
+### Hooks Created
+
+```
+src/hooks/
+├── useCampaigns.ts            # Campaign CRUD + lifecycle actions
+├── useTemplates.ts            # Template CRUD + categories
+└── index.ts                   # Updated with new exports
+```
+
+### Files Modified
+
+```
+src/components/layout/Sidebar.tsx    # Added Campaigns & Templates nav links
+src/lib/api/utils.ts                 # Added createApiSuccess, createApiError
 ```
 
 ---
 
-### 4.3 Campaigns List Page
+## Key Implementation Details
 
-**Location:** `src/app/(auth)/campaigns/page.tsx`
+### Campaign Builder Wizard (5 Steps)
 
-#### Features:
-- Campaign list with status badges
-- Progress bars for in_progress campaigns
-- Quick actions: Start, Pause, Cancel, Delete
-- Filter by status
-- Search by name
-- Click to view campaign details
+1. **Info Step** - Name, description, Gmail account selection, optional template
+2. **Recipients Step** - CSV paste/import with header detection and merge field mapping
+3. **Content Step** - Subject/body editors with merge field palette and live preview
+4. **Settings Step** - Throttle delay, scheduling, follow-up configuration
+5. **Review Step** - Summary and email preview before launch
 
-#### Campaign Detail Page: `src/app/(auth)/campaigns/[id]/page.tsx`
+### Merge Fields
 
-- Campaign info summary
-- Real-time progress (sent/total)
-- Email list with individual stats
-- Open rate, reply rate metrics
-- Pause/Resume/Cancel controls
+- Format: `{{field_name}}`
+- Auto-detected from subject and body templates
+- Common fields: `first_name`, `last_name`, `email`, `company`
+- CSV header normalization (e.g., "First Name" → "first_name")
+
+### Campaign Status Flow
+
+```
+draft → scheduled → in_progress → completed
+                 ↓         ↓
+              paused → in_progress
+                 ↓
+            cancelled
+```
+
+### Throttling Options
+
+- 15 seconds (~240 emails/hour)
+- 25 seconds (~144 emails/hour) - default
+- 45 seconds (~80 emails/hour)
+- 60 seconds (~60 emails/hour)
 
 ---
 
-## Phase 5: Templates Page UI
+## IMPORTANT: Gotchas & Known Issues
 
-### 5.1 Templates List Page
+### 1. API Utilities
 
-**Location:** `src/app/(auth)/templates/page.tsx`
+The `createApiError` and `createApiSuccess` functions were missing from `src/lib/api/utils.ts`. They have been added but ensure they match your existing error handling patterns.
 
-#### Features:
+### 2. Smart Quotes in JSX
 
-- Template cards with preview
-- Category filter tabs
-- Create new template button
-- Edit/duplicate/delete actions
-- Usage stats (times used, last used)
-- Search by name/content
+Avoid using smart quotes (', ") in JSX strings - they cause TypeScript parsing errors. Use regular quotes or escape properly.
 
-#### UI Layout:
+### 3. Campaign Start Validation
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Email Templates                                      [+ New Template]   │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  [All] [Follow-up] [Introduction] [Newsletter] [Custom]                 │
-│                                                                         │
-│  ┌─────────────────────────┐  ┌─────────────────────────┐              │
-│  │ Follow-up Reminder      │  │ Product Update          │              │
-│  │ ─────────────────────── │  │ ─────────────────────── │              │
-│  │ Hi {{first_name}},      │  │ Exciting news from...   │              │
-│  │ Just checking in...     │  │ Here's what's new...    │              │
-│  │                         │  │                         │              │
-│  │ Used: 12 times          │  │ Used: 5 times           │              │
-│  │ Last: 2 days ago        │  │ Last: 1 week ago        │              │
-│  │                         │  │                         │              │
-│  │ [Edit] [Duplicate] [⋮]  │  │ [Edit] [Duplicate] [⋮]  │              │
-│  └─────────────────────────┘  └─────────────────────────┘              │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+When starting a campaign, the API validates:
+- Minimum quota of 5 emails remaining
+- All merge fields have corresponding recipient data
+- Gmail account is connected
 
-### 5.2 Template Editor Modal
+### 4. CSV Parsing
 
-**Location:** `src/components/templates/TemplateEditor.tsx`
+The CSV parser handles common header variations:
+- `first_name`, `firstname`, `first` → `first_name`
+- `last_name`, `lastname`, `last` → `last_name`
+- `email`, `email_address`, `e-mail` → `email`
 
-#### Features:
+### 5. Campaign Edit Restrictions
 
-- Template name input
-- Category selector (dropdown with custom option)
-- Subject template with merge field insertion
-- Body template (HTML) with merge field palette
-- Preview panel with sample data
-- Available merge fields reference
+- Only `draft` and `scheduled` campaigns can be edited
+- Only `draft` and `cancelled` campaigns can be deleted
+- Running campaigns must be paused or cancelled first
 
-#### Merge Field Palette:
+### 6. Auto-Refresh
 
-```
-┌─────────────────────────────────────────┐
-│ Insert Merge Field                      │
-├─────────────────────────────────────────┤
-│ [{{first_name}}] [{{last_name}}]       │
-│ [{{email}}] [{{company}}]               │
-│ [{{custom_1}}] [{{custom_2}}]           │
-└─────────────────────────────────────────┘
-```
+The campaign detail page auto-refreshes every 5 seconds when status is `in_progress`. This is cleared on unmount.
 
 ---
 
-## Phase 6: Reply Detection
+## Remaining Work (Phase 6-7)
 
-### 6.1 Overview
+### Phase 6: Reply Detection
 
-Reply detection connects inbound emails to outbound emails, enabling:
-- Accurate "has_reply" tracking for follow-up automation
-- Reply rate analytics
-- Campaign performance metrics
+**Status:** Not Started
 
-### 6.2 Implementation Steps
+**Goal:** Connect inbound emails to outbound emails to track replies.
 
-#### Step 1: Enhance Email Parser
+#### Implementation Steps:
 
-**File:** `src/lib/gmail/email-parser.ts`
+1. **Enhance Email Parser** (`src/lib/gmail/email-parser.ts`)
+   - Extract `In-Reply-To` header
+   - Extract `References` header chain
 
-Add extraction of reply headers:
+2. **Modify Email Sync** (wherever sync happens)
+   - After parsing inbound email, check if it's a reply
+   - Update `outbound_emails.has_reply` flag
+   - Update `outbound_emails.reply_received_at` timestamp
+   - Increment `email_campaigns.reply_count`
 
-```typescript
-// Add to ParsedEmail interface
-interface ParsedEmail {
-  // ... existing fields
-  inReplyTo: string | null;      // Message-ID this is replying to
-  references: string[] | null;   // Thread reference chain
-}
+3. **Add Database Index**
+   ```sql
+   CREATE INDEX IF NOT EXISTS idx_outbound_emails_gmail_message_id
+   ON outbound_emails(user_id, gmail_message_id)
+   WHERE gmail_message_id IS NOT NULL;
+   ```
 
-// Add to parse() method
-const inReplyTo = this.getHeader(headers, 'In-Reply-To');
-const referencesHeader = this.getHeader(headers, 'References');
-const references = referencesHeader
-  ? referencesHeader.split(/\s+/).filter(Boolean)
-  : null;
+4. **Create Database Function**
+   ```sql
+   CREATE OR REPLACE FUNCTION increment_campaign_reply_count(p_campaign_id UUID)
+   RETURNS VOID AS $$
+   BEGIN
+     UPDATE email_campaigns
+     SET reply_count = reply_count + 1, updated_at = NOW()
+     WHERE id = p_campaign_id;
+   END;
+   $$ LANGUAGE plpgsql SECURITY DEFINER;
+   ```
+
+### Phase 7: Analytics Dashboard
+
+**Status:** Not Started
+
+**Goal:** Visualize email performance metrics.
+
+#### Files to Create:
+
+```
+src/app/api/analytics/
+├── overview/route.ts          # Overall email stats
+├── campaigns/route.ts         # Campaign comparison data
+└── campaigns/[id]/route.ts    # Single campaign detailed analytics
+
+src/app/(auth)/analytics/
+└── page.tsx                   # Analytics dashboard
+
+src/components/analytics/
+├── StatsCard.tsx              # Metric display card
+└── EmailChart.tsx             # Chart component (use recharts)
 ```
 
-#### Step 2: Modify Email Sync
+#### Key Metrics to Display:
 
-**File:** `src/lib/gmail/gmail-service.ts` (or wherever sync happens)
-
-After parsing an inbound email, check if it's a reply to an outbound email:
-
-```typescript
-async function processInboundEmail(parsed: ParsedEmail, userId: string) {
-  // Store the email as usual
-  await storeEmail(parsed, userId);
-
-  // Check if this is a reply to an outbound email
-  if (parsed.inReplyTo) {
-    await checkForOutboundReply(parsed.inReplyTo, userId);
-  }
-}
-
-async function checkForOutboundReply(messageId: string, userId: string) {
-  // The inReplyTo header contains the Message-ID of the original email
-  // Gmail's message_id format: <CAxxxxxxx@mail.gmail.com>
-
-  const { data: outbound } = await supabase
-    .from('outbound_emails')
-    .update({
-      has_reply: true,
-      reply_received_at: new Date().toISOString()
-    })
-    .eq('user_id', userId)
-    .eq('gmail_message_id', messageId)
-    .select('id')
-    .single();
-
-  if (outbound) {
-    logger.info('Reply detected for outbound email', {
-      outboundId: outbound.id
-    });
-  }
-}
-```
-
-#### Step 3: Add Database Index
-
-Add index for faster reply matching:
-
-```sql
-CREATE INDEX IF NOT EXISTS idx_outbound_emails_gmail_message_id
-ON outbound_emails(user_id, gmail_message_id)
-WHERE gmail_message_id IS NOT NULL;
-```
-
-#### Step 4: Update Campaign Stats
-
-When a reply is detected for a campaign email, update campaign reply count:
-
-```typescript
-async function checkForOutboundReply(messageId: string, userId: string) {
-  const { data: outbound } = await supabase
-    .from('outbound_emails')
-    .update({ has_reply: true, reply_received_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .eq('gmail_message_id', messageId)
-    .select('id, campaign_id')
-    .single();
-
-  if (outbound?.campaign_id) {
-    await supabase.rpc('increment_campaign_reply_count', {
-      p_campaign_id: outbound.campaign_id
-    });
-  }
-}
-```
-
-#### Step 5: Database Function
-
-```sql
-CREATE OR REPLACE FUNCTION increment_campaign_reply_count(p_campaign_id UUID)
-RETURNS VOID AS $$
-BEGIN
-  UPDATE email_campaigns
-  SET reply_count = reply_count + 1,
-      updated_at = NOW()
-  WHERE id = p_campaign_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
----
-
-## Phase 7: Analytics Dashboard
-
-### 7.1 Analytics Overview Page
-
-**Location:** `src/app/(auth)/analytics/page.tsx`
-
-#### Key Metrics:
-
-**Overall Stats:**
 - Total emails sent (all time, this month, this week)
-- Overall open rate (% of sent emails opened)
-- Overall reply rate (% of sent emails with replies)
-- Active campaigns count
-
-**Charts:**
+- Overall open rate and reply rate
+- Campaign comparison charts
 - Emails sent over time (line chart)
-- Open rate trend (line chart)
-- Campaign comparison (bar chart)
-- Best send times (heatmap)
-
-### 7.2 Campaign Analytics
-
-**Location:** `src/app/(auth)/campaigns/[id]/analytics/page.tsx` (or tab in detail page)
-
-#### Metrics Per Campaign:
-
-- Delivery rate
-- Open rate
-- Unique opens vs total opens
-- Reply rate
-- Follow-up effectiveness
-- Time to first open distribution
 - Device/email client breakdown
 
-#### Visualization Ideas:
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Campaign: January Newsletter                                            │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐│
-│  │     150      │  │    68.5%     │  │    23.3%     │  │     8.0%     ││
-│  │    SENT      │  │  OPEN RATE   │  │ UNIQUE OPENS │  │ REPLY RATE   ││
-│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘│
-│                                                                         │
-│  Opens Over Time                           Device Breakdown             │
-│  ┌─────────────────────────────────┐      ┌──────────────────────┐     │
-│  │      ╭──╮                       │      │  Desktop  ████████ 62%│     │
-│  │     ╱    ╲    ╭─╮               │      │  Mobile   ████░░░░ 31%│     │
-│  │    ╱      ╲  ╱   ╲              │      │  Tablet   █░░░░░░░  7%│     │
-│  │   ╱        ╲╱     ╲_____        │      └──────────────────────┘     │
-│  │  ╱                              │                                    │
-│  └─────────────────────────────────┘                                    │
-│   Day 1    Day 2    Day 3    Day 4                                      │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### 7.3 Analytics API Routes
-
-**Location:** `src/app/api/analytics/`
-
-```
-GET /api/analytics/overview        - Overall email stats
-GET /api/analytics/campaigns       - Campaign comparison data
-GET /api/analytics/campaigns/[id]  - Single campaign detailed analytics
-GET /api/analytics/trends          - Time-series data for charts
-```
-
-### 7.4 Database Queries for Analytics
+#### Database Queries:
 
 ```sql
 -- Overall stats for a user
@@ -511,214 +256,76 @@ SELECT
   COUNT(*) FILTER (WHERE has_reply = true) as total_replied,
   ROUND(
     100.0 * COUNT(*) FILTER (WHERE open_count > 0) /
-    NULLIF(COUNT(*) FILTER (WHERE status = 'sent'), 0),
-    1
-  ) as open_rate,
-  ROUND(
-    100.0 * COUNT(*) FILTER (WHERE has_reply = true) /
-    NULLIF(COUNT(*) FILTER (WHERE status = 'sent'), 0),
-    1
-  ) as reply_rate
+    NULLIF(COUNT(*) FILTER (WHERE status = 'sent'), 0), 1
+  ) as open_rate
 FROM outbound_emails
 WHERE user_id = $1;
-
--- Emails sent over time
-SELECT
-  DATE_TRUNC('day', sent_at) as date,
-  COUNT(*) as sent_count,
-  COUNT(*) FILTER (WHERE open_count > 0) as opened_count
-FROM outbound_emails
-WHERE user_id = $1
-  AND status = 'sent'
-  AND sent_at >= NOW() - INTERVAL '30 days'
-GROUP BY DATE_TRUNC('day', sent_at)
-ORDER BY date;
-
--- Device breakdown
-SELECT
-  device_type,
-  COUNT(*) as count
-FROM email_open_events eo
-JOIN outbound_emails e ON eo.outbound_email_id = e.id
-WHERE e.user_id = $1
-GROUP BY device_type;
 ```
 
 ---
 
-## Implementation Order
+## Instructions for Next AI Developer
 
-### Recommended Sequence:
+### To Continue Phase 6 (Reply Detection):
 
-1. **Phase 4.1: Campaign API Routes** (2-3 days)
-   - Foundation for UI
-   - Can test with Postman/curl
+1. Read `src/lib/gmail/email-parser.ts` to understand current parsing
+2. Find where email sync happens (likely in `src/lib/gmail/gmail-service.ts`)
+3. Add `In-Reply-To` header extraction
+4. Implement reply matching logic as described above
+5. Create the database migration for the index
+6. Test with a real email thread
 
-2. **Phase 6: Reply Detection** (1 day)
-   - Small, focused change
-   - Enables better analytics
+### To Continue Phase 7 (Analytics):
 
-3. **Phase 4.2-4.3: Campaign Builder UI** (3-4 days)
-   - Builds on API routes
-   - Complex UI with stepper
+1. Create the API routes in `src/app/api/analytics/`
+2. Follow the pattern in `src/app/api/campaigns/route.ts` for structure
+3. Create the analytics page at `src/app/(auth)/analytics/page.tsx`
+4. Add "Analytics" to Sidebar navigation (follow Campaigns pattern)
+5. Install `recharts` if not present: `npm install recharts`
 
-4. **Phase 5: Templates Page UI** (2 days)
-   - Simpler than campaigns
-   - API already exists
+### Code Patterns to Follow:
 
-5. **Phase 7: Analytics Dashboard** (2-3 days)
-   - Requires data from campaigns
-   - Good to do last
+**API Routes:**
+- Use `requireAuth()` for authentication
+- Use Zod for request validation
+- Use `createApiSuccess()` / `createApiError()` for responses
+- Use `createLogger()` for logging
+- Include comprehensive comments
 
----
+**Hooks:**
+- Follow `useCampaigns.ts` pattern
+- Use `useCallback` for all functions
+- Include optimistic updates where appropriate
+- Use the logger for debugging
 
-## Technical Considerations
+**Pages:**
+- Use `PageHeader` component for headers
+- Follow existing UI component patterns
+- Include loading states (Skeleton)
+- Include error states
+- Use `Card` components for sections
 
-### State Management
+### Testing:
 
-For the Campaign Builder wizard:
-- Use React state for form data
-- Consider using a reducer for complex state transitions
-- Alternatively, use a form library like react-hook-form
+The build tooling isn't working in the current environment (missing node_modules). After making changes:
 
-### CSV Parsing
-
-For recipient import:
-- Use `papaparse` library for robust CSV parsing
-- Handle different delimiters (comma, tab, semicolon)
-- Detect headers automatically
-- Validate email format
-
-```typescript
-import Papa from 'papaparse';
-
-function parseCSV(csvText: string): ParsedRecipients {
-  const result = Papa.parse(csvText, {
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: (header) => header.trim().toLowerCase(),
-  });
-
-  return {
-    data: result.data,
-    errors: result.errors,
-    fields: result.meta.fields,
-  };
-}
-```
-
-### Real-time Progress
-
-For campaign progress:
-- Poll campaign status every 5-10 seconds
-- Or use Supabase Realtime subscriptions
-- Show progress bar: sent_count / total_recipients
-
-### Error Handling
-
-- Show toast notifications for API errors
-- Prevent double-submission
-- Confirm before cancelling campaigns
-- Handle quota exhaustion gracefully
+1. Run `npm install` if needed
+2. Run `npm run build` to verify no TypeScript errors
+3. Run `npm run lint` for linting
+4. Test manually in browser
 
 ---
 
-## Files to Create
+## Dependencies
 
-### API Routes:
-- [ ] `src/app/api/campaigns/route.ts`
-- [ ] `src/app/api/campaigns/[id]/route.ts`
-- [ ] `src/app/api/campaigns/[id]/start/route.ts`
-- [ ] `src/app/api/campaigns/[id]/pause/route.ts`
-- [ ] `src/app/api/campaigns/[id]/cancel/route.ts`
-- [ ] `src/app/api/campaigns/[id]/preview/route.ts`
-- [ ] `src/app/api/campaigns/[id]/emails/route.ts`
-- [ ] `src/app/api/analytics/overview/route.ts`
-- [ ] `src/app/api/analytics/campaigns/route.ts`
-- [ ] `src/app/api/analytics/campaigns/[id]/route.ts`
+Already installed:
+- `@supabase/supabase-js` - Database client
+- `lucide-react` - Icons
+- Radix UI components - UI primitives
 
-### UI Components:
-- [ ] `src/components/campaigns/CampaignBuilder.tsx`
-- [ ] `src/components/campaigns/RecipientImport.tsx`
-- [ ] `src/components/campaigns/MergeFieldPalette.tsx`
-- [ ] `src/components/campaigns/CampaignProgress.tsx`
-- [ ] `src/components/campaigns/CampaignCard.tsx`
-- [ ] `src/components/templates/TemplateEditor.tsx`
-- [ ] `src/components/templates/TemplateCard.tsx`
-- [ ] `src/components/analytics/StatsCard.tsx`
-- [ ] `src/components/analytics/EmailChart.tsx`
-
-### Pages:
-- [ ] `src/app/(auth)/campaigns/page.tsx`
-- [ ] `src/app/(auth)/campaigns/new/page.tsx`
-- [ ] `src/app/(auth)/campaigns/[id]/page.tsx`
-- [ ] `src/app/(auth)/templates/page.tsx`
-- [ ] `src/app/(auth)/analytics/page.tsx`
-
-### Modifications:
-- [ ] `src/lib/gmail/email-parser.ts` - Add In-Reply-To extraction
-- [ ] `src/components/layout/Sidebar.tsx` - Add Campaigns & Analytics links
-
-### Database:
-- [ ] Migration for reply detection index
-- [ ] Database functions for analytics queries
-
----
-
-## Dependencies to Add
-
-```bash
-npm install papaparse @types/papaparse
-npm install recharts  # For analytics charts (if not already installed)
-```
-
----
-
-## Testing Checklist
-
-### Campaign API:
-- [ ] Create campaign with valid data
-- [ ] Create campaign with invalid email formats
-- [ ] Start campaign, verify status change
-- [ ] Pause campaign mid-progress
-- [ ] Resume paused campaign
-- [ ] Cancel running campaign
-- [ ] Preview merged template
-
-### Reply Detection:
-- [ ] Send test email, reply from external client
-- [ ] Verify has_reply flag updates
-- [ ] Verify campaign reply_count increments
-- [ ] Test with threaded replies
-
-### Templates:
-- [ ] Create template with merge fields
-- [ ] Edit existing template
-- [ ] Use template in campaign
-- [ ] Delete template (check for FK constraints)
-
-### Analytics:
-- [ ] Verify open rate calculations
-- [ ] Verify reply rate calculations
-- [ ] Test date range filters
-- [ ] Test campaign comparison
-
----
-
-## Notes
-
-1. **Performance:** For large recipient lists (1000+), consider pagination in the UI and batch processing in the API.
-
-2. **Rate Limits:** Gmail has a 2000 emails/day limit for regular accounts. The 400/day limit in our system provides safety margin.
-
-3. **Compliance:** Consider adding unsubscribe links for campaign emails (CAN-SPAM compliance).
-
-4. **Future Enhancements:**
-   - Click tracking (wrap links)
-   - A/B testing
-   - Attachment support
-   - Bounce detection
-   - Email scheduling optimization
+May need to install:
+- `papaparse` - For more robust CSV parsing (currently using native parsing)
+- `recharts` - For analytics charts
 
 ---
 
@@ -727,3 +334,10 @@ npm install recharts  # For analytics charts (if not already installed)
 - [Gmail API Documentation](https://developers.google.com/gmail/api)
 - [Existing Implementation](./GMAIL_SENDING_IMPLEMENTATION.md)
 - [Supabase Edge Functions](https://supabase.com/docs/guides/functions)
+
+---
+
+## Commit History
+
+- `b6e5880` - feat(campaigns): Implement Campaign Builder UI and Templates management (Phase 4-5)
+- `2e70423` - docs: Add Phase 4+ implementation plan for Gmail campaigns
