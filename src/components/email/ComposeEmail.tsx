@@ -470,7 +470,7 @@ export function ComposeEmail({
     });
 
     // Redirect to OAuth flow to add send scope
-    window.location.href = `/api/auth/add-send-scope?returnTo=/inbox&accountId=${form.accountId}`;
+    window.location.href = `/api/auth/add-send-scope?returnTo=/discover&accountId=${form.accountId}`;
   };
 
   // ─────────────────────────────────────────────────────────────────────────────

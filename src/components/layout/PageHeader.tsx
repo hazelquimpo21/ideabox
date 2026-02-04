@@ -102,7 +102,7 @@ function Breadcrumbs({
 }) {
   // Prepend home if enabled
   const allItems = showHome
-    ? [{ label: 'Home', href: '/inbox' }, ...items]
+    ? [{ label: 'Home', href: '/discover' }, ...items]
     : items;
 
   return (

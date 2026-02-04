@@ -307,14 +307,14 @@ function EmptyState() {
         </div>
         <CardTitle className="text-xl mb-2">All caught up!</CardTitle>
         <CardDescription className="max-w-sm mb-6">
-          No urgent priorities right now. Check your inbox or actions for
+          No urgent priorities right now. Check Discover or actions for
           things to work on.
         </CardDescription>
         <div className="flex gap-3">
-          <Link href="/inbox">
+          <Link href="/discover">
             <Button variant="outline" className="gap-2">
               <Mail className="h-4 w-4" />
-              View Inbox
+              View Discover
             </Button>
           </Link>
           <Link href="/actions">
@@ -537,11 +537,11 @@ export default function HubPage() {
             Explore more
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Link href="/inbox">
+            <Link href="/discover">
               <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
                 <CardContent className="py-4 flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-blue-500" />
-                  <span className="font-medium">Inbox</span>
+                  <Sparkles className="h-5 w-5 text-amber-500" />
+                  <span className="font-medium">Discover</span>
                 </CardContent>
               </Card>
             </Link>
@@ -558,14 +558,6 @@ export default function HubPage() {
                 <CardContent className="py-4 flex items-center gap-3">
                   <Building2 className="h-5 w-5 text-teal-500" />
                   <span className="font-medium">Clients</span>
-                </CardContent>
-              </Card>
-            </Link>
-            <Link href="/discover">
-              <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-                <CardContent className="py-4 flex items-center gap-3">
-                  <Sparkles className="h-5 w-5 text-amber-500" />
-                  <span className="font-medium">Discover</span>
                 </CardContent>
               </Card>
             </Link>

@@ -443,7 +443,7 @@ function DateCard({
           <div className="flex items-center gap-1 shrink-0">
             {/* View email */}
             {date.email_id && (
-              <Link href={`/inbox?email=${date.email_id}`}>
+              <Link href={`/discover?email=${date.email_id}`}>
                 <Button variant="ghost" size="icon" title="View email">
                   <Mail className="h-4 w-4" />
                 </Button>

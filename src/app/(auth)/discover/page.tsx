@@ -26,7 +26,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { EMAIL_CATEGORIES_SET } from '@/types/discovery';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -79,6 +80,7 @@ interface PendingArchive {
  */
 export default function DiscoverPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -362,9 +364,24 @@ export default function DiscoverPage() {
    */
   const handleModalClose = () => {
     setIsModalOpen(false);
+    // Clear the URL parameter
+    router.replace('/discover', { scroll: false });
     // Delay clearing the category so the close animation can finish
     setTimeout(() => setSelectedCategory(null), 200);
   };
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // URL Parameter Effect: Open modal from ?modal=category
+  // ───────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const modalCategory = searchParams.get('modal');
+    if (modalCategory && EMAIL_CATEGORIES_SET.has(modalCategory) && result) {
+      logger.info('Opening modal from URL parameter', { category: modalCategory });
+      setSelectedCategory(modalCategory as EmailCategory);
+      setIsModalOpen(true);
+    }
+  }, [searchParams, result]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Loading State
@@ -429,8 +446,8 @@ export default function DiscoverPage() {
             <Button variant="outline" onClick={() => setNeedsSync(true)}>
               Try Again
             </Button>
-            <Button onClick={() => router.push('/inbox')}>
-              Go to Inbox
+            <Button onClick={() => window.location.reload()}>
+              Refresh Page
             </Button>
           </div>
         </div>

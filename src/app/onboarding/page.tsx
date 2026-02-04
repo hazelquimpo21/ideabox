@@ -106,8 +106,8 @@ export default function OnboardingPage() {
 
   React.useEffect(() => {
     if (!isLoading && user?.onboardingCompleted) {
-      logger.info('User already completed onboarding, redirecting to inbox');
-      router.replace('/inbox');
+      logger.info('User already completed onboarding, redirecting to discover');
+      router.replace('/discover');
     }
   }, [isLoading, user, router]);
 
@@ -214,7 +214,7 @@ export default function OnboardingPage() {
       });
 
       await refreshSession();
-      router.replace('/inbox');
+      router.replace('/discover');
     } catch (error) {
       logger.error('Failed to skip sync', { error });
     }

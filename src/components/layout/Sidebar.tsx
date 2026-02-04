@@ -22,7 +22,7 @@
  * import { Sidebar } from '@/components/layout';
  *
  * <Sidebar
- *   currentPath="/inbox"
+ *   currentPath="/discover"
  *   categoryCounts={{ client_pipeline: 5, newsletters_general: 12 }}
  *   clients={[{ id: '1', name: 'Acme Corp' }]}
  *   isOpen={sidebarOpen}
@@ -39,7 +39,6 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Inbox,
   CheckSquare,
   Users,
   Settings,
@@ -196,11 +195,6 @@ const mainNavItems: NavItem[] = [
     label: 'Discover',
     href: '/discover',
     icon: Sparkles,
-  },
-  {
-    label: 'Inbox',
-    href: '/inbox',
-    icon: Inbox,
   },
   {
     label: 'Actions',
@@ -657,9 +651,9 @@ export function Sidebar({
    * Supports both exact matches and prefix matches for nested routes.
    */
   const isActivePath = (href: string): boolean => {
-    if (href === '/inbox') {
-      // Inbox is active for /inbox and /inbox?category=...
-      return activePath === '/inbox' || activePath.startsWith('/inbox?');
+    if (href === '/discover') {
+      // Discover is active for /discover and /discover/[category] routes
+      return activePath === '/discover' || activePath.startsWith('/discover/');
     }
     return activePath === href || activePath.startsWith(`${href}/`);
   };
@@ -696,10 +690,10 @@ export function Sidebar({
         {categoryItems.map((item) => (
           <CategoryLink
             key={item.category}
-            href={`/inbox?category=${item.category}`}
+            href={`/discover/${item.category}`}
             icon={item.icon}
             label={item.label}
-            isActive={activePath === `/inbox?category=${item.category}`}
+            isActive={activePath === `/discover/${item.category}`}
             count={categoryCounts[item.category]}
             iconColor={item.color}
             onClick={handleLinkClick}

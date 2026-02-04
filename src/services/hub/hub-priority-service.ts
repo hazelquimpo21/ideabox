@@ -993,7 +993,7 @@ function scoreEmail(
     senderName: email.sender_name || undefined,
     senderEmail: email.sender_email,
     originalId: email.id,
-    href: `/inbox?email=${email.id}`,
+    href: `/discover?email=${email.id}`,
     date: email.date,
   };
 }

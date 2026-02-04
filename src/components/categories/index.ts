@@ -1,24 +1,27 @@
 /**
- * Category View Components Barrel Export
+ * Email Display Components Barrel Export
  *
- * Components for the Kanban-style category cards view.
- * Includes enhanced UI components for surfacing AI-analyzed email data.
+ * Reusable components for displaying email data with AI-analyzed insights.
+ * Used by Discover views (modal, category pages, detail pages).
  *
  * @module components/categories
+ *
+ * @example
+ * ```tsx
+ * import { EmailCard, UrgencyIndicator, RelationshipHealth } from '@/components/categories';
+ * ```
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CORE COMPONENTS
+// EMAIL DISPLAY
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export { EmailCard, type EmailCardProps } from './EmailCard';
-export { CategoryColumn, type CategoryColumnProps } from './CategoryColumn';
+export { EmailKeyPoints, type EmailKeyPointsProps } from './EmailKeyPoints';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ENHANCED UI COMPONENTS
+// AI INSIGHT INDICATORS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export { UrgencyIndicator, type UrgencyIndicatorProps } from './UrgencyIndicator';
 export { RelationshipHealth, aggregateSignals, type RelationshipHealthProps } from './RelationshipHealth';
-export { EmailKeyPoints, type EmailKeyPointsProps } from './EmailKeyPoints';
-export { EmailActions, extractActionsFromAnalysis, type EmailActionsProps, type EmailAction } from './EmailActions';
