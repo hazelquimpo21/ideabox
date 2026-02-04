@@ -491,11 +491,24 @@ const API_BASE_URL = 'https://api.example.com';
 const DEFAULT_TIMEZONE = 'America/Chicago';
 
 // Enums: PascalCase
+// REFACTORED (Jan 2026): Life-bucket categories - what part of life the email touches
 enum EmailCategory {
-  ActionRequired = 'action_required',
-  Event = 'event',
-  Client = 'client',
-  Newsletter = 'newsletter',
+  // Work & Business
+  ClientPipeline = 'client_pipeline',
+  BusinessWorkGeneral = 'business_work_general',
+  // Family & Personal
+  FamilyKidsSchool = 'family_kids_school',
+  FamilyHealthAppointments = 'family_health_appointments',
+  PersonalFriendsFamily = 'personal_friends_family',
+  // Life Admin
+  Finance = 'finance',
+  Travel = 'travel',
+  Shopping = 'shopping',
+  Local = 'local',
+  // Information
+  NewslettersGeneral = 'newsletters_general',
+  NewsPolitics = 'news_politics',
+  ProductUpdates = 'product_updates',
 }
 ```
 
@@ -609,16 +622,20 @@ describe('CategorizerAnalyzer', () => {
   });
   
   describe('analyze()', () => {
-    it('should categorize action email correctly', async () => {
+    it('should categorize client email correctly', async () => {
       const email = createMockEmail({
         subject: 'Please review this proposal',
         body_text: 'Can you review and provide feedback?',
+        sender_email: 'client@acme.com',
       });
-      
+
       const result = await analyzer.analyze(email);
-      
+
       expect(result.success).toBe(true);
-      expect(result.data.category).toBe('action_required');
+      // Life-bucket category (Jan 2026): client work goes to client_pipeline
+      expect(result.data.category).toBe('client_pipeline');
+      // Urgency is now tracked via score, not category
+      expect(result.data.urgency_score).toBeGreaterThanOrEqual(6);
       expect(result.confidence).toBeGreaterThan(0.8);
     });
     

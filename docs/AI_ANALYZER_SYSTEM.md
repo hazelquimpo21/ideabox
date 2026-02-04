@@ -156,15 +156,32 @@ async analyze(email: Email): Promise<AnalyzerResult> {
       category: {
         type: 'string',
         enum: [
-          'action_required',  // Needs response, decision, or action from user
-          'event',            // Calendar-worthy: invitation, announcement with date/time
-          'newsletter',       // Informational content, digest, regular publication
-          'promo',            // Marketing, promotional, sales content
-          'admin',            // Receipts, confirmations, notifications, automated
-          'personal',         // Personal correspondence (friends, family)
-          'noise',            // Low-value, safe to ignore or bulk archive
+          // ═══════════════════════════════════════════════════════════════════════
+          // LIFE-BUCKET CATEGORIES (REFACTORED Jan 2026)
+          // Categories represent what part of life the email touches
+          // ═══════════════════════════════════════════════════════════════════════
+
+          // Work & Business
+          'client_pipeline',          // Active client work needing attention
+          'business_work_general',    // Professional/work emails
+
+          // Family & Personal
+          'family_kids_school',       // Kids, school, activities
+          'family_health_appointments', // Health, medical, appointments
+          'personal_friends_family',  // Friends, family, social correspondence
+
+          // Life Admin
+          'finance',                  // Bills, banking, payments
+          'travel',                   // Flights, hotels, trips
+          'shopping',                 // Orders, shipping, deals, promos
+          'local',                    // Community, local events
+
+          // Information
+          'newsletters_general',      // Substacks, digests, publications
+          'news_politics',            // News outlets, political updates
+          'product_updates',          // SaaS updates, tech products
         ],
-        description: 'Primary category based on action needed (NOT who sent it)',
+        description: 'Primary life-bucket category (NOT action-focused - use urgency_score for that)',
       },
       confidence: {
         type: 'number',
@@ -795,9 +812,10 @@ Every analyzer logs:
 this.log('debug', 'Starting analysis', { emailId, sender });
 
 // Key decisions
-this.log('info', 'Categorized as action_required', { 
-  emailId, 
-  confidence: 0.95 
+this.log('info', 'Categorized as client_pipeline', {
+  emailId,
+  confidence: 0.95,
+  urgencyScore: 8,
 });
 
 // Token usage for cost tracking
@@ -815,11 +833,15 @@ this.log('error', 'API call failed', {
 });
 ```
 
-### 4. Event Detector Analyzer (NEW Jan 2026)
+### 4. Event Detector Analyzer (ENHANCED Jan 2026)
 
 **Purpose:** Extract rich event details for calendar integration
 
-**When It Runs:** ONLY when Categorizer returns `category === 'event'` (conditional execution saves tokens)
+**When It Runs:** ONLY when Categorizer includes `has_event` in labels array (conditional execution saves tokens)
+
+> **IMPORTANT (Jan 2026 Refactor):** Events are NO LONGER a category. Events can appear in ANY life-bucket
+> category (local, family_kids_school, travel, etc.) and are detected via the `has_event` label.
+> This allows proper categorization of WHERE the event fits in your life while still extracting event details.
 
 **Function Schema:**
 ```typescript
@@ -1045,10 +1067,11 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │                                         │                                                │
 │                                         ▼                                                │
 │  PHASE 2: Conditional Analyzers                                                          │
-│              ┌───────────────┐                                                           │
-│              │ labels include│                                                           │
-│              │  'has_event'? │                                                           │
-│              └───────┬───────┘                                                           │
+│              ┌────────────────────────────────────────────┐                              │
+│              │ labels include 'has_event'?               │                              │
+│              │ (Events are no longer a category -        │                              │
+│              │  they're detected via label in any bucket)│                              │
+│              └───────────────────┬────────────────────────┘                              │
 │                      │                                                                   │
 │           ┌─────────┴─────────┐                                                         │
 │           │ YES               │ NO                                                       │

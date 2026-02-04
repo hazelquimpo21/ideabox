@@ -156,10 +156,23 @@ CREATE TABLE emails (
   body_html TEXT, -- HTML body (stored in full for display)
 
   -- Labels & categorization
-  -- NOTE: Category is action-focused. "client" is NOT a category - use client_id relationship instead.
-  -- This allows a client email to be "action_required" rather than hidden in a "client" category.
+  -- ═══════════════════════════════════════════════════════════════════════════════════════════
+  -- LIFE-BUCKET CATEGORIES (REFACTORED Jan 2026)
+  -- Categories represent what part of life the email touches, NOT what action is needed.
+  -- Use urgency_score (1-10) to determine if action is needed.
+  -- ═══════════════════════════════════════════════════════════════════════════════════════════
+  --
+  -- Work & Business: client_pipeline, business_work_general
+  -- Family & Personal: family_kids_school, family_health_appointments, personal_friends_family
+  -- Life Admin: finance, travel, shopping, local
+  -- Information: newsletters_general, news_politics, product_updates
+  --
+  -- NOTE: "client" is NOT a category - use client_id relationship instead.
+  -- NOTE: "event" is NOT a category - events detected via 'has_event' label in any category.
+  -- NOTE: No "action_required" category - use urgency_score >= 7 instead.
+  -- ═══════════════════════════════════════════════════════════════════════════════════════════
   gmail_labels TEXT[], -- Original Gmail labels
-  category TEXT, -- action_required, event, newsletter, promo, admin, personal, noise
+  category TEXT, -- Life-bucket category (see above for valid values)
   priority_score INTEGER DEFAULT 5, -- 1-10 scale
   topics TEXT[], -- AI-extracted topics: ['billing', 'meeting', 'feedback']
 
