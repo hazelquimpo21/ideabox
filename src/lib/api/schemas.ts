@@ -567,3 +567,44 @@ export const extractedDateActionSchema = z.object({
 );
 
 export type ExtractedDateActionInput = z.infer<typeof extractedDateActionSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BULK EMAIL OPERATIONS SCHEMAS (NEW - Jan 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Bulk archive emails schema.
+ *
+ * Allows archiving by category OR by specific email IDs.
+ * At least one must be provided.
+ *
+ * @example Archive by category
+ * POST /api/emails/bulk-archive
+ * { "category": "newsletters_general" }
+ *
+ * @example Archive by email IDs
+ * POST /api/emails/bulk-archive
+ * { "emailIds": ["uuid-1", "uuid-2", "uuid-3"] }
+ */
+export const bulkArchiveSchema = z.object({
+  category: emailCategorySchema.optional(),
+  emailIds: z.array(uuidSchema).min(1).max(500).optional(),
+}).refine(
+  (data) => data.category || data.emailIds,
+  { message: 'Either category or emailIds must be provided' }
+);
+
+export type BulkArchiveInput = z.infer<typeof bulkArchiveSchema>;
+
+/**
+ * Retry analysis for failed emails schema.
+ *
+ * @example
+ * POST /api/emails/retry-analysis
+ * { "emailIds": ["uuid-1", "uuid-2"] }
+ */
+export const retryAnalysisSchema = z.object({
+  emailIds: z.array(uuidSchema).min(1).max(100),
+});
+
+export type RetryAnalysisInput = z.infer<typeof retryAnalysisSchema>;

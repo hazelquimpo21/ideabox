@@ -4,6 +4,14 @@
  * Displays suggested quick actions the user can take after initial sync.
  * Actions include bulk archive, view urgent items, add clients, etc.
  *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * NAVIGATION (Jan 2026 Update)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * - view_urgent → /actions (the action items/tasks page)
+ * - add_events → /events (the events calendar page)
+ * - archive_category → calls onArchiveCategory callback
+ * - add_client → calls onAddClient callback
+ *
  * @module components/discover/QuickActions
  */
 
@@ -15,7 +23,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
+import { createLogger } from '@/lib/utils/logger';
 import type { SuggestedAction, SuggestedActionType } from '@/types/discovery';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('QuickActions');
 
 // =============================================================================
 // TYPES
@@ -90,40 +105,76 @@ export function QuickActions({
   const handleAction = async (action: SuggestedAction) => {
     // Skip if already completed
     if (completedActions.has(action.id)) {
+      logger.debug('Action already completed, skipping', { actionId: action.id });
       return;
     }
+
+    logger.info('Quick action triggered', {
+      actionId: action.id,
+      type: action.type,
+      category: action.category,
+      count: action.count,
+    });
 
     setLoadingAction(action.id);
 
     try {
       switch (action.type) {
+        // ─────────────────────────────────────────────────────────────────────────
+        // View Urgent: Navigate to the actions/tasks page to see urgent items
+        // ─────────────────────────────────────────────────────────────────────────
         case 'view_urgent':
-          router.push('/inbox?category=action_required&urgency=high');
+          logger.info('Navigating to actions page for urgent items');
+          router.push('/actions');
           break;
 
+        // ─────────────────────────────────────────────────────────────────────────
+        // Add Events: Navigate to the events page to review detected events
+        // ─────────────────────────────────────────────────────────────────────────
         case 'add_events':
-          router.push('/inbox?category=event');
+          logger.info('Navigating to events page');
+          router.push('/events');
           break;
 
+        // ─────────────────────────────────────────────────────────────────────────
+        // Add Client: Call the provided callback to handle client addition
+        // ─────────────────────────────────────────────────────────────────────────
         case 'add_client':
           if (onAddClient && action.clientName) {
+            logger.info('Adding client', { clientName: action.clientName });
             onAddClient(action.clientName);
           }
           break;
 
+        // ─────────────────────────────────────────────────────────────────────────
+        // Archive Category: Bulk archive emails in a category
+        // ─────────────────────────────────────────────────────────────────────────
         case 'archive_category':
           if (onArchiveCategory && action.category && action.count) {
+            logger.info('Archiving category', {
+              category: action.category,
+              count: action.count,
+            });
             await onArchiveCategory(action.category, action.count);
             setCompletedActions((prev) => new Set([...prev, action.id]));
+            logger.success('Category archived', { category: action.category });
             toast({
               title: 'Archived!',
               description: `${action.count} emails have been archived.`,
             });
           }
           break;
+
+        default:
+          logger.warn('Unknown action type', { type: action.type });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Action failed';
+      logger.error('Quick action failed', {
+        actionId: action.id,
+        type: action.type,
+        error: message,
+      });
       toast({
         title: 'Error',
         description: message,

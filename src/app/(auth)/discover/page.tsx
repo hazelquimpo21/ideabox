@@ -31,6 +31,14 @@ import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   DiscoveryHero,
   CategoryCardGrid,
   ClientInsights,
@@ -40,7 +48,26 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useInitialSyncProgress } from '@/hooks/useInitialSyncProgress';
 import { StartAnalysisCard, SyncProgressCard } from './components';
-import type { InitialSyncResponse } from '@/types/discovery';
+import { createLogger } from '@/lib/utils/logger';
+import { CATEGORY_DISPLAY } from '@/types/discovery';
+import type { InitialSyncResponse, EmailCategory } from '@/types/discovery';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('DiscoverPage');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Pending archive action awaiting confirmation */
+interface PendingArchive {
+  category: EmailCategory;
+  count: number;
+  categoryLabel: string;
+}
 
 // =============================================================================
 // PAGE COMPONENT
@@ -62,6 +89,13 @@ export default function DiscoverPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isStartingSync, setIsStartingSync] = useState(false);
 
+  // State for confirmation dialog
+  const [pendingArchive, setPendingArchive] = useState<PendingArchive | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+
+  // State for retry
+  const [isRetrying, setIsRetrying] = useState(false);
+
   // Progress tracking for sync
   const {
     progress: syncProgress,
@@ -71,6 +105,11 @@ export default function DiscoverPage() {
     stopPolling,
   } = useInitialSyncProgress({
     onComplete: (completedResult) => {
+      logger.success('Sync completed', {
+        analyzed: completedResult.stats.analyzed,
+        failed: completedResult.stats.failed,
+        categories: completedResult.categories.length,
+      });
       setResult(completedResult);
       setIsSyncing(false);
       toast({
@@ -79,10 +118,43 @@ export default function DiscoverPage() {
       });
     },
     onError: (errorMsg) => {
+      logger.error('Sync failed', { error: errorMsg });
       setError(errorMsg);
       setIsSyncing(false);
     },
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Refresh Results Function
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Refresh the sync results from the server.
+   * Called after actions complete to get fresh data.
+   */
+  const refreshResults = useCallback(async () => {
+    logger.info('Refreshing results');
+    try {
+      const response = await fetch('/api/onboarding/sync-status', {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'completed' && data.result) {
+          logger.success('Results refreshed', {
+            categories: data.result.categories.length,
+          });
+          setResult(data.result);
+        }
+      }
+    } catch (err) {
+      logger.warn('Failed to refresh results', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+      // Don't show error to user - the stale data is still usable
+    }
+  }, []);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Fetch Result on Mount
