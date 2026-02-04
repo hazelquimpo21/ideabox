@@ -14,7 +14,11 @@ IdeaBox transforms email overwhelm into organized intelligence. It's an AI-power
 
 ## Solution
 AI-powered email processing system with specialized analyzers that:
-- **Categorize by action needed**: action_required, event, newsletter, promo, admin, personal, noise
+- **Categorize by life-bucket** (REFACTORED Jan 2026): 12 categories representing what part of life the email touches:
+  - **Work & Business**: `client_pipeline` (active client work), `business_work_general` (professional/work)
+  - **Family & Personal**: `family_kids_school`, `family_health_appointments`, `personal_friends_family`
+  - **Life Admin**: `finance`, `travel`, `shopping`, `local` (community/events)
+  - **Information**: `newsletters_general`, `news_politics`, `product_updates`
 - **Track client relationships**: Link emails to clients separately from categorization
 - **Extract actions**: Build dedicated to-do list from email content
 - **Save content**: URLs, tweet ideas, networking opportunities (Phase 2)
@@ -157,8 +161,10 @@ These decisions were made after careful analysis and should guide all implementa
 |----------|--------|-----------|
 | **AI Model** | GPT-4.1-mini only | Best value (~$3-5/month), optimized for function calling, 1M context |
 | **No AI Fallback** | Single model | Fallback adds complexity without proportional benefit |
-| **Categories** | Action-focused, single primary | "client" removed as category; tracked via relationship instead |
-| **Client Tracking** | Via `client_id` + filtering | Cleaner than category; allows "action_required" emails from clients |
+| **Categories** | Life-bucket system (12 categories) | Categories represent what part of life the email touches (work, family, admin, info) - REFACTORED Jan 2026 |
+| **Client Tracking** | Via `client_id` + filtering | Cleaner than category; allows `client_pipeline` emails linked to specific clients |
+| **Events** | Label-based (`has_event`) | Events are no longer a category - detected via labels, can appear in any life-bucket |
+| **Urgency** | Score-based (1-10) | No separate "action_required" category; urgency tracked via score across all categories |
 | **Background Jobs** | Supabase pg_cron + Edge Functions | Already using Supabase; avoids Vercel Cron limitations |
 | **Gmail Labels** | Sync IdeaBox categories to Gmail | Users see categories in Gmail itself |
 | **Failed Analysis** | Mark unanalyzable with reason | No retry; clear audit trail |

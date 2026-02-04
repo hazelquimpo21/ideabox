@@ -509,8 +509,9 @@ export class InitialSyncOrchestrator {
         const clientTagging = analysis.clientTagging;
 
         // Add to analyzed emails
+        // REFACTORED (Jan 2026): 'noise' fallback → 'newsletters_general'
         this.addAnalyzedEmail(originalEmail, {
-          category: (categorization?.category as EmailCategory) || 'noise',
+          category: (categorization?.category as EmailCategory) || 'newsletters_general',
           confidence: categorization?.confidence || 0.5,
           hasAction: actionExtraction?.hasAction,
           actionUrgency: actionExtraction?.urgencyScore,
@@ -593,7 +594,9 @@ export class InitialSyncOrchestrator {
       this.discoveries.actionItems++;
     }
 
-    if (analysis.category === 'event') {
+    // REFACTORED (Jan 2026): Events are no longer a category.
+    // Events are detected via the eventDetected field from analysis.
+    if (analysis.eventDetected) {
       this.discoveries.events++;
     }
 

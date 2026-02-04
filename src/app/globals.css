@@ -184,40 +184,51 @@
 
 @layer base {
   :root {
-    /* Action Required - Red */
-    --category-action: 0 84% 60%;
+    /* ─────────────────────────────────────────────────────────────────────────
+     * Email Category Colors (REFACTORED Jan 2026 - Life-Bucket System)
+     * ─────────────────────────────────────────────────────────────────────────
+     * Categories now represent what part of user's life the email touches.
+     * Colors are chosen for quick visual scanning and accessibility.
+     * ───────────────────────────────────────────────────────────────────────── */
 
-    /* Event - Purple */
-    --category-event: 270 70% 60%;
+    /* Work & Business */
+    --category-client-pipeline: 0 84% 60%;          /* Red - needs attention */
+    --category-business-work: 270 70% 60%;          /* Purple - professional */
 
-    /* Newsletter - Blue */
-    --category-newsletter: 210 70% 55%;
+    /* Family & Personal */
+    --category-family-kids: 210 70% 55%;            /* Blue - school/activities */
+    --category-family-health: 330 70% 60%;          /* Pink - health/medical */
+    --category-personal: 140 60% 45%;               /* Green - friends/family */
 
-    /* Promo - Orange */
-    --category-promo: 30 90% 55%;
+    /* Life Admin */
+    --category-finance: 220 10% 50%;                /* Gray - bills/banking */
+    --category-travel: 185 70% 50%;                 /* Cyan - travel */
+    --category-shopping: 30 90% 55%;                /* Orange - orders/promos */
+    --category-local: 175 60% 45%;                  /* Teal - community */
 
-    /* Admin - Gray */
-    --category-admin: 220 10% 50%;
+    /* Information */
+    --category-newsletter: 210 60% 55%;             /* Blue - digests */
+    --category-news: 220 15% 50%;                   /* Slate - news */
+    --category-product-updates: 220 10% 70%;        /* Light gray - SaaS */
 
-    /* Personal - Green */
-    --category-personal: 140 60% 45%;
-
-    /* Noise - Light Gray */
-    --category-noise: 220 10% 70%;
-
-    /* Client - Teal */
-    --category-client: 175 60% 45%;
+    /* Special */
+    --category-client: 175 60% 45%;                 /* Teal - legacy client tag */
   }
 
   .dark {
     /* Darker variants for dark mode */
-    --category-action: 0 70% 50%;
-    --category-event: 270 60% 50%;
-    --category-newsletter: 210 60% 50%;
-    --category-promo: 30 80% 50%;
-    --category-admin: 220 10% 40%;
+    --category-client-pipeline: 0 70% 50%;
+    --category-business-work: 270 60% 50%;
+    --category-family-kids: 210 60% 50%;
+    --category-family-health: 330 60% 50%;
     --category-personal: 140 50% 40%;
-    --category-noise: 220 10% 40%;
+    --category-finance: 220 10% 40%;
+    --category-travel: 185 60% 45%;
+    --category-shopping: 30 80% 50%;
+    --category-local: 175 50% 40%;
+    --category-newsletter: 210 50% 50%;
+    --category-news: 220 15% 40%;
+    --category-product-updates: 220 10% 40%;
     --category-client: 175 50% 40%;
   }
 }

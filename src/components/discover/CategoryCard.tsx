@@ -137,7 +137,38 @@ export function CategoryCard({
   onClick,
 }: CategoryCardProps) {
   const router = useRouter();
-  const display = CATEGORY_DISPLAY[summary.category];
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Get display configuration with defensive fallback
+  // ───────────────────────────────────────────────────────────────────────────
+  // SAFETY (Jan 2026): If a category doesn't have display config (e.g., during
+  // migration or if AI returns unexpected category), use a fallback to prevent
+  // crashes. This logs a warning for debugging and troubleshooting.
+  // ───────────────────────────────────────────────────────────────────────────
+  const rawDisplay = CATEGORY_DISPLAY[summary.category];
+
+  // Fallback display config for unknown/unexpected categories
+  const fallbackDisplay = {
+    label: summary.category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown',
+    icon: '📧',
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-50',
+    description: 'Email category',
+  };
+
+  // Use fallback if display is undefined
+  const display = rawDisplay || fallbackDisplay;
+
+  // Log warning for unknown categories (helpful for debugging migrations)
+  React.useEffect(() => {
+    if (!rawDisplay) {
+      logger.warn('Unknown category encountered - using fallback display', {
+        category: summary.category,
+        availableCategories: Object.keys(CATEGORY_DISPLAY),
+        fallbackLabel: fallbackDisplay.label,
+      });
+    }
+  }, [summary.category, rawDisplay]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Debug Logging
@@ -152,8 +183,9 @@ export function CategoryCard({
       hasNeedsAttention: !!summary.needsAttention?.length,
       hasBriefing: !!summary.briefing,
       hasHealthSummary: !!summary.healthSummary,
+      usingFallbackDisplay: !rawDisplay,
     });
-  }, [summary]);
+  }, [summary, rawDisplay]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Handlers

@@ -3,12 +3,17 @@
  *
  * Generates suggested quick actions based on email analysis results.
  * These suggestions help users take immediate action after initial sync:
- * - Archive bulk categories (promo, noise)
- * - View urgent items
+ * - Archive bulk categories (shopping, newsletters_general)
+ * - View urgent items in client_pipeline
  * - Add suggested clients
- * - Review detected events
+ * - Review detected events (now in 'local' category)
  *
  * Actions are prioritized and limited to avoid overwhelming the user.
+ *
+ * REFACTORED (Jan 2026): Updated for life-bucket categories.
+ * - action_required → client_pipeline (urgent items via urgency score)
+ * - event → local (events detected via has_event label)
+ * - promo/noise → shopping/newsletters_general
  *
  * @module services/sync/action-suggester
  * @see docs/DISCOVERY_DASHBOARD_PLAN.md
@@ -143,18 +148,29 @@ export class ActionSuggesterService {
 
   /**
    * Generate "view urgent items" action if there are urgent emails.
+   *
+   * REFACTORED (Jan 2026): Now checks client_pipeline and business_work_general
+   * categories for urgent items (identified by urgentCount from analysis).
+   * The old 'action_required' category no longer exists.
    */
   private generateUrgentViewActions(categories: CategorySummary[]): SuggestedAction[] {
     const actions: SuggestedAction[] = [];
 
-    const actionRequired = categories.find((c) => c.category === 'action_required');
+    // ─────────────────────────────────────────────────────────────────────────
+    // Find work-related categories that may have urgent items
+    // REFACTORED (Jan 2026): action_required → client_pipeline + business_work_general
+    // ─────────────────────────────────────────────────────────────────────────
+    const clientPipeline = categories.find((c) => c.category === 'client_pipeline');
+    const businessWork = categories.find((c) => c.category === 'business_work_general');
 
-    if (!actionRequired) {
-      return actions;
-    }
+    // Sum up urgent counts from both work categories
+    const urgentCount = (clientPipeline?.urgentCount || 0) + (businessWork?.urgentCount || 0);
 
-    // Check for urgent items (urgency > threshold)
-    const urgentCount = actionRequired.urgentCount || 0;
+    logger.debug('Checking for urgent items', {
+      clientPipelineUrgent: clientPipeline?.urgentCount || 0,
+      businessWorkUrgent: businessWork?.urgentCount || 0,
+      totalUrgent: urgentCount,
+    });
 
     if (urgentCount > 0) {
       actions.push({
@@ -171,7 +187,7 @@ export class ActionSuggesterService {
         priority: 'high',
       });
 
-      logger.debug('Generated urgent view action', { urgentCount });
+      logger.info('Generated urgent view action', { urgentCount });
     }
 
     return actions;
@@ -179,44 +195,80 @@ export class ActionSuggesterService {
 
   /**
    * Generate "add events to calendar" action if events were detected.
+   *
+   * REFACTORED (Jan 2026): Events are no longer a separate category.
+   * Events are detected via the 'has_event' label and can appear in any
+   * life-bucket category (local, family_kids_school, travel, etc.).
+   * We now check for upcomingEvent across all categories.
    */
   private generateEventActions(categories: CategorySummary[]): SuggestedAction[] {
     const actions: SuggestedAction[] = [];
 
-    const eventCategory = categories.find((c) => c.category === 'event');
+    // ─────────────────────────────────────────────────────────────────────────
+    // Events can now be in any category (local, family_kids_school, travel, etc.)
+    // Count categories that have detected events via upcomingEvent field
+    // ─────────────────────────────────────────────────────────────────────────
+    const categoriesWithEvents = categories.filter((c) => c.upcomingEvent);
+    const eventCount = categoriesWithEvents.length;
 
-    if (!eventCategory || eventCategory.count === 0) {
+    logger.debug('Checking for events across categories', {
+      categoriesWithEvents: categoriesWithEvents.map(c => c.category),
+      eventCount,
+    });
+
+    if (eventCount === 0) {
       return actions;
     }
 
-    const eventCount = eventCategory.count;
+    // Find the soonest upcoming event across all categories
+    const soonestEvent = categoriesWithEvents
+      .sort((a, b) => {
+        const dateA = a.upcomingEvent?.date || '';
+        const dateB = b.upcomingEvent?.date || '';
+        return dateA.localeCompare(dateB);
+      })[0]?.upcomingEvent;
 
     actions.push({
       id: `add_events_${Date.now()}`,
       type: 'add_events',
       label: eventCount === 1
-        ? 'Review 1 event'
-        : `Review ${eventCount} events`,
-      description: eventCategory.upcomingEvent
-        ? `Next: ${eventCategory.upcomingEvent.title}`
+        ? 'Review 1 upcoming event'
+        : `Review ${eventCount} upcoming events`,
+      description: soonestEvent
+        ? `Next: ${soonestEvent.title}`
         : 'Events and invitations were detected',
       count: eventCount,
       priority: eventCount >= 3 ? 'high' : 'medium',
     });
 
-    logger.debug('Generated event action', { eventCount });
+    logger.info('Generated event action', { eventCount, soonestEvent: soonestEvent?.title });
 
     return actions;
   }
 
   /**
    * Generate "archive category" actions for low-value categories.
+   *
+   * REFACTORED (Jan 2026): Updated for life-bucket categories.
+   * - promo → shopping (but only suggest archive for clearly promotional content)
+   * - noise → newsletters_general (suggest archive for high-volume newsletters)
+   * - news_politics and product_updates are also archiveable
    */
   private generateArchiveActions(categories: CategorySummary[]): SuggestedAction[] {
     const actions: SuggestedAction[] = [];
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Categories that are candidates for bulk archive
-    const archiveableCategories: EmailCategory[] = ['promo', 'noise'];
+    // REFACTORED (Jan 2026): Updated to new life-bucket categories
+    // These are typically informational and safe to archive in bulk
+    // ─────────────────────────────────────────────────────────────────────────
+    const archiveableCategories: EmailCategory[] = [
+      'newsletters_general',  // Substacks, digests - often pile up
+      'news_politics',        // News updates - time-sensitive, archive old ones
+      'product_updates',      // SaaS updates - usually low priority
+    ];
+
+    logger.debug('Checking archiveable categories', { archiveableCategories });
 
     for (const categoryName of archiveableCategories) {
       const category = categories.find((c) => c.category === categoryName);
@@ -292,47 +344,68 @@ export class ActionSuggesterService {
 
   /**
    * Get user-friendly label for archive action.
+   *
+   * REFACTORED (Jan 2026): Updated labels for life-bucket categories.
    */
   private getArchiveLabel(category: EmailCategory, count: number): string {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Human-friendly labels for each category
+    // REFACTORED (Jan 2026): Updated to new life-bucket categories
+    // ─────────────────────────────────────────────────────────────────────────
     const categoryLabels: Record<EmailCategory, string> = {
-      promo: 'promotional',
-      noise: 'low-priority',
-      admin: 'admin',
-      newsletter: 'newsletter',
-      event: 'event',
-      action_required: 'action',
-      personal: 'personal',
+      newsletters_general: 'newsletter',
+      news_politics: 'news',
+      product_updates: 'product update',
+      local: 'local',
+      shopping: 'shopping',
+      travel: 'travel',
+      finance: 'finance',
+      family_kids_school: 'school',
+      family_health_appointments: 'health',
+      client_pipeline: 'client',
+      business_work_general: 'work',
+      personal_friends_family: 'personal',
     };
 
     const categoryLabel = categoryLabels[category] || category;
     const emailWord = count === 1 ? 'email' : 'emails';
+
+    logger.debug('Generated archive label', { category, categoryLabel, count });
 
     return `Archive ${count} ${categoryLabel} ${emailWord}`;
   }
 
   /**
    * Get description for archive action.
+   *
+   * REFACTORED (Jan 2026): Updated for life-bucket categories.
    */
   private getArchiveDescription(
     category: EmailCategory,
     summary: CategorySummary
   ): string {
-    if (category === 'promo') {
-      if (summary.topSenders.length > 0) {
-        const senderNames = summary.topSenders
-          .slice(0, 3)
-          .map((s) => s.name || s.email.split('@')[0])
-          .join(', ');
-        return `From: ${senderNames}`;
-      }
-      return 'Marketing and promotional content';
+    // ─────────────────────────────────────────────────────────────────────────
+    // Category-specific descriptions for archive actions
+    // REFACTORED (Jan 2026): Updated to new life-bucket categories
+    // ─────────────────────────────────────────────────────────────────────────
+    const descriptions: Partial<Record<EmailCategory, string>> = {
+      newsletters_general: 'Newsletters and digests safe to archive',
+      news_politics: 'News updates that can be archived',
+      product_updates: 'Product and service updates',
+      shopping: 'Promotional and shopping emails',
+    };
+
+    // If we have top senders, show them
+    if (summary.topSenders.length > 0) {
+      const senderNames = summary.topSenders
+        .slice(0, 3)
+        .map((s) => s.name || s.email.split('@')[0])
+        .join(', ');
+      return `From: ${senderNames}`;
     }
 
-    if (category === 'noise') {
-      return 'Low-value emails safe to archive';
-    }
-
-    return `${category} emails that can be archived`;
+    // Fall back to category-specific description or generic
+    return descriptions[category] || `${category.replace(/_/g, ' ')} emails that can be archived`;
   }
 
   /**

@@ -227,16 +227,32 @@ export class DiscoveryBuilderService {
     // Aggregate emails by category
     const aggregates = this.aggregateByCategory(emails);
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Build summary for each category (in display order)
+    // ─────────────────────────────────────────────────────────────────────────
+    // REFACTORED (Jan 2026): Updated to life-bucket categories.
+    // Categories now organize by what part of user's life the email touches,
+    // not by action type. Actions are tracked separately.
+    // ─────────────────────────────────────────────────────────────────────────
     const categoryOrder: EmailCategory[] = [
-      'action_required',
-      'event',
-      'newsletter',
-      'promo',
-      'admin',
-      'personal',
-      'noise',
+      'client_pipeline',              // Direct client work - highest priority
+      'business_work_general',        // Professional/work emails
+      'family_kids_school',           // Kids, school, activities
+      'family_health_appointments',   // Health, medical, appointments
+      'finance',                      // Bills, banking, payments
+      'travel',                       // Flights, hotels, trips
+      'shopping',                     // Orders, shipping, deals
+      'local',                        // Community, local events
+      'personal_friends_family',      // Friends, family, social
+      'newsletters_general',          // Substacks, digests
+      'news_politics',                // News outlets, political
+      'product_updates',              // Tech products, SaaS updates
     ];
+
+    logger.debug('Building summaries for categories', {
+      categoryOrder,
+      uniqueCategoriesInEmails: [...new Set(emails.map(e => e.category))],
+    });
 
     const summaries: CategorySummary[] = [];
 
@@ -483,9 +499,20 @@ export class DiscoveryBuilderService {
     const insights: ClientInsight[] = [];
 
     for (const aggregate of clientAggregates.values()) {
+      // ─────────────────────────────────────────────────────────────────────────
+      // Count emails needing attention (client_pipeline replaces action_required)
+      // REFACTORED (Jan 2026): Actions are now tracked via urgency score, not category.
+      // We count client_pipeline emails with high urgency as "needing attention".
+      // ─────────────────────────────────────────────────────────────────────────
       const actionRequiredCount = aggregate.emails.filter(
-        (e) => e.category === 'action_required'
+        (e) => e.category === 'client_pipeline' && (e.actionUrgency ?? 0) >= 5
       ).length;
+
+      logger.debug('Client aggregate action count', {
+        clientName: aggregate.clientName,
+        totalEmails: aggregate.emails.length,
+        actionRequiredCount,
+      });
 
       // Get dominant relationship signal
       const relationshipSignal = this.getDominantSignal(aggregate.relationshipSignals);
