@@ -32,9 +32,10 @@
  * </Badge>
  * ```
  *
- * Email category:
+ * Email category (life-bucket system, Jan 2026):
  * ```tsx
- * <CategoryBadge category="action_required" />
+ * <Badge variant="clientPipeline">Client Work</Badge>
+ * <Badge variant="newsletter">Newsletter</Badge>
  * ```
  *
  * @module components/ui/badge
@@ -69,15 +70,19 @@ const badgeVariants = cva(
        * - destructive: Error/danger badge
        * - outline: Bordered only
        *
-       * Email category variants:
-       * - actionRequired: Red for items needing action
-       * - event: Purple for calendar events
-       * - newsletter: Blue for newsletters
-       * - promo: Orange for promotions
-       * - admin: Gray for administrative
-       * - personal: Green for personal
-       * - noise: Light gray for noise
-       * - client: Teal for client-related
+       * Email category variants (REFACTORED Jan 2026 - life-bucket system):
+       * - clientPipeline: Red for client work needing attention
+       * - businessWork: Purple for professional/work
+       * - familyKids: Blue for school/kids activities
+       * - familyHealth: Pink for health/appointments
+       * - finance: Gray for bills/banking
+       * - travel: Cyan for travel bookings
+       * - shopping: Orange for orders/promos
+       * - local: Teal for community/local
+       * - personal: Green for friends/family
+       * - newsletter: Blue for newsletters/digests
+       * - news: Slate for news/politics
+       * - productUpdates: Light gray for SaaS updates
        */
       variant: {
         // Standard variants
@@ -90,20 +95,40 @@ const badgeVariants = cva(
         outline:
           'text-foreground',
 
-        // Email category variants (matching the 7 categories)
-        actionRequired:
+        // ─────────────────────────────────────────────────────────────────────────
+        // Email category variants (REFACTORED Jan 2026 - 12 life-bucket categories)
+        // ─────────────────────────────────────────────────────────────────────────
+
+        // Work & Business
+        clientPipeline:
           'border-red-200 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300',
-        event:
+        businessWork:
           'border-purple-200 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-        newsletter:
+
+        // Family & Personal
+        familyKids:
           'border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-        promo:
-          'border-orange-200 bg-orange-100 text-orange-800 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
-        admin:
-          'border-gray-200 bg-gray-100 text-gray-800 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300',
+        familyHealth:
+          'border-pink-200 bg-pink-100 text-pink-800 dark:border-pink-800 dark:bg-pink-900/30 dark:text-pink-300',
         personal:
           'border-green-200 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300',
-        noise:
+
+        // Life Admin
+        finance:
+          'border-gray-200 bg-gray-100 text-gray-800 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300',
+        travel:
+          'border-cyan-200 bg-cyan-100 text-cyan-800 dark:border-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+        shopping:
+          'border-orange-200 bg-orange-100 text-orange-800 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+        local:
+          'border-teal-200 bg-teal-100 text-teal-800 dark:border-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
+
+        // Information
+        newsletter:
+          'border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+        news:
+          'border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300',
+        productUpdates:
           'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/30 dark:text-slate-400',
 
         // Special variants
@@ -147,10 +172,10 @@ export interface BadgeProps
  * <Badge variant="destructive">Error</Badge>
  * <Badge variant="outline">Outline</Badge>
  *
- * // Email category badges
- * <Badge variant="actionRequired">Action Required</Badge>
- * <Badge variant="event">Event</Badge>
+ * // Email category badges (life-bucket system, Jan 2026)
+ * <Badge variant="clientPipeline">Client Work</Badge>
  * <Badge variant="newsletter">Newsletter</Badge>
+ * <Badge variant="shopping">Shopping</Badge>
  *
  * // With icon
  * <Badge variant="success">
