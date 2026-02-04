@@ -23,7 +23,7 @@
  *
  * <Sidebar
  *   currentPath="/inbox"
- *   categoryCounts={{ action_required: 5, newsletter: 12 }}
+ *   categoryCounts={{ client_pipeline: 5, newsletters_general: 12 }}
  *   clients={[{ id: '1', name: 'Acme Corp' }]}
  *   isOpen={sidebarOpen}
  *   onClose={() => setSidebarOpen(false)}
@@ -81,15 +81,23 @@ const logger = createLogger('Sidebar');
 /**
  * Email category for filtering.
  * Matches the categories defined in the analyzer system.
+ *
+ * REFACTORED (Jan 2026): Updated to life-bucket categories.
+ * Categories now represent what part of life the email touches.
  */
 export type EmailCategory =
-  | 'action_required'
-  | 'event'
-  | 'newsletter'
-  | 'promo'
-  | 'admin'
-  | 'personal'
-  | 'noise';
+  | 'newsletters_general'           // Substacks, digests
+  | 'news_politics'                 // News, political updates
+  | 'product_updates'               // Tech products, SaaS
+  | 'local'                         // Community, local events
+  | 'shopping'                      // Orders, shipping, deals
+  | 'travel'                        // Flights, hotels, trips
+  | 'finance'                       // Bills, banking
+  | 'family_kids_school'            // School, kid activities
+  | 'family_health_appointments'    // Health, appointments
+  | 'client_pipeline'               // Client work
+  | 'business_work_general'         // Work, professional
+  | 'personal_friends_family';      // Friends, family
 
 /**
  * Category counts for sidebar badges.
@@ -199,7 +207,7 @@ const mainNavItems: NavItem[] = [
     href: '/actions',
     icon: CheckSquare,
     badge: 'count',
-    countKey: 'action_required',
+    countKey: 'client_pipeline', // REFACTORED (Jan 2026): was 'action_required'
   },
   {
     label: 'Clients',
@@ -267,23 +275,33 @@ interface CategoryItem {
   color: string;
 }
 
+/**
+ * Category quick-filter items for sidebar.
+ * REFACTORED (Jan 2026): Updated to life-bucket categories.
+ */
 const categoryItems: CategoryItem[] = [
   {
-    label: 'Action Required',
-    category: 'action_required',
+    label: 'Client Work',
+    category: 'client_pipeline',        // was 'action_required'
     icon: AlertCircle,
     color: 'text-red-500',
+  },
+  {
+    label: 'Work',
+    category: 'business_work_general',
+    icon: Building2,
+    color: 'text-purple-500',
   },
   // Note: Events moved to dedicated /events page and main nav (Jan 2026)
   {
     label: 'Newsletters',
-    category: 'newsletter',
+    category: 'newsletters_general',    // was 'newsletter'
     icon: Newspaper,
     color: 'text-blue-500',
   },
   {
-    label: 'Promo',
-    category: 'promo',
+    label: 'Shopping',
+    category: 'shopping',               // was 'promo'
     icon: Tag,
     color: 'text-orange-500',
   },

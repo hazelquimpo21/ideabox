@@ -247,7 +247,9 @@ function EmailListItem({
   const isAnalyzed = !!email.analyzed_at;
   const hasPendingAnalysis = !isAnalyzed && !email.analysis_error;
   const quickActionInfo = getQuickActionInfo(email.quick_action);
-  const isEventEmail = email.category === 'event';
+  // REFACTORED (Jan 2026): Events are no longer a category.
+  // Events are detected via has_event label and stored with event data.
+  const isEventEmail = !!eventData;
 
   return (
     <div

@@ -203,15 +203,28 @@ export const HUB_SCORING_CONFIG = {
     normal: 1.0,       // No special activity
   },
 
+  // ─────────────────────────────────────────────────────────────────────────
   // Category-specific boosts
+  // REFACTORED (Jan 2026): Updated for life-bucket categories.
+  // Higher multipliers for categories that typically need attention.
+  // ─────────────────────────────────────────────────────────────────────────
   categoryBoosts: {
-    action_required: 1.5,  // These inherently need attention
-    event: 1.3,            // Time-sensitive
-    personal: 1.2,         // Personal matters
-    admin: 0.9,            // Usually lower priority
-    newsletter: 0.5,       // Rarely urgent
-    promo: 0.3,            // Almost never urgent
-    noise: 0.1,            // Filter these out
+    // Work & Business - high priority
+    client_pipeline: 1.5,               // Client work needs attention
+    business_work_general: 1.3,         // Professional matters
+    // Family & Personal - moderate-high priority
+    family_kids_school: 1.3,            // Kid-related often time-sensitive
+    family_health_appointments: 1.4,    // Health matters are important
+    personal_friends_family: 1.2,       // Personal relationships
+    // Life Admin - moderate priority
+    finance: 1.2,                       // Bills, payments
+    travel: 1.3,                        // Travel is time-sensitive
+    shopping: 0.6,                      // Orders, promos - lower priority
+    local: 1.1,                         // Community events
+    // Information - lower priority
+    newsletters_general: 0.5,           // Rarely urgent
+    news_politics: 0.4,                 // Can wait
+    product_updates: 0.3,               // Almost never urgent
   },
 
   // Urgency score weights (from AI analysis)
@@ -955,7 +968,8 @@ function scoreEmail(
     whyImportant = IMPORTANCE_REASONS.vipClient(clientName);
   } else if (stalenessFactor > 1.2) {
     whyImportant = IMPORTANCE_REASONS.staleForgotten(daysSinceEmail);
-  } else if (email.category === 'action_required') {
+  } else if (email.category === 'client_pipeline') {
+    // REFACTORED (Jan 2026): 'action_required' → 'client_pipeline'
     whyImportant = IMPORTANCE_REASONS.actionRequired();
   }
 

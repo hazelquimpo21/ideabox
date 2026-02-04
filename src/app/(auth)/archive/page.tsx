@@ -30,22 +30,44 @@ function formatRelativeTime(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+/**
+ * Get badge display config for a category.
+ *
+ * REFACTORED (Jan 2026): Updated for life-bucket categories.
+ * Categories now represent what part of life the email touches.
+ */
 function getCategoryBadge(category: EmailCategory | null) {
   const map: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string; icon: React.ReactNode }> = {
-    action_required: { variant: 'destructive', label: 'Action Required', icon: <AlertCircle className="h-3 w-3" /> },
-    event: { variant: 'default', label: 'Event', icon: <Calendar className="h-3 w-3" /> },
-    newsletter: { variant: 'secondary', label: 'Newsletter', icon: <Newspaper className="h-3 w-3" /> },
-    promo: { variant: 'outline', label: 'Promo', icon: <Tag className="h-3 w-3" /> },
-    admin: { variant: 'secondary', label: 'Admin', icon: <Mail className="h-3 w-3" /> },
-    personal: { variant: 'outline', label: 'Personal', icon: <Mail className="h-3 w-3" /> },
-    noise: { variant: 'outline', label: 'Noise', icon: <Archive className="h-3 w-3" /> },
+    // Work & Business
+    client_pipeline: { variant: 'destructive', label: 'Client', icon: <AlertCircle className="h-3 w-3" /> },
+    business_work_general: { variant: 'default', label: 'Work', icon: <Mail className="h-3 w-3" /> },
+    // Family & Personal
+    family_kids_school: { variant: 'default', label: 'School', icon: <Calendar className="h-3 w-3" /> },
+    family_health_appointments: { variant: 'default', label: 'Health', icon: <Calendar className="h-3 w-3" /> },
+    personal_friends_family: { variant: 'outline', label: 'Personal', icon: <Mail className="h-3 w-3" /> },
+    // Life Admin
+    finance: { variant: 'secondary', label: 'Finance', icon: <Mail className="h-3 w-3" /> },
+    travel: { variant: 'default', label: 'Travel', icon: <Calendar className="h-3 w-3" /> },
+    shopping: { variant: 'outline', label: 'Shopping', icon: <Tag className="h-3 w-3" /> },
+    local: { variant: 'default', label: 'Local', icon: <Calendar className="h-3 w-3" /> },
+    // Information
+    newsletters_general: { variant: 'secondary', label: 'Newsletter', icon: <Newspaper className="h-3 w-3" /> },
+    news_politics: { variant: 'secondary', label: 'News', icon: <Newspaper className="h-3 w-3" /> },
+    product_updates: { variant: 'outline', label: 'Updates', icon: <Archive className="h-3 w-3" /> },
   };
   return map[category || ''] || { variant: 'outline' as const, label: 'Archived', icon: <Archive className="h-3 w-3" /> };
 }
 
+/**
+ * Categories typically shown in archive view.
+ * REFACTORED (Jan 2026): Updated for life-bucket categories.
+ */
 const ARCHIVE_CATEGORIES = [
-  { value: 'all', label: 'All' }, { value: 'newsletter', label: 'Newsletters' },
-  { value: 'promo', label: 'Promotions' }, { value: 'admin', label: 'Admin' }, { value: 'noise', label: 'Noise' },
+  { value: 'all', label: 'All' },
+  { value: 'newsletters_general', label: 'Newsletters' },
+  { value: 'news_politics', label: 'News' },
+  { value: 'product_updates', label: 'Updates' },
+  { value: 'shopping', label: 'Shopping' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -122,8 +144,15 @@ export default function ArchivePage() {
     await updateEmail(id, { is_archived: true });
   };
 
+  // Filter emails to show archiveable categories
+  // REFACTORED (Jan 2026): Updated for life-bucket categories
   const archivedEmails = React.useMemo(() => {
-    const archiveCategories = ['newsletter', 'promo', 'admin', 'noise'];
+    const archiveCategories = [
+      'newsletters_general',
+      'news_politics',
+      'product_updates',
+      'shopping',
+    ];
     return emails.filter((email) => {
       if (categoryFilter !== 'all' && email.category !== categoryFilter) return false;
       if (categoryFilter === 'all' && !archiveCategories.includes(email.category || '')) return false;
@@ -137,7 +166,8 @@ export default function ArchivePage() {
   }, [emails, categoryFilter, searchQuery]);
 
   const handleRefresh = async () => { setIsRefreshing(true); await refetch(); setIsRefreshing(false); };
-  const handleUnarchive = async (id: string) => { await updateEmail(id, { category: 'personal' }); };
+  // REFACTORED (Jan 2026): 'personal' → 'personal_friends_family'
+  const handleUnarchive = async (id: string) => { await updateEmail(id, { category: 'personal_friends_family' }); };
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to archive this email?')) {
       await archiveEmail(id);

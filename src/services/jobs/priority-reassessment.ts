@@ -495,11 +495,13 @@ async function reassessEmails(
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - PRIORITY_CONFIG.lookbackDays);
 
+  // REFACTORED (Jan 2026): 'action_required' → 'client_pipeline'
+  // Work-related emails that need attention are now in client_pipeline category
   const { data: emails, error } = await supabase
     .from('emails')
     .select('id, user_id, priority_score, date, analyzed_at, client_id, category')
     .eq('user_id', userId)
-    .eq('category', 'action_required')
+    .eq('category', 'client_pipeline')
     .eq('is_archived', false)
     .gte('date', cutoffDate.toISOString())
     .limit(PRIORITY_CONFIG.batchSize);

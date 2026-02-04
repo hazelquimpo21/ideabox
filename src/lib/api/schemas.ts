@@ -45,16 +45,34 @@ export const paginationSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Valid email categories (action-focused, NOT sender-based).
+ * Valid email categories (life-bucket focused).
+ *
+ * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
+ * Categories now represent what part of the user's life the email touches.
+ * Actions are tracked separately via the `actions` table and urgency scores.
+ *
+ * Migration mapping:
+ * - action_required → client_pipeline
+ * - event → local (events detected via has_event label)
+ * - newsletter → newsletters_general
+ * - promo → shopping
+ * - admin → finance
+ * - personal → personal_friends_family
+ * - noise → newsletters_general
  */
 export const emailCategorySchema = z.enum([
-  'action_required',
-  'event',
-  'newsletter',
-  'promo',
-  'admin',
-  'personal',
-  'noise',
+  'newsletters_general',           // Substacks, digests, curated content
+  'news_politics',                 // News outlets, political updates
+  'product_updates',               // Tech products, SaaS tools
+  'local',                         // Community events, neighborhood, local orgs
+  'shopping',                      // Orders, shipping, deals, retail
+  'travel',                        // Flights, hotels, bookings, trip info
+  'finance',                       // Bills, banking, investments, receipts
+  'family_kids_school',            // School emails, activities, kid logistics
+  'family_health_appointments',    // Medical, appointments, family scheduling
+  'client_pipeline',               // Direct client correspondence, project work
+  'business_work_general',         // Team/internal, industry, professional
+  'personal_friends_family',       // Social, relationships, personal
 ]);
 
 /**
@@ -70,8 +88,8 @@ export type EmailDirection = z.infer<typeof emailDirectionSchema>;
 /**
  * Email list query parameters.
  *
- * @example
- * GET /api/emails?category=action_required&unread=true&limit=20
+ * @example Filter by category (life-bucket)
+ * GET /api/emails?category=client_pipeline&unread=true&limit=20
  *
  * @example Filter by contact email and direction
  * GET /api/emails?contactEmail=john@example.com&direction=all
