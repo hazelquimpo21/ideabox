@@ -86,6 +86,9 @@ export const LOG_EMOJIS = {
   USER: '👤',
   CLIENT: '🏢',
   ACTION: '📋',
+  DISCOVER: '🔮',
+  MODAL: '📱',
+  NAV: '🧭',
 
   // Performance & metrics
   PERFORMANCE: '⏱️',
@@ -651,6 +654,105 @@ export const logAPI = {
     baseLogger.warn(
       { context: 'API', ...meta },
       `${LOG_EMOJIS.API}${LOG_EMOJIS.WARNING} Validation failed`
+    ),
+};
+
+/**
+ * Discover feature logging helpers.
+ * Tracks category card interactions, modal usage, and navigation.
+ *
+ * ADDED (Jan 2026): For the Discover-first architecture refactor.
+ *
+ * @example
+ * ```typescript
+ * logDiscover.cardClick({ category: 'newsletters_general', count: 47 });
+ * logDiscover.modalOpen({ category: 'client_pipeline', emailCount: 12 });
+ * logDiscover.categoryMismatch({ category: 'travel', expected: 5, actual: 0 });
+ * ```
+ */
+export const logDiscover = {
+  /** Card clicked on Discover dashboard */
+  cardClick: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.DISCOVER}${LOG_EMOJIS.START} Category card clicked`
+    ),
+
+  /** Modal opened for a category */
+  modalOpen: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.MODAL}${LOG_EMOJIS.START} Category modal opened`
+    ),
+
+  /** Modal closed */
+  modalClose: (meta: LogMetadata) =>
+    baseLogger.debug(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.MODAL}${LOG_EMOJIS.COMPLETE} Category modal closed`
+    ),
+
+  /** Email action taken from Discover (archive, reply, etc.) */
+  emailAction: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.DISCOVER}${LOG_EMOJIS.ACTION} Email action from Discover`
+    ),
+
+  /** Navigation from Discover to detail page */
+  navigateToDetail: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.NAV}${LOG_EMOJIS.START} Navigate to detail page`
+    ),
+
+  /** Navigation from Discover to email */
+  navigateToEmail: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.NAV}${LOG_EMOJIS.START} Navigate to email detail`
+    ),
+
+  /** Category stats fetched */
+  statsFetched: (meta: LogMetadata) =>
+    baseLogger.debug(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.DISCOVER}${LOG_EMOJIS.SUCCESS} Category stats fetched`
+    ),
+
+  /** Category mismatch detected (expected vs actual email count) */
+  categoryMismatch: (meta: LogMetadata) =>
+    baseLogger.warn(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.DISCOVER}${LOG_EMOJIS.WARNING} Category count mismatch`
+    ),
+
+  /** Invalid category attempted (e.g., from malformed URL) */
+  invalidCategory: (meta: LogMetadata) =>
+    baseLogger.warn(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.DISCOVER}${LOG_EMOJIS.WARNING} Invalid category attempted`
+    ),
+
+  /** Bulk action performed (archive all, mark all read) */
+  bulkAction: (meta: LogMetadata) =>
+    baseLogger.info(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.DISCOVER}${LOG_EMOJIS.SUCCESS} Bulk action performed`
+    ),
+
+  /** Category sync verified (emails.category matches analysis) */
+  categorySyncVerified: (meta: LogMetadata) =>
+    baseLogger.debug(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.DISCOVER}${LOG_EMOJIS.SUCCESS} Category sync verified`
+    ),
+
+  /** Category sync failed (emails.category doesn't match analysis) */
+  categorySyncFailed: (meta: LogMetadata) =>
+    baseLogger.error(
+      { context: 'Discover', ...meta },
+      `${LOG_EMOJIS.DISCOVER}${LOG_EMOJIS.ERROR} Category sync failed`
     ),
 };
 

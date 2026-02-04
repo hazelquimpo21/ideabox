@@ -38,3 +38,6 @@ export type { FailureSummaryProps } from './FailureSummary';
 
 export { DiscoveryHero, default as DiscoveryHeroDefault } from './DiscoveryHero';
 export type { DiscoveryHeroProps } from './DiscoveryHero';
+
+export { CategoryModal, default as CategoryModalDefault } from './CategoryModal';
+export type { CategoryModalProps } from './CategoryModal';

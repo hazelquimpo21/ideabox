@@ -44,13 +44,14 @@ import {
   ClientInsights,
   QuickActions,
   FailureSummary,
+  CategoryModal,
 } from '@/components/discover';
 import { useToast } from '@/components/ui/use-toast';
 import { useInitialSyncProgress } from '@/hooks/useInitialSyncProgress';
 import { StartAnalysisCard, SyncProgressCard } from './components';
 import { createLogger } from '@/lib/utils/logger';
 import { CATEGORY_DISPLAY } from '@/types/discovery';
-import type { InitialSyncResponse, EmailCategory } from '@/types/discovery';
+import type { InitialSyncResponse, EmailCategory, CategorySummary } from '@/types/discovery';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -95,6 +96,10 @@ export default function DiscoverPage() {
 
   // State for retry
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // State for category modal
+  const [selectedCategory, setSelectedCategory] = useState<EmailCategory | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Progress tracking for sync
   const {
@@ -337,10 +342,28 @@ export default function DiscoverPage() {
   };
 
   /**
-   * Navigate to inbox.
+   * Navigate to inbox (legacy - now redirects to discover).
    */
   const handleGoToInbox = () => {
-    router.push('/inbox');
+    router.push('/discover');
+  };
+
+  /**
+   * Open modal for a category.
+   */
+  const handleCategoryClick = (category: CategorySummary) => {
+    logger.info('Opening category modal', { category: category.category });
+    setSelectedCategory(category.category);
+    setIsModalOpen(true);
+  };
+
+  /**
+   * Close the category modal.
+   */
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    // Delay clearing the category so the close animation can finish
+    setTimeout(() => setSelectedCategory(null), 200);
   };
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -444,8 +467,20 @@ export default function DiscoverPage() {
         <CategoryCardGrid
           categories={result.categories}
           hideEmpty={false}
+          onCategoryClick={handleCategoryClick}
         />
       </section>
+
+      {/* Category Modal for quick triage */}
+      <CategoryModal
+        category={selectedCategory}
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        onEmailArchived={() => {
+          // Refresh results after archiving
+          refreshResults();
+        }}
+      />
 
       {/* Client Insights */}
       {result.clientInsights.length > 0 && (
