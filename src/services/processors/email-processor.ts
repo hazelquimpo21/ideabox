@@ -1225,15 +1225,26 @@ export class EmailProcessor {
       throw new Error(`Failed to save analysis: ${error.message}`);
     }
 
-    // Update email's analyzed_at timestamp
+    // Update email's category and analyzed_at timestamp
+    // FIX: Sync category to emails table so inbox filtering works correctly
+    const emailUpdate: { analyzed_at: string; category?: string } = {
+      analyzed_at: new Date().toISOString(),
+    };
+
+    // Only set category if we have one from analysis
+    if (analysis.categorization?.category) {
+      emailUpdate.category = analysis.categorization.category;
+    }
+
     const { error: updateError } = await supabase
       .from('emails')
-      .update({ analyzed_at: new Date().toISOString() })
+      .update(emailUpdate)
       .eq('id', emailId);
 
     if (updateError) {
-      logger.warn('Failed to update analyzed_at', {
+      logger.warn('Failed to update email after analysis', {
         emailId,
+        category: emailUpdate.category,
         error: updateError.message,
       });
     }
