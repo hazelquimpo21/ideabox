@@ -1,46 +1,19 @@
 /**
- * 🔮 CategoryModal Component
+ * CategoryModal Component
  *
- * Modal dialog for quick email triage within a category.
- * Opens when clicking a CategoryCard on the Discover dashboard.
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * FEATURES
- * ═══════════════════════════════════════════════════════════════════════════════
- * - Displays emails for a single category in a scrollable list
- * - Each email shows AI summary and quick action buttons
- * - Bulk actions: Archive all read, Mark all read
- * - Link to full category page for deeper exploration
- * - Stays on Discover page - no navigation required
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * USAGE
- * ═══════════════════════════════════════════════════════════════════════════════
- * ```tsx
- * <CategoryModal
- *   category="newsletters_general"
- *   isOpen={isModalOpen}
- *   onClose={() => setIsModalOpen(false)}
- *   onEmailClick={(email) => router.push(`/discover/newsletters_general/${email.id}`)}
- * />
- * ```
+ * Modal for quick email triage within a category. Opens when clicking a
+ * CategoryCard on the Discover dashboard. Supports bulk actions (mark read,
+ * archive read) and links to full category page for deeper exploration.
  *
  * @module components/discover/CategoryModal
- * @since Jan 2026 - Discover-first architecture
+ * @since Jan 2026
  */
 
 'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Archive,
-  CheckCheck,
-  ExternalLink,
-  Loader2,
-  MailOpen,
-  RefreshCw,
-} from 'lucide-react';
+import { ExternalLink, MailOpen } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -51,7 +24,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { EmailCard } from '@/components/categories/EmailCard';
+import { ModalBulkActions } from './ModalBulkActions';
+import { ModalEmailItem } from './ModalEmailItem';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger, logDiscover } from '@/lib/utils/logger';
 import {
@@ -107,28 +81,19 @@ export function CategoryModal({
   const router = useRouter();
   const supabase = React.useMemo(() => createClient(), []);
 
-  // ───────────────────────────────────────────────────────────────────────────
   // State
-  // ───────────────────────────────────────────────────────────────────────────
-
   const [emails, setEmails] = React.useState<Email[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [totalCount, setTotalCount] = React.useState(0);
   const [isBulkActionLoading, setIsBulkActionLoading] = React.useState(false);
 
-  // ───────────────────────────────────────────────────────────────────────────
   // Derived
-  // ───────────────────────────────────────────────────────────────────────────
-
   const categoryDisplay = category ? CATEGORY_DISPLAY[category] : null;
   const unreadCount = emails.filter(e => !e.is_read).length;
   const hasMoreEmails = totalCount > emails.length;
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Fetch Emails
-  // ───────────────────────────────────────────────────────────────────────────
-
+  // Fetch emails for this category
   const fetchEmails = React.useCallback(async () => {
     if (!category || !EMAIL_CATEGORIES_SET.has(category)) {
       logDiscover.invalidCategory({ category: category || 'null' });
@@ -185,10 +150,7 @@ export function CategoryModal({
     }
   }, [isOpen, category]);
 
-  // ───────────────────────────────────────────────────────────────────────────
   // Handlers
-  // ───────────────────────────────────────────────────────────────────────────
-
   const handleEmailClick = (email: Email) => {
     logDiscover.navigateToEmail({ category, emailId: email.id });
 
@@ -321,18 +283,12 @@ export function CategoryModal({
     onClose();
   };
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Render
-  // ───────────────────────────────────────────────────────────────────────────
-
   if (!category) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-        {/* ─────────────────────────────────────────────────────────────────────
-            HEADER
-        ───────────────────────────────────────────────────────────────────── */}
+        {/* Header */}
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-2xl">{categoryDisplay?.icon || '📧'}</span>
@@ -355,51 +311,18 @@ export function CategoryModal({
           </div>
         </DialogHeader>
 
-        {/* ─────────────────────────────────────────────────────────────────────
-            BULK ACTIONS BAR
-        ───────────────────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between py-2 border-b flex-shrink-0">
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleMarkAllRead}
-              disabled={isBulkActionLoading || unreadCount === 0}
-            >
-              {isBulkActionLoading ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <CheckCheck className="h-4 w-4 mr-1" />
-              )}
-              Mark All Read
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleArchiveAllRead}
-              disabled={isBulkActionLoading || emails.filter(e => e.is_read).length === 0}
-            >
-              {isBulkActionLoading ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <Archive className="h-4 w-4 mr-1" />
-              )}
-              Archive Read
-            </Button>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => fetchEmails()}
-            disabled={isLoading}
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
+        {/* Bulk Actions */}
+        <ModalBulkActions
+          unreadCount={unreadCount}
+          readCount={emails.filter(e => e.is_read).length}
+          isLoading={isBulkActionLoading}
+          isRefreshing={isLoading}
+          onMarkAllRead={handleMarkAllRead}
+          onArchiveAllRead={handleArchiveAllRead}
+          onRefresh={fetchEmails}
+        />
 
-        {/* ─────────────────────────────────────────────────────────────────────
-            EMAIL LIST
-        ───────────────────────────────────────────────────────────────────── */}
+        {/* Email List */}
         <div className="flex-1 overflow-y-auto py-2 space-y-2 min-h-0">
           {isLoading ? (
             // Loading skeleton
@@ -432,25 +355,13 @@ export function CategoryModal({
             // Email cards
             <>
               {emails.map((email) => (
-                <div key={email.id} className="relative group">
-                  <EmailCard
-                    email={email}
-                    onClick={() => handleEmailClick(email)}
-                    onToggleStar={() => handleToggleStar(email)}
-                    enhanced
-                  />
-                  {/* Quick archive button on hover */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleArchiveEmail(email);
-                    }}
-                    className="absolute top-2 right-10 p-1.5 rounded-md bg-background/80 border opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
-                    title="Archive"
-                  >
-                    <Archive className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </div>
+                <ModalEmailItem
+                  key={email.id}
+                  email={email}
+                  onClick={() => handleEmailClick(email)}
+                  onToggleStar={() => handleToggleStar(email)}
+                  onArchive={() => handleArchiveEmail(email)}
+                />
               ))}
 
               {/* Show more indicator */}
@@ -463,9 +374,7 @@ export function CategoryModal({
           )}
         </div>
 
-        {/* ─────────────────────────────────────────────────────────────────────
-            FOOTER
-        ───────────────────────────────────────────────────────────────────── */}
+        {/* Footer */}
         <div className="flex justify-end pt-2 border-t flex-shrink-0">
           <Button onClick={handleViewFullPage} className="gap-2">
             <ExternalLink className="h-4 w-4" />

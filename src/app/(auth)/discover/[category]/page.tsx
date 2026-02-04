@@ -1,48 +1,23 @@
 /**
  * Category Detail Page
  *
- * Full-page view of all emails in a single category.
- * Accessible from:
- * - Clicking "View Full Page" in CategoryModal
- * - Direct navigation to /discover/[category]
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * FEATURES
- * ═══════════════════════════════════════════════════════════════════════════════
- * - Full list of emails in the category with AI summaries
- * - Bulk actions: Archive all read, Mark all read
- * - Filter by unread/starred
- * - Click email to open detail view
- * - Back navigation to Discover dashboard
+ * Full-page view of all emails in a single category with bulk actions,
+ * filters, and pagination. Accessible from CategoryModal or direct navigation.
  *
  * @module app/(auth)/discover/[category]/page
- * @since Jan 2026 - Discover-first architecture
+ * @since Jan 2026
  */
 
 'use client';
 
 import * as React from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import {
-  ArrowLeft,
-  Archive,
-  CheckCheck,
-  Filter,
-  Loader2,
-  MailOpen,
-  RefreshCw,
-  Star,
-} from 'lucide-react';
+import { ArrowLeft, Loader2, MailOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { EmailCard } from '@/components/categories/EmailCard';
+import { CategoryPageHeader } from '@/components/discover/CategoryPageHeader';
+import { CategoryPageToolbar } from '@/components/discover/CategoryPageToolbar';
+import { ModalEmailItem } from '@/components/discover/ModalEmailItem';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger, logDiscover } from '@/lib/utils/logger';
 import {
@@ -52,18 +27,8 @@ import {
 } from '@/types/discovery';
 import type { Email } from '@/types/database';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
 const logger = createLogger('CategoryDetailPage');
-
-/** Number of emails per page */
 const PAGE_SIZE = 25;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════════
 
 export default function CategoryDetailPage() {
   const router = useRouter();
@@ -71,19 +36,13 @@ export default function CategoryDetailPage() {
   const category = params.category as string;
   const supabase = React.useMemo(() => createClient(), []);
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Validate Category
-  // ───────────────────────────────────────────────────────────────────────────
-
+  // Validate category
   const isValidCategory = EMAIL_CATEGORIES_SET.has(category);
   const categoryDisplay = isValidCategory
     ? CATEGORY_DISPLAY[category as EmailCategory]
     : null;
 
-  // ───────────────────────────────────────────────────────────────────────────
   // State
-  // ───────────────────────────────────────────────────────────────────────────
-
   const [emails, setEmails] = React.useState<Email[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -96,16 +55,8 @@ export default function CategoryDetailPage() {
   const [showUnreadOnly, setShowUnreadOnly] = React.useState(false);
   const [showStarredOnly, setShowStarredOnly] = React.useState(false);
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Derived
-  // ───────────────────────────────────────────────────────────────────────────
-
   const unreadCount = emails.filter(e => !e.is_read).length;
   const readCount = emails.filter(e => e.is_read).length;
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Fetch Emails
-  // ───────────────────────────────────────────────────────────────────────────
 
   const fetchEmails = React.useCallback(async (reset = true) => {
     if (!isValidCategory) {
@@ -169,9 +120,7 @@ export default function CategoryDetailPage() {
     }
   }, [category, isValidCategory, showUnreadOnly, showStarredOnly, supabase]);
 
-  // ───────────────────────────────────────────────────────────────────────────
   // Load More
-  // ───────────────────────────────────────────────────────────────────────────
 
   const loadMore = async () => {
     if (!hasMore || isLoadingMore) return;
@@ -214,17 +163,13 @@ export default function CategoryDetailPage() {
     }
   };
 
-  // ───────────────────────────────────────────────────────────────────────────
   // Effects
-  // ───────────────────────────────────────────────────────────────────────────
 
   React.useEffect(() => {
     fetchEmails();
   }, [fetchEmails]);
 
-  // ───────────────────────────────────────────────────────────────────────────
   // Handlers
-  // ───────────────────────────────────────────────────────────────────────────
 
   const handleBack = () => {
     router.push('/discover');
@@ -336,9 +281,7 @@ export default function CategoryDetailPage() {
     }
   };
 
-  // ───────────────────────────────────────────────────────────────────────────
   // Invalid Category
-  // ───────────────────────────────────────────────────────────────────────────
 
   if (!isValidCategory) {
     return (
@@ -358,134 +301,39 @@ export default function CategoryDetailPage() {
     );
   }
 
-  // ───────────────────────────────────────────────────────────────────────────
   // Render
-  // ───────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="container max-w-4xl mx-auto py-8 px-4">
-      {/* ─────────────────────────────────────────────────────────────────────
-          HEADER
-      ───────────────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={handleBack}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex items-center gap-3 flex-1">
-          <span className="text-3xl">{categoryDisplay?.icon || '📧'}</span>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {categoryDisplay?.label || category}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {categoryDisplay?.description}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-lg px-3 py-1">
-            {totalCount} emails
-          </Badge>
-          {unreadCount > 0 && (
-            <Badge variant="default" className="bg-blue-500 text-lg px-3 py-1">
-              {unreadCount} unread
-            </Badge>
-          )}
-        </div>
-      </div>
+      <CategoryPageHeader
+        categoryDisplay={categoryDisplay}
+        category={category}
+        totalCount={totalCount}
+        unreadCount={unreadCount}
+        onBack={handleBack}
+      />
 
-      {/* ─────────────────────────────────────────────────────────────────────
-          TOOLBAR
-      ───────────────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between py-3 border-y mb-4">
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleMarkAllRead}
-            disabled={isBulkActionLoading || unreadCount === 0}
-          >
-            {isBulkActionLoading ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <CheckCheck className="h-4 w-4 mr-1" />
-            )}
-            Mark All Read
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleArchiveAllRead}
-            disabled={isBulkActionLoading || readCount === 0}
-          >
-            {isBulkActionLoading ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Archive className="h-4 w-4 mr-1" />
-            )}
-            Archive Read ({readCount})
-          </Button>
-        </div>
+      {/* Toolbar */}
+      <CategoryPageToolbar
+        unreadCount={unreadCount}
+        readCount={readCount}
+        isBulkActionLoading={isBulkActionLoading}
+        isRefreshing={isLoading}
+        showUnreadOnly={showUnreadOnly}
+        showStarredOnly={showStarredOnly}
+        onMarkAllRead={handleMarkAllRead}
+        onArchiveAllRead={handleArchiveAllRead}
+        onRefresh={() => fetchEmails()}
+        onUnreadFilterChange={setShowUnreadOnly}
+        onStarredFilterChange={setShowStarredOnly}
+      />
 
-        <div className="flex items-center gap-2">
-          {/* Filters dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-1" />
-                Filter
-                {(showUnreadOnly || showStarredOnly) && (
-                  <Badge variant="secondary" className="ml-1 px-1">
-                    {[showUnreadOnly && 'Unread', showStarredOnly && 'Starred']
-                      .filter(Boolean)
-                      .length}
-                  </Badge>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuCheckboxItem
-                checked={showUnreadOnly}
-                onCheckedChange={setShowUnreadOnly}
-              >
-                <MailOpen className="h-4 w-4 mr-2" />
-                Unread only
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={showStarredOnly}
-                onCheckedChange={setShowStarredOnly}
-              >
-                <Star className="h-4 w-4 mr-2" />
-                Starred only
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Refresh */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => fetchEmails()}
-            disabled={isLoading}
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          EMAIL LIST
-      ───────────────────────────────────────────────────────────────────── */}
+      {/* Email List */}
       <div className="space-y-3">
         {isLoading ? (
-          // Loading skeleton
-          Array.from({ length: 5 }).map((_, i) => (
+          Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="p-4 border rounded-lg space-y-2">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-4 w-20 ml-auto" />
-              </div>
+              <Skeleton className="h-4 w-40" />
               <Skeleton className="h-5 w-3/4" />
               <Skeleton className="h-4 w-full" />
             </div>
@@ -499,50 +347,23 @@ export default function CategoryDetailPage() {
             </Button>
           </div>
         ) : emails.length === 0 ? (
-          // Empty state
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <MailOpen className="h-16 w-16 text-muted-foreground mb-4" />
-            <h2 className="text-xl font-semibold mb-2">No emails found</h2>
-            <p className="text-muted-foreground mb-4">
-              {showUnreadOnly || showStarredOnly
-                ? 'Try adjusting your filters'
-                : 'No emails in this category'}
+            <MailOpen className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">
+              {showUnreadOnly || showStarredOnly ? 'No matching emails' : 'No emails'}
             </p>
-            {(showUnreadOnly || showStarredOnly) && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowUnreadOnly(false);
-                  setShowStarredOnly(false);
-                }}
-              >
-                Clear Filters
-              </Button>
-            )}
           </div>
         ) : (
           // Email list
           <>
             {emails.map((email) => (
-              <div key={email.id} className="relative group">
-                <EmailCard
-                  email={email}
-                  onClick={() => handleEmailClick(email)}
-                  onToggleStar={() => handleToggleStar(email)}
-                  enhanced
-                />
-                {/* Quick archive on hover */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleArchiveEmail(email);
-                  }}
-                  className="absolute top-3 right-12 p-1.5 rounded-md bg-background/80 border opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
-                  title="Archive"
-                >
-                  <Archive className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </div>
+              <ModalEmailItem
+                key={email.id}
+                email={email}
+                onClick={() => handleEmailClick(email)}
+                onToggleStar={() => handleToggleStar(email)}
+                onArchive={() => handleArchiveEmail(email)}
+              />
             ))}
 
             {/* Load more */}
