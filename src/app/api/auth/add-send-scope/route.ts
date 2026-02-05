@@ -82,7 +82,7 @@ const FULL_OAUTH_SCOPES_WITH_SEND = [
  * Initiates OAuth flow to add gmail.send permission.
  *
  * Query Parameters:
- * - returnTo: Path to redirect after success (default: /inbox)
+ * - returnTo: Path to redirect after success (default: /discover)
  * - accountId: Gmail account ID to update (optional)
  *
  * @example
@@ -93,7 +93,7 @@ const FULL_OAUTH_SCOPES_WITH_SEND = [
  */
 export async function GET(request: Request) {
   const { origin, searchParams } = new URL(request.url);
-  const returnTo = searchParams.get('returnTo') || '/inbox';
+  const returnTo = searchParams.get('returnTo') || '/discover';
   const accountId = searchParams.get('accountId');
 
   logger.start('Initiating Gmail send scope addition', {

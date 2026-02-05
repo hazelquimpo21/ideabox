@@ -38,3 +38,18 @@ export type { FailureSummaryProps } from './FailureSummary';
 
 export { DiscoveryHero, default as DiscoveryHeroDefault } from './DiscoveryHero';
 export type { DiscoveryHeroProps } from './DiscoveryHero';
+
+export { CategoryModal, default as CategoryModalDefault } from './CategoryModal';
+export type { CategoryModalProps } from './CategoryModal';
+
+export { ModalBulkActions, default as ModalBulkActionsDefault } from './ModalBulkActions';
+export type { ModalBulkActionsProps } from './ModalBulkActions';
+
+export { ModalEmailItem, default as ModalEmailItemDefault } from './ModalEmailItem';
+export type { ModalEmailItemProps } from './ModalEmailItem';
+
+export { CategoryPageHeader, default as CategoryPageHeaderDefault } from './CategoryPageHeader';
+export type { CategoryPageHeaderProps } from './CategoryPageHeader';
+
+export { CategoryPageToolbar, default as CategoryPageToolbarDefault } from './CategoryPageToolbar';
+export type { CategoryPageToolbarProps } from './CategoryPageToolbar';

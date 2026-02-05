@@ -39,6 +39,34 @@ export type EmailCategory =
   | 'personal_friends_family';      // Social, relationships, personal correspondence
 
 /**
+ * Array of all valid email categories.
+ * Single source of truth - use this for validation and iteration.
+ *
+ * ADDED (Jan 2026): For Discover-first architecture.
+ * Use this instead of hardcoding category lists elsewhere.
+ */
+export const EMAIL_CATEGORIES: EmailCategory[] = [
+  'newsletters_general',
+  'news_politics',
+  'product_updates',
+  'local',
+  'shopping',
+  'travel',
+  'finance',
+  'family_kids_school',
+  'family_health_appointments',
+  'client_pipeline',
+  'business_work_general',
+  'personal_friends_family',
+] as const;
+
+/**
+ * Set of valid email categories for O(1) lookup.
+ * Use for validating category values from URLs or user input.
+ */
+export const EMAIL_CATEGORIES_SET = new Set<string>(EMAIL_CATEGORIES);
+
+/**
  * Display configuration for each category.
  * Used by UI components to render consistent styling.
  */

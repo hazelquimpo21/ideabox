@@ -13,7 +13,7 @@
  *
  * - Unauthenticated users: See landing page with sign-in CTA
  * - Authenticated users (onboarding incomplete): Redirect to /onboarding
- * - Authenticated users (onboarding complete): Redirect to /inbox
+ * - Authenticated users (onboarding complete): Redirect to /discover
  * - Error state: Shows error toast if redirected with error param
  *
  * @module app/page
@@ -213,8 +213,8 @@ export default function LandingPage() {
         logger.info('Redirecting to return URL', { returnUrl });
         router.replace(decodeURIComponent(returnUrl));
       } else {
-        logger.info('Redirecting to inbox', { userId: user.id });
-        router.replace('/inbox');
+        logger.info('Redirecting to discover', { userId: user.id });
+        router.replace('/discover');
       }
     }
   }, [isLoading, isAuthenticated, user, router, searchParams]);

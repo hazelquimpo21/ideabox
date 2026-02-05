@@ -50,7 +50,7 @@ import type { CategorySummary, NeedsAttentionItem } from '@/types/discovery';
 import { UrgencyIndicator } from '@/components/categories/UrgencyIndicator';
 import { RelationshipHealth } from '@/components/categories/RelationshipHealth';
 import { cn } from '@/lib/utils/cn';
-import { createLogger } from '@/lib/utils/logger';
+import { createLogger, logDiscover } from '@/lib/utils/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -192,21 +192,23 @@ export function CategoryCard({
   // ───────────────────────────────────────────────────────────────────────────
 
   const handleClick = () => {
-    logger.info('Category card clicked', { category: summary.category });
+    logDiscover.cardClick({ category: summary.category, count: summary.count });
     if (onClick) {
       onClick(summary);
     } else {
-      router.push(`/inbox?category=${summary.category}`);
+      // Default: navigate to category detail page
+      router.push(`/discover/${summary.category}`);
     }
   };
 
   const handleNeedsAttentionClick = (item: NeedsAttentionItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    logger.info('Needs attention item clicked', {
+    logDiscover.navigateToEmail({
+      category: summary.category,
       emailId: item.emailId,
       actionType: item.actionType,
     });
-    router.push(`/inbox/${item.emailId}`);
+    router.push(`/discover/${summary.category}/${item.emailId}`);
   };
 
   // ───────────────────────────────────────────────────────────────────────────

@@ -26,7 +26,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { EMAIL_CATEGORIES_SET } from '@/types/discovery';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -44,13 +45,14 @@ import {
   ClientInsights,
   QuickActions,
   FailureSummary,
+  CategoryModal,
 } from '@/components/discover';
 import { useToast } from '@/components/ui/use-toast';
 import { useInitialSyncProgress } from '@/hooks/useInitialSyncProgress';
 import { StartAnalysisCard, SyncProgressCard } from './components';
 import { createLogger } from '@/lib/utils/logger';
 import { CATEGORY_DISPLAY } from '@/types/discovery';
-import type { InitialSyncResponse, EmailCategory } from '@/types/discovery';
+import type { InitialSyncResponse, EmailCategory, CategorySummary } from '@/types/discovery';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -78,6 +80,7 @@ interface PendingArchive {
  */
 export default function DiscoverPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -95,6 +98,10 @@ export default function DiscoverPage() {
 
   // State for retry
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // State for category modal
+  const [selectedCategory, setSelectedCategory] = useState<EmailCategory | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Progress tracking for sync
   const {
@@ -337,11 +344,44 @@ export default function DiscoverPage() {
   };
 
   /**
-   * Navigate to inbox.
+   * Navigate to inbox (legacy - now redirects to discover).
    */
   const handleGoToInbox = () => {
-    router.push('/inbox');
+    router.push('/discover');
   };
+
+  /**
+   * Open modal for a category.
+   */
+  const handleCategoryClick = (category: CategorySummary) => {
+    logger.info('Opening category modal', { category: category.category });
+    setSelectedCategory(category.category);
+    setIsModalOpen(true);
+  };
+
+  /**
+   * Close the category modal.
+   */
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    // Clear the URL parameter
+    router.replace('/discover', { scroll: false });
+    // Delay clearing the category so the close animation can finish
+    setTimeout(() => setSelectedCategory(null), 200);
+  };
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // URL Parameter Effect: Open modal from ?modal=category
+  // ───────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const modalCategory = searchParams.get('modal');
+    if (modalCategory && EMAIL_CATEGORIES_SET.has(modalCategory) && result) {
+      logger.info('Opening modal from URL parameter', { category: modalCategory });
+      setSelectedCategory(modalCategory as EmailCategory);
+      setIsModalOpen(true);
+    }
+  }, [searchParams, result]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Loading State
@@ -406,8 +446,8 @@ export default function DiscoverPage() {
             <Button variant="outline" onClick={() => setNeedsSync(true)}>
               Try Again
             </Button>
-            <Button onClick={() => router.push('/inbox')}>
-              Go to Inbox
+            <Button onClick={() => window.location.reload()}>
+              Refresh Page
             </Button>
           </div>
         </div>
@@ -444,8 +484,20 @@ export default function DiscoverPage() {
         <CategoryCardGrid
           categories={result.categories}
           hideEmpty={false}
+          onCategoryClick={handleCategoryClick}
         />
       </section>
+
+      {/* Category Modal for quick triage */}
+      <CategoryModal
+        category={selectedCategory}
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        onEmailArchived={() => {
+          // Refresh results after archiving
+          refreshResults();
+        }}
+      />
 
       {/* Client Insights */}
       {result.clientInsights.length > 0 && (
