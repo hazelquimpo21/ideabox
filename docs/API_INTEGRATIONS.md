@@ -662,26 +662,34 @@ export interface FunctionSchema {
   };
 }
 
-// Example: Email categorization
+// Example: Email categorization (UPDATED Feb 2026 for life-bucket categories)
 export const CATEGORIZE_FUNCTION: FunctionSchema = {
   name: 'categorize_email',
-  description: 'Categorizes an email into one primary category',
+  description: 'Categorizes an email into one primary life-bucket category',
   parameters: {
     type: 'object',
     properties: {
       category: {
         type: 'string',
         enum: [
-          'action_required',
-          'event',
-          'client',
-          'newsletter',
-          'promo',
-          'admin',
-          'personal',
-          'noise',
+          // Work & Business
+          'client_pipeline',
+          'business_work_general',
+          // Family & Personal
+          'family_kids_school',
+          'family_health_appointments',
+          'personal_friends_family',
+          // Life Admin
+          'finance',
+          'travel',
+          'shopping',
+          'local',
+          // Information
+          'newsletters_general',
+          'news_politics',
+          'product_updates',
         ],
-        description: 'Primary category for this email',
+        description: 'Primary life-bucket category for this email',
       },
       confidence: {
         type: 'number',

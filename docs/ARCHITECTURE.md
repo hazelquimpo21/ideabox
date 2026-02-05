@@ -293,7 +293,7 @@ throw new AnalyzerError('Failed to extract actions', {
 ```
 1. User views inbox → /inbox page
 2. Page uses useEmails() hook
-3. Hook calls → /api/emails?category=action_required
+3. Hook calls → /api/emails?category=client_pipeline
 4. API route queries Supabase with filters
 5. Returns typed Email[] with embedded analyses
 6. Component renders with proper types

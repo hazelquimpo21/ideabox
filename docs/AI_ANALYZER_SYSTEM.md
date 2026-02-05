@@ -139,7 +139,7 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 **Purpose:** Classify email + generate assistant-style summary + suggest quick action
 
 > **IMPORTANT:** "client" is NOT a category. Client relationship is tracked via `client_id` in the database.
-> This design allows a client email to be categorized as "action_required" rather than hidden in a "client" bucket.
+> This design allows a client email to be categorized into a life-bucket category (e.g., `client_pipeline`) rather than hidden in a "client" bucket.
 
 **ENHANCED (Jan 2026):** Now also generates:
 - `summary`: One-sentence assistant-style overview (e.g., "Sarah from Acme wants you to review the proposal by Friday")
