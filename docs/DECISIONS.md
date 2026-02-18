@@ -3,7 +3,7 @@
 > **Purpose:** Quick reference for all key architectural decisions made during planning.
 > Each decision includes context, alternatives considered, and rationale.
 >
-> **Last Updated:** January 2026
+> **Last Updated:** February 2026
 
 ---
 
@@ -22,6 +22,12 @@
 | Log Retention | 30-day cleanup | Prevents unbounded storage growth |
 | OAuth | External app (testing mode) | Allows non-Workspace users |
 | Cost Tracking | api_usage_logs table | Essential for budget monitoring |
+| Sender Classification | Pattern-based + AI | Distinguish direct humans from newsletters |
+| Email Sending | Gmail API (not SendGrid) | Emails come from user's real address |
+| Send Rate Limit | 400/day per user | Respects Gmail API limits |
+| Content Digest | Separate analyzer | Gist + key points for non-reading triage |
+| Multi-Action | Array in JSONB | One email can produce multiple to-do items |
+| Historical Sync | Metadata-only | Enrich contacts without full email download |
 
 ---
 
@@ -317,6 +323,56 @@ CREATE TABLE api_usage_logs (
 
 ---
 
+### 11. Sender Type Classification (Jan 2026)
+
+**Decision:** Classify contacts as `direct`, `broadcast`, `cold_outreach`, `opportunity`, or `unknown` using pattern-based detection + AI fallback.
+
+**Rationale:**
+- Helps prioritize emails (direct humans > newsletters > cold outreach)
+- Pattern-based first pass is free (no AI cost)
+- AI enrichment only for ambiguous contacts
+- Stored on `contacts` table for reuse across all emails from that sender
+
+---
+
+### 12. Email Sending: Gmail API Direct (Jan 2026)
+
+**Decision:** Send emails through Gmail API directly, not third-party services.
+
+**Rationale:**
+- Emails come from user's real Gmail address
+- Appear in Gmail Sent folder automatically
+- No SendGrid/Mailgun costs or deliverability issues
+- Requires `gmail.send` scope (requested separately via upgrade flow)
+- Rate limited to 400/day per user (respects Gmail quotas)
+
+**Schema:** See migration 026 for `outbound_emails`, `email_templates`, `email_campaigns`, `daily_send_quotas` tables.
+
+---
+
+### 13. Content Digest Analyzer (Jan 2026)
+
+**Decision:** Add a separate content digest analyzer that extracts gist, key points, and links.
+
+**Rationale:**
+- Different from `summary` (which is action-focused); `gist` is content-focused
+- Key points let users scan without reading
+- Link extraction with context (article, registration, document)
+- Denormalized `gist` and `key_points` to emails table for fast list views
+
+---
+
+### 14. Historical Sync: Metadata-Only (Jan 2026)
+
+**Decision:** Historical email sync fetches metadata only (sender, date, subject) without downloading full bodies.
+
+**Rationale:**
+- Enriches contact intelligence (email_count, first_seen_at, last_seen_at) without paying AI costs
+- Much faster than full sync (no body download, no analysis)
+- Contacts page shows accurate frequency data even for old emails
+
+---
+
 ## Decision Template (For Future Decisions)
 
 When making new architectural decisions, document them here using this template:
@@ -345,3 +401,5 @@ When making new architectural decisions, document them here using this template:
 | Date | Decision | Changed By |
 |------|----------|------------|
 | Jan 2026 | Initial decisions documented | Claude (planning session) |
+| Jan 2026 | Sender classification, email sending, content digest, historical sync | Claude |
+| Feb 2026 | Updated references, added missing decisions | Claude (audit) |
