@@ -13,8 +13,8 @@ The initial sync system has been fully implemented with the following features:
 
 ### Token Optimization (20-30% savings)
 - **Pre-filtering**: Skip no-reply, notification emails before AI
-- **Auto-categorization**: Domain patterns (linkedin.com → newsletter)
-- **Subject patterns**: "[ACTION]" → action_required automatically
+- **Auto-categorization**: Domain patterns (linkedin.com → newsletters_general)
+- **Subject patterns**: "[ACTION]" → client_pipeline automatically
 - **Sender patterns**: Learn and reuse categorization from similar senders
 
 ### Partial Success Handling
@@ -260,20 +260,20 @@ export const SKIP_SENDER_PATTERNS = [
   /@bounce\./i,
 ];
 
-// Auto-categorize by domain
+// Auto-categorize by domain (UPDATED Feb 2026 for life-bucket categories)
 export const AUTO_CATEGORIZE_DOMAINS: Record<string, EmailCategory> = {
-  'linkedin.com': 'newsletter',
-  'twitter.com': 'newsletter',
-  'facebook.com': 'newsletter',
-  'github.com': 'admin',
-  'stripe.com': 'admin',
-  'aws.amazon.com': 'admin',
+  'linkedin.com': 'newsletters_general',
+  'twitter.com': 'newsletters_general',
+  'facebook.com': 'newsletters_general',
+  'github.com': 'product_updates',
+  'stripe.com': 'finance',
+  'aws.amazon.com': 'finance',
 };
 
-// Auto-categorize by subject prefix
+// Auto-categorize by subject prefix (UPDATED Feb 2026 for life-bucket categories)
 export const AUTO_CATEGORIZE_PREFIXES: Record<string, EmailCategory> = {
-  '[ACTION]': 'action_required',
-  '[URGENT]': 'action_required',
+  '[ACTION]': 'client_pipeline',
+  '[URGENT]': 'client_pipeline',
   'Re:': null,  // Doesn't override
   'Fwd:': null,
 };

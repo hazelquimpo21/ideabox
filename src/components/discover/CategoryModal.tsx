@@ -5,6 +5,11 @@
  * CategoryCard on the Discover dashboard. Supports bulk actions (mark read,
  * archive read) and links to full category page for deeper exploration.
  *
+ * UPDATED (Feb 2026): Added support for legacy category values. The modal now
+ * uses normalizeCategory() to handle old category values (action_required, event,
+ * newsletter, etc.) that may exist in the database or cached sync_progress data.
+ * Legacy categories are mapped to their new life-bucket equivalents before querying.
+ *
  * @module components/discover/CategoryModal
  * @since Jan 2026
  */
@@ -32,6 +37,8 @@ import {
   type EmailCategory,
   CATEGORY_DISPLAY,
   EMAIL_CATEGORIES_SET,
+  normalizeCategory,
+  isLegacyCategory,
 } from '@/types/discovery';
 import type { Email } from '@/types/database';
 
@@ -88,29 +95,71 @@ export function CategoryModal({
   const [totalCount, setTotalCount] = React.useState(0);
   const [isBulkActionLoading, setIsBulkActionLoading] = React.useState(false);
 
-  // Derived
-  const categoryDisplay = category ? CATEGORY_DISPLAY[category] : null;
+  // ───────────────────────────────────────────────────────────────────────────
+  // Category Normalization
+  // ───────────────────────────────────────────────────────────────────────────
+  // The category prop might contain legacy values (action_required, newsletter, etc.)
+  // from cached sync_progress data. We normalize it to get the display config,
+  // but query with the ORIGINAL value since that's what's in the database.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const normalizedCategory = category ? normalizeCategory(category) : null;
+  const isLegacy = category ? isLegacyCategory(category) : false;
+
+  // Use normalized category for display config, fall back to original if needed
+  const categoryDisplay = normalizedCategory ? CATEGORY_DISPLAY[normalizedCategory] : null;
   const unreadCount = emails.filter(e => !e.is_read).length;
   const hasMoreEmails = totalCount > emails.length;
 
+  // Log legacy category detection for debugging
+  React.useEffect(() => {
+    if (isLegacy && category) {
+      logger.warn('Legacy category detected in modal', {
+        originalCategory: category,
+        normalizedCategory,
+        hint: 'Consider running migration 028_category_cleanup.sql to update database',
+      });
+    }
+  }, [category, isLegacy, normalizedCategory]);
+
   // Fetch emails for this category
   const fetchEmails = React.useCallback(async () => {
-    if (!category || !EMAIL_CATEGORIES_SET.has(category)) {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Validate category: accept both new categories and legacy categories
+    // Legacy categories will be queried as-is since that's the DB value
+    // ─────────────────────────────────────────────────────────────────────────
+    const effectiveCategory = normalizeCategory(category);
+    if (!category || !effectiveCategory) {
       logDiscover.invalidCategory({ category: category || 'null' });
+      logger.warn('Invalid category - cannot fetch emails', {
+        providedCategory: category,
+        normalizedResult: effectiveCategory,
+      });
       return;
     }
 
     setIsLoading(true);
     setError(null);
 
+    const isLegacyCat = isLegacyCategory(category);
     logDiscover.modalOpen({ category, emailCount: 0 });
-    logger.start('Fetching emails for modal', { category });
+    logger.start('Fetching emails for modal', {
+      category,
+      isLegacy: isLegacyCat,
+      queryCategory: category, // Query with original value (that's what's in DB)
+    });
 
     try {
+      // ─────────────────────────────────────────────────────────────────────────
+      // Query Strategy:
+      // - Use the ORIGINAL category value for the query (matches DB)
+      // - Legacy categories like 'newsletter' are still in the DB until migrated
+      // - After migration 028 runs, all values will be new categories
+      // ─────────────────────────────────────────────────────────────────────────
       const { data, error: queryError, count } = await supabase
         .from('emails')
         .select('*', { count: 'exact' })
-        .eq('category', category)
+        .eq('category', category) // Use original value - that's what's stored
         .eq('is_archived', false)
         .order('date', { ascending: false })
         .limit(MODAL_EMAIL_LIMIT);
@@ -124,6 +173,7 @@ export function CategoryModal({
 
       logger.success('Emails fetched for modal', {
         category,
+        isLegacy: isLegacyCat,
         count: data?.length || 0,
         total: count,
       });
@@ -158,7 +208,9 @@ export function CategoryModal({
       onEmailClick(email);
     } else {
       // Default: navigate to email detail page
-      router.push(`/discover/${category}/${email.id}`);
+      // Use normalized category for clean URLs (new category names)
+      const urlCategory = normalizedCategory || category;
+      router.push(`/discover/${urlCategory}/${email.id}`);
       onClose();
     }
   };
@@ -278,8 +330,10 @@ export function CategoryModal({
   };
 
   const handleViewFullPage = () => {
-    logDiscover.navigateToDetail({ category });
-    router.push(`/discover/${category}`);
+    // Use normalized category for clean URLs (new category names)
+    const urlCategory = normalizedCategory || category;
+    logDiscover.navigateToDetail({ category: urlCategory });
+    router.push(`/discover/${urlCategory}`);
     onClose();
   };
 

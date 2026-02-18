@@ -66,6 +66,108 @@ export const EMAIL_CATEGORIES: EmailCategory[] = [
  */
 export const EMAIL_CATEGORIES_SET = new Set<string>(EMAIL_CATEGORIES);
 
+// =============================================================================
+// LEGACY CATEGORY MIGRATION SUPPORT
+// =============================================================================
+
+/**
+ * Legacy category values from before the Jan 2026 refactor.
+ * These old action-focused categories have been replaced with life-bucket categories.
+ *
+ * This mapping allows graceful handling of emails that haven't been re-analyzed yet,
+ * or cached data that contains old category values.
+ *
+ * @deprecated These categories are deprecated. Use EMAIL_CATEGORIES instead.
+ * @see Migration 028_category_cleanup.sql for database-level fixes
+ *
+ * Mapping rationale:
+ * - action_required → client_pipeline (urgent work items are typically client-related)
+ * - event → local (events are often community/local activities)
+ * - newsletter → newsletters_general (direct mapping)
+ * - promo → shopping (promotional emails are shopping-related)
+ * - admin → finance (admin emails often relate to accounts/billing)
+ * - personal → personal_friends_family (direct mapping)
+ * - noise → newsletters_general (low-priority content, treat as newsletter)
+ */
+export const LEGACY_CATEGORY_MAP: Record<string, EmailCategory> = {
+  'action_required': 'client_pipeline',
+  'event': 'local',
+  'newsletter': 'newsletters_general',
+  'promo': 'shopping',
+  'admin': 'finance',
+  'personal': 'personal_friends_family',
+  'noise': 'newsletters_general',
+} as const;
+
+/**
+ * Type for legacy category strings.
+ * Used for type-safe handling of old category values during migration.
+ */
+export type LegacyCategory = keyof typeof LEGACY_CATEGORY_MAP;
+
+/**
+ * Set of legacy category values for O(1) lookup.
+ */
+export const LEGACY_CATEGORIES_SET = new Set<string>(Object.keys(LEGACY_CATEGORY_MAP));
+
+/**
+ * Normalizes a category value to a valid EmailCategory.
+ *
+ * This function handles three cases:
+ * 1. Valid new category → returns as-is
+ * 2. Legacy category → maps to corresponding new category
+ * 3. Unknown category → returns null
+ *
+ * Use this when:
+ * - Reading category values from the database (might have old values)
+ * - Parsing URL parameters (might contain legacy category)
+ * - Processing cached sync_progress data
+ *
+ * @param category - The category string to normalize (can be new, legacy, or unknown)
+ * @returns The normalized EmailCategory, or null if the category is unrecognized
+ *
+ * @example
+ * ```typescript
+ * normalizeCategory('client_pipeline')  // → 'client_pipeline' (valid new)
+ * normalizeCategory('action_required')  // → 'client_pipeline' (legacy mapped)
+ * normalizeCategory('unknown_value')    // → null (unrecognized)
+ * ```
+ */
+export function normalizeCategory(category: string | null | undefined): EmailCategory | null {
+  if (!category) {
+    return null;
+  }
+
+  // Check if it's already a valid new category
+  if (EMAIL_CATEGORIES_SET.has(category)) {
+    return category as EmailCategory;
+  }
+
+  // Check if it's a legacy category that can be mapped
+  if (LEGACY_CATEGORIES_SET.has(category)) {
+    return LEGACY_CATEGORY_MAP[category as LegacyCategory];
+  }
+
+  // Unknown category - return null
+  return null;
+}
+
+/**
+ * Checks if a category value is a legacy (deprecated) category.
+ *
+ * @param category - The category string to check
+ * @returns True if this is a legacy category that should be migrated
+ *
+ * @example
+ * ```typescript
+ * isLegacyCategory('action_required')  // → true
+ * isLegacyCategory('client_pipeline')  // → false
+ * ```
+ */
+export function isLegacyCategory(category: string | null | undefined): boolean {
+  return category ? LEGACY_CATEGORIES_SET.has(category) : false;
+}
+
 /**
  * Display configuration for each category.
  * Used by UI components to render consistent styling.

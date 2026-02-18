@@ -4,6 +4,11 @@
  * Full-page view of all emails in a single category with bulk actions,
  * filters, and pagination. Accessible from CategoryModal or direct navigation.
  *
+ * UPDATED (Feb 2026): Added support for legacy category values in URL params.
+ * The page now uses normalizeCategory() to handle old category values that may
+ * appear in URLs from bookmarks, shared links, or cached navigation state.
+ * Legacy categories are normalized for display but queried as-is in the database.
+ *
  * @module app/(auth)/discover/[category]/page
  * @since Jan 2026
  */
@@ -23,7 +28,8 @@ import { createLogger, logDiscover } from '@/lib/utils/logger';
 import {
   type EmailCategory,
   CATEGORY_DISPLAY,
-  EMAIL_CATEGORIES_SET,
+  normalizeCategory,
+  isLegacyCategory,
 } from '@/types/discovery';
 import type { Email } from '@/types/database';
 
@@ -36,11 +42,33 @@ export default function CategoryDetailPage() {
   const category = params.category as string;
   const supabase = React.useMemo(() => createClient(), []);
 
-  // Validate category
-  const isValidCategory = EMAIL_CATEGORIES_SET.has(category);
-  const categoryDisplay = isValidCategory
-    ? CATEGORY_DISPLAY[category as EmailCategory]
+  // ───────────────────────────────────────────────────────────────────────────
+  // Category Normalization
+  // ───────────────────────────────────────────────────────────────────────────
+  // The URL may contain legacy category values (action_required, newsletter, etc.)
+  // from old bookmarks or shared links. We normalize for display config lookup,
+  // but query the database with the original value since that's what's stored.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const normalizedCategory = normalizeCategory(category);
+  const isLegacy = isLegacyCategory(category);
+  const isValidCategory = normalizedCategory !== null;
+
+  // Use normalized category for display config
+  const categoryDisplay = normalizedCategory
+    ? CATEGORY_DISPLAY[normalizedCategory]
     : null;
+
+  // Log legacy category detection
+  React.useEffect(() => {
+    if (isLegacy) {
+      logger.warn('Legacy category detected in URL', {
+        urlCategory: category,
+        normalizedCategory,
+        hint: 'Consider running migration 028_category_cleanup.sql to update database',
+      });
+    }
+  }, [category, isLegacy, normalizedCategory]);
 
   // State
   const [emails, setEmails] = React.useState<Email[]>([]);
@@ -61,6 +89,10 @@ export default function CategoryDetailPage() {
   const fetchEmails = React.useCallback(async (reset = true) => {
     if (!isValidCategory) {
       logDiscover.invalidCategory({ category });
+      logger.error('Cannot fetch emails - invalid category', {
+        providedCategory: category,
+        normalizedResult: normalizedCategory,
+      });
       setError('Invalid category');
       setIsLoading(false);
       return;
@@ -71,7 +103,13 @@ export default function CategoryDetailPage() {
     }
     setError(null);
 
-    logger.start('Fetching emails for category page', { category });
+    // Query with the original category value (that's what's stored in DB)
+    // Legacy categories like 'newsletter' will match DB until migration runs
+    logger.start('Fetching emails for category page', {
+      category,
+      isLegacy,
+      queryCategory: category,
+    });
 
     try {
       let query = supabase
@@ -118,7 +156,7 @@ export default function CategoryDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [category, isValidCategory, showUnreadOnly, showStarredOnly, supabase]);
+  }, [category, isValidCategory, isLegacy, normalizedCategory, showUnreadOnly, showStarredOnly, supabase]);
 
   // Load More
 

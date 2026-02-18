@@ -13,7 +13,7 @@
 |------|----------|-----------|
 | AI Model | GPT-4.1-mini only | Best cost/capability ratio, ~$3-5/month |
 | AI Fallback | None | Adds complexity without proportional benefit |
-| Categories | Action-focused (7 types) | "client" removed; tracked via relationship |
+| Categories | Life-bucket focused (12 types) | Refactored Jan 2026 from action to life-bucket |
 | Background Jobs | Supabase pg_cron + Edge Functions | Already using Supabase; Vercel Cron too limited |
 | Gmail Labels | Sync to Gmail | Users see categories in Gmail UI |
 | Failed Analysis | Mark unanalyzable (no retry) | Clear audit trail, prevents wasted costs |
@@ -55,37 +55,62 @@ Monthly: ~$3.00
 
 ---
 
-### 2. Categories: Action-Focused Design
+### 2. Categories: Life-Bucket Design (REFACTORED Jan 2026)
 
-**Decision:** Single primary category per email, focused on "what action is needed."
+**Decision:** Single primary category per email, focused on "what part of life this email touches."
 
-**Categories:**
+**Current Categories (12 life-buckets):**
 | Category | Description |
 |----------|-------------|
-| `action_required` | Needs response, decision, or action |
-| `event` | Calendar-worthy with date/time/location |
-| `newsletter` | Informational content, digests |
-| `promo` | Marketing, promotional content |
-| `admin` | Receipts, confirmations, automated |
-| `personal` | Personal correspondence |
-| `noise` | Low value, safe to ignore |
+| `newsletters_general` | Substacks, digests, curated content |
+| `news_politics` | News outlets, political updates |
+| `product_updates` | Tech products, SaaS tools you use |
+| `local` | Community events, neighborhood, local orgs |
+| `shopping` | Orders, shipping, deals, retail |
+| `travel` | Flights, hotels, bookings, trip info |
+| `finance` | Bills, banking, investments, receipts |
+| `family_kids_school` | School emails, kid activities, logistics |
+| `family_health_appointments` | Medical, appointments, family scheduling |
+| `client_pipeline` | Direct client correspondence, project work |
+| `business_work_general` | Team, industry, professional (not direct clients) |
+| `personal_friends_family` | Social, relationships, personal correspondence |
 
-**Alternatives Considered:**
-- "client" as a category (original design)
-- Multiple categories per email
+**Legacy Categories (DEPRECATED):**
+| Old Category | Mapped To | Notes |
+|--------------|-----------|-------|
+| `action_required` | `client_pipeline` | Most action items are client/work related |
+| `event` | `local` | Events detected via `has_event` label now |
+| `newsletter` | `newsletters_general` | Direct mapping |
+| `promo` | `shopping` | Promotional emails are shopping-related |
+| `admin` | `finance` | Admin emails often relate to accounts/billing |
+| `personal` | `personal_friends_family` | Direct mapping |
+| `noise` | `newsletters_general` | Low-priority content treated as newsletter |
+
+**Migration:** See `supabase/migrations/028_category_cleanup_and_cache_clear.sql`
+
+**Application Code:** See `src/types/discovery.ts` for `LEGACY_CATEGORY_MAP` and `normalizeCategory()` helper.
 
 **Rationale:**
-- "client" removed because it conflicts with action-tracking
-- A client email asking for feedback should be "action_required", not hidden in "client"
-- Client relationship tracked via `client_id` foreign key
-- Allows filtering: "Show me action items from Client X"
+- Life-bucket categories better reflect how users think about their inbox
+- "Where would I naturally look for this email?" vs "What action do I need to take?"
+- Actions are tracked separately via the `actions` table and `has_event` label
+- Client relationship still tracked via `client_id` foreign key
+- Events detected via `has_event` label in categorization result
 
 **Schema Impact:**
 ```sql
 -- emails table
-category TEXT,           -- action_required, event, newsletter, etc.
+category TEXT,           -- One of the 12 life-bucket categories
 client_id UUID,          -- relationship to clients table (NOT a category)
 topics TEXT[],           -- extracted topics for additional context
+
+-- CHECK constraint enforces valid category values
+CONSTRAINT emails_category_check CHECK (
+  category IN ('newsletters_general', 'news_politics', 'product_updates', 'local',
+               'shopping', 'travel', 'finance', 'family_kids_school',
+               'family_health_appointments', 'client_pipeline',
+               'business_work_general', 'personal_friends_family')
+)
 ```
 
 ---
@@ -183,19 +208,24 @@ function truncateBody(body: string, maxChars = 16000): string {
 
 **Rationale:**
 - Users see categories in Gmail UI
-- Allows searching in Gmail: `label:IdeaBox/action_required`
+- Allows searching in Gmail: `label:IdeaBox/client_pipeline`
 - Minimal additional API cost (one modify call per email)
 - Can be disabled via `ENABLE_GMAIL_LABEL_SYNC=false`
 
-**Labels Created:**
+**Labels Created (updated Feb 2026 for life-bucket categories):**
 ```
-IdeaBox/action_required
-IdeaBox/event
-IdeaBox/newsletter
-IdeaBox/promo
-IdeaBox/admin
-IdeaBox/personal
-IdeaBox/noise
+IdeaBox/newsletters_general
+IdeaBox/news_politics
+IdeaBox/product_updates
+IdeaBox/local
+IdeaBox/shopping
+IdeaBox/travel
+IdeaBox/finance
+IdeaBox/family_kids_school
+IdeaBox/family_health_appointments
+IdeaBox/client_pipeline
+IdeaBox/business_work_general
+IdeaBox/personal_friends_family
 ```
 
 ---

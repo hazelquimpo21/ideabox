@@ -369,16 +369,23 @@ export class InitialSyncOrchestrator {
   /**
    * Fetch emails from database for analysis.
    * Assumes emails are already synced from Gmail.
+   *
+   * UPDATED (Feb 2026): Added is_archived filter to exclude archived emails
+   * from discovery counts. This ensures the counts shown on category cards
+   * match the emails shown in the modal/detail views (which also filter
+   * by is_archived = false).
    */
   private async fetchEmailsFromDatabase(): Promise<EmailForAnalysis[]> {
     const supabase = await createServerClient();
 
     // Exclude emails that previously failed analysis (per DECISIONS.md: "Do NOT retry on next sync")
+    // Exclude archived emails so discovery counts match modal/detail views
     const { data, error } = await supabase
       .from('emails')
       .select('id, gmail_id, subject, sender_email, sender_name, snippet, body_text, gmail_labels, is_read, date')
       .eq('user_id', this.userId)
       .eq('gmail_account_id', this.gmailAccountId)
+      .eq('is_archived', false) // Exclude archived - keeps counts consistent with UI views
       .is('analyzed_at', null) // Only unanalyzed emails
       .is('analysis_error', null) // Exclude emails that previously failed analysis
       .order('date', { ascending: false })

@@ -10,6 +10,10 @@
  * - Sync completed: Shows full Discovery Dashboard with results
  * - Sync failed: Shows error with retry option
  *
+ * UPDATED (Feb 2026): Added legacy category detection and auto-refresh.
+ * If cached sync results contain old category values (action_required, newsletter,
+ * etc.), the page will prompt for a re-sync to get fresh data with correct categories.
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
  * DATA FLOW
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -19,15 +23,16 @@
  * 3. User clicks "Start Analysis" → triggers sync with chosen email count
  * 4. Shows progress UI while syncing
  * 5. Sync completes → shows Discovery Dashboard
+ * 6. If legacy categories detected → show info toast and prompt for re-analysis
  *
  * @module app/(auth)/discover/page
  */
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { EMAIL_CATEGORIES_SET } from '@/types/discovery';
+import { EMAIL_CATEGORIES_SET, isLegacyCategory } from '@/types/discovery';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -102,6 +107,13 @@ export default function DiscoverPage() {
   // State for category modal
   const [selectedCategory, setSelectedCategory] = useState<EmailCategory | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Legacy Category Detection
+  // ───────────────────────────────────────────────────────────────────────────
+  // Track whether we've already shown the legacy category warning to avoid spam
+  const hasShownLegacyWarning = useRef(false);
+  const [hasLegacyCategories, setHasLegacyCategories] = useState(false);
 
   // Progress tracking for sync
   const {
@@ -221,6 +233,45 @@ export default function DiscoverPage() {
     // Only run on mount - startPolling/stopPolling are stable refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Legacy Category Detection Effect
+  // ───────────────────────────────────────────────────────────────────────────
+  // Check if cached sync results contain old category values. If so, show a
+  // warning toast and set state so we can prompt user to re-analyze.
+
+  useEffect(() => {
+    if (!result?.categories || hasShownLegacyWarning.current) {
+      return;
+    }
+
+    // Check if any categories in the result are legacy (old) values
+    const legacyCategories = result.categories.filter(
+      (cat) => isLegacyCategory(cat.category)
+    );
+
+    if (legacyCategories.length > 0) {
+      // Found legacy categories in cached data
+      const legacyNames = legacyCategories.map((c) => c.category).join(', ');
+
+      logger.warn('Legacy categories detected in cached sync results', {
+        legacyCategories: legacyNames,
+        totalLegacy: legacyCategories.length,
+        totalCategories: result.categories.length,
+        hint: 'Run migration 028_category_cleanup_and_cache_clear.sql to fix database',
+      });
+
+      setHasLegacyCategories(true);
+      hasShownLegacyWarning.current = true;
+
+      // Show info toast to user
+      toast({
+        title: 'Outdated email categories detected',
+        description: 'Some categories need to be refreshed. Click "Re-analyze" to update.',
+        duration: 8000,
+      });
+    }
+  }, [result, toast]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Start Analysis Handler
@@ -466,6 +517,35 @@ export default function DiscoverPage() {
         stats={result.stats}
         userName={user?.email?.split('@')[0]}
       />
+
+      {/* Legacy Categories Warning Banner */}
+      {hasLegacyCategories && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-amber-800 dark:text-amber-200">
+                Email categories need updating
+              </h3>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                Your email analysis uses an older category system. Re-run the analysis
+                to get more accurate categorization with the new life-bucket categories.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/30"
+              onClick={() => {
+                setNeedsSync(true);
+                setHasLegacyCategories(false);
+              }}
+            >
+              Re-analyze
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       {result.suggestedActions.length > 0 && (

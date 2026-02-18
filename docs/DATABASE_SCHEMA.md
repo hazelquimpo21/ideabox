@@ -1016,13 +1016,26 @@ supabase/migrations/
   008_rls_policies.sql            # All RLS policies
   009_functions_triggers.sql      # Helper functions + cleanup function
   ...
-  021_user_event_states.sql       # Event dismiss/maybe/calendar tracking (NEW Jan 2026)
+  018_category_refactor.sql       # Life-bucket categories introduced (Jan 2026)
+  021_user_event_states.sql       # Event dismiss/maybe/calendar tracking (Jan 2026)
+  027_category_backfill.sql       # Backfill categories from email_analyses
+  028_category_cleanup.sql        # Final cleanup of legacy categories, cache clear (Feb 2026)
 
   # Phase 2 migrations
   101_urls_table.sql
   102_events_table.sql
   103_content_opportunities.sql
 ```
+
+### Migration 028: Category Cleanup (Feb 2026)
+
+This migration performs final cleanup of the category system:
+1. Maps any remaining legacy categories (`action_required`, `newsletter`, etc.) to new life-bucket categories
+2. Updates `email_analyses.categorization` JSONB to use new category values
+3. Clears cached `sync_progress.result` to force UI refresh with correct categories
+4. Re-adds the CHECK constraint for valid categories
+
+See `supabase/migrations/028_category_cleanup_and_cache_clear.sql` for details.
 
 ## Indexes Strategy
 - All foreign keys have indexes
