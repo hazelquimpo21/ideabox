@@ -1,27 +1,39 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
+> **Last Updated:** February 2026
+> **Source of Truth:** `supabase/migrations/001-028`
+> **TypeScript Types:** `src/types/database.ts`
+
 ## Schema Overview
 
 ```
-users (Supabase Auth)
-  ├─ user_profiles
-  ├─ gmail_accounts
-  ├─ clients
-  ├─ emails
-  │   └─ email_analyses
-  ├─ actions
-  ├─ urls (Phase 2)
-  ├─ events (Phase 2)
-  └─ content_opportunities (Phase 2)
+auth.users (Supabase Auth)
+  ├── user_profiles          # App-specific user data, sync state
+  ├── user_settings          # AI analysis toggles, cost limits, notifications
+  ├── user_context           # AI personalization context (role, location, VIPs)
+  ├── gmail_accounts         # OAuth tokens, sync state, push notifications
+  │   └── gmail_push_logs    # Push notification audit trail
+  ├── clients                # Business client tracking
+  ├── contacts               # Contact intelligence + sender classification
+  │   └── contact_aliases    # Multi-email → single person mapping
+  ├── emails                 # Central email storage + denormalized AI fields
+  │   ├── email_analyses     # Full AI analyzer outputs (JSONB)
+  │   └── extracted_dates    # Timeline dates/events extracted from emails
+  ├── actions                # To-do items extracted from emails
+  ├── user_event_states      # User decisions on events (dismiss/maybe/calendar)
+  ├── outbound_emails        # Sent/scheduled/draft outgoing emails
+  │   └── email_open_events  # Tracking pixel hits
+  ├── email_templates        # Reusable email templates with merge fields
+  ├── email_campaigns        # Mail merge campaigns
+  ├── daily_send_quotas      # Send rate limiting
+  ├── sync_logs              # Sync operation audit trail
+  ├── scheduled_sync_runs    # Background sync execution tracking
+  └── api_usage_logs         # OpenAI/Gmail API cost tracking
 ```
 
-## Core Tables (Phase 1)
+---
 
-### users (Managed by Supabase Auth)
-```sql
--- Built-in Supabase auth.users table
--- We don't create this, but reference it via foreign keys
-```
+## Core Tables
 
 ### user_profiles
 Extends Supabase auth.users with app-specific data.
@@ -33,105 +45,277 @@ CREATE TABLE user_profiles (
   full_name TEXT,
   timezone TEXT DEFAULT 'America/Chicago',
   onboarding_completed BOOLEAN DEFAULT FALSE,
-  
-  -- Preferences
-  default_view TEXT DEFAULT 'inbox', -- inbox, clients, actions
+  default_view TEXT DEFAULT 'inbox',
   emails_per_page INTEGER DEFAULT 50,
-  
-  -- Metadata
+
+  -- Sync state (migration 010)
+  sync_progress JSONB,                    -- Cached initial sync progress/result
+  initial_sync_completed_at TIMESTAMPTZ,
+
+  -- Sync triggers (migration 016)
+  initial_sync_pending BOOLEAN DEFAULT FALSE,
+  initial_sync_triggered_at TIMESTAMPTZ,
+
+  -- Learned patterns (migration 018)
+  sender_patterns JSONB DEFAULT '[]'::jsonb, -- Auto-categorization patterns
+
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+```
 
--- RLS Policies
-ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+### user_settings
+User preferences for AI analysis, cost control, and notifications.
 
-CREATE POLICY "Users can view own profile"
-  ON user_profiles FOR SELECT
-  USING (auth.uid() = id);
+```sql
+CREATE TABLE user_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
 
-CREATE POLICY "Users can update own profile"
-  ON user_profiles FOR UPDATE
-  USING (auth.uid() = id);
+  -- AI Analysis toggles
+  auto_analyze BOOLEAN DEFAULT TRUE,
+  extract_actions BOOLEAN DEFAULT TRUE,
+  categorize_emails BOOLEAN DEFAULT TRUE,
+  detect_clients BOOLEAN DEFAULT TRUE,
+
+  -- Analysis limits
+  initial_sync_email_count INTEGER DEFAULT 50,
+  max_emails_per_sync INTEGER DEFAULT 100,
+  max_analysis_per_sync INTEGER DEFAULT 50,
+
+  -- Cost control
+  daily_cost_limit DECIMAL(10,4) DEFAULT 1.00,
+  monthly_cost_limit DECIMAL(10,4) DEFAULT 10.00,
+  cost_alert_threshold DECIMAL(10,4) DEFAULT 0.80,
+  pause_on_limit_reached BOOLEAN DEFAULT FALSE,
+
+  -- Notifications
+  email_digest_enabled BOOLEAN DEFAULT TRUE,
+  email_digest_frequency TEXT DEFAULT 'daily',
+  action_reminders BOOLEAN DEFAULT TRUE,
+  new_client_alerts BOOLEAN DEFAULT TRUE,
+  sync_error_alerts BOOLEAN DEFAULT TRUE,
+  cost_limit_alerts BOOLEAN DEFAULT TRUE,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### user_context
+Foundational user info used to personalize AI analysis.
+
+```sql
+CREATE TABLE user_context (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+
+  -- Professional context
+  role TEXT,
+  company TEXT,
+  industry TEXT,
+  location_city TEXT,
+  location_metro TEXT,
+
+  -- Priorities & projects
+  priorities TEXT[],
+  projects TEXT[],
+
+  -- VIP contacts
+  vip_emails TEXT[],
+  vip_domains TEXT[],
+
+  -- Personal context
+  interests TEXT[],
+  family_context JSONB DEFAULT '{}',
+
+  -- Work schedule
+  work_hours_start TIME DEFAULT '09:00',
+  work_hours_end TIME DEFAULT '17:00',
+  work_days INTEGER[] DEFAULT ARRAY[1,2,3,4,5],
+
+  -- Onboarding
+  onboarding_completed BOOLEAN DEFAULT FALSE,
+  onboarding_completed_at TIMESTAMPTZ,
+  onboarding_step INTEGER DEFAULT 0,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
 ### gmail_accounts
-Multiple Gmail accounts per user.
+Multiple Gmail accounts per user with OAuth, sync state, and push notifications.
 
 ```sql
 CREATE TABLE gmail_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  
+
   email TEXT NOT NULL,
   display_name TEXT,
-  
-  -- OAuth tokens (encrypted by Supabase)
+
+  -- OAuth tokens
   access_token TEXT NOT NULL,
   refresh_token TEXT NOT NULL,
   token_expiry TIMESTAMPTZ NOT NULL,
-  
-  -- Sync state
+
+  -- Core sync state
   last_sync_at TIMESTAMPTZ,
-  last_history_id TEXT, -- For incremental sync
+  last_history_id TEXT,
   sync_enabled BOOLEAN DEFAULT TRUE,
-  
-  -- Metadata
+
+  -- Push notifications (migration 015)
+  watch_expiration TIMESTAMPTZ,
+  watch_history_id TEXT,
+  watch_resource_id TEXT,
+  push_enabled BOOLEAN DEFAULT TRUE,
+  last_push_at TIMESTAMPTZ,
+
+  -- Sync locking & health (migration 016)
+  sync_lock_until TIMESTAMPTZ,
+  history_id_validated_at TIMESTAMPTZ,
+  needs_full_sync BOOLEAN DEFAULT FALSE,
+  watch_renewal_failures INTEGER DEFAULT 0,
+  watch_last_error TEXT,
+  watch_alert_sent_at TIMESTAMPTZ,
+
+  -- Google Contacts integration (migration 022)
+  contacts_synced_at TIMESTAMPTZ,
+  contacts_sync_enabled BOOLEAN DEFAULT FALSE,
+
+  -- Historical sync (migration 023)
+  historical_sync_status TEXT DEFAULT 'not_started',
+  historical_sync_oldest_date TIMESTAMPTZ,
+  historical_sync_email_count INTEGER DEFAULT 0,
+  historical_sync_contacts_updated INTEGER DEFAULT 0,
+  historical_sync_started_at TIMESTAMPTZ,
+  historical_sync_completed_at TIMESTAMPTZ,
+  historical_sync_page_token TEXT,
+  historical_sync_error TEXT,
+
+  -- Email sending (migration 026)
+  has_send_scope BOOLEAN DEFAULT FALSE,
+  send_scope_granted_at TIMESTAMPTZ,
+
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
+
   UNIQUE(user_id, email)
 );
-
-CREATE INDEX idx_gmail_accounts_user_id ON gmail_accounts(user_id);
-
--- RLS Policies
-ALTER TABLE gmail_accounts ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own Gmail accounts"
-  ON gmail_accounts FOR ALL
-  USING (auth.uid() = user_id);
 ```
 
 ### clients
-Client/customer tracking for business context.
+Business client/customer tracking.
 
 ```sql
 CREATE TABLE clients (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  
+
   name TEXT NOT NULL,
   company TEXT,
-  email TEXT, -- Primary contact email
-  
-  -- Status
-  status TEXT DEFAULT 'active', -- active, inactive, archived
+  email TEXT,
+
+  status TEXT DEFAULT 'active',   -- active, inactive, archived
   priority TEXT DEFAULT 'medium', -- low, medium, high, vip
-  
-  -- Auto-learned patterns
-  email_domains TEXT[], -- ['@clientco.com', '@client-alias.com']
-  keywords TEXT[], -- Words that appear in their emails
-  
-  -- Metadata
+
+  email_domains TEXT[],  -- ['@clientco.com']
+  keywords TEXT[],       -- Auto-learned keywords
   notes TEXT,
+
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+```
 
-CREATE INDEX idx_clients_user_id ON clients(user_id);
-CREATE INDEX idx_clients_status ON clients(user_id, status);
+### contacts
+Contact intelligence with sender type classification.
 
--- RLS Policies
-ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+```sql
+CREATE TABLE contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
-CREATE POLICY "Users can manage own clients"
-  ON clients FOR ALL
-  USING (auth.uid() = user_id);
+  -- Identity
+  email TEXT NOT NULL,
+  name TEXT,
+  display_name TEXT,
+  avatar_url TEXT,                          -- (migration 022)
+
+  -- Communication stats
+  email_count INTEGER DEFAULT 0,
+  sent_count INTEGER DEFAULT 0,
+  received_count INTEGER DEFAULT 0,
+  first_seen_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ,
+  last_user_reply_at TIMESTAMPTZ,
+  avg_response_hours DECIMAL(10,2),
+
+  -- Sender type classification (migration 024)
+  sender_type TEXT DEFAULT 'unknown',       -- direct, broadcast, cold_outreach, opportunity, unknown
+  broadcast_subtype TEXT,                   -- newsletter_author, company_newsletter, digest_service, transactional
+  sender_type_confidence DECIMAL(3,2),
+  sender_type_detected_at TIMESTAMPTZ,
+  sender_type_source TEXT,                  -- header, email_pattern, ai_analysis, user_behavior, manual
+
+  -- Relationship & enrichment
+  relationship_type TEXT,                   -- client, colleague, vendor, friend, family, etc.
+  relationship_strength TEXT DEFAULT 'normal',
+  company TEXT,
+  job_title TEXT,
+  phone TEXT,
+  linkedin_url TEXT,
+  extraction_confidence DECIMAL(3,2),
+  last_extracted_at TIMESTAMPTZ,
+  extraction_source TEXT,
+  needs_enrichment BOOLEAN DEFAULT TRUE,
+
+  -- Personal dates
+  birthday DATE,
+  birthday_year_known BOOLEAN DEFAULT FALSE,
+  work_anniversary DATE,
+  custom_dates JSONB DEFAULT '[]',
+
+  -- User flags
+  is_vip BOOLEAN DEFAULT FALSE,
+  is_muted BOOLEAN DEFAULT FALSE,
+  is_archived BOOLEAN DEFAULT FALSE,
+
+  -- Google Contacts integration (migration 022)
+  google_resource_name TEXT,
+  google_labels TEXT[] DEFAULT '{}',
+  is_google_starred BOOLEAN DEFAULT FALSE,
+  google_synced_at TIMESTAMPTZ,
+  import_source TEXT DEFAULT 'email',       -- email, google, manual
+
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(user_id, email)
+);
+```
+
+### contact_aliases
+Links same person across multiple email addresses.
+
+```sql
+CREATE TABLE contact_aliases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  primary_contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  alias_email TEXT NOT NULL,
+  created_via TEXT DEFAULT 'manual',
+  confidence DECIMAL(3,2),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(user_id, alias_email)
+);
 ```
 
 ### emails
-Central email storage.
+Central email storage with denormalized AI analysis fields for fast list queries.
 
 ```sql
 CREATE TABLE emails (
@@ -140,8 +324,8 @@ CREATE TABLE emails (
   gmail_account_id UUID NOT NULL REFERENCES gmail_accounts(id) ON DELETE CASCADE,
 
   -- Gmail identifiers
-  gmail_id TEXT NOT NULL, -- Gmail message ID
-  thread_id TEXT NOT NULL, -- Gmail thread ID
+  gmail_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
 
   -- Email metadata
   subject TEXT,
@@ -150,112 +334,97 @@ CREATE TABLE emails (
   recipient_email TEXT,
   date TIMESTAMPTZ NOT NULL,
 
-  -- Content (body_text truncated to 16K chars for AI analysis cost efficiency)
-  snippet TEXT, -- Gmail's short preview
-  body_text TEXT, -- Plain text body (may be truncated)
-  body_html TEXT, -- HTML body (stored in full for display)
+  -- Content
+  snippet TEXT,
+  body_text TEXT,    -- Plain text (truncated to 16K for AI)
+  body_html TEXT,    -- Full HTML for display
 
   -- Labels & categorization
-  -- ═══════════════════════════════════════════════════════════════════════════════════════════
-  -- LIFE-BUCKET CATEGORIES (REFACTORED Jan 2026)
-  -- Categories represent what part of life the email touches, NOT what action is needed.
-  -- Use urgency_score (1-10) to determine if action is needed.
-  -- ═══════════════════════════════════════════════════════════════════════════════════════════
-  --
-  -- Work & Business: client_pipeline, business_work_general
-  -- Family & Personal: family_kids_school, family_health_appointments, personal_friends_family
-  -- Life Admin: finance, travel, shopping, local
-  -- Information: newsletters_general, news_politics, product_updates
-  --
-  -- NOTE: "client" is NOT a category - use client_id relationship instead.
-  -- NOTE: "event" is NOT a category - events detected via 'has_event' label in any category.
-  -- NOTE: No "action_required" category - use urgency_score >= 7 instead.
-  -- ═══════════════════════════════════════════════════════════════════════════════════════════
-  gmail_labels TEXT[], -- Original Gmail labels
-  category TEXT, -- Life-bucket category (see above for valid values)
-  priority_score INTEGER DEFAULT 5, -- 1-10 scale
-  topics TEXT[], -- AI-extracted topics: ['billing', 'meeting', 'feedback']
+  gmail_labels TEXT[],
+  category TEXT,          -- Life-bucket category (see CHECK constraint below)
+  priority_score INTEGER DEFAULT 5,
+  topics TEXT[],
 
-  -- Relations (client tracked separately from category for better filtering)
+  -- Denormalized AI fields (migration 017)
+  summary TEXT,           -- One-line summary from categorizer
+  quick_action TEXT,      -- respond, review, archive, save, calendar, unsubscribe, follow_up, none
+  labels TEXT[],          -- Secondary labels: has_event, needs_reply, urgent, etc.
+
+  -- Content digest fields (migration 025)
+  gist TEXT,              -- 1-2 sentence content briefing
+  key_points TEXT[],      -- Key bullet points
+
+  -- Relations
   client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
-  project_tags TEXT[], -- ['PodcastPipeline', 'HappenlistScraper']
+  project_tags TEXT[],
 
   -- State
   is_read BOOLEAN DEFAULT FALSE,
   is_archived BOOLEAN DEFAULT FALSE,
   is_starred BOOLEAN DEFAULT FALSE,
-  analyzed_at TIMESTAMPTZ, -- When AI analysis completed
-
-  -- Analysis failure tracking (if AI analysis fails, we mark why instead of retrying)
-  analysis_error TEXT, -- NULL if successful, error message if failed
-
-  -- Gmail label sync (we sync our categories back to Gmail as labels)
+  analyzed_at TIMESTAMPTZ,
+  analysis_error TEXT,
   gmail_label_synced BOOLEAN DEFAULT FALSE,
 
-  -- Metadata
+  -- Sync type (migration 023)
+  sync_type TEXT DEFAULT 'full', -- full, metadata
+
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
 
   UNIQUE(user_id, gmail_id)
 );
 
-CREATE INDEX idx_emails_user_id ON emails(user_id);
-CREATE INDEX idx_emails_category ON emails(user_id, category);
-CREATE INDEX idx_emails_client_id ON emails(client_id);
-CREATE INDEX idx_emails_date ON emails(user_id, date DESC);
-CREATE INDEX idx_emails_thread_id ON emails(thread_id);
-CREATE INDEX idx_emails_analyzed ON emails(user_id, analyzed_at);
-
--- Full text search on subject and snippet
-CREATE INDEX idx_emails_search ON emails USING GIN(to_tsvector('english', subject || ' ' || snippet));
-
--- RLS Policies
-ALTER TABLE emails ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own emails"
-  ON emails FOR ALL
-  USING (auth.uid() = user_id);
+-- Category CHECK constraint (migration 018, re-added in 028)
+ALTER TABLE emails ADD CONSTRAINT emails_category_check CHECK (
+  category IS NULL OR category IN (
+    'newsletters_general', 'news_politics', 'product_updates', 'local',
+    'shopping', 'travel', 'finance', 'family_kids_school',
+    'family_health_appointments', 'client_pipeline',
+    'business_work_general', 'personal_friends_family'
+  )
+);
 ```
 
+#### Life-Bucket Categories (12 values)
+| Group | Category | Description |
+|-------|----------|-------------|
+| Work & Business | `client_pipeline` | Direct client correspondence, project work |
+| Work & Business | `business_work_general` | Team, industry, professional |
+| Family & Personal | `family_kids_school` | School emails, kid activities |
+| Family & Personal | `family_health_appointments` | Medical, appointments |
+| Family & Personal | `personal_friends_family` | Social, relationships |
+| Life Admin | `finance` | Bills, banking, receipts |
+| Life Admin | `travel` | Flights, hotels, bookings |
+| Life Admin | `shopping` | Orders, shipping, deals |
+| Life Admin | `local` | Community events, local orgs |
+| Information | `newsletters_general` | Substacks, digests |
+| Information | `news_politics` | News outlets, political |
+| Information | `product_updates` | SaaS tools, tech products |
+
 ### email_analyses
-Stores all AI analyzer outputs (one row per email, JSONB for flexibility).
+AI analyzer outputs stored as JSONB for flexibility.
 
 ```sql
 CREATE TABLE email_analyses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email_id UUID NOT NULL REFERENCES emails(id) ON DELETE CASCADE,
+  email_id UUID NOT NULL REFERENCES emails(id) ON DELETE CASCADE UNIQUE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  
-  -- Analysis results (flexible JSONB structure)
-  categorization JSONB, -- {category, confidence, reasoning}
-  action_extraction JSONB, -- {has_action, action_type, urgency, deadline}
-  client_tagging JSONB, -- {client_id, project_name, confidence}
-  event_detection JSONB, -- Phase 2: {event_name, date, time, location}
-  url_extraction JSONB, -- Phase 2: [{url, type, relevance}]
-  content_opportunity JSONB, -- Phase 2: {tweet_idea, networking_value}
-  
-  -- Metadata
+
+  -- Analysis results (JSONB)
+  categorization JSONB,       -- {category, confidence, reasoning, topics, summary, quick_action, labels}
+  action_extraction JSONB,    -- {has_action, actions[], urgency_score} (supports multi-action)
+  client_tagging JSONB,       -- {client_match, client_id, client_name, confidence, relationship_signal}
+  event_detection JSONB,      -- {has_event, event_title, event_date, event_locality, ...}
+  url_extraction JSONB,       -- Future
+  content_opportunity JSONB,  -- Future
+  content_digest JSONB,       -- {gist, key_points, links, content_type} (migration 025)
+
   analyzer_version TEXT DEFAULT '1.0',
-  tokens_used INTEGER, -- For cost tracking
+  tokens_used INTEGER,
   processing_time_ms INTEGER,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  
-  UNIQUE(email_id)
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
-CREATE INDEX idx_email_analyses_email_id ON email_analyses(email_id);
-CREATE INDEX idx_email_analyses_user_id ON email_analyses(user_id);
-
--- RLS Policies
-ALTER TABLE email_analyses ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view own analyses"
-  ON email_analyses FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "System can insert analyses"
-  ON email_analyses FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
 ```
 
 ### actions
@@ -265,656 +434,80 @@ To-do items extracted from emails.
 CREATE TABLE actions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  email_id UUID REFERENCES emails(id) ON DELETE SET NULL, -- Source email
+  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
   client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
-  
-  -- Action details
+
   title TEXT NOT NULL,
   description TEXT,
-  action_type TEXT, -- respond, review, create, schedule, decide
-  
-  -- Priority & timing
+  action_type TEXT,          -- respond, review, create, schedule, decide, none
   priority TEXT DEFAULT 'medium', -- low, medium, high, urgent
-  urgency_score INTEGER DEFAULT 5, -- 1-10
+  urgency_score INTEGER DEFAULT 5,
   deadline TIMESTAMPTZ,
-  estimated_minutes INTEGER, -- AI's estimate of time needed
-  
-  -- State
+  estimated_minutes INTEGER,
+
   status TEXT DEFAULT 'pending', -- pending, in_progress, completed, cancelled
   completed_at TIMESTAMPTZ,
-  
-  -- Metadata
+
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
-CREATE INDEX idx_actions_user_id ON actions(user_id);
-CREATE INDEX idx_actions_status ON actions(user_id, status);
-CREATE INDEX idx_actions_client_id ON actions(client_id);
-CREATE INDEX idx_actions_deadline ON actions(user_id, deadline) WHERE status != 'completed';
-
--- RLS Policies
-ALTER TABLE actions ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own actions"
-  ON actions FOR ALL
-  USING (auth.uid() = user_id);
 ```
 
 ### extracted_dates
-Timeline dates extracted from emails (deadlines, events, payments, etc.).
-Powers the Hub "upcoming things" view and the Events page.
+Timeline dates/events extracted from emails. Powers Hub and Events views.
 
 ```sql
 CREATE TABLE extracted_dates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-
-  -- Source References
   email_id UUID REFERENCES emails(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
 
-  -- Date Information
-  date_type TEXT NOT NULL,      -- 'deadline', 'event', 'payment_due', 'birthday', etc.
-  date DATE NOT NULL,           -- The primary date
-  event_time TIME,              -- Time if known (NULL for all-day)
-  end_date DATE,                -- End date for ranges
-  end_time TIME,                -- End time for ranges
+  -- Date info
+  date_type TEXT NOT NULL,   -- deadline, event, appointment, payment_due, birthday, etc.
+  date DATE NOT NULL,
+  event_time TIME,
+  end_date DATE,
+  end_time TIME,
   timezone TEXT DEFAULT 'America/Chicago',
 
   -- Context
-  title TEXT NOT NULL,          -- "Invoice #1234 due", "Milwaukee Tech Meetup"
-  description TEXT,             -- Additional context
-  source_snippet TEXT,          -- Original text or key points
-  related_entity TEXT,          -- Company, person, or organizer
+  title TEXT NOT NULL,
+  description TEXT,
+  source_snippet TEXT,
+  related_entity TEXT,
 
   -- Recurrence
   is_recurring BOOLEAN DEFAULT FALSE,
-  recurrence_pattern TEXT,      -- 'daily', 'weekly', 'monthly', 'yearly'
+  recurrence_pattern TEXT,
+  recurrence_end_date DATE,
 
-  -- Extraction Metadata
-  confidence DECIMAL(3,2),      -- 0.00-1.00 confidence in extraction
-  extracted_by TEXT DEFAULT 'date_extractor',  -- Which analyzer extracted this
+  -- Extraction metadata
+  confidence DECIMAL(3,2),
+  extracted_by TEXT DEFAULT 'date_extractor',
 
-  -- Hub Display & User Interaction
-  priority_score INTEGER DEFAULT 5,     -- 1-10, for Hub ranking
+  -- Hub display & user interaction
+  priority_score INTEGER DEFAULT 5,
   is_acknowledged BOOLEAN DEFAULT FALSE,
   acknowledged_at TIMESTAMPTZ,
   is_hidden BOOLEAN DEFAULT FALSE,
   snoozed_until TIMESTAMPTZ,
 
-  -- Rich Event Metadata (NEW Jan 2026)
-  -- Only populated for events from EventDetector (date_type='event')
-  -- Contains locality, location, RSVP info for enhanced EventCard display
-  event_metadata JSONB,
+  -- Rich event metadata (migration 019)
+  event_metadata JSONB,      -- {locality, locationType, location, rsvpRequired, ...}
 
-  -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_extracted_dates_user_date ON extracted_dates(user_id, date);
-CREATE INDEX idx_extracted_dates_type ON extracted_dates(user_id, date_type, date);
-CREATE INDEX idx_extracted_dates_email ON extracted_dates(email_id);
-
--- Deduplication index
+-- Deduplication
 CREATE UNIQUE INDEX idx_extracted_dates_dedup
   ON extracted_dates(email_id, date_type, date, title)
   WHERE email_id IS NOT NULL;
-
--- Index for event locality queries (uses event_metadata JSONB)
-CREATE INDEX idx_extracted_dates_event_locality
-  ON extracted_dates USING GIN (event_metadata jsonb_path_ops)
-  WHERE date_type = 'event' AND event_metadata IS NOT NULL;
-
--- RLS Policies
-ALTER TABLE extracted_dates ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own extracted dates"
-  ON extracted_dates FOR ALL
-  USING (auth.uid() = user_id);
-```
-
-#### event_metadata JSONB Schema
-For events extracted by EventDetector, the `event_metadata` column contains:
-
-```json
-{
-  "locality": "local" | "out_of_town" | "virtual",
-  "locationType": "in_person" | "virtual" | "hybrid" | "unknown",
-  "location": "123 Main St, Milwaukee, WI" | "https://zoom.us/j/...",
-  "rsvpRequired": true,
-  "rsvpUrl": "https://meetup.com/...",
-  "rsvpDeadline": "2026-01-23",
-  "organizer": "MKE Tech Community",
-  "cost": "Free" | "$25",
-  "additionalDetails": "Parking available...",
-  "isKeyDate": false,
-  "keyDateType": null | "registration_deadline" | "open_house",
-  "eventSummary": "Milwaukee Tech Meetup on Sat Jan 25 at 6pm (local). Free.",
-  "keyPoints": ["Sat Jan 25, 6-8pm", "In-person: 123 Main St", "Free"]
-}
-```
-
-### contacts (ENHANCED Jan 2026)
-Contact management with sender type classification.
-
-```sql
-CREATE TABLE contacts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-
-  -- Core contact info
-  email TEXT NOT NULL,
-  name TEXT,
-  display_name TEXT, -- User override or extracted
-  avatar_url TEXT,
-
-  -- Communication stats
-  email_count INTEGER DEFAULT 0,
-  sent_count INTEGER DEFAULT 0,   -- Emails user sent TO this contact
-  received_count INTEGER DEFAULT 0, -- Emails user received FROM this contact
-  first_seen_at TIMESTAMPTZ,
-  last_seen_at TIMESTAMPTZ,
-
-  -- ════════════════════════════════════════════════════════════════════════════
-  -- SENDER TYPE CLASSIFICATION (NEW Jan 2026)
-  -- ════════════════════════════════════════════════════════════════════════════
-  -- Distinguishes real contacts from newsletters/broadcasts
-
-  sender_type TEXT DEFAULT 'unknown',
-    -- 'direct': Real person who knows you
-    -- 'broadcast': Newsletter/marketing sender
-    -- 'cold_outreach': Cold email from stranger
-    -- 'opportunity': HARO-style mailing list
-    -- 'unknown': Not yet classified
-
-  broadcast_subtype TEXT,
-    -- Only for sender_type='broadcast':
-    -- 'newsletter_author': Substack, personal blog
-    -- 'company_newsletter': Company marketing
-    -- 'digest_service': LinkedIn digest, GitHub notifications
-    -- 'transactional': Receipts, noreply addresses
-
-  sender_type_confidence DECIMAL(3,2),
-  sender_type_detected_at TIMESTAMPTZ,
-  sender_type_source TEXT,
-    -- 'header': List-Unsubscribe detected
-    -- 'email_pattern': @substack.com, noreply@
-    -- 'ai_analysis': ContactEnricher determined
-    -- 'user_behavior': User replied = direct
-    -- 'manual': User override
-
-  -- ════════════════════════════════════════════════════════════════════════════
-
-  -- Relationship & enrichment
-  relationship_type TEXT DEFAULT 'unknown',
-    -- client, colleague, vendor, friend, family, recruiter, service, networking, unknown
-    -- NOTE: Only meaningful when sender_type='direct'
-  company TEXT,
-  job_title TEXT,
-  phone TEXT,
-  linkedin_url TEXT,
-  extraction_confidence DECIMAL(3,2),
-  last_extracted_at TIMESTAMPTZ,
-
-  -- User flags
-  is_vip BOOLEAN DEFAULT FALSE,
-  is_muted BOOLEAN DEFAULT FALSE,
-  is_archived BOOLEAN DEFAULT FALSE,
-
-  -- Google integration
-  google_resource_name TEXT,
-  google_labels TEXT[],
-  is_google_starred BOOLEAN DEFAULT FALSE,
-  google_synced_at TIMESTAMPTZ,
-
-  -- Import tracking
-  import_source TEXT DEFAULT 'email', -- email, google, manual
-  notes TEXT,
-
-  -- Timestamps
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-  UNIQUE(user_id, email)
-);
-
--- Core indexes
-CREATE INDEX idx_contacts_user_id ON contacts(user_id);
-CREATE INDEX idx_contacts_email ON contacts(email);
-
--- Sender type indexes (NEW Jan 2026)
-CREATE INDEX idx_contacts_sender_type ON contacts(user_id, sender_type);
-CREATE INDEX idx_contacts_broadcast ON contacts(user_id, sender_type, broadcast_subtype)
-  WHERE sender_type = 'broadcast';
-CREATE INDEX idx_contacts_direct ON contacts(user_id, last_seen_at DESC)
-  WHERE sender_type = 'direct';
-
--- RLS Policies
-ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own contacts"
-  ON contacts FOR ALL
-  USING (auth.uid() = user_id);
-```
-
-#### Sender Type Classification Flow
-
-```
-Email Received
-      │
-      ▼
-┌─────────────────────────────────────────────────────┐
-│ 1. Header Detection (highest confidence)            │
-│    - List-Unsubscribe header? → broadcast           │
-│    - ESP headers (Mailchimp, etc)? → broadcast      │
-└───────────────────┬─────────────────────────────────┘
-                    │ no match
-                    ▼
-┌─────────────────────────────────────────────────────┐
-│ 2. Email Pattern Detection                          │
-│    - @substack.com → broadcast/newsletter_author    │
-│    - noreply@ → broadcast/transactional             │
-│    - newsletter@ → broadcast/company_newsletter     │
-└───────────────────┬─────────────────────────────────┘
-                    │ no match
-                    ▼
-┌─────────────────────────────────────────────────────┐
-│ 3. AI Analysis (ContactEnricher)                    │
-│    - Analyze content for broadcast signals          │
-│    - Check for unsubscribe links, "view in browser" │
-│    - Detect cold outreach patterns                  │
-└───────────────────┬─────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────┐
-│ 4. User Behavior Signal (ongoing)                   │
-│    - User replied to them? → upgrade to 'direct'    │
-│    - User marked as VIP? → likely 'direct'          │
-└─────────────────────────────────────────────────────┘
-```
-
-## Phase 2 Tables
-
-### urls
-URLs extracted from emails for content library.
-
-```sql
-CREATE TABLE urls (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
-  
-  url TEXT NOT NULL,
-  title TEXT, -- Fetched via meta tags
-  domain TEXT,
-  
-  -- AI analysis
-  url_type TEXT, -- article, tool, inspiration, example, documentation
-  relevance_score INTEGER DEFAULT 5,
-  summary TEXT,
-  topics TEXT[], -- ['AI', 'Chrome Extensions', 'TypeScript']
-  
-  -- Relations
-  project_tags TEXT[],
-  
-  -- State
-  is_saved BOOLEAN DEFAULT TRUE,
-  is_archived BOOLEAN DEFAULT FALSE,
-  
-  -- Metadata
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_urls_user_id ON urls(user_id);
-CREATE INDEX idx_urls_topics ON urls USING GIN(topics);
-CREATE INDEX idx_urls_domain ON urls(domain);
-
--- RLS Policies
-ALTER TABLE urls ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own URLs"
-  ON urls FOR ALL
-  USING (auth.uid() = user_id);
-```
-
-### events
-Calendar events extracted from emails.
-
-```sql
-CREATE TABLE events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
-  
-  -- Event details
-  title TEXT NOT NULL,
-  description TEXT,
-  
-  -- Date/time
-  start_date DATE NOT NULL,
-  start_time TIME,
-  end_date DATE,
-  end_time TIME,
-  all_day BOOLEAN DEFAULT FALSE,
-  timezone TEXT DEFAULT 'America/Chicago',
-  
-  -- Location
-  location TEXT,
-  is_local BOOLEAN DEFAULT FALSE, -- Within Milwaukee/Shorewood area
-  
-  -- RSVP
-  rsvp_required BOOLEAN DEFAULT FALSE,
-  rsvp_deadline DATE,
-  rsvp_status TEXT, -- pending, accepted, declined, tentative
-  
-  -- Google Calendar sync
-  gcal_event_id TEXT, -- If sent to Google Calendar
-  synced_to_gcal BOOLEAN DEFAULT FALSE,
-  
-  -- State
-  is_archived BOOLEAN DEFAULT FALSE,
-  confidence_score INTEGER DEFAULT 5, -- How confident AI is this is an event
-  
-  -- Metadata
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_events_user_id ON events(user_id);
-CREATE INDEX idx_events_date ON events(user_id, start_date);
-CREATE INDEX idx_events_local ON events(user_id, is_local);
-
--- RLS Policies
-ALTER TABLE events ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own events"
-  ON events FOR ALL
-  USING (auth.uid() = user_id);
-```
-
-### content_opportunities
-Tweet ideas, networking opportunities, etc.
-
-```sql
-CREATE TABLE content_opportunities (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
-  
-  -- Opportunity type
-  type TEXT NOT NULL, -- tweet_idea, newsletter_reply, linkedin_post, conversation_starter
-  
-  -- Content
-  title TEXT NOT NULL,
-  draft_content TEXT, -- AI-generated draft
-  talking_points TEXT[],
-  
-  -- Context
-  source_context TEXT, -- Why this is an opportunity
-  networking_value TEXT, -- high, medium, low
-  
-  -- State
-  status TEXT DEFAULT 'pending', -- pending, used, skipped
-  used_at TIMESTAMPTZ,
-  
-  -- Metadata
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_content_opportunities_user_id ON content_opportunities(user_id);
-CREATE INDEX idx_content_opportunities_type ON content_opportunities(user_id, type);
-CREATE INDEX idx_content_opportunities_status ON content_opportunities(user_id, status);
-
--- RLS Policies
-ALTER TABLE content_opportunities ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage own content opportunities"
-  ON content_opportunities FOR ALL
-  USING (auth.uid() = user_id);
-```
-
-## Utility Tables
-
-### sync_logs
-Track email sync operations for debugging.
-
-```sql
-CREATE TABLE sync_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  gmail_account_id UUID REFERENCES gmail_accounts(id) ON DELETE CASCADE,
-  
-  -- Sync details
-  sync_type TEXT NOT NULL, -- full, incremental
-  emails_fetched INTEGER DEFAULT 0,
-  emails_analyzed INTEGER DEFAULT 0,
-  errors_count INTEGER DEFAULT 0,
-  
-  -- Status
-  status TEXT NOT NULL, -- started, completed, failed
-  error_message TEXT,
-  
-  -- Performance
-  duration_ms INTEGER,
-  
-  -- Metadata
-  started_at TIMESTAMPTZ DEFAULT NOW(),
-  completed_at TIMESTAMPTZ
-);
-
-CREATE INDEX idx_sync_logs_user_id ON sync_logs(user_id);
-CREATE INDEX idx_sync_logs_started_at ON sync_logs(started_at DESC);
-
--- RLS Policies
-ALTER TABLE sync_logs ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view own sync logs"
-  ON sync_logs FOR SELECT
-  USING (auth.uid() = user_id);
-```
-
-### api_usage_logs
-Track API usage for cost monitoring and budget alerts.
-
-```sql
-CREATE TABLE api_usage_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-
-  -- API details
-  service TEXT NOT NULL, -- 'openai', 'gmail'
-  endpoint TEXT, -- 'chat.completions', 'users.messages.list'
-  model TEXT, -- 'gpt-4.1-mini'
-
-  -- Usage metrics
-  tokens_input INTEGER DEFAULT 0,
-  tokens_output INTEGER DEFAULT 0,
-  tokens_total INTEGER DEFAULT 0,
-  estimated_cost DECIMAL(10, 6), -- Cost in USD (6 decimal places for precision)
-
-  -- Context
-  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
-  analyzer_name TEXT, -- 'categorizer', 'action_extractor', 'client_tagger'
-
-  -- Performance
-  duration_ms INTEGER,
-  success BOOLEAN DEFAULT TRUE,
-  error_message TEXT,
-
-  -- Metadata
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_api_usage_logs_user_id ON api_usage_logs(user_id);
-CREATE INDEX idx_api_usage_logs_created_at ON api_usage_logs(created_at DESC);
-CREATE INDEX idx_api_usage_logs_service ON api_usage_logs(service, created_at DESC);
-
--- RLS Policies
-ALTER TABLE api_usage_logs ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view own API usage"
-  ON api_usage_logs FOR SELECT
-  USING (auth.uid() = user_id);
-
--- Helper function: Get daily API cost for a user
-CREATE OR REPLACE FUNCTION get_daily_api_cost(p_user_id UUID, p_date DATE DEFAULT CURRENT_DATE)
-RETURNS DECIMAL AS $$
-BEGIN
-  RETURN COALESCE(
-    (SELECT SUM(estimated_cost)
-     FROM api_usage_logs
-     WHERE user_id = p_user_id
-       AND created_at >= p_date
-       AND created_at < p_date + INTERVAL '1 day'),
-    0
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Helper function: Get monthly API cost for a user
-CREATE OR REPLACE FUNCTION get_monthly_api_cost(p_user_id UUID, p_month DATE DEFAULT DATE_TRUNC('month', CURRENT_DATE)::DATE)
-RETURNS DECIMAL AS $$
-BEGIN
-  RETURN COALESCE(
-    (SELECT SUM(estimated_cost)
-     FROM api_usage_logs
-     WHERE user_id = p_user_id
-       AND created_at >= p_month
-       AND created_at < p_month + INTERVAL '1 month'),
-    0
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
-## Database Functions & Triggers
-
-### Update updated_at timestamp automatically
-
-```sql
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Apply to all tables with updated_at
-CREATE TRIGGER update_user_profiles_updated_at BEFORE UPDATE ON user_profiles
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_gmail_accounts_updated_at BEFORE UPDATE ON gmail_accounts
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_clients_updated_at BEFORE UPDATE ON clients
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_emails_updated_at BEFORE UPDATE ON emails
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_actions_updated_at BEFORE UPDATE ON actions
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- (Repeat for Phase 2 tables)
-```
-
-### Helper function: Get user's active clients
-
-```sql
-CREATE OR REPLACE FUNCTION get_active_clients(p_user_id UUID)
-RETURNS SETOF clients AS $$
-BEGIN
-  RETURN QUERY
-  SELECT * FROM clients
-  WHERE user_id = p_user_id AND status = 'active'
-  ORDER BY priority DESC, name ASC;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
-## Common Queries
-
-### Get unread emails by category
-```sql
-SELECT 
-  e.*,
-  c.name as client_name,
-  ea.categorization,
-  ea.action_extraction
-FROM emails e
-LEFT JOIN clients c ON e.client_id = c.id
-LEFT JOIN email_analyses ea ON e.id = ea.email_id
-WHERE e.user_id = $1
-  AND e.is_read = false
-  AND e.category = $2
-ORDER BY e.priority_score DESC, e.date DESC
-LIMIT 50;
-```
-
-### Get client email summary
-```sql
-SELECT 
-  c.id,
-  c.name,
-  COUNT(e.id) as total_emails,
-  COUNT(e.id) FILTER (WHERE e.is_read = false) as unread_count,
-  COUNT(a.id) FILTER (WHERE a.status = 'pending') as pending_actions
-FROM clients c
-LEFT JOIN emails e ON c.id = e.client_id AND e.user_id = $1
-LEFT JOIN actions a ON c.id = a.client_id AND a.user_id = $1
-WHERE c.user_id = $1 AND c.status = 'active'
-GROUP BY c.id, c.name
-ORDER BY unread_count DESC, c.priority DESC;
-```
-
-### Get today's actions
-```sql
-SELECT 
-  a.*,
-  e.subject as source_email_subject,
-  c.name as client_name
-FROM actions a
-LEFT JOIN emails e ON a.email_id = e.id
-LEFT JOIN clients c ON a.client_id = c.id
-WHERE a.user_id = $1
-  AND a.status IN ('pending', 'in_progress')
-  AND (a.deadline IS NULL OR a.deadline <= CURRENT_DATE + INTERVAL '1 day')
-ORDER BY a.urgency_score DESC, a.deadline ASC;
-```
-
-## Log Cleanup (30-day retention)
-
-```sql
--- Cleanup function for old logs (run daily via pg_cron)
-CREATE OR REPLACE FUNCTION cleanup_old_logs()
-RETURNS void AS $$
-BEGIN
-  -- Delete sync logs older than 30 days
-  DELETE FROM sync_logs
-  WHERE started_at < NOW() - INTERVAL '30 days';
-
-  -- Delete API usage logs older than 30 days
-  DELETE FROM api_usage_logs
-  WHERE created_at < NOW() - INTERVAL '30 days';
-
-  -- Log the cleanup
-  RAISE NOTICE 'Cleaned up logs older than 30 days at %', NOW();
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Schedule cleanup to run daily at 3am (via pg_cron)
--- Run this after enabling pg_cron extension:
--- SELECT cron.schedule('cleanup-old-logs', '0 3 * * *', 'SELECT cleanup_old_logs()');
 ```
 
 ### user_event_states
-User decisions about events (dismiss, maybe, saved to calendar).
-Separate from AI analysis to keep user preferences distinct from generated data.
+User decisions about events (separate from AI analysis).
 
 ```sql
 CREATE TABLE user_event_states (
@@ -922,136 +515,374 @@ CREATE TABLE user_event_states (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   email_id UUID NOT NULL REFERENCES emails(id) ON DELETE CASCADE,
 
-  -- State: 'dismissed', 'maybe', 'saved_to_calendar'
   state TEXT NOT NULL CHECK (state IN ('dismissed', 'maybe', 'saved_to_calendar')),
-
-  -- Optional notes (for future use)
   notes TEXT,
 
-  -- Timestamps
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-  -- One state per user per email per state type
   UNIQUE(user_id, email_id, state)
 );
-
-CREATE INDEX idx_user_event_states_user_id ON user_event_states(user_id);
-CREATE INDEX idx_user_event_states_email_id ON user_event_states(email_id);
-CREATE INDEX idx_user_event_states_user_state ON user_event_states(user_id, state);
-CREATE INDEX idx_user_event_states_lookup ON user_event_states(user_id, email_id, state);
-
--- RLS Policies
-ALTER TABLE user_event_states ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view own event states"
-  ON user_event_states FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own event states"
-  ON user_event_states FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own event states"
-  ON user_event_states FOR UPDATE
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own event states"
-  ON user_event_states FOR DELETE
-  USING (auth.uid() = user_id);
-
--- Helper function: Check if event has a specific state
-CREATE OR REPLACE FUNCTION has_event_state(
-  p_user_id UUID,
-  p_email_id UUID,
-  p_state TEXT
-)
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM user_event_states
-    WHERE user_id = p_user_id
-      AND email_id = p_email_id
-      AND state = p_state
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Helper function: Get all states for an event
-CREATE OR REPLACE FUNCTION get_event_states(
-  p_user_id UUID,
-  p_email_id UUID
-)
-RETURNS TEXT[] AS $$
-BEGIN
-  RETURN ARRAY(
-    SELECT state FROM user_event_states
-    WHERE user_id = p_user_id
-      AND email_id = p_email_id
-    ORDER BY state
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
-#### State Values
+---
 
-| State | Description | UI Effect |
-|-------|-------------|-----------|
-| `dismissed` | User doesn't want to see this event | Event hidden from list unless showDismissed=true |
-| `maybe` | User is interested but not committed | Event shows star badge, appears in Maybe filter |
-| `saved_to_calendar` | User added to their calendar | Calendar button shows "Added" with checkmark |
+## Email Sending Tables (migration 026)
 
-## Migration Files Structure
+### email_templates
+Reusable templates with merge field support (`{{first_name}}`, `{{company}}`, etc.).
 
-```
-supabase/migrations/
-  001_initial_schema.sql          # user_profiles, gmail_accounts
-  002_clients_table.sql           # clients
-  003_emails_table.sql            # emails (with topics, analysis_error, gmail_label_synced)
-  004_email_analyses_table.sql    # email_analyses
-  005_actions_table.sql           # actions
-  006_sync_logs.sql               # sync_logs
-  007_api_usage_logs.sql          # api_usage_logs (for cost tracking)
-  008_rls_policies.sql            # All RLS policies
-  009_functions_triggers.sql      # Helper functions + cleanup function
-  ...
-  018_category_refactor.sql       # Life-bucket categories introduced (Jan 2026)
-  021_user_event_states.sql       # Event dismiss/maybe/calendar tracking (Jan 2026)
-  027_category_backfill.sql       # Backfill categories from email_analyses
-  028_category_cleanup.sql        # Final cleanup of legacy categories, cache clear (Feb 2026)
+```sql
+CREATE TABLE email_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
-  # Phase 2 migrations
-  101_urls_table.sql
-  102_events_table.sql
-  103_content_opportunities.sql
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT,                -- follow_up, introduction, outreach, thank_you
+  subject_template TEXT NOT NULL,
+  body_html_template TEXT NOT NULL,
+  body_text_template TEXT,
+  merge_fields TEXT[] DEFAULT ARRAY['first_name', 'last_name', 'email', 'company'],
+
+  times_used INTEGER DEFAULT 0,
+  last_used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
-### Migration 028: Category Cleanup (Feb 2026)
+### email_campaigns
+Mail merge / bulk sending with throttling.
 
-This migration performs final cleanup of the category system:
-1. Maps any remaining legacy categories (`action_required`, `newsletter`, etc.) to new life-bucket categories
-2. Updates `email_analyses.categorization` JSONB to use new category values
-3. Clears cached `sync_progress.result` to force UI refresh with correct categories
-4. Re-adds the CHECK constraint for valid categories
+```sql
+CREATE TABLE email_campaigns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  gmail_account_id UUID NOT NULL REFERENCES gmail_accounts(id) ON DELETE CASCADE,
 
-See `supabase/migrations/028_category_cleanup_and_cache_clear.sql` for details.
+  name TEXT NOT NULL,
+  description TEXT,
+  template_id UUID REFERENCES email_templates(id) ON DELETE SET NULL,
+  subject_template TEXT NOT NULL,
+  body_html_template TEXT NOT NULL,
+  body_text_template TEXT,
 
-## Indexes Strategy
-- All foreign keys have indexes
-- User-specific queries have compound indexes (user_id + filter column)
-- Date columns used for sorting have DESC indexes
-- Full-text search on email subject/snippet
-- GIN indexes for array columns (topics, tags)
+  recipients JSONB NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'scheduled', 'in_progress', 'paused', 'completed', 'cancelled')),
 
-## RLS (Row Level Security) Summary
-- **Enabled on all tables**
-- **Users can only access their own data**
-- **Service role key bypasses RLS** (for API routes doing bulk operations)
-- **Functions use SECURITY DEFINER** when needed for cross-user queries
+  scheduled_at TIMESTAMPTZ,
+  throttle_seconds INTEGER DEFAULT 25,
 
-## Backup & Data Retention
-- Supabase handles automatic backups
-- Consider archiving old emails (>1 year) to separate table
-- Soft delete pattern for emails (is_archived instead of DELETE)
-- Hard delete only via explicit user action
+  -- Progress
+  total_recipients INTEGER DEFAULT 0,
+  sent_count INTEGER DEFAULT 0,
+  failed_count INTEGER DEFAULT 0,
+  open_count INTEGER DEFAULT 0,
+  reply_count INTEGER DEFAULT 0,
+  current_index INTEGER DEFAULT 0,
+
+  -- Follow-up
+  follow_up_enabled BOOLEAN DEFAULT FALSE,
+  follow_up_condition TEXT CHECK (follow_up_condition IN ('no_open', 'no_reply', 'both')),
+  follow_up_delay_hours INTEGER DEFAULT 48,
+  follow_up_subject TEXT,
+  follow_up_body_html TEXT,
+
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  paused_at TIMESTAMPTZ,
+  last_send_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### outbound_emails
+Tracks all outgoing emails: drafts, scheduled, sent, failed.
+
+```sql
+CREATE TABLE outbound_emails (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  gmail_account_id UUID NOT NULL REFERENCES gmail_accounts(id) ON DELETE CASCADE,
+
+  campaign_id UUID REFERENCES email_campaigns(id) ON DELETE SET NULL,
+  template_id UUID REFERENCES email_templates(id) ON DELETE SET NULL,
+
+  -- Recipients
+  to_email TEXT NOT NULL,
+  to_name TEXT,
+  cc_emails TEXT[],
+  bcc_emails TEXT[],
+  reply_to TEXT,
+
+  -- Content
+  subject TEXT NOT NULL,
+  body_html TEXT NOT NULL,
+  body_text TEXT,
+
+  -- Gmail integration
+  gmail_message_id TEXT,
+  gmail_thread_id TEXT,
+  in_reply_to TEXT,
+  references_header TEXT,
+
+  -- Status
+  status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'scheduled', 'queued', 'sending', 'sent', 'failed', 'cancelled')),
+  scheduled_at TIMESTAMPTZ,
+  sent_at TIMESTAMPTZ,
+
+  -- Open tracking
+  tracking_id UUID UNIQUE DEFAULT gen_random_uuid(),
+  tracking_enabled BOOLEAN DEFAULT TRUE,
+  open_count INTEGER DEFAULT 0,
+  first_opened_at TIMESTAMPTZ,
+  last_opened_at TIMESTAMPTZ,
+
+  -- Reply tracking
+  has_reply BOOLEAN DEFAULT FALSE,
+  reply_received_at TIMESTAMPTZ,
+  reply_email_id UUID,
+
+  -- Follow-up
+  follow_up_enabled BOOLEAN DEFAULT FALSE,
+  follow_up_condition TEXT CHECK (follow_up_condition IN ('no_open', 'no_reply', 'both')),
+  follow_up_delay_hours INTEGER DEFAULT 48,
+  follow_up_email_id UUID REFERENCES outbound_emails(id) ON DELETE SET NULL,
+  follow_up_sent BOOLEAN DEFAULT FALSE,
+
+  -- Error handling
+  error_message TEXT,
+  error_code TEXT,
+  retry_count INTEGER DEFAULT 0,
+  max_retries INTEGER DEFAULT 3,
+  last_retry_at TIMESTAMPTZ,
+  next_retry_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### email_open_events
+Tracking pixel hit records.
+
+```sql
+CREATE TABLE email_open_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  outbound_email_id UUID NOT NULL REFERENCES outbound_emails(id) ON DELETE CASCADE,
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_address INET,
+  user_agent TEXT,
+  country TEXT,
+  city TEXT,
+  device_type TEXT,     -- desktop, mobile, tablet
+  email_client TEXT,    -- gmail, outlook, apple_mail
+  fingerprint TEXT      -- Dedup hash of IP + user agent
+);
+```
+
+### daily_send_quotas
+Rate limiting: 400 emails/day per user.
+
+```sql
+CREATE TABLE daily_send_quotas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  emails_sent INTEGER DEFAULT 0,
+  quota_limit INTEGER DEFAULT 400,
+  UNIQUE(user_id, date)
+);
+```
+
+---
+
+## Utility Tables
+
+### sync_logs
+```sql
+CREATE TABLE sync_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  gmail_account_id UUID REFERENCES gmail_accounts(id) ON DELETE CASCADE,
+  sync_type TEXT NOT NULL,    -- full, incremental
+  emails_fetched INTEGER DEFAULT 0,
+  emails_analyzed INTEGER DEFAULT 0,
+  errors_count INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'started', -- started, completed, failed
+  error_message TEXT,
+  duration_ms INTEGER,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+```
+
+### scheduled_sync_runs
+Background sync execution tracking.
+
+```sql
+CREATE TABLE scheduled_sync_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  duration_ms INTEGER,
+  accounts_processed INTEGER DEFAULT 0,
+  accounts_succeeded INTEGER DEFAULT 0,
+  accounts_failed INTEGER DEFAULT 0,
+  accounts_skipped INTEGER DEFAULT 0,
+  emails_fetched INTEGER DEFAULT 0,
+  emails_created INTEGER DEFAULT 0,
+  emails_analyzed INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'running', -- running, completed, failed, partial
+  results JSONB DEFAULT '[]',
+  error TEXT,
+  trigger_source TEXT DEFAULT 'cron'
+);
+```
+
+### gmail_push_logs
+Push notification audit trail.
+
+```sql
+CREATE TABLE gmail_push_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  gmail_account_id UUID REFERENCES gmail_accounts(id),
+  email_address TEXT NOT NULL,
+  history_id TEXT NOT NULL,
+  pubsub_message_id TEXT,
+  processed_at TIMESTAMPTZ DEFAULT NOW(),
+  processing_time_ms INTEGER,
+  messages_found INTEGER DEFAULT 0,
+  messages_synced INTEGER DEFAULT 0,
+  messages_analyzed INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'received', -- received, processing, completed, skipped, failed
+  skip_reason TEXT,
+  error TEXT
+);
+```
+
+### api_usage_logs
+OpenAI and Gmail API cost tracking.
+
+```sql
+CREATE TABLE api_usage_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  service TEXT NOT NULL,       -- openai, gmail
+  endpoint TEXT,
+  model TEXT,
+  tokens_input INTEGER DEFAULT 0,
+  tokens_output INTEGER DEFAULT 0,
+  tokens_total INTEGER DEFAULT 0,
+  estimated_cost NUMERIC(10,6),
+  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
+  analyzer_name TEXT,
+  duration_ms INTEGER,
+  success BOOLEAN DEFAULT TRUE,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
+## Database Functions
+
+### Cost Tracking
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `get_daily_api_cost(user_id, date)` | DECIMAL | Sum of API costs for a day |
+| `get_monthly_api_cost(user_id, month)` | DECIMAL | Sum of API costs for a month |
+| `is_within_daily_limit(user_id)` | BOOLEAN | Check against user_settings daily limit |
+| `is_within_monthly_limit(user_id)` | BOOLEAN | Check against user_settings monthly limit |
+| `get_cost_usage_summary(user_id)` | RECORD | Daily/monthly costs, limits, percentages |
+
+### Email Sending
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `can_send_email(user_id)` | BOOLEAN | Check daily send quota |
+| `increment_send_count(user_id)` | BOOLEAN | Atomic increment, FALSE if at limit |
+| `get_remaining_quota(user_id)` | INTEGER | Emails remaining today |
+| `get_scheduled_emails_to_send(limit)` | TABLE | Due scheduled emails with quota check |
+| `record_email_open(tracking_id, ...)` | BOOLEAN | Record pixel hit, update stats |
+| `get_emails_for_follow_up(limit)` | TABLE | Emails needing follow-up action |
+| `get_active_campaigns(limit)` | TABLE | Campaigns ready for next send |
+| `increment_template_usage(template_id)` | VOID | Track template usage count |
+
+### Contacts & Dates
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `upsert_contact_from_email(...)` | UUID | Create/update contact from email data |
+| `get_top_contacts(user_id, limit)` | TABLE | Top contacts by email count |
+| `classify_sender_type_from_email(email)` | TEXT | Pattern-based sender classification |
+| `get_upcoming_dates(user_id, ...)` | TABLE | Upcoming dates for Hub view |
+| `get_events_with_metadata(user_id, ...)` | TABLE | Events with rich metadata |
+| `has_event_state(user_id, email_id, state)` | BOOLEAN | Check event user state |
+
+### Sync & Maintenance
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `acquire_sync_lock(account_id, seconds)` | BOOLEAN | Prevent concurrent syncs |
+| `release_sync_lock(account_id)` | VOID | Release sync lock |
+| `cleanup_old_logs()` | VOID | Delete logs > 30 days |
+| `cleanup_old_sync_runs(retention_days)` | VOID | Delete old sync runs |
+| `get_active_clients(user_id)` | SETOF clients | Active clients sorted by priority |
+| `create_default_user_settings()` | TRIGGER | Auto-create settings on user signup |
+| `create_default_user_context()` | TRIGGER | Auto-create context on user signup |
+
+---
+
+## RLS (Row Level Security)
+
+All tables have RLS enabled. Policy pattern:
+- **Users can only access their own data** (via `auth.uid() = user_id`)
+- **Service role key bypasses RLS** for API routes doing bulk operations
+- **Functions use SECURITY DEFINER** for cross-table queries
+
+---
+
+## Migration Files (001-028)
+
+| # | File | What it does |
+|---|------|-------------|
+| 001 | initial_schema.sql | user_profiles, gmail_accounts, update_updated_at trigger |
+| 002 | clients_table.sql | clients table |
+| 003 | emails_table.sql | emails table with original categories |
+| 004 | email_analyses_table.sql | email_analyses JSONB storage |
+| 005 | actions_table.sql | actions table |
+| 006 | sync_logs.sql | sync_logs table |
+| 007 | api_usage_logs.sql | api_usage_logs + cost functions |
+| 008 | cleanup_functions.sql | cleanup_old_logs, get_active_clients |
+| 009 | user_settings.sql | user_settings + cost limit functions |
+| 010 | sync_progress_column.sql | Add sync_progress to user_profiles |
+| 011 | user_context.sql | user_context table + VIP functions |
+| 012 | contacts.sql | contacts table + enrichment functions |
+| 013 | extracted_dates.sql | extracted_dates table + Hub functions |
+| 014 | scheduled_sync.sql | scheduled_sync_runs table |
+| 015 | gmail_push_notifications.sql | Push notification columns + gmail_push_logs |
+| 016 | sync_improvements.sql | Sync locking, health monitoring |
+| 017 | email_analysis_fields.sql | Add summary, quick_action, labels to emails |
+| 018 | category_refactor_and_event_locality.sql | Life-bucket categories + sender_patterns |
+| 019 | event_metadata_column.sql | Add event_metadata JSONB to extracted_dates |
+| 020 | email_analyses_update_policy.sql | Update/delete RLS for email_analyses |
+| 021 | user_event_states.sql | user_event_states table |
+| 022 | google_contacts_integration.sql | Google Contacts columns + contact_aliases |
+| 023 | historical_sync.sql | Historical sync columns + metadata emails |
+| 024 | sender_type_classification.sql | Sender type columns on contacts |
+| 025 | content_digest_and_multi_actions.sql | content_digest + gist/key_points |
+| 026 | email_sending.sql | Templates, campaigns, outbound, tracking, quotas |
+| 027 | backfill_email_categories.sql | Data migration: backfill categories |
+| 028 | category_cleanup_and_cache_clear.sql | Data migration: final category cleanup |
+
+---
+
+## Planned Tables (Not Yet Created)
+
+These appear in earlier documentation but have **no migration files**:
+- `urls` - URL extraction library
+- `events` - Dedicated events table (currently using extracted_dates)
+- `content_opportunities` - Tweet ideas, networking opportunities

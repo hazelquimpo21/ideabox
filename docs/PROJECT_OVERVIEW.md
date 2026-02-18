@@ -21,8 +21,8 @@ AI-powered email processing system with specialized analyzers that:
   - **Information**: `newsletters_general`, `news_politics`, `product_updates`
 - **Track client relationships**: Link emails to clients separately from categorization
 - **Extract actions**: Build dedicated to-do list from email content
-- **Save content**: URLs, tweet ideas, networking opportunities (Phase 2)
-- **Detect events**: Auto-extract event details for calendar (Phase 2)
+- **Save content**: URLs, tweet ideas, networking opportunities (future)
+- **Detect events**: Auto-extract event details for calendar (implemented)
 - **Sync to Gmail**: Create IdeaBox labels in Gmail for visibility
 - **Learn continuously**: User preferences, client names, communication patterns
 - **Provide intelligence**: Client health metrics, content trends, priority signals
@@ -135,15 +135,13 @@ AI-powered email processing system with specialized analyzers that:
 - User feels "in control" of email rather than overwhelmed
 
 ## Non-Goals (For Now)
-- Not replacing Gmail (it's an intelligence layer)
-- Not doing AI-generated responses
-- Not processing attachments in Phase 1
+- Not replacing Gmail (it's an intelligence layer on top)
+- Not processing attachments
 - Not supporting email providers other than Gmail
-- Not a CRM (though has CRM-like features)
+- Not a full CRM (though has CRM-like features for clients)
 
-> **Note (Jan 2026):** Email composition/sending via Gmail API has been added.
-> Features include: send, schedule, tracking, mail merge, follow-up automation.
-> See `docs/GMAIL_SENDING_IMPLEMENTATION.md` for details.
+> **Note:** Email sending was added (Jan 2026) via Gmail API - send, schedule, templates,
+> campaigns, open tracking, follow-up automation. See `docs/GMAIL_SENDING_IMPLEMENTATION.md`.
 
 ## Design Principles
 1. **Modular First**: Every component standalone and replaceable

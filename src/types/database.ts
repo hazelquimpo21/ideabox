@@ -103,6 +103,11 @@ export interface Database {
           onboarding_completed: boolean;
           default_view: string;
           emails_per_page: number;
+          sync_progress: Record<string, unknown> | null;
+          initial_sync_completed_at: string | null;
+          initial_sync_pending: boolean;
+          initial_sync_triggered_at: string | null;
+          sender_patterns: Record<string, unknown>[];
           created_at: string;
           updated_at: string;
         };
@@ -114,6 +119,11 @@ export interface Database {
           onboarding_completed?: boolean;
           default_view?: string;
           emails_per_page?: number;
+          sync_progress?: Record<string, unknown> | null;
+          initial_sync_completed_at?: string | null;
+          initial_sync_pending?: boolean;
+          initial_sync_triggered_at?: string | null;
+          sender_patterns?: Record<string, unknown>[];
           created_at?: string;
           updated_at?: string;
         };
@@ -125,6 +135,11 @@ export interface Database {
           onboarding_completed?: boolean;
           default_view?: string;
           emails_per_page?: number;
+          sync_progress?: Record<string, unknown> | null;
+          initial_sync_completed_at?: string | null;
+          initial_sync_pending?: boolean;
+          initial_sync_triggered_at?: string | null;
+          sender_patterns?: Record<string, unknown>[];
           created_at?: string;
           updated_at?: string;
         };
@@ -141,6 +156,34 @@ export interface Database {
           last_sync_at: string | null;
           last_history_id: string | null;
           sync_enabled: boolean;
+          // Push notifications (migration 015)
+          watch_expiration: string | null;
+          watch_history_id: string | null;
+          watch_resource_id: string | null;
+          push_enabled: boolean;
+          last_push_at: string | null;
+          // Sync locking (migration 016)
+          sync_lock_until: string | null;
+          history_id_validated_at: string | null;
+          needs_full_sync: boolean;
+          watch_renewal_failures: number;
+          watch_last_error: string | null;
+          watch_alert_sent_at: string | null;
+          // Google Contacts (migration 022)
+          contacts_synced_at: string | null;
+          contacts_sync_enabled: boolean;
+          // Historical sync (migration 023)
+          historical_sync_status: string;
+          historical_sync_oldest_date: string | null;
+          historical_sync_email_count: number;
+          historical_sync_contacts_updated: number;
+          historical_sync_started_at: string | null;
+          historical_sync_completed_at: string | null;
+          historical_sync_page_token: string | null;
+          historical_sync_error: string | null;
+          // Email sending (migration 026)
+          has_send_scope: boolean;
+          send_scope_granted_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -155,6 +198,29 @@ export interface Database {
           last_sync_at?: string | null;
           last_history_id?: string | null;
           sync_enabled?: boolean;
+          watch_expiration?: string | null;
+          watch_history_id?: string | null;
+          watch_resource_id?: string | null;
+          push_enabled?: boolean;
+          last_push_at?: string | null;
+          sync_lock_until?: string | null;
+          history_id_validated_at?: string | null;
+          needs_full_sync?: boolean;
+          watch_renewal_failures?: number;
+          watch_last_error?: string | null;
+          watch_alert_sent_at?: string | null;
+          contacts_synced_at?: string | null;
+          contacts_sync_enabled?: boolean;
+          historical_sync_status?: string;
+          historical_sync_oldest_date?: string | null;
+          historical_sync_email_count?: number;
+          historical_sync_contacts_updated?: number;
+          historical_sync_started_at?: string | null;
+          historical_sync_completed_at?: string | null;
+          historical_sync_page_token?: string | null;
+          historical_sync_error?: string | null;
+          has_send_scope?: boolean;
+          send_scope_granted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -169,6 +235,29 @@ export interface Database {
           last_sync_at?: string | null;
           last_history_id?: string | null;
           sync_enabled?: boolean;
+          watch_expiration?: string | null;
+          watch_history_id?: string | null;
+          watch_resource_id?: string | null;
+          push_enabled?: boolean;
+          last_push_at?: string | null;
+          sync_lock_until?: string | null;
+          history_id_validated_at?: string | null;
+          needs_full_sync?: boolean;
+          watch_renewal_failures?: number;
+          watch_last_error?: string | null;
+          watch_alert_sent_at?: string | null;
+          contacts_synced_at?: string | null;
+          contacts_sync_enabled?: boolean;
+          historical_sync_status?: string;
+          historical_sync_oldest_date?: string | null;
+          historical_sync_email_count?: number;
+          historical_sync_contacts_updated?: number;
+          historical_sync_started_at?: string | null;
+          historical_sync_completed_at?: string | null;
+          historical_sync_page_token?: string | null;
+          historical_sync_error?: string | null;
+          has_send_scope?: boolean;
+          send_scope_granted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -242,11 +331,17 @@ export interface Database {
           labels: string[] | null;
           client_id: string | null;
           project_tags: string[] | null;
-          // Enhanced display fields (Jan 2026)
+          // Content digest fields (migration 025)
           gist: string | null;
           key_points: string[] | null;
+          // NOTE: urgency_score and relationship_signal are used in UI but have
+          // no DB migration. They exist only in email_analyses JSONB. Reads from
+          // the emails table will return null. A future migration should add these
+          // columns if denormalization is desired.
           urgency_score: number | null;
           relationship_signal: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
+          // Sync type (migration 023)
+          sync_type: string;
           is_read: boolean;
           is_archived: boolean;
           is_starred: boolean;
@@ -283,6 +378,7 @@ export interface Database {
           key_points?: string[] | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
+          sync_type?: string;
           is_read?: boolean;
           is_archived?: boolean;
           is_starred?: boolean;
@@ -319,6 +415,7 @@ export interface Database {
           key_points?: string[] | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
+          sync_type?: string;
           is_read?: boolean;
           is_archived?: boolean;
           is_starred?: boolean;
@@ -340,6 +437,7 @@ export interface Database {
           event_detection: Record<string, unknown> | null;
           url_extraction: Record<string, unknown> | null;
           content_opportunity: Record<string, unknown> | null;
+          content_digest: Record<string, unknown> | null;
           analyzer_version: string;
           tokens_used: number | null;
           processing_time_ms: number | null;
@@ -355,6 +453,7 @@ export interface Database {
           event_detection?: Record<string, unknown> | null;
           url_extraction?: Record<string, unknown> | null;
           content_opportunity?: Record<string, unknown> | null;
+          content_digest?: Record<string, unknown> | null;
           analyzer_version?: string;
           tokens_used?: number | null;
           processing_time_ms?: number | null;
@@ -370,6 +469,7 @@ export interface Database {
           event_detection?: Record<string, unknown> | null;
           url_extraction?: Record<string, unknown> | null;
           content_opportunity?: Record<string, unknown> | null;
+          content_digest?: Record<string, unknown> | null;
           analyzer_version?: string;
           tokens_used?: number | null;
           processing_time_ms?: number | null;
@@ -602,6 +702,516 @@ export interface Database {
           updated_at?: string;
         };
       };
+      user_context: {
+        Row: {
+          id: string;
+          user_id: string;
+          role: string | null;
+          company: string | null;
+          industry: string | null;
+          location_city: string | null;
+          location_metro: string | null;
+          priorities: string[] | null;
+          projects: string[] | null;
+          vip_emails: string[] | null;
+          vip_domains: string[] | null;
+          interests: string[] | null;
+          family_context: Record<string, unknown>;
+          work_hours_start: string;
+          work_hours_end: string;
+          work_days: number[];
+          onboarding_completed: boolean;
+          onboarding_completed_at: string | null;
+          onboarding_step: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          role?: string | null;
+          company?: string | null;
+          industry?: string | null;
+          location_city?: string | null;
+          location_metro?: string | null;
+          priorities?: string[] | null;
+          projects?: string[] | null;
+          vip_emails?: string[] | null;
+          vip_domains?: string[] | null;
+          interests?: string[] | null;
+          family_context?: Record<string, unknown>;
+          work_hours_start?: string;
+          work_hours_end?: string;
+          work_days?: number[];
+          onboarding_completed?: boolean;
+          onboarding_completed_at?: string | null;
+          onboarding_step?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['user_context']['Insert']>;
+      };
+      contacts: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string;
+          name: string | null;
+          display_name: string | null;
+          avatar_url: string | null;
+          email_count: number;
+          sent_count: number;
+          received_count: number;
+          first_seen_at: string | null;
+          last_seen_at: string | null;
+          last_user_reply_at: string | null;
+          avg_response_hours: number | null;
+          sender_type: string;
+          broadcast_subtype: string | null;
+          sender_type_confidence: number | null;
+          sender_type_detected_at: string | null;
+          sender_type_source: string | null;
+          relationship_type: string | null;
+          relationship_strength: string;
+          company: string | null;
+          job_title: string | null;
+          phone: string | null;
+          linkedin_url: string | null;
+          extraction_confidence: number | null;
+          last_extracted_at: string | null;
+          extraction_source: string | null;
+          needs_enrichment: boolean;
+          birthday: string | null;
+          birthday_year_known: boolean;
+          work_anniversary: string | null;
+          custom_dates: Record<string, unknown>[];
+          is_vip: boolean;
+          is_muted: boolean;
+          is_archived: boolean;
+          google_resource_name: string | null;
+          google_labels: string[];
+          is_google_starred: boolean;
+          google_synced_at: string | null;
+          import_source: string;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email: string;
+          name?: string | null;
+          display_name?: string | null;
+          avatar_url?: string | null;
+          email_count?: number;
+          sent_count?: number;
+          received_count?: number;
+          first_seen_at?: string | null;
+          last_seen_at?: string | null;
+          last_user_reply_at?: string | null;
+          avg_response_hours?: number | null;
+          sender_type?: string;
+          broadcast_subtype?: string | null;
+          sender_type_confidence?: number | null;
+          sender_type_detected_at?: string | null;
+          sender_type_source?: string | null;
+          relationship_type?: string | null;
+          relationship_strength?: string;
+          company?: string | null;
+          job_title?: string | null;
+          phone?: string | null;
+          linkedin_url?: string | null;
+          extraction_confidence?: number | null;
+          last_extracted_at?: string | null;
+          extraction_source?: string | null;
+          needs_enrichment?: boolean;
+          birthday?: string | null;
+          birthday_year_known?: boolean;
+          work_anniversary?: string | null;
+          custom_dates?: Record<string, unknown>[];
+          is_vip?: boolean;
+          is_muted?: boolean;
+          is_archived?: boolean;
+          google_resource_name?: string | null;
+          google_labels?: string[];
+          is_google_starred?: boolean;
+          google_synced_at?: string | null;
+          import_source?: string;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['contacts']['Insert']>;
+      };
+      contact_aliases: {
+        Row: {
+          id: string;
+          user_id: string;
+          primary_contact_id: string;
+          alias_email: string;
+          created_via: string;
+          confidence: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          primary_contact_id: string;
+          alias_email: string;
+          created_via?: string;
+          confidence?: number | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['contact_aliases']['Insert']>;
+      };
+      extracted_dates: {
+        Row: {
+          id: string;
+          user_id: string;
+          email_id: string | null;
+          contact_id: string | null;
+          date_type: string;
+          date: string;
+          event_time: string | null;
+          end_date: string | null;
+          end_time: string | null;
+          timezone: string;
+          title: string;
+          description: string | null;
+          source_snippet: string | null;
+          related_entity: string | null;
+          is_recurring: boolean;
+          recurrence_pattern: string | null;
+          recurrence_end_date: string | null;
+          confidence: number | null;
+          extracted_by: string;
+          priority_score: number;
+          is_acknowledged: boolean;
+          acknowledged_at: string | null;
+          is_hidden: boolean;
+          snoozed_until: string | null;
+          event_metadata: Record<string, unknown> | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email_id?: string | null;
+          contact_id?: string | null;
+          date_type: string;
+          date: string;
+          event_time?: string | null;
+          end_date?: string | null;
+          end_time?: string | null;
+          timezone?: string;
+          title: string;
+          description?: string | null;
+          source_snippet?: string | null;
+          related_entity?: string | null;
+          is_recurring?: boolean;
+          recurrence_pattern?: string | null;
+          recurrence_end_date?: string | null;
+          confidence?: number | null;
+          extracted_by?: string;
+          priority_score?: number;
+          is_acknowledged?: boolean;
+          acknowledged_at?: string | null;
+          is_hidden?: boolean;
+          snoozed_until?: string | null;
+          event_metadata?: Record<string, unknown> | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['extracted_dates']['Insert']>;
+      };
+      user_event_states: {
+        Row: {
+          id: string;
+          user_id: string;
+          email_id: string;
+          state: 'dismissed' | 'maybe' | 'saved_to_calendar';
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email_id: string;
+          state: 'dismissed' | 'maybe' | 'saved_to_calendar';
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['user_event_states']['Insert']>;
+      };
+      email_templates: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          description: string | null;
+          category: string | null;
+          subject_template: string;
+          body_html_template: string;
+          body_text_template: string | null;
+          merge_fields: string[];
+          times_used: number;
+          last_used_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          description?: string | null;
+          category?: string | null;
+          subject_template: string;
+          body_html_template: string;
+          body_text_template?: string | null;
+          merge_fields?: string[];
+          times_used?: number;
+          last_used_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['email_templates']['Insert']>;
+      };
+      email_campaigns: {
+        Row: {
+          id: string;
+          user_id: string;
+          gmail_account_id: string;
+          name: string;
+          description: string | null;
+          template_id: string | null;
+          subject_template: string;
+          body_html_template: string;
+          body_text_template: string | null;
+          recipients: Record<string, unknown>[];
+          status: string;
+          scheduled_at: string | null;
+          throttle_seconds: number;
+          total_recipients: number;
+          sent_count: number;
+          failed_count: number;
+          open_count: number;
+          reply_count: number;
+          current_index: number;
+          follow_up_enabled: boolean;
+          follow_up_condition: string | null;
+          follow_up_delay_hours: number;
+          follow_up_subject: string | null;
+          follow_up_body_html: string | null;
+          started_at: string | null;
+          completed_at: string | null;
+          paused_at: string | null;
+          last_send_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          gmail_account_id: string;
+          name: string;
+          description?: string | null;
+          template_id?: string | null;
+          subject_template: string;
+          body_html_template: string;
+          body_text_template?: string | null;
+          recipients?: Record<string, unknown>[];
+          status?: string;
+          scheduled_at?: string | null;
+          throttle_seconds?: number;
+          follow_up_enabled?: boolean;
+          follow_up_condition?: string | null;
+          follow_up_delay_hours?: number;
+          follow_up_subject?: string | null;
+          follow_up_body_html?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['email_campaigns']['Insert']>;
+      };
+      outbound_emails: {
+        Row: {
+          id: string;
+          user_id: string;
+          gmail_account_id: string;
+          campaign_id: string | null;
+          template_id: string | null;
+          to_email: string;
+          to_name: string | null;
+          cc_emails: string[] | null;
+          bcc_emails: string[] | null;
+          reply_to: string | null;
+          subject: string;
+          body_html: string;
+          body_text: string | null;
+          gmail_message_id: string | null;
+          gmail_thread_id: string | null;
+          in_reply_to: string | null;
+          references_header: string | null;
+          status: string;
+          scheduled_at: string | null;
+          sent_at: string | null;
+          tracking_id: string;
+          tracking_enabled: boolean;
+          open_count: number;
+          first_opened_at: string | null;
+          last_opened_at: string | null;
+          has_reply: boolean;
+          reply_received_at: string | null;
+          reply_email_id: string | null;
+          follow_up_enabled: boolean;
+          follow_up_condition: string | null;
+          follow_up_delay_hours: number;
+          follow_up_email_id: string | null;
+          follow_up_sent: boolean;
+          error_message: string | null;
+          error_code: string | null;
+          retry_count: number;
+          max_retries: number;
+          last_retry_at: string | null;
+          next_retry_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          gmail_account_id: string;
+          campaign_id?: string | null;
+          template_id?: string | null;
+          to_email: string;
+          to_name?: string | null;
+          cc_emails?: string[] | null;
+          bcc_emails?: string[] | null;
+          reply_to?: string | null;
+          subject: string;
+          body_html: string;
+          body_text?: string | null;
+          in_reply_to?: string | null;
+          references_header?: string | null;
+          status?: string;
+          scheduled_at?: string | null;
+          tracking_enabled?: boolean;
+          follow_up_enabled?: boolean;
+          follow_up_condition?: string | null;
+          follow_up_delay_hours?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['outbound_emails']['Insert']>;
+      };
+      email_open_events: {
+        Row: {
+          id: string;
+          outbound_email_id: string;
+          opened_at: string;
+          ip_address: string | null;
+          user_agent: string | null;
+          country: string | null;
+          city: string | null;
+          device_type: string | null;
+          email_client: string | null;
+          fingerprint: string | null;
+        };
+        Insert: {
+          id?: string;
+          outbound_email_id: string;
+          opened_at?: string;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          country?: string | null;
+          city?: string | null;
+          device_type?: string | null;
+          email_client?: string | null;
+          fingerprint?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['email_open_events']['Insert']>;
+      };
+      daily_send_quotas: {
+        Row: {
+          id: string;
+          user_id: string;
+          date: string;
+          emails_sent: number;
+          quota_limit: number;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          date?: string;
+          emails_sent?: number;
+          quota_limit?: number;
+        };
+        Update: Partial<Database['public']['Tables']['daily_send_quotas']['Insert']>;
+      };
+      scheduled_sync_runs: {
+        Row: {
+          id: string;
+          started_at: string;
+          completed_at: string | null;
+          duration_ms: number | null;
+          accounts_processed: number;
+          accounts_succeeded: number;
+          accounts_failed: number;
+          accounts_skipped: number;
+          emails_fetched: number;
+          emails_created: number;
+          emails_analyzed: number;
+          status: string;
+          results: Record<string, unknown>[];
+          error: string | null;
+          trigger_source: string;
+        };
+        Insert: {
+          id?: string;
+          started_at?: string;
+          completed_at?: string | null;
+          duration_ms?: number | null;
+          status?: string;
+          results?: Record<string, unknown>[];
+          error?: string | null;
+          trigger_source?: string;
+        };
+        Update: Partial<Database['public']['Tables']['scheduled_sync_runs']['Insert']>;
+      };
+      gmail_push_logs: {
+        Row: {
+          id: string;
+          gmail_account_id: string | null;
+          email_address: string;
+          history_id: string;
+          pubsub_message_id: string | null;
+          processed_at: string;
+          processing_time_ms: number | null;
+          messages_found: number;
+          messages_synced: number;
+          messages_analyzed: number;
+          status: string;
+          skip_reason: string | null;
+          error: string | null;
+        };
+        Insert: {
+          id?: string;
+          gmail_account_id?: string | null;
+          email_address: string;
+          history_id: string;
+          pubsub_message_id?: string | null;
+          processed_at?: string;
+          processing_time_ms?: number | null;
+          status?: string;
+          skip_reason?: string | null;
+          error?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['gmail_push_logs']['Insert']>;
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -632,6 +1242,26 @@ export interface Database {
           monthly_percent: number;
           is_paused: boolean;
         };
+      };
+      can_send_email: {
+        Args: { p_user_id: string };
+        Returns: boolean;
+      };
+      increment_send_count: {
+        Args: { p_user_id: string };
+        Returns: boolean;
+      };
+      get_remaining_quota: {
+        Args: { p_user_id: string };
+        Returns: number;
+      };
+      acquire_sync_lock: {
+        Args: { p_account_id: string; p_lock_duration_seconds?: number };
+        Returns: boolean;
+      };
+      release_sync_lock: {
+        Args: { p_account_id: string };
+        Returns: void;
       };
     };
     Enums: Record<string, never>;
@@ -668,6 +1298,18 @@ export type EmailAnalysis = TableRow<'email_analyses'>;
 export type SyncLog = TableRow<'sync_logs'>;
 export type ApiUsageLog = TableRow<'api_usage_logs'>;
 export type UserSettings = TableRow<'user_settings'>;
+export type UserContext = TableRow<'user_context'>;
+export type Contact = TableRow<'contacts'>;
+export type ContactAlias = TableRow<'contact_aliases'>;
+export type ExtractedDate = TableRow<'extracted_dates'>;
+export type UserEventState = TableRow<'user_event_states'>;
+export type EmailTemplate = TableRow<'email_templates'>;
+export type EmailCampaign = TableRow<'email_campaigns'>;
+export type OutboundEmail = TableRow<'outbound_emails'>;
+export type EmailOpenEvent = TableRow<'email_open_events'>;
+export type DailySendQuota = TableRow<'daily_send_quotas'>;
+export type ScheduledSyncRun = TableRow<'scheduled_sync_runs'>;
+export type GmailPushLog = TableRow<'gmail_push_logs'>;
 
 /**
  * Cost usage summary from database function.
@@ -796,6 +1438,19 @@ export interface EventDetectionJsonb {
 }
 
 /**
+ * Content digest JSONB structure (migration 025).
+ * Extracts gist, key points, and links from emails.
+ */
+export interface ContentDigestJsonb {
+  gist: string;
+  key_points: { point: string; relevance?: string }[];
+  links?: { url: string; type?: string; title?: string; description?: string }[];
+  content_type?: 'single_topic' | 'multi_topic_digest' | 'curated_links' | 'personal_update';
+  topics_highlighted?: string[];
+  confidence: number;
+}
+
+/**
  * Typed email analysis with properly typed JSONB columns.
  * Use this instead of EmailAnalysis when you need type-safe access to analysis data.
  */
@@ -809,6 +1464,7 @@ export interface TypedEmailAnalysis {
   event_detection: EventDetectionJsonb | null;
   url_extraction: Record<string, unknown> | null; // Future: URLExtractionJsonb
   content_opportunity: Record<string, unknown> | null; // Future: ContentOpportunityJsonb
+  content_digest: ContentDigestJsonb | null;
   analyzer_version: string;
   tokens_used: number | null;
   processing_time_ms: number | null;
@@ -833,5 +1489,5 @@ export interface TypedEmailAnalysis {
  * ```
  */
 export function toTypedAnalysis(analysis: EmailAnalysis): TypedEmailAnalysis {
-  return analysis as TypedEmailAnalysis;
+  return analysis as unknown as TypedEmailAnalysis;
 }
