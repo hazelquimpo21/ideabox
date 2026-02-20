@@ -1117,7 +1117,7 @@ export class EmailProcessor {
       email_id: emailId,
       user_id: userId,
 
-      // Categorization (ENHANCED: now includes summary, quick_action, labels)
+      // Categorization (ENHANCED: now includes summary, quick_action, labels, signal_strength, reply_worthiness)
       categorization: analysis.categorization
         ? {
             category: analysis.categorization.category,
@@ -1127,6 +1127,9 @@ export class EmailProcessor {
             summary: analysis.categorization.summary,
             quick_action: analysis.categorization.quickAction,
             labels: analysis.categorization.labels,
+            // NEW Feb 2026: Signal strength and reply worthiness
+            signal_strength: analysis.categorization.signalStrength,
+            reply_worthiness: analysis.categorization.replyWorthiness,
           }
         : null,
 
@@ -1688,6 +1691,9 @@ export class EmailProcessor {
       quick_action: categorization.quickAction || null,
       labels: categorization.labels || null,
       topics: categorization.topics || null,
+      // NEW Feb 2026: Signal strength and reply worthiness for fast filtering
+      signal_strength: categorization.signalStrength || null,
+      reply_worthiness: categorization.replyWorthiness || null,
     };
 
     // Add content digest fields if available (NEW Jan 2026)

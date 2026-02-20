@@ -204,6 +204,29 @@ export const HUB_SCORING_CONFIG = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Signal strength multipliers (NEW Feb 2026)
+  // Applied to email base scores based on AI-assessed signal quality.
+  // This is the primary mechanism for suppressing noise in the Hub.
+  // ─────────────────────────────────────────────────────────────────────────
+  signalStrengthMultipliers: {
+    high: 1.8,      // Direct correspondence - boost significantly
+    medium: 1.0,    // Neutral - no modification
+    low: 0.3,       // Background noise - heavily suppress
+    noise: 0.05,    // Pure noise - essentially remove from Hub
+  } as Record<string, number>,
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Reply worthiness boosts (NEW Feb 2026)
+  // Emails that warrant replies get boosted so users see them sooner.
+  // ─────────────────────────────────────────────────────────────────────────
+  replyWorthinessBoosts: {
+    must_reply: 1.6,      // Someone is waiting - high boost
+    should_reply: 1.3,    // Good networking move - moderate boost
+    optional_reply: 1.0,  // Neutral
+    no_reply: 0.8,        // No reply expected - slight reduction
+  } as Record<string, number>,
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Category-specific boosts
   // REFACTORED (Jan 2026): Updated for life-bucket categories.
   // Higher multipliers for categories that typically need attention.
@@ -615,6 +638,9 @@ interface EmailCandidate {
   analysis_summary?: string;
   analysis_quick_action?: string;
   analysis_urgency?: number;
+  // NEW Feb 2026: Signal strength and reply worthiness from categorizer
+  analysis_signal_strength?: string;
+  analysis_reply_worthiness?: string;
 }
 
 interface ActionCandidate {
@@ -713,16 +739,19 @@ async function fetchEmailCandidates(supabase: any, userId: string): Promise<Emai
     // Merge analysis data
     if (analyses) {
       const analysisMap = new Map(
-        analyses.map((a: { email_id: string; categorization: { summary?: string; quick_action?: string } | null }) => [
+        analyses.map((a: { email_id: string; categorization: { summary?: string; quick_action?: string; signal_strength?: string; reply_worthiness?: string } | null }) => [
           a.email_id,
           a.categorization,
         ])
       );
       for (const email of data) {
-        const analysis = analysisMap.get(email.id) as { summary?: string; quick_action?: string } | undefined;
+        const analysis = analysisMap.get(email.id) as { summary?: string; quick_action?: string; signal_strength?: string; reply_worthiness?: string } | undefined;
         if (analysis) {
           email.analysis_summary = analysis.summary;
           email.analysis_quick_action = analysis.quick_action;
+          // NEW Feb 2026: Extract signal strength and reply worthiness
+          email.analysis_signal_strength = analysis.signal_strength;
+          email.analysis_reply_worthiness = analysis.reply_worthiness;
         }
       }
     }
@@ -940,6 +969,17 @@ function scoreEmail(
   if (email.priority_score) {
     baseScore *= 1 + (email.priority_score * config.urgencyWeight) / 10;
   }
+
+  // Signal strength factor (NEW Feb 2026)
+  // This is the primary noise suppression mechanism
+  const signalStrengthFactor =
+    config.signalStrengthMultipliers[email.analysis_signal_strength || 'medium'] ?? 1.0;
+  baseScore *= signalStrengthFactor;
+
+  // Reply worthiness factor (NEW Feb 2026)
+  const replyWorthinessFactor =
+    config.replyWorthinessBoosts[email.analysis_reply_worthiness || 'no_reply'] ?? 1.0;
+  baseScore *= replyWorthinessFactor;
 
   // Client factor — use contact_id exclusively (Phase 4)
   let clientFactor = 1.0;

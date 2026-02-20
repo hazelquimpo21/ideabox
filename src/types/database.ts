@@ -290,6 +290,9 @@ export interface Database {
           // Content digest fields (migration 025)
           gist: string | null;
           key_points: string[] | null;
+          // Signal strength and reply worthiness (NEW Feb 2026)
+          signal_strength: SignalStrengthDb | null;
+          reply_worthiness: ReplyWorthinessDb | null;
           // NOTE: urgency_score and relationship_signal are used in UI but have
           // no DB migration. They exist only in email_analyses JSONB. Reads from
           // the emails table will return null. A future migration should add these
@@ -333,6 +336,8 @@ export interface Database {
           project_tags?: string[] | null;
           gist?: string | null;
           key_points?: string[] | null;
+          signal_strength?: SignalStrengthDb | null;
+          reply_worthiness?: ReplyWorthinessDb | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           sync_type?: string;
@@ -369,6 +374,8 @@ export interface Database {
           project_tags?: string[] | null;
           gist?: string | null;
           key_points?: string[] | null;
+          signal_strength?: SignalStrengthDb | null;
+          reply_worthiness?: ReplyWorthinessDb | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           sync_type?: string;
@@ -1344,6 +1351,20 @@ export type QuickActionDb =
   | 'none';
 
 /**
+ * Signal strength type for email relevance assessment.
+ * Stored in categorization JSONB as signal_strength and denormalized to emails table.
+ * NEW (Feb 2026).
+ */
+export type SignalStrengthDb = 'high' | 'medium' | 'low' | 'noise';
+
+/**
+ * Reply worthiness type for reply assessment.
+ * Stored in categorization JSONB as reply_worthiness and denormalized to emails table.
+ * NEW (Feb 2026).
+ */
+export type ReplyWorthinessDb = 'must_reply' | 'should_reply' | 'optional_reply' | 'no_reply';
+
+/**
  * Event format type - describes how attendees participate.
  * Stored in event_detection JSONB as location_type.
  */
@@ -1364,6 +1385,7 @@ export type EventLocalityDb = 'local' | 'out_of_town' | 'virtual' | null;
 /**
  * Categorization JSONB structure.
  * ENHANCED (Jan 2026): Added summary and quick_action fields.
+ * ENHANCED (Feb 2026): Added signal_strength, reply_worthiness, labels.
  */
 export interface CategorizationJsonb {
   category: EmailCategory;
@@ -1374,6 +1396,12 @@ export interface CategorizationJsonb {
   summary: string;
   /** Suggested quick action for inbox triage */
   quick_action: QuickActionDb;
+  /** Secondary classification labels */
+  labels?: string[];
+  /** Signal strength - how important is this email? (NEW Feb 2026) */
+  signal_strength?: SignalStrengthDb;
+  /** Reply worthiness - should the user reply? (NEW Feb 2026) */
+  reply_worthiness?: ReplyWorthinessDb;
 }
 
 /**

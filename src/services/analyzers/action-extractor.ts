@@ -187,6 +187,39 @@ Examples of NO ACTION NEEDED:
 - "Let me know if you have questions" (passive, not active request)
 
 ═══════════════════════════════════════════════════════════════════════════════
+NOISE EMAILS ARE NEVER ACTIONS - BE EXTRA SKEPTICAL OF THESE
+═══════════════════════════════════════════════════════════════════════════════
+
+These look like they need action but DON'T:
+
+COLD SALES (no action even though they ask "Can we schedule a call?"):
+- "Can we schedule 15 minutes?" from unknown senders → NOT an action
+- "Would love to show you a demo" → NOT an action
+- "Quick question about your [business]" from strangers → NOT an action
+- "I noticed your company uses [tool] and wanted to..." → NOT an action
+- ANY "call to action" from unknown senders selling something → NOT an action
+
+FAKE AWARDS/RECOGNITION (no action):
+- "Congratulations! You've been nominated..." → NOT an action
+- "Claim your award by [date]" → NOT an action (it's pay-to-play)
+- "RSVP for the awards gala" → NOT an action (it's a sales funnel)
+
+MASS OUTREACH (no action):
+- "I'd love to feature you in..." → NOT an action (PR pitch)
+- "We're looking for guest contributors" → NOT an action (mass blast)
+- "I found a broken link on your site" → NOT an action (SEO spam)
+- "Partnership opportunity" from unknown companies → NOT an action
+
+WEBINAR SPAM (no action):
+- "Register for our free webinar" from unknown organizers → NOT an action
+- "Last chance to sign up" for unknown events → NOT an action
+- "Exclusive masterclass" with urgency language → NOT an action
+
+KEY PRINCIPLE: If the sender is unknown AND they want something FROM the user
+(your time, your money, your platform), it is almost never a real action.
+Real actions come from people the user has a relationship with.
+
+═══════════════════════════════════════════════════════════════════════════════
 ACTION TYPES
 ═══════════════════════════════════════════════════════════════════════════════
 
