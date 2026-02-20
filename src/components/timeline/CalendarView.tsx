@@ -586,7 +586,8 @@ function SelectedDayPanel({
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {/* View source email */}
                     {item.email_id && (
-                      <Link href={`/discover?email=${item.email_id}`}>
+                      {/* UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign */}
+                      <Link href={`/inbox?email=${item.email_id}`}>
                         <Button variant="ghost" size="icon" title="View email">
                           <Mail className="h-4 w-4" />
                         </Button>

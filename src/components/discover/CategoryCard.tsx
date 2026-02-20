@@ -197,7 +197,8 @@ export function CategoryCard({
       onClick(summary);
     } else {
       // Default: navigate to category detail page
-      router.push(`/discover/${summary.category}`);
+      // UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign
+      router.push(`/inbox/${summary.category}`);
     }
   };
 
@@ -208,7 +209,8 @@ export function CategoryCard({
       emailId: item.emailId,
       actionType: item.actionType,
     });
-    router.push(`/discover/${summary.category}/${item.emailId}`);
+    // UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign
+    router.push(`/inbox/${summary.category}/${item.emailId}`);
   };
 
   // ───────────────────────────────────────────────────────────────────────────

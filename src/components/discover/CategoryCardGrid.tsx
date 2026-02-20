@@ -38,7 +38,7 @@ export interface CategoryCardGridProps {
  * ```tsx
  * <CategoryCardGrid
  *   categories={result.categories}
- *   onCategoryClick={(cat) => router.push(`/discover/${cat.category}`)}
+ *   onCategoryClick={(cat) => router.push(`/inbox/${cat.category}`)}
  * />
  * ```
  */
