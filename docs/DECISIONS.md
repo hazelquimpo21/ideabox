@@ -26,6 +26,9 @@
 | Email Sending | Gmail API (not SendGrid) | Emails come from user's real address |
 | Send Rate Limit | 400/day per user | Respects Gmail API limits |
 | Content Digest | Separate analyzer | Gist + key points for non-reading triage |
+| Signal Strength | In categorizer (not separate analyzer) | Avoids extra API call; high/medium/low/noise relevance |
+| Reply Worthiness | In categorizer (not separate analyzer) | Avoids extra API call; must/should/optional/no reply |
+| Noise Detection | Labels + signal_strength | Flexible labeling (5 noise types) + hard scoring (0.05x multiplier) |
 | Multi-Action | Array in JSONB | One email can produce multiple to-do items |
 | Archive Delete | Hard delete (Supabase) | Archived emails can be permanently deleted; soft-delete was a no-op |
 | Back Navigation | `?from=` query param | Preserves originating tab on email detail back button |
@@ -426,6 +429,33 @@ CREATE TABLE api_usage_logs (
 
 ---
 
+### 17. Signal Strength, Reply Worthiness & Noise Detection (Feb 2026)
+
+**Decision:** Add `signal_strength` (high/medium/low/noise) and `reply_worthiness` (must_reply/should_reply/optional_reply/no_reply) as new fields in the categorizer output, plus 5 noise detection labels.
+
+**Alternatives Considered:**
+- Separate analyzer for signal assessment (adds API cost per email)
+- Binary important/not-important flag (too coarse)
+- Rely solely on urgency_score from action extractor (misses read-only emails)
+
+**Rationale:**
+- Adding to the categorizer avoids an extra API call — signal and reply assessment use the same context as categorization
+- Four-level signal strength enables nuanced filtering (noise=auto-archive, low=batch, medium=see, high=prioritize)
+- Reply worthiness is orthogonal to signal — a high-signal email might not need a reply (e.g., order confirmation), while a medium-signal newsletter might be worth replying to (networking)
+- Noise detection labels (sales_pitch, webinar_invite, fake_recognition, mass_outreach, promotional) enable specific noise-type filtering and analytics
+- Denormalized to emails table for fast Hub queries without joining to email_analyses
+
+**Impact:**
+- Categorizer prompt overhauled with "protective assistant" framing and detailed noise pattern guidance
+- Function schema expanded: 2 new required fields (signal_strength, reply_worthiness)
+- Hub priority scoring applies multiplicative factors: signal (0.05x–1.8x) and reply (0.8x–1.6x)
+- Action extractor prompt updated to reject noise emails as actions
+- Migration 032: `signal_strength` and `reply_worthiness` columns on emails table with composite indexes
+- `CategorizationData` type updated with new fields
+- Categorizer maxTokens increased from 500 to 600
+
+---
+
 ## Decision Template (For Future Decisions)
 
 When making new architectural decisions, document them here using this template:
@@ -457,3 +487,4 @@ When making new architectural decisions, document them here using this template:
 | Jan 2026 | Sender classification, email sending, content digest, historical sync | Claude |
 | Feb 2026 | Updated references, added missing decisions | Claude (audit) |
 | Feb 2026 | Navigation redesign (11→5 items), clients merged into contacts | Claude (nav redesign) |
+| Feb 2026 | Signal strength, reply worthiness, noise detection in categorizer | Claude (taxonomy refinement) |

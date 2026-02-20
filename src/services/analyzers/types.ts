@@ -21,6 +21,51 @@ import type { Email, Client, EmailCategory, ActionType } from '@/types/database'
 import type { AnalyzerConfig as BaseAnalyzerConfig } from '@/config/analyzers';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL STRENGTH (NEW Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Signal strength classification - "is this email worth the user's time?"
+ *
+ * This is the core relevance assessment. It answers: should this email be
+ * surfaced prominently, or buried/auto-archived?
+ *
+ * DESIGN: Added to categorizer (not a separate analyzer) because it's
+ * a natural extension of the "what is this email?" assessment and costs
+ * zero additional API calls.
+ */
+export const SIGNAL_STRENGTHS = [
+  'high',     // Direct human correspondence requiring attention (client, colleague, friend)
+  'medium',   // Useful information worth seeing (relevant newsletter, product update you care about)
+  'low',      // Background noise, can be batched or skipped (generic newsletters, promotions)
+  'noise',    // Pure noise - auto-archive candidate (sales pitches, fake awards, mass outreach)
+] as const;
+
+export type SignalStrength = typeof SIGNAL_STRENGTHS[number];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REPLY WORTHINESS (NEW Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Reply worthiness assessment - "should the user reply to this?"
+ *
+ * More nuanced than quickAction='respond'. Distinguishes between:
+ * - A client waiting for an answer (must_reply)
+ * - A newsletter author whose content is relevant to your business (should_reply for networking)
+ * - A cold outreach that seems interesting but isn't urgent (optional_reply)
+ * - A broadcast with no expectation of response (no_reply)
+ */
+export const REPLY_WORTHINESS = [
+  'must_reply',       // Someone is waiting. Direct question, client request, time-sensitive ask.
+  'should_reply',     // Smart to reply. Networking opportunity, relationship building, warm lead.
+  'optional_reply',   // Could reply if interested. Cold outreach that's actually relevant, interesting thread.
+  'no_reply',         // No reply expected or useful. Broadcast, automated, transactional.
+] as const;
+
+export type ReplyWorthiness = typeof REPLY_WORTHINESS[number];
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // EMAIL LABELS (Multi-Label Taxonomy)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -32,6 +77,9 @@ import type { AnalyzerConfig as BaseAnalyzerConfig } from '@/config/analyzers';
  * a primary category. Events are detected via this label and processed
  * by the EventDetector analyzer when present.
  *
+ * ENHANCED (Feb 2026): Added noise-detection labels for filtering out
+ * low-value emails (sales pitches, fake awards, mass outreach, etc.)
+ *
  * Labels are organized by concern:
  * - Action: What type of action is needed
  * - Urgency: Time sensitivity
@@ -42,6 +90,7 @@ import type { AnalyzerConfig as BaseAnalyzerConfig } from '@/config/analyzers';
  * - Financial: Money-related
  * - Calendar: Time-based events
  * - Learning: Educational/career content
+ * - Noise: Low-value email patterns (NEW Feb 2026)
  */
 export const EMAIL_LABELS = [
   // Action-related
@@ -58,7 +107,7 @@ export const EMAIL_LABELS = [
   // Relationship
   'from_vip',              // Sender is on VIP list
   'new_contact',           // First email from this sender
-  'networking_opportunity', // Potential valuable connection
+  'networking_opportunity', // Potential valuable connection (see criteria in categorizer prompt)
 
   // Content
   'has_attachment',        // Email has attachments
@@ -87,6 +136,13 @@ export const EMAIL_LABELS = [
   'educational',           // Learning content
   'industry_news',         // Industry updates
   'job_opportunity',       // Job/career related
+
+  // Noise Detection (NEW Feb 2026)
+  'sales_pitch',           // Cold sales email ("Let me show you our platform...")
+  'webinar_invite',        // Generic webinar/event marketing (not relevant industry events)
+  'fake_recognition',      // Fake awards, "You've been nominated", pay-to-play recognition
+  'mass_outreach',         // PR pitches, link exchange, generic partnership requests
+  'promotional',           // Deals, discounts, upsells from existing services
 ] as const;
 
 export type EmailLabel = typeof EMAIL_LABELS[number];
@@ -400,6 +456,7 @@ export interface CategorizationData {
    * - ['needs_reply', 'has_deadline', 'from_vip']
    * - ['local_event', 'rsvp_needed']
    * - ['invoice', 'payment_due']
+   * - ['sales_pitch'] (noise detection)
    *
    * Maximum 5 labels per email.
    */
@@ -444,6 +501,28 @@ export interface CategorizationData {
    * This helps users quickly process their inbox.
    */
   quickAction: QuickAction;
+
+  /**
+   * Signal strength - "is this email worth the user's time?"
+   * NEW (Feb 2026): Core relevance assessment for filtering and prioritization.
+   *
+   * - 'high': Direct human correspondence requiring attention
+   * - 'medium': Useful information worth seeing
+   * - 'low': Background noise, can be batched/skipped
+   * - 'noise': Pure noise, auto-archive candidate
+   */
+  signalStrength: SignalStrength;
+
+  /**
+   * Reply worthiness - "should the user reply to this?"
+   * NEW (Feb 2026): More nuanced than quickAction='respond'.
+   *
+   * - 'must_reply': Someone is waiting (client, colleague, direct question)
+   * - 'should_reply': Smart networking/relationship move
+   * - 'optional_reply': Could reply if interested
+   * - 'no_reply': No reply expected or useful
+   */
+  replyWorthiness: ReplyWorthiness;
 }
 
 /**

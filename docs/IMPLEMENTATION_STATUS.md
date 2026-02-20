@@ -1,7 +1,7 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** February 2026
-> **Database Migrations:** 001-030
+> **Database Migrations:** 001-032
 
 ## What's Built
 
@@ -16,7 +16,7 @@
 
 ### AI Analysis Pipeline
 - **8 analyzers** running in parallel via EmailProcessor:
-  - Categorizer (12 life-bucket categories + summary + quick_action + labels)
+  - Categorizer (12 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
   - Action Extractor (multi-action support, urgency scoring)
   - Client Tagger (fuzzy matching, relationship signals)
   - Event Detector (dates, location, RSVP, locality awareness)
@@ -27,6 +27,9 @@
 - Pre-filter system saves 20-30% AI tokens (skip no-reply, auto-categorize by domain)
 - Sender pattern learning for future auto-categorization
 - Two-phase execution (core in parallel, then conditional analyzers)
+- Signal strength + reply worthiness scoring for Hub priority (noise emails suppressed at 0.05x)
+- Noise detection labels (sales_pitch, webinar_invite, fake_recognition, mass_outreach, promotional)
+- Action extractor noise rejection (cold outreach, fake awards never generate actions)
 
 ### Email Sync
 - Full sync + incremental sync via Gmail API
@@ -145,3 +148,4 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Superadmin | Feb 2026 | Superadmin dashboard (/admin), account reset API, superadmin access control config, two-step confirmation UI |
 | Inbox Audit | Feb 2026 | Fixed 9 inbox issues: archive tab now queries archived emails correctly, unarchive/delete handlers fixed, archived emails clickable, back button preserves tab context, retry failures wired to real API, "View All" navigates to full page, all 12 category colors in Priority tab, unused imports cleaned up |
 | Inbox Perf | Feb 2026 | Performance overhaul: EmailDetailModal (no full-page reloads), select specific fields (80-90% less data), server-side archive filtering, batch bulk ops, React.memo on list items, fixed broken /inbox/[category] route, removed debug logging |
+| Email Taxonomy | Feb 2026 | Signal strength (high/medium/low/noise) + reply worthiness (must_reply/should_reply/optional_reply/no_reply) added to categorizer. Noise detection labels (sales_pitch, webinar_invite, fake_recognition, mass_outreach, promotional). Action extractor noise rejection. Hub priority scoring with signal/reply multipliers. Migration 032 for denormalized columns + indexes. |

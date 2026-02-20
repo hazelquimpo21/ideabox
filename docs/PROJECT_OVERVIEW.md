@@ -25,6 +25,8 @@ AI-powered email processing system with specialized analyzers that:
 - **Detect events**: Auto-extract event details for calendar (implemented)
 - **Sync to Gmail**: Create IdeaBox labels in Gmail for visibility
 - **Learn continuously**: User preferences, client names, communication patterns
+- **Assess signal quality**: Classify email relevance (high/medium/low/noise) and reply worthiness (must_reply/should_reply/optional_reply/no_reply)
+- **Filter noise**: Detect sales pitches, fake awards, mass outreach, webinar spam, and promotional clutter
 - **Provide intelligence**: Client health metrics, content trends, priority signals
 
 ## Target User: Hazel

@@ -200,7 +200,7 @@ src/
     app.ts                      # App configuration
 
 supabase/
-  migrations/                   # 31 SQL migration files (001-031)
+  migrations/                   # 32 SQL migration files (001-032)
 
 scripts/
   seed.ts                       # Database seeding

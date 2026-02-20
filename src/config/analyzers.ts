@@ -76,6 +76,8 @@ export type EmailCategory = typeof EMAIL_CATEGORIES[number];
  * Secondary labels available for multi-label classification.
  * Note: Full list with descriptions is in services/analyzers/types.ts
  * See docs/ENHANCED_EMAIL_INTELLIGENCE.md for complete taxonomy.
+ *
+ * ENHANCED (Feb 2026): Added noise detection labels.
  */
 export const EMAIL_LABELS_SUMMARY = {
   action: ['needs_reply', 'needs_decision', 'needs_review', 'needs_approval'],
@@ -87,7 +89,30 @@ export const EMAIL_LABELS_SUMMARY = {
   financial: ['invoice', 'receipt', 'payment_due'],
   calendar: ['meeting_request', 'rsvp_needed', 'appointment'],
   learning: ['educational', 'industry_news', 'job_opportunity'],
+  noise: ['sales_pitch', 'webinar_invite', 'fake_recognition', 'mass_outreach', 'promotional'],
 } as const;
+
+/**
+ * Signal strength values for email relevance assessment.
+ * NEW (Feb 2026): Core "is this worth the user's time?" classification.
+ */
+export const SIGNAL_STRENGTHS = [
+  'high',     // Direct human correspondence requiring attention
+  'medium',   // Useful information worth seeing
+  'low',      // Background noise, can be batched/skipped
+  'noise',    // Pure noise - auto-archive candidate
+] as const;
+
+/**
+ * Reply worthiness values for reply assessment.
+ * NEW (Feb 2026): More nuanced than quickAction='respond'.
+ */
+export const REPLY_WORTHINESS = [
+  'must_reply',       // Someone is waiting for a response
+  'should_reply',     // Smart networking/relationship move
+  'optional_reply',   // Could reply if interested
+  'no_reply',         // No reply expected or useful
+] as const;
 
 /**
  * Action types that the action extractor can identify.
@@ -127,7 +152,7 @@ export const analyzerConfig = {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for deterministic classification
-    maxTokens: 500,   // Increased: category + reasoning + topics + summary + quickAction
+    maxTokens: 600,   // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness
   } satisfies AnalyzerConfig,
 
   /**
