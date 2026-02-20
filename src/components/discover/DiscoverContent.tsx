@@ -427,6 +427,19 @@ export function DiscoverContent() {
     }
   }, [searchParams, result]);
 
+  // ─── Redirect onboarded users away from needsSync ──────────────────────────
+  // For onboarded users: NEVER show StartAnalysisCard (calling initial-sync
+  // after onboarding returns 409, creating a confusing error loop).
+  // Instead, show the dashboard with an inline banner and poll for live data.
+  // NOTE: Must be above early returns to satisfy Rules of Hooks.
+  useEffect(() => {
+    if (needsSync && !isSyncing && user?.onboardingCompleted && !result) {
+      setResult(EMPTY_RESULT);
+      setIsPollingForEmails(true);
+      setNeedsSync(false);
+    }
+  }, [needsSync, isSyncing, user?.onboardingCompleted, result]);
+
   // ─── Loading State ─────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -438,18 +451,6 @@ export function DiscoverContent() {
       </div>
     );
   }
-
-  // ─── Redirect onboarded users away from needsSync ──────────────────────────
-  // For onboarded users: NEVER show StartAnalysisCard (calling initial-sync
-  // after onboarding returns 409, creating a confusing error loop).
-  // Instead, show the dashboard with an inline banner and poll for live data.
-  useEffect(() => {
-    if (needsSync && !isSyncing && user?.onboardingCompleted && !result) {
-      setResult(EMPTY_RESULT);
-      setIsPollingForEmails(true);
-      setNeedsSync(false);
-    }
-  }, [needsSync, isSyncing, user?.onboardingCompleted, result]);
 
   // ─── Needs Sync State (non-onboarded users only) ──────────────────────────
   if (needsSync && !isSyncing && !user?.onboardingCompleted) {
