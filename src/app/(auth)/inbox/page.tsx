@@ -2,25 +2,22 @@
  * Inbox Page — Email Intelligence Hub
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * NAVIGATION REDESIGN — Phase 1 (February 2026)
+ * NAVIGATION REDESIGN — Phase 2 (February 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * This page replaces / absorbs:
- *   - Discover page (/discover) → default view (categories)
- *   - Archive page (/archive)   → accessible via ?tab=archive
+ * Full-featured Inbox page with three tabs:
  *
- * Previously this file was a deprecated redirect page that sent users from
- * /inbox to /discover. Now /inbox IS the primary email interface.
+ *   1. Categories (default) — email categorization dashboard (DiscoverPage)
+ *   2. Priority — emails ranked by AI priority score
+ *   3. Archive — archived emails with search/filter/bulk actions
  *
- * Currently a thin wrapper that renders the appropriate existing page component
- * based on the `tab` query parameter:
- *   - (default)      → DiscoverPage (Categories + analysis)
- *   - ?tab=archive   → ArchivePage
+ * Tab state is persisted in the URL via the `?tab=` query parameter:
+ *   - (default)       → Categories tab
+ *   - ?tab=priority   → Priority tab
+ *   - ?tab=archive    → Archive tab
  *
- * Phase 2 will build out the full InboxTabs component with:
- *   - Categories tab (default) — category cards with counts
- *   - Priority tab — emails ranked by AI priority score
- *   - Archive tab — archived emails with search/restore/delete
+ * Sub-routes `/inbox/[category]` and `/inbox/[category]/[emailId]` are
+ * separate pages (thin wrappers) and NOT part of this tabbed UI.
  *
  * Route: /inbox
  * Redirects:
@@ -28,23 +25,20 @@
  *   /archive  → /inbox?tab=archive (redirect page file)
  *
  * Query Parameters:
- *   - tab:      'archive' to show archive content (default: categories/discover)
+ *   - tab:      'categories' | 'priority' | 'archive' (default: categories)
  *   - modal:    Category name to open category modal (passed to DiscoverPage)
  *   - category: Legacy param — preserved for backwards compatibility
  *
  * @module app/(auth)/inbox/page
- * @since February 2026 (replaces old InboxRedirect page)
+ * @since February 2026
  * @see NAVIGATION_REDESIGN_PLAN.md for full context
  */
 
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { PageHeader } from '@/components/layout';
+import { InboxTabs } from '@/components/inbox';
 import { createLogger } from '@/lib/utils/logger';
-
-// ─── Import existing page components used as tab content ─────────────────────
-import DiscoverPage from '@/app/(auth)/discover/page';
-import ArchivePage from '@/app/(auth)/archive/page';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -57,33 +51,29 @@ const logger = createLogger('InboxPage');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Inbox page — routes to the correct tab content based on query param.
+ * Inbox page — tabbed interface for email management.
  *
- * Phase 1: Renders existing page components based on `tab` param.
- *   - No tab / invalid tab → DiscoverPage (Categories)
- *   - ?tab=archive         → ArchivePage
- *
- * Phase 2: Will replace with InboxTabs component providing a unified tabbed UI
- *          with Categories, Priority, and Archive tabs.
+ * Phase 2: Full InboxTabs component with Categories, Priority, and Archive tabs.
+ * Replaces the Phase 1 thin wrapper that conditionally rendered
+ * DiscoverPage/ArchivePage based on the `tab` query param.
  */
 export default function InboxPage() {
-  const searchParams = useSearchParams();
-  const tab = searchParams.get('tab');
+  logger.info('Rendering Inbox page (Phase 2 — tabbed UI)');
 
-  logger.info('Rendering Inbox page', { tab: tab || 'categories (default)' });
+  return (
+    <div>
+      {/* ─── Page Header ──────────────────────────────────────────────────── */}
+      <PageHeader
+        title="Inbox"
+        description="Your email intelligence hub."
+        breadcrumbs={[
+          { label: 'Home', href: '/home' },
+          { label: 'Inbox' },
+        ]}
+      />
 
-  // ─── Route to the correct tab content ──────────────────────────────────────
-  switch (tab) {
-    case 'archive':
-      // Show archived emails — replaces /archive route
-      logger.debug('Rendering Archive tab content');
-      return <ArchivePage />;
-
-    default:
-      // Default to Discover/Categories view — the primary inbox content
-      // All query params (modal, category) are passed through automatically
-      // via useSearchParams() inside DiscoverPage
-      logger.debug('Rendering Categories tab content (DiscoverPage)');
-      return <DiscoverPage />;
-  }
+      {/* ─── Tabbed Content ───────────────────────────────────────────────── */}
+      <InboxTabs />
+    </div>
+  );
 }

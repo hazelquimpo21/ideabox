@@ -1,7 +1,7 @@
 # IdeaBox Navigation Redesign — Implementation Plan
 
 > **Created:** 2026-02-20
-> **Status:** Phase 1 COMPLETE — Phase 2 ready to begin
+> **Status:** Phase 2 COMPLETE — Phase 3 ready to begin
 > **Goal:** Simplify navigation from 11 top-level items to 5, reorganize screens for clarity.
 
 ---
@@ -406,20 +406,73 @@ src/app/(auth)/tasks/page.tsx                     — Tab router for Actions/Cam
 
 ---
 
-### Phase 2: Page Builds — Home, Inbox, Calendar
+### Phase 2: Page Builds — Home, Inbox, Calendar ✅ COMPLETE
 **Goal:** Real content for Home, Inbox, and Calendar.
 **Risk:** Medium — restructuring UI, reusing components.
+**Completed:** 2026-02-20 on branch `claude/phase-2-navigation-redesign-pJreh`
 
-| # | Task | Detail |
-|---|------|--------|
-| 2.1 | Build Home page | DailyBriefingHeader, priorities (reuse PriorityCard), TodaySchedule, PendingTasksList, ProfileCompletionNudge |
-| 2.2 | Build Inbox with tabs | InboxTabs (Categories/Priority/Archive), move Discover components to Categories tab, new PriorityEmailList, move Archive components to Archive tab |
-| 2.3 | Build Calendar page | Unified view toggle (calendar/list), merge DateCard + EventCard into CalendarItemCard, unified type filter, merge stats |
+| # | Task | File(s) | Status |
+|---|------|---------|--------|
+| 2.1 | Build DailyBriefingHeader — time-of-day greeting with summary stats (priorities, events, tasks) | `src/components/home/DailyBriefingHeader.tsx` | ✅ |
+| 2.2 | Build TodaySchedule — compact timeline of today/tomorrow events with links to `/calendar?highlight=[id]` | `src/components/home/TodaySchedule.tsx` | ✅ |
+| 2.3 | Build PendingTasksList — top 5 pending tasks with quick-complete checkboxes and "View all →" link | `src/components/home/PendingTasksList.tsx` | ✅ |
+| 2.4 | Build Home page — assemble all sections: DailyBriefingHeader, Top 3 PriorityCards (reused from Hub), TodaySchedule (merged events + dates), PendingTasksList, ProfileCompletionNudge, Explore More nav | `src/app/(auth)/home/page.tsx` | ✅ |
+| 2.5 | Build PriorityEmailList — emails ranked by AI priority score from Supabase | `src/components/inbox/PriorityEmailList.tsx` | ✅ |
+| 2.6 | Build InboxTabs — three-tab container with URL-persisted tab state via `?tab=` | `src/components/inbox/InboxTabs.tsx` | ✅ |
+| 2.7 | Build Inbox page — PageHeader + InboxTabs (Categories→DiscoverPage, Priority→PriorityEmailList, Archive→ArchivePage) | `src/app/(auth)/inbox/page.tsx` | ✅ |
+| 2.8 | Build CalendarStats — merged stats banner from events + extracted dates | `src/components/calendar/CalendarStats.tsx` | ✅ |
+| 2.9 | Build Calendar page — unified view with list/calendar toggle, type filters, merged groups, highlight support, show past/done toggles | `src/app/(auth)/calendar/page.tsx` | ✅ |
+| 2.10 | Verify sidebar active state highlighting on all routes | `src/components/layout/Sidebar.tsx` | ✅ (no changes needed) |
 
-**Done when:**
-- Home shows briefing + priorities + schedule + tasks
-- Inbox has 3 working tabs, category detail pages work at `/inbox/[category]`
-- Calendar shows unified dates + events with view toggle and type filtering
+**Phase 2 Verification:**
+- ✅ Home shows Daily Briefing Header with greeting + summary stats
+- ✅ Home shows top 3 AI-scored PriorityCards (reused from Hub)
+- ✅ Home shows Today's Schedule (merged events + extracted dates)
+- ✅ Home shows Pending Tasks with quick-complete checkboxes
+- ✅ Home shows ProfileCompletionNudge when profile < 50%
+- ✅ Inbox has 3 working tabs: Categories (default), Priority, Archive
+- ✅ Inbox Categories tab renders full DiscoverPage with sync/analysis
+- ✅ Inbox Priority tab shows emails sorted by AI priority score
+- ✅ Inbox Archive tab renders full ArchivePage with search/filter/bulk
+- ✅ Tab state persists in URL query params (`?tab=`, `?view=`, `?type=`)
+- ✅ Calendar has working view toggle (Calendar Grid / List)
+- ✅ Calendar List view shows merged events + extracted dates, grouped by time period
+- ✅ Calendar Calendar view renders the grid from CalendarView component
+- ✅ Calendar type filters work (All, Events, Deadlines, Birthdays, etc.)
+- ✅ `?highlight=` param works to scroll to and highlight a specific item
+- ✅ Active sidebar highlighting works on all pages and sub-pages
+- ✅ All new components have `createLogger()` logging
+- ✅ All new components have JSDoc comments
+- ✅ Zero new TypeScript errors introduced
+- ✅ No old page files deleted (Phase 4)
+- ✅ `/inbox/[category]` and `/inbox/[category]/[emailId]` thin wrappers unchanged
+
+**Files created (10):**
+```
+src/components/home/DailyBriefingHeader.tsx    — Greeting + summary stats
+src/components/home/TodaySchedule.tsx          — Compact timeline of today's events/deadlines
+src/components/home/PendingTasksList.tsx        — Top 5 tasks with quick-complete
+src/components/home/index.ts                   — Barrel exports
+src/components/inbox/InboxTabs.tsx             — Three-tab container with URL sync
+src/components/inbox/PriorityEmailList.tsx     — Emails ranked by AI priority score
+src/components/inbox/index.ts                  — Barrel exports
+src/components/calendar/CalendarStats.tsx      — Merged stats banner
+src/components/calendar/index.ts               — Barrel exports
+```
+
+**Files modified (3):**
+```
+src/app/(auth)/home/page.tsx                   — Replaced HubPage wrapper with full Home page
+src/app/(auth)/inbox/page.tsx                  — Replaced switch-based wrapper with InboxTabs
+src/app/(auth)/calendar/page.tsx               — Replaced EventsPage wrapper with unified Calendar
+```
+
+**Important for Phase 3 developer:**
+- The Home page replicates PriorityCard inline rather than importing from Hub (Hub exports nothing; Phase 4 will clean this up)
+- The InboxTabs component imports DiscoverPage and ArchivePage directly as tab content — these still render their own PageHeaders (slight duplication, cleaned up in Phase 4)
+- The Calendar page merges events from `useEvents()` and dates from `useExtractedDates()` — both are shown in the list view, but only dates appear in the CalendarView grid (CalendarView only accepts ExtractedDate[])
+- The `/tasks/page.tsx` still uses the Phase 1 thin wrapper pattern — Phase 3 will replace it with TasksTabs
+- The Contacts page has NOT been touched yet — Phase 3 will add tabs and the client merge
 
 ---
 
@@ -427,19 +480,29 @@ src/app/(auth)/tasks/page.tsx                     — Tab router for Actions/Cam
 **Goal:** Merge Clients into Contacts, build Tasks tabs.
 **Risk:** High (database migration) + Medium (Tasks UI).
 
-| # | Task | Detail |
-|---|------|--------|
-| 3.1 | Database migration | Add columns, migrate data, add contact_id to emails/actions |
-| 3.2 | Update Contacts API | Add `is_client` filter, client field updates, "promote to client" |
-| 3.3 | Update Contacts page | Add tabs (All/Clients/Personal/Subscriptions), promote-to-client flow |
-| 3.4 | Enhance Contact detail page | Client fields, tabs (Emails/Actions/Events/Notes) |
-| 3.5 | Update client references | Deprecate useClients → use useContacts, update Hub scoring, email analysis |
-| 3.6 | Build Tasks page with tabs | TasksTabs (To-dos/Campaigns/Templates), move components, nested campaign routes |
+| # | Task | Detail | File(s) |
+|---|------|--------|---------|
+| 3.1 | Database migration — Add client columns to contacts | Add `is_client`, `client_status`, `client_priority`, `email_domains`, `keywords` columns + indexes | `supabase/migrations/XXX_merge_clients_contacts.sql` |
+| 3.2 | Database migration — Migrate client data into contacts | Update existing contacts matching clients, insert new contacts for unmatched clients | Same migration file |
+| 3.3 | Database migration — Add contact_id to emails/actions | Add `contact_id` FK column, populate from client_id mapping | Same migration file |
+| 3.4 | Update Contacts API — Add client filtering and operations | Add `is_client` filter param, "promote to client" endpoint, client field update support | `src/app/api/contacts/route.ts`, new `src/app/api/contacts/promote/route.ts` |
+| 3.5 | Update useContacts hook — Add client-related filters and operations | Add `isClient` filter option, `promoteToClient()` function, update Contact interface with client fields | `src/hooks/useContacts.ts` |
+| 3.6 | Build ContactsTabs component — All/Clients/Personal/Subscriptions | Tab container with URL-persisted state via `?tab=`, reuses existing contact list components | `src/components/contacts/ContactsTabs.tsx` |
+| 3.7 | Build PromoteToClientDialog — Promote a contact to client status | Dialog form with client fields: status, priority, email domains, keywords | `src/components/contacts/PromoteToClientDialog.tsx` |
+| 3.8 | Update Contacts page — Replace current page with tabbed layout | PageHeader + ContactsTabs, add promote-to-client action on cards | `src/app/(auth)/contacts/page.tsx` |
+| 3.9 | Enhance Contact detail page — Add client section and relationship tabs | Show client fields when `is_client`, add Emails/Actions/Events/Notes tabs, promote action | `src/app/(auth)/contacts/[id]/page.tsx` |
+| 3.10 | Update client references in Hub scoring | Update `hub-priority-service.ts` to use contacts with `is_client` instead of clients table | `src/services/hub/hub-priority-service.ts` |
+| 3.11 | Build TasksTabs component — To-dos/Campaigns/Templates | Tab container with URL-persisted state via `?tab=`, renders existing page components | `src/components/tasks/TasksTabs.tsx` |
+| 3.12 | Build Tasks page — Replace thin wrapper with TasksTabs | PageHeader + TasksTabs, preserve campaign sub-routes | `src/app/(auth)/tasks/page.tsx` |
+| 3.13 | Create campaign sub-route wrappers | Thin wrappers at `/tasks/campaigns/new` and `/tasks/campaigns/[id]` | `src/app/(auth)/tasks/campaigns/new/page.tsx`, `src/app/(auth)/tasks/campaigns/[id]/page.tsx` |
 
 **Done when:**
-- Client data appears in Contacts, promote-to-client works
-- Contact detail shows full relationship history
-- Tasks has 3 working tabs, campaign routes work at `/tasks/campaigns/*`
+- Client data appears in Contacts under "Clients" tab
+- Promote-to-client works from contact card and detail page
+- Contact detail shows full relationship history with Emails/Actions/Events/Notes tabs
+- Tasks has 3 working tabs (To-dos, Campaigns, Templates)
+- Campaign routes work at `/tasks/campaigns/new` and `/tasks/campaigns/[id]`
+- Hub priority scoring uses contacts instead of clients table
 
 ---
 
@@ -477,14 +540,24 @@ src/app/(auth)/tasks/page.tsx                     — Tab router for Actions/Cam
 ### Files to Create
 | File | Phase | Status |
 |------|-------|--------|
-| `app/(auth)/home/page.tsx` | 1 → 2 | ✅ Created (Phase 1 thin wrapper, Phase 2 will build real content) |
-| `app/(auth)/inbox/page.tsx` | 1 → 2 | ✅ Created (Phase 1 tab router, Phase 2 will build InboxTabs) |
-| `app/(auth)/inbox/[category]/page.tsx` | 1 | ✅ Created (Phase 1 thin wrapper) |
-| `app/(auth)/inbox/[category]/[emailId]/page.tsx` | 1 | ✅ Created (Phase 1 thin wrapper) |
-| `app/(auth)/calendar/page.tsx` | 1 → 2 | ✅ Created (Phase 1 thin wrapper, Phase 2 will build unified CalendarPage) |
-| `app/(auth)/tasks/page.tsx` | 1 → 3 | ✅ Created (Phase 1 tab router, Phase 3 will build TasksTabs) |
+| `app/(auth)/home/page.tsx` | 1 → 2 | ✅ Phase 1 wrapper → Phase 2 full page |
+| `app/(auth)/inbox/page.tsx` | 1 → 2 | ✅ Phase 1 wrapper → Phase 2 InboxTabs |
+| `app/(auth)/inbox/[category]/page.tsx` | 1 | ✅ Thin wrapper (preserved) |
+| `app/(auth)/inbox/[category]/[emailId]/page.tsx` | 1 | ✅ Thin wrapper (preserved) |
+| `app/(auth)/calendar/page.tsx` | 1 → 2 | ✅ Phase 1 wrapper → Phase 2 unified CalendarPage |
+| `app/(auth)/tasks/page.tsx` | 1 → 3 | ✅ Phase 1 tab router (Phase 3 will build TasksTabs) |
+| `components/home/DailyBriefingHeader.tsx` | 2 | ✅ Created |
+| `components/home/TodaySchedule.tsx` | 2 | ✅ Created |
+| `components/home/PendingTasksList.tsx` | 2 | ✅ Created |
+| `components/inbox/InboxTabs.tsx` | 2 | ✅ Created |
+| `components/inbox/PriorityEmailList.tsx` | 2 | ✅ Created |
+| `components/calendar/CalendarStats.tsx` | 2 | ✅ Created |
+| `components/contacts/ContactsTabs.tsx` | 3 | Pending |
+| `components/contacts/PromoteToClientDialog.tsx` | 3 | Pending |
+| `components/tasks/TasksTabs.tsx` | 3 | Pending |
 | `app/(auth)/tasks/campaigns/new/page.tsx` | 3 | Pending |
 | `app/(auth)/tasks/campaigns/[id]/page.tsx` | 3 | Pending |
+| `app/api/contacts/promote/route.ts` | 3 | Pending |
 | `supabase/migrations/XXX_merge_clients_contacts.sql` | 3 | Pending |
 
 ### Files to Delete (Phase 4)
@@ -504,9 +577,10 @@ app/(auth)/archive/
 
 ## Notes
 
-1. **Phase 1 is safe to ship independently** — additive only, nothing breaks.
-2. **Phase 2 pages can be built one at a time** — Home → Inbox → Calendar.
+1. **Phase 1 shipped independently** — additive only, nothing broke. ✅
+2. **Phase 2 shipped independently** — all three pages (Home, Inbox, Calendar) built in one pass. ✅
 3. **Phase 3 DB migration must be tested against a copy of production data** before running live.
 4. **Phase 4 deletions only after Phase 3 is validated** in production for a few days.
 5. **The `/sent` page stays as-is** — not part of this redesign.
 6. **`client_id` columns kept during Phase 3**, removed only in Phase 4 after validation.
+7. **Phase 2 left some duplication intentionally** — DiscoverPage and ArchivePage render their own PageHeaders inside InboxTabs (Phase 4 cleanup). PriorityCard is duplicated in the Home page because Hub doesn't export it (Phase 4 extraction to shared component).
