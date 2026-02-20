@@ -44,6 +44,20 @@ ContactImportStep → POST /api/contacts/import-google
   → aggregate results → reload VIP suggestions
 ```
 
+### Profile Suggestions (Onboarding Phase 2)
+```
+POST /api/onboarding/profile-suggestions
+  → Auth check → Check cache (user_context.profile_suggestions, 1hr TTL)
+  → Query sent emails (local DB, SENT label, LIMIT 20)
+  → Query top contacts (by email_count, LIMIT 20)
+  → analyzeProfileFromEmails() → GPT-4.1-mini (single function-calling request)
+    → Extract role, company, industry, projects, priorities
+  → inferWorkHours() → Statistical analysis of send-time distribution
+    → Bucket by hour-of-day → find 80% contiguous block → detect active days
+  → Merge AI results + work hours → Save to user_context.profile_suggestions
+  → Return ProfileSuggestions (consumed by Mad Libs step in Phase 3)
+```
+
 ### User Interaction
 ```
 Component → Hook → API Route → Supabase (RLS-protected) → Response
@@ -89,7 +103,7 @@ src/
       contacts/                 # CRUD, import-google/, historical-sync/, vip-suggestions/, promote/, stats/
       hub/                      # Hub prioritization endpoints
       settings/                 # Settings + usage stats
-      onboarding/               # Initial sync endpoints
+      onboarding/               # Initial sync + profile suggestions endpoints
       campaigns/                # Campaign CRUD
       templates/                # Template CRUD
       actions/                  # Action/to-do CRUD
@@ -122,6 +136,9 @@ src/
     contacts/                   # Contact service layer
     hub/                        # Hub prioritization service
     user-context/               # AI personalization context
+    onboarding/                 # Onboarding intelligence services
+      profile-analyzer.ts       # AI profile extraction from sent emails
+      work-hours-analyzer.ts    # Statistical work hours inference
     jobs/                       # Background job runners
 
   components/
@@ -171,7 +188,7 @@ src/
     app.ts                      # App configuration
 
 supabase/
-  migrations/                   # 30 SQL migration files (001-030)
+  migrations/                   # 31 SQL migration files (001-031)
 
 scripts/
   seed.ts                       # Database seeding

@@ -52,6 +52,7 @@
 import { createServerClient } from '@/lib/supabase/server';
 import { createLogger } from '@/lib/utils/logger';
 import type { UserContext } from '@/services/analyzers/types';
+import type { ProfileSuggestions } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -571,6 +572,96 @@ export async function completeOnboarding(
     onboarding_completed: true,
     onboarding_step: 7, // Final step
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROFILE SUGGESTIONS (Phase 2 — Onboarding AI Autofill)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Saves AI-generated profile suggestions to the user_context table.
+ *
+ * Stores the raw suggestions in the `profile_suggestions` JSONB column
+ * along with a timestamp for cache invalidation. These suggestions are
+ * consumed by the Mad Libs onboarding step (Phase 3) to show smart defaults.
+ *
+ * IMPORTANT: This does NOT write to the individual fields (role, company, etc.).
+ * Those are only written when the user explicitly confirms in the Mad Libs step.
+ *
+ * @param userId - The user's UUID
+ * @param suggestions - Profile suggestions from the AI analyzer
+ *
+ * @example
+ * ```typescript
+ * import { saveProfileSuggestions } from '@/services/user-context/user-context-service';
+ *
+ * // After AI analysis completes
+ * await saveProfileSuggestions(userId, {
+ *   role: { value: "Freelance Designer", confidence: 0.9, source: "email_signature" },
+ *   company: null,
+ *   industry: { value: "Design", confidence: 0.7, source: "inferred" },
+ *   workHours: { start: "09:00", end: "17:00", days: [1,2,3,4,5], confidence: 0.8, source: "email_send_times" },
+ *   projects: [],
+ *   priorities: [],
+ *   meta: { emailsAnalyzed: 15, accountsUsed: ["user@gmail.com"], processingTimeMs: 2500, totalTokensUsed: 1200, estimatedCost: 0.002 },
+ * });
+ * ```
+ */
+export async function saveProfileSuggestions(
+  userId: string,
+  suggestions: ProfileSuggestions
+): Promise<void> {
+  logger.start('Saving profile suggestions', {
+    userId: userId.substring(0, 8),
+    emailsAnalyzed: suggestions.meta.emailsAnalyzed,
+    hasRole: !!suggestions.role,
+    hasCompany: !!suggestions.company,
+  });
+
+  try {
+    const supabase = await createServerClient();
+    const now = new Date().toISOString();
+
+    // Upsert to user_context — creates row if it doesn't exist (onConflict: user_id)
+    const { error } = await supabase
+      .from('user_context')
+      .upsert(
+        {
+          user_id: userId,
+          profile_suggestions: suggestions,
+          profile_suggestions_generated_at: now,
+          updated_at: now,
+        },
+        {
+          onConflict: 'user_id',
+        }
+      );
+
+    if (error) {
+      logger.error('Failed to save profile suggestions', {
+        userId: userId.substring(0, 8),
+        error: error.message,
+        code: error.code,
+      });
+      return;
+    }
+
+    // Invalidate the in-memory context cache so next read picks up the new data
+    contextCache.delete(userId);
+
+    logger.success('Profile suggestions saved', {
+      userId: userId.substring(0, 8),
+      emailsAnalyzed: suggestions.meta.emailsAnalyzed,
+      tokensUsed: suggestions.meta.totalTokensUsed,
+      estimatedCost: suggestions.meta.estimatedCost,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Unexpected error saving profile suggestions', {
+      userId: userId.substring(0, 8),
+      error: message,
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
