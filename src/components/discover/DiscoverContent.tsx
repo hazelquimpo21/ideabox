@@ -445,9 +445,31 @@ export function DiscoverContent() {
     setIsModalOpen(true);
   };
 
+  /**
+   * Close the category modal.
+   *
+   * Only cleans up the `?modal=` query param if we're staying on the inbox
+   * page. If the modal is closing because the user clicked an email (which
+   * triggers router.push to the detail page), we must NOT call
+   * router.replace — that would overwrite the pending navigation and strand
+   * the user on /inbox instead of going to the email detail.
+   *
+   * We detect the "navigating away" case by checking a ref that
+   * handleEmailClick sets before calling onClose.
+   */
+  const isNavigatingToEmailRef = React.useRef(false);
+
   const handleModalClose = () => {
     setIsModalOpen(false);
-    router.replace('/inbox', { scroll: false });
+
+    // Only replace the URL to clean up ?modal= if we're NOT navigating
+    // to an email detail page. If we are, the router.push from
+    // handleEmailClick will handle the URL change.
+    if (!isNavigatingToEmailRef.current) {
+      router.replace('/inbox', { scroll: false });
+    }
+    isNavigatingToEmailRef.current = false;
+
     setTimeout(() => setSelectedCategory(null), 200);
   };
 
@@ -571,6 +593,16 @@ export function DiscoverContent() {
         isOpen={isModalOpen}
         onClose={handleModalClose}
         onEmailArchived={() => { refreshResults(); }}
+        onEmailClick={(email) => {
+          // Signal that we're navigating to an email detail page so
+          // handleModalClose doesn't overwrite the navigation with router.replace.
+          isNavigatingToEmailRef.current = true;
+          const urlCategory = selectedCategory || email.category || 'uncategorized';
+          logger.info('Navigating to email from modal', { emailId: email.id, category: urlCategory });
+          router.push(`/inbox/${urlCategory}/${email.id}?from=categories`);
+          // Close modal state so it doesn't reopen on back-navigation
+          handleModalClose();
+        }}
       />
 
       {result.clientInsights.length > 0 && (
