@@ -388,7 +388,7 @@ export async function GET(request: NextRequest) {
           categorization,
           event_detection
         ),
-        contacts:client_id (
+        contacts:contact_id (
           id,
           name,
           email,
