@@ -53,8 +53,10 @@ const logger = createLogger('InitialSyncOrchestrator');
 export interface InitialSyncOrchestratorConfig extends Partial<InitialSyncConfig> {
   /** User ID performing the sync */
   userId: string;
-  /** Gmail account ID to sync */
+  /** Gmail account ID to sync (primary, used for logging) */
   gmailAccountId: string;
+  /** All Gmail account IDs to include in analysis (if provided, queries across all accounts) */
+  gmailAccountIds?: string[];
 }
 
 /**
@@ -91,6 +93,7 @@ export class InitialSyncOrchestrator {
   private config: InitialSyncConfig;
   private userId: string;
   private gmailAccountId: string;
+  private gmailAccountIds: string[];
 
   // Services
   private preFilter: EmailPreFilterService;
@@ -136,6 +139,7 @@ export class InitialSyncOrchestrator {
   constructor(orchConfig: InitialSyncOrchestratorConfig) {
     this.userId = orchConfig.userId;
     this.gmailAccountId = orchConfig.gmailAccountId;
+    this.gmailAccountIds = orchConfig.gmailAccountIds || [orchConfig.gmailAccountId];
 
     // Merge config with defaults
     this.config = {
@@ -377,20 +381,31 @@ export class InitialSyncOrchestrator {
    * from discovery counts. This ensures the counts shown on category cards
    * match the emails shown in the modal/detail views (which also filter
    * by is_archived = false).
+   *
+   * UPDATED (Feb 2026): Now queries across all connected Gmail accounts
+   * instead of just the primary one. This fixes the issue where emails
+   * from secondary accounts were never analyzed during onboarding.
    */
   private async fetchEmailsFromDatabase(): Promise<EmailForAnalysis[]> {
     const supabase = await createServerClient();
 
     // Exclude emails that previously failed analysis (per DECISIONS.md: "Do NOT retry on next sync")
     // Exclude archived emails so discovery counts match modal/detail views
-    const { data, error } = await supabase
+    // Query across ALL connected accounts (not just the primary one)
+    let query = supabase
       .from('emails')
       .select('id, gmail_id, subject, sender_email, sender_name, snippet, body_text, gmail_labels, is_read, date')
       .eq('user_id', this.userId)
-      .eq('gmail_account_id', this.gmailAccountId)
       .eq('is_archived', false) // Exclude archived - keeps counts consistent with UI views
       .is('analyzed_at', null) // Only unanalyzed emails
-      .is('analysis_error', null) // Exclude emails that previously failed analysis
+      .is('analysis_error', null); // Exclude emails that previously failed analysis
+
+    // Filter by account IDs if provided (covers all connected accounts)
+    if (this.gmailAccountIds.length > 0) {
+      query = query.in('gmail_account_id', this.gmailAccountIds);
+    }
+
+    const { data, error } = await query
       .order('date', { ascending: false })
       .limit(this.config.maxEmails);
 
