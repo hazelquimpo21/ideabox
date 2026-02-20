@@ -35,6 +35,15 @@ Cron/Push → Gmail API → Save raw emails → EmailProcessor → 8 Analyzers (
   → Save analysis JSONB → Denormalize to emails table → Extract actions → Update contacts
 ```
 
+### Google Contacts Import (Onboarding)
+```
+ContactImportStep → POST /api/contacts/import-google
+  → Promise.allSettled(accounts.map(account =>
+      TokenManager.getValidToken → Google People API → batch .upsert(50) → contacts table
+    ))
+  → aggregate results → reload VIP suggestions
+```
+
 ### User Interaction
 ```
 Component → Hook → API Route → Supabase (RLS-protected) → Response
@@ -176,6 +185,21 @@ scripts/
 3. **Service layer pattern**: Component -> Hook -> API Route -> Service -> Database
 4. **Type safety first** - strict TypeScript, Zod validation at boundaries
 5. **Configuration over hardcoding** - analyzer settings in `config/analyzers.ts`
+
+## Performance Patterns
+
+1. **No sequential DB calls in loops** — batch upserts, use `.in()` filters, chunk large
+   operations. The Google contacts import uses batches of 50 with `.upsert()` instead of
+   individual RPC calls. (See `contact-service.ts` `importFromGoogle()`.)
+2. **Parallel where independent** — multi-account Google contact imports run via
+   `Promise.allSettled()` so each account refreshes tokens and upserts independently.
+   (See `import-google/route.ts`.)
+3. **Don't fetch what you'll immediately invalidate** — when returning from OAuth with
+   `scope_added=true`, the initial `loadSuggestions()` call is skipped because the import
+   handler reloads suggestions after it completes. (See `ContactImportStep.tsx`.)
+4. **React.memo + useCallback for list items** — `SuggestionCard` is memoized and
+   `handleToggle` uses `useCallback` for stable references in `.map()` loops.
+5. **Optimistic UI** — import success states shown immediately with count badges.
 
 ## Security
 

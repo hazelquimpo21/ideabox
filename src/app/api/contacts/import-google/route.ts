@@ -147,33 +147,37 @@ export async function POST(request: NextRequest) {
     });
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Step 5: Import contacts from each account
+    // Step 5: Import contacts from all accounts in parallel
     // ─────────────────────────────────────────────────────────────────────────────
-    for (let i = 0; i < accounts.length; i++) {
-      const account = accounts[i];
-      const accountProgress = Math.round((i / accounts.length) * 100);
+    // Previously, accounts were processed sequentially in a for-loop, meaning
+    // 3 accounts with 100 contacts each = 3x the wait time. Now each account
+    // refreshes its token, fetches contacts, and batch-upserts independently.
+    // Promise.allSettled() ensures one failing account doesn't block the others.
 
-      logger.info('Importing contacts from account', {
+    logger.info('Starting parallel import for all accounts', {
+      accountCount: accounts.length,
+      accountEmails: accounts.map((a) => a.email),
+    });
+
+    await updateSyncProgress(supabase, user.id, {
+      progress: 10,
+      imported: 0,
+      skipped: 0,
+      message: `Importing from ${accounts.length} account(s) in parallel...`,
+    });
+
+    const importPromises = accounts.map(async (account) => {
+      const accountTag = account.email; // for logging
+      logger.info('Starting import for account', {
         accountId: account.id.substring(0, 8),
-        email: account.email,
-        accountIndex: i + 1,
-        totalAccounts: accounts.length,
-      });
-
-      // Update progress with current account
-      await updateSyncProgress(supabase, user.id, {
-        progress: accountProgress,
-        imported: totalImported,
-        skipped: totalSkipped,
-        currentAccount: account.email,
-        message: `Importing from ${account.email}...`,
+        email: accountTag,
       });
 
       try {
-        // Get valid access token
+        // Each account independently refreshes its token
         const accessToken = await tokenManager.getValidToken(account);
 
-        // Import contacts using ContactService
+        // Each account independently fetches + upserts its contacts (batched)
         const result = await contactService.importFromGoogle({
           userId: user.id,
           accessToken,
@@ -182,51 +186,80 @@ export async function POST(request: NextRequest) {
           starredOnly,
         });
 
-        totalImported += result.imported;
-        totalStarred += result.starred;
-        totalSkipped += result.skipped;
-        allErrors.push(...result.errors);
-
-        // Update progress after account completes
-        const completedProgress = Math.round(((i + 1) / accounts.length) * 100);
-        await updateSyncProgress(supabase, user.id, {
-          progress: completedProgress,
-          imported: totalImported,
-          skipped: totalSkipped,
-          message: `Imported ${result.imported} contacts from ${account.email}`,
-        });
-
         logger.info('Account import complete', {
           accountId: account.id.substring(0, 8),
+          email: accountTag,
           imported: result.imported,
           starred: result.starred,
+          skipped: result.skipped,
+          errors: result.errors.length,
         });
+
+        return { account: accountTag, ...result };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
+        const isPermissionError =
+          message.includes('403') || message.includes('scope') || message.includes('permission');
 
-        // Check if this is a scope/permission error
-        if (message.includes('403') || message.includes('scope') || message.includes('permission')) {
+        if (isPermissionError) {
           logger.warn('Contacts scope not available for account', {
             accountId: account.id.substring(0, 8),
+            email: accountTag,
           });
-          allErrors.push(`${account.email}: Contacts permission not granted`);
         } else {
           logger.error('Failed to import from account', {
             accountId: account.id.substring(0, 8),
+            email: accountTag,
             error: message,
           });
-          allErrors.push(`${account.email}: ${message}`);
         }
 
-        // Update progress even on error
-        await updateSyncProgress(supabase, user.id, {
-          progress: Math.round(((i + 1) / accounts.length) * 100),
-          imported: totalImported,
-          skipped: totalSkipped,
-          message: `Error importing from ${account.email}`,
-        });
+        // Return a result-shaped object so we can aggregate uniformly
+        return {
+          account: accountTag,
+          imported: 0,
+          starred: 0,
+          skipped: 0,
+          errors: [
+            `${accountTag}: ${isPermissionError ? 'Contacts permission not granted' : message}`,
+          ],
+        };
+      }
+    });
+
+    // Wait for all accounts to finish (none will reject thanks to inner try/catch)
+    const settledResults = await Promise.allSettled(importPromises);
+
+    // Aggregate results from all accounts
+    for (const settled of settledResults) {
+      if (settled.status === 'fulfilled') {
+        const r = settled.value;
+        totalImported += r.imported;
+        totalStarred += r.starred;
+        totalSkipped += r.skipped;
+        allErrors.push(...r.errors);
+      } else {
+        // This shouldn't happen since we catch inside the promise, but handle defensively
+        const reason = settled.reason instanceof Error ? settled.reason.message : 'Unknown';
+        logger.error('Unexpected rejected import promise', { error: reason });
+        allErrors.push(`Unknown account: ${reason}`);
       }
     }
+
+    logger.info('All parallel imports settled', {
+      totalImported,
+      totalStarred,
+      totalSkipped,
+      errorCount: allErrors.length,
+    });
+
+    // Update progress after all accounts complete
+    await updateSyncProgress(supabase, user.id, {
+      progress: 90,
+      imported: totalImported,
+      skipped: totalSkipped,
+      message: `Imported ${totalImported} contacts from ${accounts.length} account(s)`,
+    });
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Step 6: Check if any imports succeeded
