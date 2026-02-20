@@ -38,9 +38,11 @@ import {
   ChevronDown,
   Menu,
   Mail,
+  Shield,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
+import { isSuperAdmin } from '@/config/superadmin';
 import {
   Button,
   Input,
@@ -354,6 +356,18 @@ function UserMenu({
             <Settings className="h-4 w-4" />
             All Settings
           </Link>
+
+          {/* Superadmin link — only visible to authorized emails */}
+          {isSuperAdmin(user.email) && (
+            <Link
+              href="/admin"
+              className="flex items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent text-primary"
+              onClick={() => setIsOpen(false)}
+            >
+              <Shield className="h-4 w-4" />
+              Superadmin
+            </Link>
+          )}
 
           <div className="border-t my-1" />
 
