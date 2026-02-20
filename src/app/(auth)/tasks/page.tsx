@@ -2,27 +2,31 @@
  * Tasks Page — To-dos, Campaigns, and Templates
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * NAVIGATION REDESIGN — Phase 1 (February 2026)
+ * NAVIGATION REDESIGN — Phase 3 (February 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * This page replaces / absorbs:
- *   - Actions page (/actions) → default "To-dos" tab
- *   - Campaigns page (/campaigns) → accessible via ?tab=campaigns
- *   - Templates page (/templates) → accessible via ?tab=templates
+ * Full-featured Tasks page with three tabs:
  *
- * Currently a thin wrapper that renders the appropriate existing page component
- * based on the `tab` query parameter:
- *   - (default)       → ActionsPage (To-dos)
- *   - ?tab=campaigns  → CampaignsPage
- *   - ?tab=templates  → TemplatesPage
+ *   1. To-dos (default) — action items from ActionsPage
+ *   2. Campaigns — campaign management from CampaignsPage
+ *   3. Templates — template management from TemplatesPage
  *
- * Phase 2/3 will build out the full TasksTabs component with proper tab UI.
+ * Tab state is persisted in the URL via the `?tab=` query parameter:
+ *   - (default)       → To-dos tab
+ *   - ?tab=campaigns  → Campaigns tab
+ *   - ?tab=templates  → Templates tab
+ *
+ * Sub-routes `/tasks/campaigns/new` and `/tasks/campaigns/[id]` are
+ * separate pages (thin wrappers) and NOT part of this tabbed UI.
  *
  * Route: /tasks
  * Redirects:
  *   /actions   → /tasks                (configured in next.config.mjs)
  *   /campaigns → /tasks?tab=campaigns  (redirect page file)
  *   /templates → /tasks?tab=templates  (redirect page file)
+ *
+ * Query Parameters:
+ *   - tab: 'todos' | 'campaigns' | 'templates' (default: todos)
  *
  * @module app/(auth)/tasks/page
  * @since February 2026
@@ -31,11 +35,9 @@
 
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { PageHeader } from '@/components/layout';
+import { TasksTabs } from '@/components/tasks';
 import { createLogger } from '@/lib/utils/logger';
-import ActionsPage from '@/app/(auth)/actions/page';
-import CampaignsPage from '@/app/(auth)/campaigns/page';
-import TemplatesPage from '@/app/(auth)/templates/page';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -48,34 +50,29 @@ const logger = createLogger('TasksPage');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Tasks page — routes to the correct tab content based on query param.
+ * Tasks page — tabbed interface for task management.
  *
- * Phase 1: Renders existing page components based on `tab` param.
- *   - No tab / invalid tab → ActionsPage (To-dos)
- *   - ?tab=campaigns       → CampaignsPage
- *   - ?tab=templates       → TemplatesPage
- *
- * Phase 3: Will replace with TasksTabs component providing a unified tabbed UI.
+ * Phase 3: Full TasksTabs component with To-dos, Campaigns, and Templates tabs.
+ * Replaces the Phase 1 thin wrapper that conditionally rendered page components
+ * based on the `tab` query param.
  */
 export default function TasksPage() {
-  const searchParams = useSearchParams();
-  const tab = searchParams.get('tab');
+  logger.info('Rendering Tasks page (Phase 3 — tabbed UI)');
 
-  logger.info('Rendering Tasks page', { tab: tab || 'todos (default)' });
+  return (
+    <div>
+      {/* ─── Page Header ──────────────────────────────────────────────────── */}
+      <PageHeader
+        title="Tasks"
+        description="Manage your to-dos, campaigns, and templates."
+        breadcrumbs={[
+          { label: 'Home', href: '/home' },
+          { label: 'Tasks' },
+        ]}
+      />
 
-  // ─── Route to the correct tab content ──────────────────────────────────────
-  switch (tab) {
-    case 'campaigns':
-      logger.debug('Rendering Campaigns tab');
-      return <CampaignsPage />;
-
-    case 'templates':
-      logger.debug('Rendering Templates tab');
-      return <TemplatesPage />;
-
-    default:
-      // Default to Actions/To-dos — the primary tasks view
-      logger.debug('Rendering To-dos tab (default)');
-      return <ActionsPage />;
-  }
+      {/* ─── Tabbed Content ───────────────────────────────────────────────── */}
+      <TasksTabs />
+    </div>
+  );
 }

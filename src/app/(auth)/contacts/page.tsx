@@ -45,8 +45,16 @@ import {
   Pagination,
 } from '@/components/ui';
 import { useContacts } from '@/hooks/useContacts';
-import { SyncContactsButton, HistoricalSyncButton } from '@/components/contacts';
+import {
+  SyncContactsButton,
+  HistoricalSyncButton,
+  ContactsTabs,
+  getActiveContactsTab,
+  PromoteToClientDialog,
+} from '@/components/contacts';
+import type { ContactsTab } from '@/components/contacts';
 import type { Contact, ContactRelationshipType, ContactStats, SenderType } from '@/hooks/useContacts';
+import type { PromoteToClientData } from '@/components/contacts/PromoteToClientDialog';
 import {
   Users,
   Star,
@@ -69,6 +77,10 @@ import {
   CircleHelp,
   Megaphone,
   Target,
+  Crown,
+  CheckCircle,
+  XCircle,
+  Archive,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
@@ -434,14 +446,43 @@ function ContactFilters({
  * Displays contact info with action buttons.
  * The entire card is clickable and navigates to the contact detail page.
  */
+/**
+ * Gets the appropriate badge config for a client status value.
+ */
+function getClientStatusBadge(status: string | null) {
+  const map: Record<string, { variant: 'default' | 'secondary' | 'outline'; label: string; icon: React.ReactNode }> = {
+    active: { variant: 'default', label: 'Active', icon: <CheckCircle className="h-3 w-3" /> },
+    inactive: { variant: 'secondary', label: 'Inactive', icon: <XCircle className="h-3 w-3" /> },
+    archived: { variant: 'outline', label: 'Archived', icon: <Archive className="h-3 w-3" /> },
+  };
+  return status ? map[status] || null : null;
+}
+
+/**
+ * Gets the appropriate badge config for a client priority value.
+ */
+function getClientPriorityBadge(priority: string | null) {
+  const map: Record<string, { variant: 'default' | 'destructive' | 'secondary'; label: string }> = {
+    vip: { variant: 'destructive', label: 'VIP' },
+    high: { variant: 'destructive', label: 'High' },
+    medium: { variant: 'default', label: 'Medium' },
+    low: { variant: 'secondary', label: 'Low' },
+  };
+  return priority ? map[priority] || null : null;
+}
+
 function ContactCard({
   contact,
   onToggleVip,
   onToggleMuted,
+  onPromoteToClient,
+  showPromoteButton,
 }: {
   contact: Contact;
   onToggleVip: (id: string, e: React.MouseEvent) => void;
   onToggleMuted: (id: string, e: React.MouseEvent) => void;
+  onPromoteToClient?: (contact: Contact, e: React.MouseEvent) => void;
+  showPromoteButton?: boolean;
 }) {
   const relationshipConfig = RELATIONSHIP_CONFIG[contact.relationship_type] || RELATIONSHIP_CONFIG.unknown;
   // Get sender type config with fallback to 'unknown' if not found
@@ -449,32 +490,57 @@ function ContactCard({
   const senderTypeConfig = SENDER_TYPE_CONFIG[senderKey] ?? SENDER_TYPE_CONFIG.unknown;
   const SenderTypeIcon = senderTypeConfig.icon;
 
+  // Client-specific badges
+  const clientStatusBadge = contact.is_client ? getClientStatusBadge(contact.client_status) : null;
+  const clientPriorityBadge = contact.is_client ? getClientPriorityBadge(contact.client_priority) : null;
+
   return (
     <Link href={`/contacts/${contact.id}`} className="block">
-      <Card className="hover:bg-muted/50 hover:border-primary/20 transition-colors cursor-pointer group">
+      <Card className={`hover:bg-muted/50 hover:border-primary/20 transition-colors cursor-pointer group ${
+        contact.is_client && contact.client_priority === 'vip' ? 'bg-yellow-50/30 dark:bg-yellow-950/10' : ''
+      }`}>
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-4">
             {/* Contact info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                {/* VIP indicator */}
-                {contact.is_vip && (
+                {/* VIP / Client icon */}
+                {contact.is_client && contact.client_priority === 'vip' ? (
+                  <Crown className="h-4 w-4 text-yellow-500 shrink-0" />
+                ) : contact.is_vip ? (
                   <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 shrink-0" />
-                )}
+                ) : null}
 
                 {/* Name */}
                 <h3 className="font-medium truncate group-hover:text-primary transition-colors">
                   {contact.name || contact.email.split('@')[0]}
                 </h3>
 
-                {/* Sender type badge (newsletter vs contact) */}
-                <Badge className={`text-xs shrink-0 ${senderTypeConfig.color}`}>
-                  <SenderTypeIcon className="h-3 w-3 mr-1" />
-                  {senderTypeConfig.label}
-                </Badge>
+                {/* Client status badge */}
+                {clientStatusBadge && (
+                  <Badge variant={clientStatusBadge.variant} className="gap-1 text-xs shrink-0">
+                    {clientStatusBadge.icon}
+                    {clientStatusBadge.label}
+                  </Badge>
+                )}
 
-                {/* Relationship badge (only show for direct contacts) */}
-                {contact.sender_type === 'direct' && contact.relationship_type !== 'unknown' && (
+                {/* Client priority badge (only show non-medium) */}
+                {clientPriorityBadge && contact.client_priority !== 'medium' && (
+                  <Badge variant={clientPriorityBadge.variant} className="text-xs shrink-0">
+                    {clientPriorityBadge.label}
+                  </Badge>
+                )}
+
+                {/* Sender type badge (newsletter vs contact) — hide for clients */}
+                {!contact.is_client && (
+                  <Badge className={`text-xs shrink-0 ${senderTypeConfig.color}`}>
+                    <SenderTypeIcon className="h-3 w-3 mr-1" />
+                    {senderTypeConfig.label}
+                  </Badge>
+                )}
+
+                {/* Relationship badge (only show for direct contacts, non-client) */}
+                {!contact.is_client && contact.sender_type === 'direct' && contact.relationship_type !== 'unknown' && (
                   <Badge className={`text-xs shrink-0 ${relationshipConfig.color}`}>
                     {relationshipConfig.label}
                   </Badge>
@@ -491,6 +557,13 @@ function ContactCard({
 
               {/* Email */}
               <p className="text-sm text-muted-foreground truncate">{contact.email}</p>
+
+              {/* Email domains (for clients) */}
+              {contact.is_client && contact.email_domains && contact.email_domains.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {contact.email_domains.join(', ')}
+                </p>
+              )}
 
               {/* Company and job title */}
               {(contact.company || contact.job_title) && (
@@ -525,6 +598,18 @@ function ContactCard({
 
             {/* Action buttons - prevent card click propagation */}
             <div className="flex items-center gap-2 shrink-0">
+              {/* Promote to Client button (only for non-clients) */}
+              {showPromoteButton && !contact.is_client && onPromoteToClient && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => onPromoteToClient(contact, e)}
+                  title="Promote to Client"
+                >
+                  <Building2 className="h-4 w-4" />
+                </Button>
+              )}
+
               {/* VIP toggle */}
               <Button
                 variant="ghost"
@@ -766,12 +851,18 @@ export default function ContactsPage() {
   // Local State
   // ─────────────────────────────────────────────────────────────────────────────
 
+  // Top-level tab: All, Clients, Personal, Subscriptions (NEW Phase 3)
+  const activeContactsTab = getActiveContactsTab(searchParams);
   // Primary filter: sender type (Contacts vs Subscriptions)
   const [activeSenderType, setActiveSenderType] = React.useState<SenderType>('direct');
   // Secondary filter: VIP/Muted
   const [activeTab, setActiveTab] = React.useState<string>('all');
   const [searchValue, setSearchValue] = React.useState('');
   const [sortBy, setSortBy] = React.useState<string>('last_seen_at');
+
+  // Promote to Client dialog state
+  const [promoteDialogOpen, setPromoteDialogOpen] = React.useState(false);
+  const [promoteTarget, setPromoteTarget] = React.useState<Contact | null>(null);
 
   // Debounce search to avoid excessive API calls
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
@@ -784,22 +875,51 @@ export default function ContactsPage() {
   }, [searchValue]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Build filter options based on active sender type and secondary tab
+  // Build filter options based on active tab, sender type, and secondary tab
   // ─────────────────────────────────────────────────────────────────────────────
 
   const filterOptions = React.useMemo(() => {
     const tabFilter = FILTER_TABS.find((t) => t.id === activeTab)?.filter || {};
-    return {
+
+    // Base options
+    const options: Record<string, unknown> = {
       ...tabFilter,
-      // Primary filter: sender type (Contacts vs Subscriptions)
-      senderType: activeSenderType,
       search: debouncedSearch || undefined,
       sortBy: sortBy as 'email_count' | 'last_seen_at' | 'name',
       sortOrder: sortBy === 'name' ? 'asc' as const : 'desc' as const,
       page: initialPage,
       pageSize: PAGE_SIZE,
     };
-  }, [activeSenderType, activeTab, debouncedSearch, sortBy, initialPage]);
+
+    // ─── Apply top-level tab filters (NEW Phase 3) ─────────────────────────
+    switch (activeContactsTab) {
+      case 'clients':
+        // Clients tab: show only is_client = TRUE
+        options.isClient = true;
+        break;
+      case 'personal':
+        // Personal tab: direct senders who are friends/family
+        options.senderType = 'direct' as SenderType;
+        break;
+      case 'subscriptions':
+        // Subscriptions tab: broadcast senders
+        options.senderType = 'broadcast' as SenderType;
+        break;
+      case 'all':
+      default:
+        // All tab: keep existing sender type filter
+        options.senderType = activeSenderType;
+        break;
+    }
+
+    logger.debug('Filter options built', {
+      contactsTab: activeContactsTab,
+      senderType: options.senderType,
+      isClient: options.isClient,
+    });
+
+    return options;
+  }, [activeContactsTab, activeSenderType, activeTab, debouncedSearch, sortBy, initialPage]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Fetch contacts using the hook
@@ -816,6 +936,7 @@ export default function ContactsPage() {
     refreshStats,
     toggleVip,
     toggleMuted,
+    promoteToClient,
   } = useContacts(filterOptions);
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -869,6 +990,41 @@ export default function ContactsPage() {
       handlePageChange(1);
     }
   };
+
+  /**
+   * Handle top-level tab change (All/Clients/Personal/Subscriptions).
+   * Resets secondary filters and page when switching tabs.
+   */
+  const handleContactsTabChange = React.useCallback((tab: ContactsTab) => {
+    logger.info('Contacts tab changed', { to: tab });
+    // Reset secondary filters when changing top-level tab
+    setActiveTab('all');
+    setActiveSenderType('direct');
+    // Page reset is handled by ContactsTabs via URL param
+  }, []);
+
+  /**
+   * Open the Promote to Client dialog for a contact.
+   */
+  const handlePromoteToClient = React.useCallback((contact: Contact, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    logger.info('Opening promote dialog', {
+      contactId: contact.id.substring(0, 8),
+      name: contact.name,
+    });
+    setPromoteTarget(contact);
+    setPromoteDialogOpen(true);
+  }, []);
+
+  /**
+   * Handle the promote action from the dialog.
+   */
+  const handlePromoteSubmit = React.useCallback(async (contactId: string, data: PromoteToClientData) => {
+    logger.start('Promoting contact to client', { contactId: contactId.substring(0, 8) });
+    await promoteToClient(contactId, data);
+    refetch();
+  }, [promoteToClient, refetch]);
 
   const handleTabChange = (tab: string) => {
     logger.debug('Tab changed', { from: activeTab, to: tab });
@@ -973,13 +1129,26 @@ export default function ContactsPage() {
       {/* Stats Cards - always show but with loading state */}
       <StatsCards stats={stats} isLoading={isLoading} />
 
-      {/* Sender Type Tabs (Primary Filter) */}
-      <SenderTypeTabs
-        activeType={activeSenderType}
-        onTypeChange={handleSenderTypeChange}
-        stats={stats}
-        isLoading={isLoading}
+      {/* ─── Top-Level Tabs (NEW Phase 3) ────────────────────────────────── */}
+      <ContactsTabs
+        onTabChange={handleContactsTabChange}
+        stats={{
+          total: stats.total,
+          clients: stats.clients,
+          personal: stats.bySenderType?.direct ?? 0,
+          subscriptions: stats.bySenderType?.broadcast ?? 0,
+        }}
       />
+
+      {/* Sender Type Tabs (only show on "All" tab) */}
+      {activeContactsTab === 'all' && (
+        <SenderTypeTabs
+          activeType={activeSenderType}
+          onTypeChange={handleSenderTypeChange}
+          stats={stats}
+          isLoading={isLoading}
+        />
+      )}
 
       {/* Secondary Filters (VIP/Muted) and Search */}
       <ContactFilters
@@ -1019,6 +1188,8 @@ export default function ContactsPage() {
                 contact={contact}
                 onToggleVip={handleToggleVip}
                 onToggleMuted={handleToggleMuted}
+                onPromoteToClient={handlePromoteToClient}
+                showPromoteButton={activeContactsTab === 'all' || activeContactsTab === 'personal'}
               />
             ))}
 
@@ -1036,6 +1207,17 @@ export default function ContactsPage() {
           </>
         )}
       </div>
+
+      {/* ─── Promote to Client Dialog ─────────────────────────────────────── */}
+      {promoteTarget && (
+        <PromoteToClientDialog
+          open={promoteDialogOpen}
+          onOpenChange={setPromoteDialogOpen}
+          contactId={promoteTarget.id}
+          contactName={promoteTarget.name}
+          onPromote={handlePromoteSubmit}
+        />
+      )}
     </div>
   );
 }

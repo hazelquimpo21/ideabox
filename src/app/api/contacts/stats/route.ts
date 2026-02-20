@@ -95,12 +95,12 @@ export async function GET() {
         .eq('user_id', user.id)
         .eq('is_muted', true),
 
-      // Client contacts
+      // Client contacts (UPDATED Feb 2026: use is_client flag instead of relationship_type)
       supabase
         .from('contacts')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .eq('relationship_type', 'client'),
+        .eq('is_client', true),
 
       // Last Google sync time (from gmail_accounts)
       supabase

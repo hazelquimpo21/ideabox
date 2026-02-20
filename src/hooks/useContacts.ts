@@ -154,6 +154,21 @@ export interface Contact {
   broadcast_subtype: BroadcastSubtype | null;
   /** Confidence in sender type classification (0-1) */
   sender_type_confidence: number | null;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLIENT FIELDS (NEW Feb 2026 — Phase 3 Navigation Redesign)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Whether this contact is a client (merged from clients table) */
+  is_client: boolean;
+  /** Client status: active, inactive, or archived (null if not a client) */
+  client_status: string | null;
+  /** Client priority: vip, high, medium, or low (null if not a client) */
+  client_priority: string | null;
+  /** Email domains for auto-matching emails to this client */
+  email_domains: string[] | null;
+  /** Keywords for categorizing emails related to this client */
+  keywords: string[] | null;
 }
 
 /**
@@ -193,6 +208,17 @@ export interface UseContactsOptions {
   senderType?: SenderType;
   /** Filter by broadcast subtype (only when senderType='broadcast') */
   broadcastSubtype?: BroadcastSubtype;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLIENT FILTERING (NEW Feb 2026 — Phase 3 Navigation Redesign)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Filter by is_client column — true for clients, false for non-clients */
+  isClient?: boolean;
+  /** Filter by client status: active, inactive, or archived */
+  clientStatus?: 'active' | 'inactive' | 'archived';
+  /** Filter by client priority: vip, high, medium, or low */
+  clientPriority?: 'vip' | 'high' | 'medium' | 'low';
 }
 
 /**
@@ -305,6 +331,25 @@ export interface UseContactsReturn {
   toggleMuted: (contactId: string) => Promise<void>;
   /** Update relationship type for a contact */
   updateRelationship: (contactId: string, type: ContactRelationshipType) => Promise<void>;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Client Operations (NEW Feb 2026 — Phase 3 Navigation Redesign)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Promote a contact to client status via the promote API endpoint */
+  promoteToClient: (contactId: string, clientData: {
+    clientStatus: 'active' | 'inactive' | 'archived';
+    clientPriority: 'vip' | 'high' | 'medium' | 'low';
+    emailDomains?: string[];
+    keywords?: string[];
+  }) => Promise<void>;
+  /** Update client-specific fields on a contact */
+  updateClientFields: (contactId: string, fields: Partial<{
+    client_status: string;
+    client_priority: string;
+    email_domains: string[];
+    keywords: string[];
+  }>) => Promise<void>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -399,6 +444,9 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     pageSize = DEFAULT_PAGE_SIZE,
     senderType,
     broadcastSubtype,
+    isClient,
+    clientStatus,
+    clientPriority,
   } = options;
 
   // Internal page state - allows navigation without requiring parent to track page
@@ -511,6 +559,24 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
         }
       }
 
+      // ─────────────────────────────────────────────────────────────────────────
+      // CLIENT FILTERING (NEW Feb 2026 — Phase 3 Navigation Redesign)
+      // ─────────────────────────────────────────────────────────────────────────
+      if (isClient !== undefined) {
+        query = query.eq('is_client', isClient);
+        logger.debug('Applying is_client filter', { isClient });
+      }
+
+      if (clientStatus) {
+        query = query.eq('client_status', clientStatus);
+        logger.debug('Applying client_status filter', { clientStatus });
+      }
+
+      if (clientPriority) {
+        query = query.eq('client_priority', clientPriority);
+        logger.debug('Applying client_priority filter', { clientPriority });
+      }
+
       // Text search - searches across both name and email fields
       if (search && search.trim()) {
         const searchTerm = search.trim();
@@ -567,7 +633,7 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, internalPage, pageSize, isVip, isMuted, relationshipType, senderType, broadcastSubtype, search, sortBy, sortOrder]);
+  }, [supabase, internalPage, pageSize, isVip, isMuted, relationshipType, senderType, broadcastSubtype, isClient, clientStatus, clientPriority, search, sortBy, sortOrder]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Page Navigation
@@ -897,6 +963,139 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
   );
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Promote to Client (NEW Feb 2026 — Phase 3 Navigation Redesign)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Promotes a contact to client status by calling the promote API endpoint.
+   * Updates local state optimistically, then calls the server endpoint.
+   *
+   * @param contactId - The ID of the contact to promote
+   * @param clientData - Client-specific fields to set
+   */
+  const promoteToClient = React.useCallback(
+    async (contactId: string, clientData: {
+      clientStatus: 'active' | 'inactive' | 'archived';
+      clientPriority: 'vip' | 'high' | 'medium' | 'low';
+      emailDomains?: string[];
+      keywords?: string[];
+    }) => {
+      logger.start('Promoting contact to client', {
+        contactId: contactId.substring(0, 8),
+        clientStatus: clientData.clientStatus,
+        clientPriority: clientData.clientPriority,
+      });
+
+      try {
+        const response = await fetch('/api/contacts/promote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contactId,
+            clientStatus: clientData.clientStatus,
+            clientPriority: clientData.clientPriority,
+            emailDomains: clientData.emailDomains,
+            keywords: clientData.keywords,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to promote contact');
+        }
+
+        const result = await response.json();
+        const updatedContact = result.data || result;
+
+        // Update local state with the server response
+        setContacts((prev) =>
+          prev.map((c) => (c.id === contactId ? { ...c, ...updatedContact } : c))
+        );
+
+        logger.success('Contact promoted to client', {
+          contactId: contactId.substring(0, 8),
+        });
+
+        // Refresh stats to update client count
+        fetchStats();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        logger.error('Failed to promote contact to client', { error: errorMessage });
+        setError(err instanceof Error ? err : new Error(errorMessage));
+        throw err;
+      }
+    },
+    [fetchStats]
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Update Client Fields (NEW Feb 2026 — Phase 3 Navigation Redesign)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Updates client-specific fields on a contact.
+   * Uses optimistic update pattern with rollback on error.
+   *
+   * @param contactId - The ID of the contact to update
+   * @param fields - Partial client fields to update
+   */
+  const updateClientFields = React.useCallback(
+    async (contactId: string, fields: Partial<{
+      client_status: string;
+      client_priority: string;
+      email_domains: string[];
+      keywords: string[];
+    }>) => {
+      const contact = contacts.find((c) => c.id === contactId);
+      if (!contact) {
+        logger.warn('Update client fields: Contact not found', {
+          contactId: contactId.substring(0, 8),
+        });
+        return;
+      }
+
+      logger.start('Updating client fields', {
+        contactId: contactId.substring(0, 8),
+        fields: Object.keys(fields),
+      });
+
+      // Save original for rollback
+      const originalContact = { ...contact };
+
+      // Optimistic update
+      setContacts((prev) =>
+        prev.map((c) => (c.id === contactId ? { ...c, ...fields } : c))
+      );
+
+      try {
+        const { error: updateError } = await supabase
+          .from('contacts')
+          .update({ ...fields, updated_at: new Date().toISOString() })
+          .eq('id', contactId);
+
+        if (updateError) {
+          throw new Error(updateError.message);
+        }
+
+        logger.success('Client fields updated', {
+          contactId: contactId.substring(0, 8),
+        });
+      } catch (err) {
+        // Rollback on error
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        logger.error('Rolling back client fields update', { error: errorMessage });
+
+        setContacts((prev) =>
+          prev.map((c) => (c.id === contactId ? originalContact : c))
+        );
+
+        setError(err instanceof Error ? err : new Error(errorMessage));
+      }
+    },
+    [supabase, contacts]
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Effects
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -911,7 +1110,7 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
   }, [fetchStats]);
 
   // Reset to page 1 when filters change (but not when page changes)
-  const filterKey = `${isVip}-${isMuted}-${relationshipType}-${senderType}-${broadcastSubtype}-${search}-${sortBy}-${sortOrder}`;
+  const filterKey = `${isVip}-${isMuted}-${relationshipType}-${senderType}-${broadcastSubtype}-${isClient}-${clientStatus}-${clientPriority}-${search}-${sortBy}-${sortOrder}`;
   const prevFilterKeyRef = React.useRef(filterKey);
 
   React.useEffect(() => {
@@ -953,6 +1152,10 @@ export function useContacts(options: UseContactsOptions = {}): UseContactsReturn
     toggleVip,
     toggleMuted,
     updateRelationship,
+
+    // Client operations (NEW Feb 2026 — Phase 3 Navigation Redesign)
+    promoteToClient,
+    updateClientFields,
   };
 }
 

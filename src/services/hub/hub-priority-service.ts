@@ -787,23 +787,66 @@ async function fetchEventCandidates(supabase: any, userId: string): Promise<Even
   return data || [];
 }
 
+/**
+ * Fetches client data from the contacts table (Phase 3: merged).
+ * Falls back to the legacy clients table if contacts query returns empty.
+ *
+ * The returned map is keyed by contact.id (for contact_id lookups) AND
+ * also stores entries under the original client_id (via a separate legacy query)
+ * for backward compatibility until Phase 4 removes client_id columns.
+ *
+ * @param supabase - Supabase client instance
+ * @param userId - User ID to fetch clients for
+ * @returns Map of id → { name, priority } for both contact IDs and legacy client IDs
+ *
+ * @since February 2026 — Phase 3 Navigation Redesign (updated from clients table)
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchClientMap(supabase: any, userId: string): Promise<Map<string, { name: string; priority: ClientPriority }>> {
-  const { data, error } = await supabase
+  const map = new Map<string, { name: string; priority: ClientPriority }>();
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Primary source: contacts table (NEW Phase 3)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const { data: contactClients, error: contactError } = await supabase
+    .from('contacts')
+    .select('id, name, email, client_priority')
+    .eq('user_id', userId)
+    .eq('is_client', true)
+    .eq('client_status', 'active');
+
+  if (contactError) {
+    logger.warn('Failed to fetch client contacts', { error: contactError.message });
+  } else if (contactClients) {
+    for (const c of contactClients) {
+      const priority = (c.client_priority || 'medium') as ClientPriority;
+      map.set(c.id, { name: c.name || c.email, priority });
+    }
+    logger.debug('Client contacts fetched from contacts table', { count: contactClients.length });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Fallback: legacy clients table (for client_id references on emails/actions)
+  // This ensures emails/actions with client_id (but no contact_id) still resolve.
+  // Will be removed in Phase 4 after client_id columns are dropped.
+  // ─────────────────────────────────────────────────────────────────────────────
+  const { data: legacyClients, error: legacyError } = await supabase
     .from('clients')
     .select('id, name, priority')
     .eq('user_id', userId)
     .eq('status', 'active');
 
-  if (error) {
-    logger.warn('Failed to fetch clients', { error: error.message });
-    return new Map();
+  if (legacyError) {
+    logger.warn('Failed to fetch legacy clients', { error: legacyError.message });
+  } else if (legacyClients) {
+    for (const client of legacyClients) {
+      // Only add if not already in the map (contacts take precedence)
+      if (!map.has(client.id)) {
+        map.set(client.id, { name: client.name, priority: client.priority });
+      }
+    }
   }
 
-  const map = new Map<string, { name: string; priority: ClientPriority }>();
-  for (const client of data || []) {
-    map.set(client.id, { name: client.name, priority: client.priority });
-  }
   return map;
 }
 
@@ -927,11 +970,12 @@ function scoreEmail(
     baseScore *= 1 + (email.priority_score * config.urgencyWeight) / 10;
   }
 
-  // Client factor
+  // Client factor — check contact_id first (Phase 3), then fall back to client_id
   let clientFactor = 1.0;
   let clientName: string | undefined;
-  if (email.client_id && clientMap.has(email.client_id)) {
-    const client = clientMap.get(email.client_id)!;
+  const resolvedClientId = (email as Record<string, unknown>).contact_id as string | null || email.client_id;
+  if (resolvedClientId && clientMap.has(resolvedClientId)) {
+    const client = clientMap.get(resolvedClientId)!;
     clientName = client.name;
     clientFactor = config.clientMultipliers[client.priority] ?? 1.0;
   }
@@ -1013,11 +1057,12 @@ function scoreAction(
   // Urgency from AI analysis
   baseScore *= 1 + (action.urgency_score * config.urgencyWeight);
 
-  // Client factor
+  // Client factor — check contact_id first (Phase 3), then fall back to client_id
   let clientFactor = 1.0;
   let clientName: string | undefined;
-  if (action.client_id && clientMap.has(action.client_id)) {
-    const client = clientMap.get(action.client_id)!;
+  const resolvedActionClientId = (action as Record<string, unknown>).contact_id as string | null || action.client_id;
+  if (resolvedActionClientId && clientMap.has(resolvedActionClientId)) {
+    const client = clientMap.get(resolvedActionClientId)!;
     clientName = client.name;
     clientFactor = config.clientMultipliers[client.priority] ?? 1.0;
   }
