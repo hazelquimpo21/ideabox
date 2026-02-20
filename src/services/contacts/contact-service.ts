@@ -187,6 +187,44 @@ export interface ContactSummary {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Builds a human-readable reason for why a contact is suggested as a VIP.
+ * Combines Google starred status with email frequency for a tiered message.
+ *
+ * Priority order:
+ * 1. Starred + high frequency  → "Starred + Frequent (N emails)"
+ * 2. Starred + some emails     → "Starred in Google (N emails)"
+ * 3. Starred + no emails       → "Starred in Google Contacts"
+ * 4. High frequency (20+)      → "Frequent (N emails)"
+ * 5. Medium frequency (10+)    → "Regular contact (N emails)"
+ * 6. Low frequency (<10)       → "N emails"
+ */
+function buildSuggestionReason(isStarred: boolean, emailCount: number): string {
+  if (isStarred && emailCount >= 20) {
+    return `Starred + Frequent (${emailCount} emails)`;
+  }
+  if (isStarred && emailCount > 0) {
+    return `Starred in Google (${emailCount} emails)`;
+  }
+  if (isStarred) {
+    return 'Starred in Google Contacts';
+  }
+  if (emailCount >= 20) {
+    return `Frequent (${emailCount} emails)`;
+  }
+  if (emailCount >= 10) {
+    return `Regular contact (${emailCount} emails)`;
+  }
+  return `${emailCount} emails`;
+}
+
+/** Batch size for chunked contact upserts during Google import. */
+const IMPORT_BATCH_SIZE = 50;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // CONTACT SERVICE CLASS
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -530,90 +568,100 @@ export class ContactService {
       });
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Import each contact
+      // Prepare contacts for batched import
       // ─────────────────────────────────────────────────────────────────────────
+      // Filter to contacts that have a valid email, then build the upsert rows.
+      // Contacts without emails are skipped (common in Google Contacts for
+      // phone-only entries).
       const supabase = await createServerClient();
+      const now = new Date().toISOString();
 
-      for (const gContact of googleContacts) {
+      const validContacts = googleContacts.filter((gc) => {
+        if (!gc.email) {
+          result.skipped++;
+          return false;
+        }
+        return true;
+      });
+
+      // Count starred contacts up-front for the result
+      result.starred = validContacts.filter((gc) => gc.isStarred).length;
+
+      logger.info('Prepared contacts for batch import', {
+        total: googleContacts.length,
+        valid: validContacts.length,
+        skippedNoEmail: result.skipped,
+        starred: result.starred,
+      });
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Batch upsert contacts in chunks of IMPORT_BATCH_SIZE (50)
+      // ─────────────────────────────────────────────────────────────────────────
+      // Previously this was a sequential for-loop making one RPC call per contact
+      // (100 contacts = 100 DB round-trips = 10+ seconds). Now we batch into
+      // chunks of 50, using a single .upsert() per batch. This reduces 100
+      // contacts to 2 DB calls, completing in <2 seconds.
+      for (let batchStart = 0; batchStart < validContacts.length; batchStart += IMPORT_BATCH_SIZE) {
+        const batch = validContacts.slice(batchStart, batchStart + IMPORT_BATCH_SIZE);
+        const batchNumber = Math.floor(batchStart / IMPORT_BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(validContacts.length / IMPORT_BATCH_SIZE);
+
+        // Map Google contacts to database row format
+        const rows = batch.map((gc) => ({
+          user_id: userId,
+          email: gc.email!.toLowerCase().trim(),
+          name: gc.name,
+          avatar_url: gc.photoUrl ?? null,
+          google_resource_name: gc.resourceName ?? null,
+          google_labels: gc.labels ?? [],
+          is_google_starred: gc.isStarred ?? false,
+          google_synced_at: now,
+          import_source: 'google' as const,
+          needs_enrichment: true,
+          updated_at: now,
+        }));
+
+        logger.debug('Upserting contact batch', {
+          batchNumber,
+          totalBatches,
+          batchSize: rows.length,
+        });
+
         try {
-          // Skip contacts without email
-          if (!gContact.email) {
-            result.skipped++;
-            continue;
-          }
-
-          // Try using the database function first, fallback to direct upsert
-          // This allows the feature to work before migration 022 is run
-          let upsertError: Error | null = null;
-
-          try {
-            const { error } = await supabase.rpc('upsert_google_contact', {
-              p_user_id: userId,
-              p_email: gContact.email,
-              p_name: gContact.name,
-              p_avatar_url: gContact.photoUrl,
-              p_google_resource_name: gContact.resourceName,
-              p_google_labels: gContact.labels,
-              p_is_starred: gContact.isStarred,
+          const { error: batchError } = await supabase
+            .from('contacts')
+            .upsert(rows, {
+              onConflict: 'user_id,email',
+              ignoreDuplicates: false,
             });
 
-            if (error) {
-              upsertError = new Error(error.message);
-            }
-          } catch (rpcError) {
-            // RPC function might not exist - use fallback
-            upsertError = rpcError instanceof Error ? rpcError : new Error('RPC failed');
-          }
-
-          // Fallback: Direct upsert without Google-specific fields
-          if (upsertError) {
-            logger.debug('RPC failed, using fallback upsert', {
-              email: gContact.email.substring(0, 30),
-              error: upsertError.message,
+          if (batchError) {
+            logger.error('Batch upsert failed', {
+              batchNumber,
+              error: batchError.message,
+              errorCode: batchError.code,
             });
-
-            const { error: fallbackError } = await supabase
-              .from('contacts')
-              .upsert(
-                {
-                  user_id: userId,
-                  email: gContact.email.toLowerCase().trim(),
-                  name: gContact.name,
-                  // Google-specific fields may not exist yet
-                  ...(await this.getGoogleFieldsIfAvailable(supabase, {
-                    avatar_url: gContact.photoUrl,
-                    google_resource_name: gContact.resourceName,
-                    google_labels: gContact.labels,
-                    is_google_starred: gContact.isStarred,
-                    google_synced_at: new Date().toISOString(),
-                    import_source: 'google',
-                  })),
-                  needs_enrichment: true,
-                  updated_at: new Date().toISOString(),
-                },
-                {
-                  onConflict: 'user_id,email',
-                  ignoreDuplicates: false,
-                }
-              );
-
-            if (fallbackError) {
-              logger.warn('Failed to import Google contact (fallback)', {
-                email: gContact.email.substring(0, 30),
-                error: fallbackError.message,
-              });
-              result.errors.push(`${gContact.email}: ${fallbackError.message}`);
-              continue;
+            // Record error for each contact in the failed batch
+            for (const row of rows) {
+              result.errors.push(`${row.email}: Batch upsert failed - ${batchError.message}`);
             }
+          } else {
+            result.imported += rows.length;
+            logger.debug('Batch upsert succeeded', {
+              batchNumber,
+              imported: rows.length,
+              runningTotal: result.imported,
+            });
           }
-
-          result.imported++;
-          if (gContact.isStarred) {
-            result.starred++;
+        } catch (batchErr) {
+          const message = batchErr instanceof Error ? batchErr.message : 'Unknown batch error';
+          logger.error('Unexpected batch upsert error', {
+            batchNumber,
+            error: message,
+          });
+          for (const row of rows) {
+            result.errors.push(`${row.email}: ${message}`);
           }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          result.errors.push(`${gContact.email || 'unknown'}: ${message}`);
         }
       }
 
@@ -725,37 +773,47 @@ export class ContactService {
         });
         usedFallback = true;
 
-        // Fallback: Direct query for contacts with high email count
+        // Fallback: Query contacts that are either starred OR have enough email history.
+        // Previously this only filtered by email_count >= 3, which excluded freshly imported
+        // Google contacts (they have email_count = 0). The OR condition ensures starred
+        // contacts always appear even with zero email history.
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('contacts')
-          .select('id, email, name, email_count, last_seen_at, relationship_type, is_vip')
+          .select('id, email, name, email_count, last_seen_at, relationship_type, is_vip, avatar_url, is_google_starred, google_labels')
           .eq('user_id', userId)
           .eq('is_archived', false)
           .eq('is_vip', false)
-          .gte('email_count', 3)
+          .or('email_count.gte.3,is_google_starred.eq.true')
+          .order('is_google_starred', { ascending: false })
           .order('email_count', { ascending: false })
           .limit(limit);
 
         if (fallbackError) {
-          logger.error('Fallback query failed', { error: fallbackError.message });
+          logger.error('Fallback VIP suggestions query failed', {
+            error: fallbackError.message,
+            userId: userId.substring(0, 8),
+          });
           return [];
         }
 
+        logger.debug('Fallback query returned contacts', {
+          count: fallbackData?.length ?? 0,
+          starredCount: fallbackData?.filter((r) => r.is_google_starred).length ?? 0,
+        });
+
+        // Map rows to VipSuggestion, using actual DB values instead of hardcoded defaults.
+        // Suggestion reasons are tiered by starred status + email frequency.
         suggestions = (fallbackData || []).map((row) => ({
           id: row.id,
           email: row.email,
           name: row.name,
-          avatarUrl: null,
+          avatarUrl: row.avatar_url ?? null,
           emailCount: row.email_count,
           lastSeenAt: row.last_seen_at,
-          isGoogleStarred: false,
-          googleLabels: [],
+          isGoogleStarred: row.is_google_starred ?? false,
+          googleLabels: row.google_labels ?? [],
           relationshipType: row.relationship_type,
-          suggestionReason: row.email_count >= 20
-            ? `Frequent (${row.email_count} emails)`
-            : row.email_count >= 10
-              ? `Regular contact (${row.email_count} emails)`
-              : `${row.email_count} emails`,
+          suggestionReason: buildSuggestionReason(row.is_google_starred, row.email_count),
         }));
       }
 
@@ -997,40 +1055,8 @@ export class ContactService {
   // PRIVATE HELPER METHODS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /**
-   * Returns Google-specific fields only if the columns exist in the database.
-   * This allows the import to work before migration 022 is run.
-   *
-   * @param supabase - Supabase client
-   * @param fields - The Google-specific fields to potentially include
-   * @returns The fields if columns exist, empty object otherwise
-   */
-  private async getGoogleFieldsIfAvailable(
-    supabase: Awaited<ReturnType<typeof createServerClient>>,
-    fields: Record<string, unknown>
-  ): Promise<Record<string, unknown>> {
-    // Check if Google fields exist by querying table info
-    // For now, just try to return the fields - the upsert will ignore unknown columns
-    // in most cases, or we can catch the error
-    try {
-      // Quick check: try to select one of the Google-specific columns
-      const { error } = await supabase
-        .from('contacts')
-        .select('avatar_url')
-        .limit(0);
-
-      if (error && error.message.includes('avatar_url')) {
-        // Column doesn't exist - don't include Google fields
-        logger.debug('Google-specific columns not available yet');
-        return {};
-      }
-
-      return fields;
-    } catch {
-      // If check fails, return empty to be safe
-      return {};
-    }
-  }
+  // (Batched upserts now include all Google fields directly — no column check needed.
+  //  Migration 022 added all Google-specific columns and is required.)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

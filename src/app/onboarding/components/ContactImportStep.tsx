@@ -143,8 +143,10 @@ function ContactAvatar({
 
 /**
  * Single contact suggestion card.
+ * Wrapped in React.memo to avoid re-rendering all cards when parent state
+ * changes (e.g. toggling a different card's checkbox).
  */
-function SuggestionCard({
+const SuggestionCard = React.memo(function SuggestionCard({
   suggestion,
   isSelected,
   onToggle,
@@ -196,7 +198,7 @@ function SuggestionCard({
       </div>
     </div>
   );
-}
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
@@ -222,16 +224,28 @@ export function ContactImportStep({
   const [isImporting, setIsImporting] = React.useState(false);
   const [hasContactsPermission, setHasContactsPermission] = React.useState(false);
   const [importStatus, setImportStatus] = React.useState<string | null>(null);
+  /** Tracks whether a Google import has completed at least once in this session */
+  const [hasImported, setHasImported] = React.useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Load suggestions on mount
+  // Load suggestions on mount (skip if we're about to auto-import)
   // ─────────────────────────────────────────────────────────────────────────────
 
   const searchParams = useSearchParams();
   const hasTriggeredImportRef = React.useRef(false);
 
+  // When returning from OAuth with scope_added=true, the import handler will
+  // call loadSuggestions() after the import finishes. Loading suggestions on
+  // mount in that case is wasted work — the results are immediately invalidated
+  // once the import completes. So we skip the initial fetch when scope_added
+  // is present.
   React.useEffect(() => {
-    loadSuggestions();
+    const isScopeReturn = searchParams.get('scope_added') === 'true';
+    if (!isScopeReturn) {
+      loadSuggestions();
+    } else {
+      logger.info('Skipping initial loadSuggestions — scope_added=true, import will reload');
+    }
   }, []);
 
   // Auto-trigger import when returning from OAuth with contacts scope granted
@@ -291,8 +305,9 @@ export function ContactImportStep({
 
   /**
    * Toggles a contact's selection.
+   * Wrapped in useCallback so SuggestionCard (React.memo) gets stable references.
    */
-  const handleToggle = (id: string) => {
+  const handleToggle = React.useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -302,7 +317,7 @@ export function ContactImportStep({
       }
       return next;
     });
-  };
+  }, []);
 
   /**
    * Selects all suggestions.
@@ -333,15 +348,19 @@ export function ContactImportStep({
 
       if (response.ok) {
         const data = await response.json();
-        setImportStatus(`Imported ${data.imported} contacts`);
+        const starredNote = data.starred > 0 ? ` (${data.starred} starred)` : '';
+        setImportStatus(`Imported ${data.imported} contacts${starredNote}`);
         setHasContactsPermission(true);
+        setHasImported(true);
 
-        logger.info('Google contacts imported', {
+        logger.info('Google contacts imported successfully', {
           imported: data.imported,
           starred: data.starred,
+          skipped: data.skipped,
+          errors: data.errors?.length ?? 0,
         });
 
-        // Reload suggestions to include new contacts
+        // Reload suggestions to include newly imported contacts
         await loadSuggestions();
       } else if (response.status === 403) {
         // Need to re-authorize with contacts scope
@@ -444,43 +463,79 @@ export function ContactImportStep({
       {/* Content */}
       {!isLoading && (
         <div className="space-y-4">
-          {/* Google Import Banner (if no contacts permission) */}
+          {/* ─── Google Contacts CTA ─────────────────────────────────────── */}
+          {/* State 1: No contacts permission — explain why and redirect to OAuth */}
           {!hasContactsPermission && (
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50 border border-dashed">
-              <div className="flex-shrink-0">
-                <UserPlus className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Import from Google Contacts</p>
-                <p className="text-xs text-muted-foreground">
-                  Get better suggestions from your starred contacts and contact groups
-                </p>
+            <div className="rounded-lg border bg-card p-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <Users className="h-5 w-5 text-primary" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    Connect your Google Contacts
+                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    See your starred and important contacts here. This helps us
+                    suggest the right VIPs based on your existing contact
+                    organization. You&apos;ll be briefly redirected to Google to
+                    grant access.
+                  </p>
+                </div>
               </div>
               <Button
-                variant="outline"
-                size="sm"
+                className="w-full"
                 onClick={handleImportFromGoogle}
                 disabled={isImporting}
               >
                 {isImporting ? (
                   <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    Importing...
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Connecting...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                    Import
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Connect Google Contacts
                   </>
                 )}
               </Button>
             </div>
           )}
 
-          {/* Import Status */}
+          {/* State 2: Permission granted but haven't imported yet — direct import */}
+          {hasContactsPermission && !hasImported && !isImporting && suggestions.length === 0 && (
+            <div className="rounded-lg border bg-card p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  <RefreshCw className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Google Contacts connected</p>
+                  <p className="text-xs text-muted-foreground">
+                    Import your contacts to see VIP suggestions
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleImportFromGoogle}
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Import Contacts
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Import Status — shows spinner while importing, check on success */}
           {importStatus && (
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Check className="h-4 w-4 text-green-500" />
+              {isImporting ? (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              ) : (
+                <Check className="h-4 w-4 text-green-500" />
+              )}
               {importStatus}
             </div>
           )}
@@ -515,14 +570,19 @@ export function ContactImportStep({
           {/* Suggestions List */}
           {suggestions.length > 0 ? (
             <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-              {suggestions.map((suggestion) => (
-                <SuggestionCard
-                  key={suggestion.id}
-                  suggestion={suggestion}
-                  isSelected={selectedIds.has(suggestion.id)}
-                  onToggle={() => handleToggle(suggestion.id)}
-                />
-              ))}
+              {suggestions.map((suggestion) => {
+                // Inline arrow closures in .map() create new references each render,
+                // which defeats React.memo. Binding handleToggle to the id keeps
+                // SuggestionCard from re-rendering unless its own props change.
+                return (
+                  <SuggestionCard
+                    key={suggestion.id}
+                    suggestion={suggestion}
+                    isSelected={selectedIds.has(suggestion.id)}
+                    onToggle={() => handleToggle(suggestion.id)}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8">
