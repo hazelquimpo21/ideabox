@@ -361,13 +361,17 @@ export function CategoryModal({
             <div className="flex-1">
               <DialogTitle className="flex items-center gap-2">
                 {categoryDisplay?.label || category}
-                <Badge variant="secondary" className="ml-2">
-                  {totalCount} emails
-                </Badge>
-                {unreadCount > 0 && (
-                  <Badge variant="default" className="bg-blue-500">
-                    {unreadCount} unread
-                  </Badge>
+                {!isLoading && (
+                  <>
+                    <Badge variant="secondary" className="ml-2">
+                      {totalCount} emails
+                    </Badge>
+                    {unreadCount > 0 && (
+                      <Badge variant="default" className="bg-blue-500">
+                        {unreadCount} unread
+                      </Badge>
+                    )}
+                  </>
                 )}
               </DialogTitle>
               <DialogDescription>
@@ -391,8 +395,8 @@ export function CategoryModal({
         {/* Email List */}
         <div className="flex-1 overflow-y-auto py-2 space-y-2 min-h-0">
           {isLoading ? (
-            // Loading skeleton
-            Array.from({ length: 3 }).map((_, i) => (
+            // Loading skeleton — 5 items to approximate typical list height
+            Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="p-3 border rounded-lg space-y-2">
                 <div className="flex items-center gap-2">
                   <Skeleton className="h-4 w-4" />

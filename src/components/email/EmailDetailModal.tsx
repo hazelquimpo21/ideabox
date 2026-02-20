@@ -299,6 +299,7 @@ export function EmailDetailModal({
       <DialogContent
         className="max-w-3xl max-h-[90vh] p-0 flex flex-col overflow-hidden sm:max-h-[85vh]"
         aria-describedby={undefined}
+        hideClose
       >
         {/* Accessible title (visually hidden when email subject is shown) */}
         <DialogTitle className="sr-only">
