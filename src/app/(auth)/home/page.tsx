@@ -45,6 +45,11 @@ import { useAuth } from '@/lib/auth';
 import {
   Target,
   RefreshCw,
+  Sparkles,
+  CheckSquare,
+  Building2,
+  Calendar,
+  AlertTriangle,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
