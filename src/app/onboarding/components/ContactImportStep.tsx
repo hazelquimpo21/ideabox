@@ -228,6 +228,7 @@ export function ContactImportStep({
   // ─────────────────────────────────────────────────────────────────────────────
 
   const searchParams = useSearchParams();
+  const hasTriggeredImportRef = React.useRef(false);
 
   React.useEffect(() => {
     loadSuggestions();
@@ -235,7 +236,8 @@ export function ContactImportStep({
 
   // Auto-trigger import when returning from OAuth with contacts scope granted
   React.useEffect(() => {
-    if (searchParams.get('scope_added') === 'true') {
+    if (searchParams.get('scope_added') === 'true' && !hasTriggeredImportRef.current) {
+      hasTriggeredImportRef.current = true;
       logger.info('Returned from OAuth with contacts scope granted, auto-importing');
       handleImportFromGoogle();
     }
