@@ -135,9 +135,6 @@ export function DiscoverContent() {
   const hasShownLegacyWarning = useRef(false);
   const [hasLegacyCategories, setHasLegacyCategories] = useState(false);
 
-  // Track when we started waiting for a background sync so we can time out
-  const syncWaitStartRef = useRef<number | null>(null);
-
   // Live email counts from the category-summary API (used for empty-state decisions)
   const [liveEmailStats, setLiveEmailStats] = useState<{ total: number; analyzed: number; unanalyzed: number } | null>(null);
 
@@ -267,13 +264,16 @@ export function DiscoverContent() {
         }
         else if (data.status === 'in_progress') { setIsSyncing(true); startPolling(true); }
         else if (data.status === 'pending' && user?.onboardingCompleted) {
-          // User just completed onboarding — background sync was already triggered.
-          // Show progress UI and poll instead of prompting for a duplicate sync.
-          // Time out after 30s and fall back to live data if sync never starts.
-          logger.info('Sync pending after onboarding, waiting for background sync');
-          syncWaitStartRef.current = Date.now();
-          setIsSyncing(true);
-          startPolling(true);
+          // Sync hasn't started yet — don't waste requests polling sync-status.
+          // Just show the dashboard with an inline banner and poll for live
+          // category data so categories appear as emails arrive.
+          logger.info('Sync pending after onboarding, showing dashboard with live poll');
+          const gotLive = await fetchLiveCategories();
+          if (!isMounted) return;
+          if (!gotLive) {
+            setResult(EMPTY_RESULT);
+            setIsPollingForEmails(true);
+          }
         }
         else if (user?.onboardingCompleted) {
           // Onboarding done but no cached sync data — show dashboard with
@@ -299,32 +299,6 @@ export function DiscoverContent() {
     return () => { isMounted = false; stopPolling(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Time out if background sync stays 'pending' for too long (30s).
-  // For onboarded users, try live data instead of showing StartAnalysisCard.
-  useEffect(() => {
-    if (!isSyncing || !syncWaitStartRef.current) return;
-    const timeout = setTimeout(async () => {
-      if (syncWaitStartRef.current && syncProgress === 0) {
-        logger.warn('Background sync timed out, trying live data fallback');
-        syncWaitStartRef.current = null;
-        stopPolling();
-
-        setIsSyncing(false);
-        if (user?.onboardingCompleted) {
-          const gotLive = await fetchLiveCategories();
-          if (!gotLive) {
-            // Show dashboard with inline banner + start polling
-            setResult((prev: InitialSyncResponse | null) => prev ?? EMPTY_RESULT);
-            setIsPollingForEmails(true);
-          }
-        } else {
-          setNeedsSync(true);
-        }
-      }
-    }, 30000);
-    return () => clearTimeout(timeout);
-  }, [isSyncing, syncProgress, stopPolling, user?.onboardingCompleted, fetchLiveCategories]);
 
   // ─── Polling: incrementally populate categories as emails are analyzed ──────
   useEffect(() => {
