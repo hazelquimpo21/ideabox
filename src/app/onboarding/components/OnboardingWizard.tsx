@@ -35,6 +35,7 @@
 'use client';
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui';
 import { createLogger } from '@/lib/utils/logger';
 import type { AuthUser } from '@/lib/auth';
@@ -129,8 +130,22 @@ const STEPS: StepConfig[] = [
  * Onboarding wizard managing multi-step setup flow.
  */
 export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
+  const searchParams = useSearchParams();
+
+  // If returning from OAuth contacts scope flow, jump to VIP Contacts step
+  const initialStepIndex = React.useMemo(() => {
+    if (searchParams.get('scope_added') === 'true') {
+      const vipStepIndex = STEPS.findIndex((s) => s.id === 'vip-contacts');
+      if (vipStepIndex >= 0) {
+        logger.info('Returning from OAuth scope flow, jumping to VIP Contacts step');
+        return vipStepIndex;
+      }
+    }
+    return 0;
+  }, [searchParams]);
+
   // Current step index (0-based)
-  const [currentStepIndex, setCurrentStepIndex] = React.useState(0);
+  const [currentStepIndex, setCurrentStepIndex] = React.useState(initialStepIndex);
 
   // Sync configuration chosen by user
   const [syncConfig, setSyncConfig] = React.useState<SyncConfig>({
