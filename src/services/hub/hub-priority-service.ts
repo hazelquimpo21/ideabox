@@ -993,7 +993,8 @@ function scoreEmail(
     senderName: email.sender_name || undefined,
     senderEmail: email.sender_email,
     originalId: email.id,
-    href: `/discover?email=${email.id}`,
+    // UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign
+    href: `/inbox?email=${email.id}`,
     date: email.date,
   };
 }
@@ -1106,7 +1107,8 @@ function scoreAction(
     timeRemaining,
     clientName,
     originalId: action.id,
-    href: `/actions?action=${action.id}`,
+    // UPDATED (Feb 2026): /actions → /tasks per Navigation Redesign
+    href: `/tasks?action=${action.id}`,
     date: action.created_at,
   };
 }
@@ -1193,7 +1195,8 @@ function scoreEvent(
     deadline: eventDateTime.toISOString(),
     timeRemaining,
     originalId: event.id,
-    href: `/events?event=${event.id}`,
+    // UPDATED (Feb 2026): /events → /calendar per Navigation Redesign
+    href: `/calendar?event=${event.id}`,
     date: event.start_date,
   };
 }
@@ -1417,8 +1420,9 @@ function scoreExtractedDate(
     deadline: dateTime.toISOString(),
     timeRemaining,
     originalId: extractedDate.id,
-    // Link to timeline view with this date highlighted
-    href: `/timeline?date=${extractedDate.id}`,
+    // Link to calendar view with this date highlighted
+    // UPDATED (Feb 2026): /timeline → /calendar per Navigation Redesign
+    href: `/calendar?date=${extractedDate.id}`,
     date: extractedDate.date,
   };
 }

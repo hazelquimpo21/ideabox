@@ -213,8 +213,9 @@ export default function LandingPage() {
         logger.info('Redirecting to return URL', { returnUrl });
         router.replace(decodeURIComponent(returnUrl));
       } else {
-        logger.info('Redirecting to discover', { userId: user.id });
-        router.replace('/discover');
+        // UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign
+        logger.info('Redirecting to inbox', { userId: user.id });
+        router.replace('/inbox');
       }
     }
   }, [isLoading, isAuthenticated, user, router, searchParams]);

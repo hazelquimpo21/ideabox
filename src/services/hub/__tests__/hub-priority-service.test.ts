@@ -590,7 +590,8 @@ describe('HubPriorityService', () => {
       const result = await getTopPriorityItems('user-123');
 
       if (result.items.length > 0 && result.items[0].type === 'extracted_date') {
-        expect(result.items[0].href).toContain('/timeline');
+        // UPDATED (Feb 2026): /timeline → /calendar per Navigation Redesign
+        expect(result.items[0].href).toContain('/calendar');
         expect(result.items[0].href).toContain(result.items[0].originalId);
       }
     });

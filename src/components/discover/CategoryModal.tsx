@@ -209,8 +209,9 @@ export function CategoryModal({
     } else {
       // Default: navigate to email detail page
       // Use normalized category for clean URLs (new category names)
+      // UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign
       const urlCategory = normalizedCategory || category;
-      router.push(`/discover/${urlCategory}/${email.id}`);
+      router.push(`/inbox/${urlCategory}/${email.id}`);
       onClose();
     }
   };
@@ -333,7 +334,8 @@ export function CategoryModal({
     // Use normalized category for clean URLs (new category names)
     const urlCategory = normalizedCategory || category;
     logDiscover.navigateToDetail({ category: urlCategory });
-    router.push(`/discover/${urlCategory}`);
+    // UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign
+    router.push(`/inbox/${urlCategory}`);
     onClose();
   };
 

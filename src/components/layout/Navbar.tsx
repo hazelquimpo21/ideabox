@@ -107,12 +107,14 @@ export interface NavbarProps {
 
 /**
  * App logo and brand name.
- * Links back to Discover (the main dashboard view).
+ * Links back to Inbox (the main dashboard view).
+ *
+ * UPDATED (Feb 2026): Changed from /discover to /inbox per Navigation Redesign.
  */
 function NavbarLogo() {
   return (
     <Link
-      href="/discover"
+      href="/inbox"
       className="flex items-center gap-2 font-semibold text-foreground hover:text-foreground/80 transition-colors"
     >
       <Mail className="h-6 w-6 text-primary" />

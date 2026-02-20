@@ -38,7 +38,7 @@
  *   }, [startPolling, stopPolling]);
  *
  *   if (status === 'completed' && result) {
- *     return <Navigate to="/discover" state={{ result }} />;
+ *     return <Navigate to="/inbox" state={{ result }} />;
  *   }
  *
  *   return (

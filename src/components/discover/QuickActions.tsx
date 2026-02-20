@@ -121,19 +121,21 @@ export function QuickActions({
     try {
       switch (action.type) {
         // ─────────────────────────────────────────────────────────────────────────
-        // View Urgent: Navigate to the actions/tasks page to see urgent items
+        // View Urgent: Navigate to the tasks page to see urgent items
+        // UPDATED (Feb 2026): /actions → /tasks per Navigation Redesign
         // ─────────────────────────────────────────────────────────────────────────
         case 'view_urgent':
-          logger.info('Navigating to actions page for urgent items');
-          router.push('/actions');
+          logger.info('Navigating to tasks page for urgent items');
+          router.push('/tasks');
           break;
 
         // ─────────────────────────────────────────────────────────────────────────
-        // Add Events: Navigate to the events page to review detected events
+        // Add Events: Navigate to the calendar page to review detected events
+        // UPDATED (Feb 2026): /events → /calendar per Navigation Redesign
         // ─────────────────────────────────────────────────────────────────────────
         case 'add_events':
-          logger.info('Navigating to events page');
-          router.push('/events');
+          logger.info('Navigating to calendar page');
+          router.push('/calendar');
           break;
 
         // ─────────────────────────────────────────────────────────────────────────

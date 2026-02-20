@@ -955,9 +955,10 @@ export default function ContactDetailPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base">Email History</CardTitle>
-          <Link href={`/discover?sender=${encodeURIComponent(contact.email)}`}>
+          {/* UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign */}
+          <Link href={`/inbox?sender=${encodeURIComponent(contact.email)}`}>
             <Button variant="ghost" size="sm">
-              View in Discover
+              View in Inbox
               <ExternalLink className="h-4 w-4 ml-1" />
             </Button>
           </Link>
@@ -997,7 +998,7 @@ export default function ContactDetailPage() {
                   {emails.map((email) => (
                     <Link
                       key={email.id}
-                      href={`/discover?email=${email.id}`}
+                      href={`/inbox?email=${email.id}`}
                       className="block p-3 rounded-lg border hover:bg-accent transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2">

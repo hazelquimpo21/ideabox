@@ -101,8 +101,9 @@ function Breadcrumbs({
   showHome?: boolean;
 }) {
   // Prepend home if enabled
+  // UPDATED (Feb 2026): Home breadcrumb links to /inbox (was /discover)
   const allItems = showHome
-    ? [{ label: 'Home', href: '/discover' }, ...items]
+    ? [{ label: 'Home', href: '/inbox' }, ...items]
     : items;
 
   return (

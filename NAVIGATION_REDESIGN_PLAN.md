@@ -1,7 +1,7 @@
 # IdeaBox Navigation Redesign — Implementation Plan
 
 > **Created:** 2026-02-20
-> **Status:** Planning
+> **Status:** Phase 1 COMPLETE — Phase 2 ready to begin
 > **Goal:** Simplify navigation from 11 top-level items to 5, reorganize screens for clarity.
 
 ---
@@ -339,23 +339,70 @@ ALTER TABLE clients RENAME TO clients_deprecated;
 
 ## Implementation Phases
 
-### Phase 1: Routing Shell & Sidebar
+### Phase 1: Routing Shell & Sidebar ✅ COMPLETE
 **Goal:** New nav works, old URLs redirect, nothing breaks.
 **Risk:** Low — purely additive.
+**Completed:** 2026-02-20 on branch `claude/redesign-sidebar-navigation-E0mab`
 
-| # | Task | File(s) |
-|---|------|---------|
-| 1.1 | Update Sidebar.tsx — 5 nav items, updated sidebar sections | `src/components/layout/Sidebar.tsx` |
-| 1.2 | Create thin wrapper pages: `/home`, `/inbox`, `/calendar`, `/tasks` | `app/(auth)/home/page.tsx`, `app/(auth)/inbox/page.tsx`, `app/(auth)/calendar/page.tsx`, `app/(auth)/tasks/page.tsx` |
-| 1.3 | Set up all redirects (old routes → new routes) | `next.config.js` or redirect page files |
-| 1.4 | Update Navbar logo link `/discover` → `/inbox` | `src/components/layout/Navbar.tsx` |
-| 1.5 | Search & update all hardcoded route references | All files with href/router.push to old routes |
+| # | Task | File(s) | Status |
+|---|------|---------|--------|
+| 1.1 | Update Sidebar.tsx — 5 nav items (Home/Inbox/Contacts/Calendar/Tasks), category filters link to /inbox/[category], events link to /calendar, "Top Contacts" section rename, client links → /contacts/[id] | `src/components/layout/Sidebar.tsx` | ✅ |
+| 1.2 | Create thin wrapper pages: `/home` (wraps Hub), `/inbox` (wraps Discover + Archive via ?tab), `/inbox/[category]` (wraps CategoryDetail), `/inbox/[category]/[emailId]` (wraps EmailDetail), `/calendar` (wraps Events), `/tasks` (wraps Actions + Campaigns + Templates via ?tab) | `app/(auth)/home/page.tsx`, `app/(auth)/inbox/page.tsx`, `app/(auth)/inbox/[category]/page.tsx`, `app/(auth)/inbox/[category]/[emailId]/page.tsx`, `app/(auth)/calendar/page.tsx`, `app/(auth)/tasks/page.tsx` | ✅ |
+| 1.3 | Set up all redirects (16 redirect rules) in next.config.mjs | `next.config.mjs` | ✅ |
+| 1.4 | Update Navbar logo link `/discover` → `/inbox` | `src/components/layout/Navbar.tsx` | ✅ |
+| 1.5 | Update PageHeader breadcrumb home link `/discover` → `/inbox` | `src/components/layout/PageHeader.tsx` | ✅ |
+| 1.6 | Update QuickActions routes: `/actions` → `/tasks`, `/events` → `/calendar` | `src/components/discover/QuickActions.tsx` | ✅ |
+| 1.7 | Update ClientInsights route: `/clients/[id]` → `/contacts/[id]` | `src/components/discover/ClientInsights.tsx` | ✅ |
+| 1.8 | Update onboarding redirects: `/discover` → `/inbox` (3 locations) | `src/app/onboarding/page.tsx`, `src/app/onboarding/context/page.tsx` | ✅ |
+| 1.9 | Update landing page redirect: `/discover` → `/inbox` | `src/app/page.tsx` | ✅ |
+| 1.10 | Update auth callback default: `/discover` → `/inbox` | `src/app/api/auth/callback/route.ts` | ✅ |
+| 1.11 | Update add-send-scope default: `/discover` → `/inbox` | `src/app/api/auth/add-send-scope/route.ts` | ✅ |
+| 1.12 | Update docstrings and comments across all modified files | Multiple files | ✅ |
 
-**Done when:**
-- Sidebar shows 5 items + Settings
-- All new routes load
-- All old routes redirect correctly
-- No broken links, active states work
+**Phase 1 Verification:**
+- ✅ Sidebar shows 5 items (Home, Inbox, Contacts, Calendar, Tasks) + Settings
+- ✅ All new routes have page files that render existing components
+- ✅ 16 redirect rules in next.config.mjs cover all old routes
+- ✅ Category quick-filters link to /inbox/[category]
+- ✅ Upcoming Events section links to /calendar
+- ✅ "Top Contacts" section renamed from "Clients"
+- ✅ Navbar logo links to /inbox
+- ✅ No TypeScript errors introduced (all existing TS errors are pre-existing)
+- ✅ Old page files preserved for Phase 4 deletion
+
+**Files modified (14):**
+```
+next.config.mjs                                   — Redirects + config
+src/app/(auth)/inbox/page.tsx                     — Replaced old redirect with Inbox page
+src/app/api/auth/add-send-scope/route.ts          — Default return path
+src/app/api/auth/callback/route.ts                — Default redirect path
+src/app/onboarding/context/page.tsx               — Redirect after wizard
+src/app/onboarding/page.tsx                       — Redirect after sync
+src/app/page.tsx                                  — Redirect for authenticated users
+src/components/discover/ClientInsights.tsx         — Client link → contacts
+src/components/discover/QuickActions.tsx           — Actions → tasks, events → calendar
+src/components/layout/Navbar.tsx                  — Logo link
+src/components/layout/PageHeader.tsx              — Breadcrumb home link
+src/components/layout/Sidebar.tsx                 — Nav items, sections, links
+src/components/onboarding/UserContextWizard.tsx   — Docstring examples
+src/hooks/useInitialSyncProgress.ts               — Docstring example
+```
+
+**Files created (6):**
+```
+src/app/(auth)/home/page.tsx                      — Thin wrapper around HubPage
+src/app/(auth)/inbox/[category]/page.tsx          — Thin wrapper around CategoryDetailPage
+src/app/(auth)/inbox/[category]/[emailId]/page.tsx — Thin wrapper around EmailDetailPage
+src/app/(auth)/calendar/page.tsx                  — Thin wrapper around EventsPage
+src/app/(auth)/tasks/page.tsx                     — Tab router for Actions/Campaigns/Templates
+```
+
+**Important for Phase 2 developer:**
+- All new pages are thin wrappers — they import and render existing page components
+- The old page files at `/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clients`, `/campaigns`, `/templates`, `/archive` still exist and must NOT be deleted until Phase 4
+- The `/inbox/page.tsx` uses `?tab=archive` to switch between Discover and Archive views
+- The `/tasks/page.tsx` uses `?tab=campaigns` and `?tab=templates` to switch between Actions, Campaigns, and Templates
+- Phase 2 should replace these thin wrappers with real tabbed UI components
 
 ---
 
@@ -428,17 +475,17 @@ ALTER TABLE clients RENAME TO clients_deprecated;
 | `app/api/contacts/route.ts` | 3 |
 
 ### Files to Create
-| File | Phase |
-|------|-------|
-| `app/(auth)/home/page.tsx` | 1, 2 |
-| `app/(auth)/inbox/page.tsx` | 1, 2 |
-| `app/(auth)/inbox/[category]/page.tsx` | 2 |
-| `app/(auth)/inbox/[category]/[emailId]/page.tsx` | 2 |
-| `app/(auth)/calendar/page.tsx` | 1, 2 |
-| `app/(auth)/tasks/page.tsx` | 1, 3 |
-| `app/(auth)/tasks/campaigns/new/page.tsx` | 3 |
-| `app/(auth)/tasks/campaigns/[id]/page.tsx` | 3 |
-| `supabase/migrations/XXX_merge_clients_contacts.sql` | 3 |
+| File | Phase | Status |
+|------|-------|--------|
+| `app/(auth)/home/page.tsx` | 1 → 2 | ✅ Created (Phase 1 thin wrapper, Phase 2 will build real content) |
+| `app/(auth)/inbox/page.tsx` | 1 → 2 | ✅ Created (Phase 1 tab router, Phase 2 will build InboxTabs) |
+| `app/(auth)/inbox/[category]/page.tsx` | 1 | ✅ Created (Phase 1 thin wrapper) |
+| `app/(auth)/inbox/[category]/[emailId]/page.tsx` | 1 | ✅ Created (Phase 1 thin wrapper) |
+| `app/(auth)/calendar/page.tsx` | 1 → 2 | ✅ Created (Phase 1 thin wrapper, Phase 2 will build unified CalendarPage) |
+| `app/(auth)/tasks/page.tsx` | 1 → 3 | ✅ Created (Phase 1 tab router, Phase 3 will build TasksTabs) |
+| `app/(auth)/tasks/campaigns/new/page.tsx` | 3 | Pending |
+| `app/(auth)/tasks/campaigns/[id]/page.tsx` | 3 | Pending |
+| `supabase/migrations/XXX_merge_clients_contacts.sql` | 3 | Pending |
 
 ### Files to Delete (Phase 4)
 ```

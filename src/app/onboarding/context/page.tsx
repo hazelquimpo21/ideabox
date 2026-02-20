@@ -64,17 +64,18 @@ export default function OnboardingContextPage() {
    * Redirects to discover dashboard.
    */
   const handleComplete = React.useCallback(() => {
-    logger.info('User context wizard completed, redirecting to discover');
-    router.push('/discover');
+    logger.info('User context wizard completed, redirecting to inbox');
+    router.push('/inbox');
   }, [router]);
 
   /**
    * Handles user skipping the wizard.
-   * Still redirects to discover - they can configure later.
+   * Still redirects to inbox - they can configure later.
+   * UPDATED (Feb 2026): /discover → /inbox per Navigation Redesign.
    */
   const handleSkip = React.useCallback(() => {
-    logger.info('User skipped context wizard, redirecting to discover');
-    router.push('/discover');
+    logger.info('User skipped context wizard, redirecting to inbox');
+    router.push('/inbox');
   }, [router]);
 
   // ─────────────────────────────────────────────────────────────────────────────

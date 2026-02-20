@@ -93,7 +93,8 @@ const FULL_OAUTH_SCOPES_WITH_SEND = [
  */
 export async function GET(request: Request) {
   const { origin, searchParams } = new URL(request.url);
-  const returnTo = searchParams.get('returnTo') || '/discover';
+  // UPDATED (Feb 2026): Default /discover → /inbox per Navigation Redesign
+  const returnTo = searchParams.get('returnTo') || '/inbox';
   const accountId = searchParams.get('accountId');
 
   logger.start('Initiating Gmail send scope addition', {

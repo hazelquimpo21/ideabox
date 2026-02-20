@@ -79,8 +79,8 @@ export default function OnboardingPage() {
           error: err instanceof Error ? err.message : 'Unknown error'
         });
       }
-      // Redirect to discover page
-      router.replace('/discover');
+      // Redirect to inbox page (was /discover — updated Feb 2026 Navigation Redesign)
+      router.replace('/inbox');
     },
     onError: (error) => {
       logger.error('Initial sync failed', { error });
@@ -106,8 +106,8 @@ export default function OnboardingPage() {
 
   React.useEffect(() => {
     if (!isLoading && user?.onboardingCompleted) {
-      logger.info('User already completed onboarding, redirecting to discover');
-      router.replace('/discover');
+      logger.info('User already completed onboarding, redirecting to inbox');
+      router.replace('/inbox');
     }
   }, [isLoading, user, router]);
 
@@ -214,7 +214,7 @@ export default function OnboardingPage() {
       });
 
       await refreshSession();
-      router.replace('/discover');
+      router.replace('/inbox');
     } catch (error) {
       logger.error('Failed to skip sync', { error });
     }
