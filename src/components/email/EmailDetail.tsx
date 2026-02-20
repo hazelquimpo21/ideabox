@@ -584,8 +584,8 @@ export function EmailDetail({
       />
       <div className="flex-1 overflow-y-auto">
         <EmailSubject email={email} />
-        <AnalysisSummary email={email} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
         <EmailBody email={email} />
+        <AnalysisSummary email={email} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
         {email.gmail_id && (
           <div className="px-6 py-4 border-t border-border">
             <a
