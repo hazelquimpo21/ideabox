@@ -11,17 +11,20 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * 1. Welcome → 2. Accounts → 3. Sync Config → 4. Clients →
- * 5. VIP Contacts (NEW) → 6. About You (optional) → Complete
+ * 5. VIP Contacts → 6. About You (Mad Libs Profile Card) → Complete
  *
- * The "VIP Contacts" step (NEW Jan 2026) helps users identify important contacts:
+ * The "VIP Contacts" step (Jan 2026) helps users identify important contacts:
  * - Imports contacts from Google (if permission granted)
  * - Shows starred contacts and frequent communicators
  * - Lets user select VIPs for email prioritization
  *
- * The "About You" step collects user context for better AI personalization:
- * - Role & Company
- * - Priorities
- * - Work Schedule
+ * The "About You" step (Feb 2026 — Phase 3 overhaul) uses a "Mad Libs" profile
+ * card that pre-fills AI suggestions from the user's emails. Replaces the old
+ * form-based AboutYouStep with an interactive fill-in-the-blank experience:
+ * - Role & Company (AI pre-filled from email signatures)
+ * - Priorities (AI-suggested from email patterns)
+ * - Work Schedule (statistically inferred from send times)
+ * - VIP Contacts (carried from the VIP Contacts step)
  *
  * Users can:
  * - Navigate forward with "Next"/"Continue"
@@ -44,7 +47,7 @@ import { AccountsStep } from './AccountsStep';
 import { ClientsStep } from './ClientsStep';
 import { SyncConfigStep, type SyncConfig } from './SyncConfigStep';
 import { ContactImportStep } from './ContactImportStep';
-import { AboutYouStep } from './AboutYouStep';
+import { MadLibsProfileStep } from './MadLibsProfileStep';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -118,7 +121,7 @@ const STEPS: StepConfig[] = [
   {
     id: 'about-you',
     title: 'About You',
-    description: 'Help AI understand your context (optional)',
+    description: 'Confirm your AI-generated profile (optional)',
   },
 ];
 
@@ -272,7 +275,7 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
         return <ContactImportStep user={user} {...commonProps} />;
 
       case 'about-you':
-        return <AboutYouStep user={user} {...commonProps} />;
+        return <MadLibsProfileStep user={user} {...commonProps} />;
 
       default:
         return null;

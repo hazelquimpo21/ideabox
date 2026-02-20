@@ -134,7 +134,7 @@ AboutYouStep). Saves ~40KB from initial bundle.
 - Or: run it earlier (after Accounts step) on a small sample of sent emails
   to have suggestions ready by the time the user reaches the Mad Libs step
 
-### Phase 3: "Mad Libs" Profile Card
+### Phase 3: "Mad Libs" Profile Card ✅ DONE (Feb 2026)
 
 Replace the current AboutYouStep form with an interactive fill-in-the-blank card.
 
@@ -253,9 +253,11 @@ Rationale:
 - `src/types/database.ts` — Added `ProfileSuggestions` interface + updated user_context types
 - `supabase/migrations/031_profile_suggestions.sql` — New JSONB column on user_context
 
-### Phase 3
+### Phase 3 ✅ DONE
 - `src/app/onboarding/components/MadLibsProfileStep.tsx` — New component (replaces AboutYouStep)
 - `src/app/onboarding/components/MadLibsField.tsx` — Reusable inline-edit blank component
+- `src/app/onboarding/components/OnboardingWizard.tsx` — Swapped AboutYouStep → MadLibsProfileStep
+- `src/app/onboarding/components/AboutYouStep.tsx` — Deprecated (kept for rollback)
 
 ### Phase 4
 - `src/app/onboarding/components/OnboardingWizard.tsx` — Reorder steps, remove ClientsStep, lazy load
