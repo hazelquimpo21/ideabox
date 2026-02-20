@@ -169,7 +169,7 @@ src/
     discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions
     categories/                 # Category view (EmailCard, intelligence bar)
     layout/                     # Navbar, Sidebar, PageHeader
-    onboarding/                 # Onboarding wizard steps + MadLibsProfileStep, MadLibsField
+    onboarding/                 # Onboarding wizard steps (5 steps, lazy-loaded 3+) + MadLibsProfileStep, MadLibsField
 
   hooks/                        # Custom React hooks
     useEmails.ts                # Email list, search, filters
@@ -229,6 +229,9 @@ scripts/
 4. **React.memo + useCallback for list items** — `SuggestionCard` is memoized and
    `handleToggle` uses `useCallback` for stable references in `.map()` loops.
 5. **Optimistic UI** — import success states shown immediately with count badges.
+6. **Lazy loading for onboarding steps** — steps 3+ (VIP Contacts, Mad Libs Profile,
+   Sync Config) are loaded via `React.lazy()` + `Suspense` so the initial bundle only
+   includes WelcomeStep and AccountsStep. Later steps load on demand as the user navigates.
 
 ## Security
 

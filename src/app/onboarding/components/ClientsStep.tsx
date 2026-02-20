@@ -1,9 +1,19 @@
 /**
- * 👥 Clients Step Component
+ * @deprecated — Removed from the onboarding wizard in Phase 4 (February 2026).
  *
- * Third (final) step of onboarding. Allows users to add
- * their main clients for better email organization.
- * This step is optional and can be skipped.
+ * Clients are now auto-detected by the ClientTaggerAnalyzer from email patterns,
+ * making manual client entry during onboarding redundant. The onboarding flow is:
+ *   1. Welcome → 2. Accounts → 3. VIP Contacts → 4. About You → 5. Sync Config
+ *
+ * This component is kept for use in Settings or for rollback purposes.
+ * It is no longer imported by OnboardingWizard.tsx.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Clients Step Component (DEPRECATED from onboarding)
+ *
+ * Allows users to manually add their main clients for better email
+ * organization. This step was optional and could be skipped.
  *
  * @module app/onboarding/components/ClientsStep
  */
