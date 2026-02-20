@@ -58,6 +58,18 @@ POST /api/onboarding/profile-suggestions
   → Return ProfileSuggestions (consumed by Mad Libs step in Phase 3)
 ```
 
+### Mad Libs Profile Card (Onboarding Phase 3)
+```
+MadLibsProfileStep (mounts)
+  → POST /api/onboarding/profile-suggestions (fetches AI suggestions)
+  → GET /api/user/context (fetches existing VIP emails)
+  → Pre-fill MadLibsField blanks: role, company, priorities, work hours
+  → Pre-fill VIP chips from contacts table (is_vip = true)
+  → User clicks/edits inline blanks (MadLibsField components)
+  → "Looks good!" → PUT /api/user/context (saves confirmed values to user_context)
+  → Advances to next onboarding step
+```
+
 ### User Interaction
 ```
 Component → Hook → API Route → Supabase (RLS-protected) → Response
@@ -157,7 +169,7 @@ src/
     discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions
     categories/                 # Category view (EmailCard, intelligence bar)
     layout/                     # Navbar, Sidebar, PageHeader
-    onboarding/                 # Onboarding wizard steps
+    onboarding/                 # Onboarding wizard steps + MadLibsProfileStep, MadLibsField
 
   hooks/                        # Custom React hooks
     useEmails.ts                # Email list, search, filters

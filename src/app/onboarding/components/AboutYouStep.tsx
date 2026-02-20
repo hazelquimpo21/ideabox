@@ -1,5 +1,15 @@
 /**
- * About You Step Component
+ * @deprecated — Replaced by MadLibsProfileStep.tsx (Phase 3, February 2026).
+ *
+ * This component is kept for rollback purposes only. The OnboardingWizard now
+ * uses MadLibsProfileStep which provides an interactive "Mad Libs" fill-in-the-blank
+ * card with AI-suggested values from the profile-suggestions endpoint.
+ *
+ * To revert: change the import in OnboardingWizard.tsx back to AboutYouStep.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * About You Step Component (DEPRECATED)
  *
  * A streamlined step in the onboarding wizard that collects essential user context
  * for AI personalization. This is a simplified version of the full UserContextWizard,
