@@ -54,10 +54,11 @@ const DEFAULT_LIMIT = 50;
  * Excludes body_html, body_text, and other heavy fields that are only
  * needed in the full email detail view. This reduces data transfer
  * by ~80-90% compared to select('*').
+ * Excludes urgency_score/relationship_signal — no DB columns (see database.ts:293).
  *
  * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
  */
-const EMAIL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, urgency_score, gist, summary, priority_score, key_points, topics, labels, relationship_signal, analyzed_at, analysis_error, client_id' as const;
+const EMAIL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, gist, summary, priority_score, key_points, topics, labels, analyzed_at, analysis_error, client_id' as const;
 
 /** Logger instance for this hook */
 const logger = createLogger('useEmails');
