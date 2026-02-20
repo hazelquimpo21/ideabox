@@ -37,10 +37,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
 import { CheckSquare, Megaphone, FileText } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
-// ─── Lazy-loaded tab content to avoid loading all pages upfront ─────────────
-import ActionsPage from '@/app/(auth)/actions/page';
-import CampaignsPage from '@/app/(auth)/campaigns/page';
-import TemplatesPage from '@/app/(auth)/templates/page';
+// ─── Extracted content components (Phase 4) ─────────────────────────────────
+import { ActionsContent } from '@/components/actions';
+import { CampaignsContent } from '@/components/campaigns';
+import { TemplatesContent } from '@/components/templates';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -137,17 +137,17 @@ export function TasksTabs() {
 
       {/* ─── Tab Content: To-dos ──────────────────────────────────────────── */}
       <TabsContent value="todos">
-        <ActionsPage />
+        <ActionsContent />
       </TabsContent>
 
       {/* ─── Tab Content: Campaigns ───────────────────────────────────────── */}
       <TabsContent value="campaigns">
-        <CampaignsPage />
+        <CampaignsContent />
       </TabsContent>
 
       {/* ─── Tab Content: Templates ───────────────────────────────────────── */}
       <TabsContent value="templates">
-        <TemplatesPage />
+        <TemplatesContent />
       </TabsContent>
     </Tabs>
   );

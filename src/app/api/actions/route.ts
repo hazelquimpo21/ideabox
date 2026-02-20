@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (clientId) {
-      query = query.eq('client_id', clientId);
+      query = query.eq('contact_id', clientId);
     }
 
     if (emailId) {

@@ -262,50 +262,7 @@ export interface Database {
           updated_at?: string;
         };
       };
-      clients: {
-        Row: {
-          id: string;
-          user_id: string;
-          name: string;
-          company: string | null;
-          email: string | null;
-          status: ClientStatus;
-          priority: ClientPriority;
-          email_domains: string[] | null;
-          keywords: string[] | null;
-          notes: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          name: string;
-          company?: string | null;
-          email?: string | null;
-          status?: ClientStatus;
-          priority?: ClientPriority;
-          email_domains?: string[] | null;
-          keywords?: string[] | null;
-          notes?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          name?: string;
-          company?: string | null;
-          email?: string | null;
-          status?: ClientStatus;
-          priority?: ClientPriority;
-          email_domains?: string[] | null;
-          keywords?: string[] | null;
-          notes?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
+      // clients table archived as clients_deprecated in migration 030
       emails: {
         Row: {
           id: string;
@@ -329,7 +286,6 @@ export interface Database {
           summary: string | null;
           quick_action: QuickActionDb | null;
           labels: string[] | null;
-          client_id: string | null;
           project_tags: string[] | null;
           // Content digest fields (migration 025)
           gist: string | null;
@@ -374,7 +330,6 @@ export interface Database {
           summary?: string | null;
           quick_action?: QuickActionDb | null;
           labels?: string[] | null;
-          client_id?: string | null;
           project_tags?: string[] | null;
           gist?: string | null;
           key_points?: string[] | null;
@@ -411,7 +366,6 @@ export interface Database {
           summary?: string | null;
           quick_action?: QuickActionDb | null;
           labels?: string[] | null;
-          client_id?: string | null;
           project_tags?: string[] | null;
           gist?: string | null;
           key_points?: string[] | null;
@@ -483,7 +437,6 @@ export interface Database {
           id: string;
           user_id: string;
           email_id: string | null;
-          client_id: string | null;
           // Contact reference (Phase 3 — migration 029)
           contact_id: string | null;
           title: string;
@@ -502,7 +455,6 @@ export interface Database {
           id?: string;
           user_id: string;
           email_id?: string | null;
-          client_id?: string | null;
           contact_id?: string | null;
           title: string;
           description?: string | null;
@@ -520,7 +472,6 @@ export interface Database {
           id?: string;
           user_id?: string;
           email_id?: string | null;
-          client_id?: string | null;
           contact_id?: string | null;
           title?: string;
           description?: string | null;
@@ -1310,7 +1261,25 @@ export type TableUpdate<T extends keyof Database['public']['Tables']> =
  * Convenient type aliases for common table rows.
  */
 export type Email = TableRow<'emails'>;
-export type Client = TableRow<'clients'>;
+/**
+ * @deprecated clients table archived as clients_deprecated in migration 030.
+ * Use Contact with is_client=true instead. This type is kept for backward
+ * compatibility with the analyzer pipeline (client-tagger, etc.).
+ */
+export interface Client {
+  id: string;
+  user_id: string;
+  name: string;
+  company: string | null;
+  email: string | null;
+  status: ClientStatus;
+  priority: ClientPriority;
+  email_domains: string[] | null;
+  keywords: string[] | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
 export type Action = TableRow<'actions'>;
 export type GmailAccount = TableRow<'gmail_accounts'>;
 export type UserProfile = TableRow<'user_profiles'>;

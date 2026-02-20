@@ -1,7 +1,7 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** February 2026
-> **Database Migrations:** 001-028
+> **Database Migrations:** 001-030
 
 ## What's Built
 
@@ -37,24 +37,34 @@
 - Historical metadata-only sync for contact enrichment
 - Initial sync orchestrator for onboarding
 
-### Pages & UI
-| Page | Route | Description |
-|------|-------|-------------|
-| Landing | `/` | Gmail sign-in, feature highlights |
-| Onboarding | `/onboarding` | Multi-step wizard: accounts, clients, user context (7 steps), sync config |
-| Discovery | `/discover` | Post-sync dashboard with category cards, client insights, quick actions |
-| Category View | `/discover/[category]` | Deep-dive into a life-bucket category |
-| Inbox | `/inbox` | Email list with filters, category badges, AI fields |
-| Hub | `/hub` | Priority dashboard with urgency scoring |
-| Actions | `/actions` | To-do list from email analysis |
-| Clients | `/clients` | Client management with CRUD |
-| Contacts | `/contacts` | Contact intelligence, VIP/muted toggles, sender type |
-| Contact Detail | `/contacts/[id]` | CRM-style view with email history |
-| Events | `/events` | Calendar events grouped by time period |
-| Timeline | `/timeline` | Upcoming dates/deadlines with snooze/acknowledge |
-| Archive | `/archive` | Archived emails |
-| Sent | `/sent` | Email composition, outbox, sent history |
-| Settings | `/settings` | Preferences, cost tracking, account management |
+### Navigation & Pages
+
+The app uses a 5-item sidebar navigation (redesigned Feb 2026):
+
+| Nav Item | Route | Description |
+|----------|-------|-------------|
+| **Home** | `/home` | Daily briefing: greeting, top 3 priorities, today's schedule, pending tasks, profile nudge |
+| **Inbox** | `/inbox` | Tabbed email view — Categories (discover dashboard), Priority (AI-ranked), Archive |
+| | `/inbox/[category]` | Category deep-dive (email list for a life-bucket) |
+| | `/inbox/[category]/[emailId]` | Single email detail view |
+| **Contacts** | `/contacts` | Tabbed contacts — All, Clients, Personal, Subscriptions |
+| | `/contacts/[id]` | Contact detail (CRM-style with emails, actions, events, notes) |
+| **Calendar** | `/calendar` | Unified calendar: list/grid views, merged events + extracted dates, type filters |
+| **Tasks** | `/tasks` | Tabbed task management — To-dos, Campaigns, Templates |
+| | `/tasks/campaigns/new` | Create new campaign |
+| | `/tasks/campaigns/[id]` | Campaign detail |
+| **Sent** | `/sent` | Email composition, outbox, sent history |
+| **Settings** | `/settings` | Preferences, cost tracking, account management |
+
+All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clients`, `/campaigns`, `/templates`, `/archive`) redirect to their new equivalents via `next.config.mjs`.
+
+### Clients Merged into Contacts (migration 029)
+- `contacts` table gained: `is_client`, `client_status`, `client_priority`, `email_domains`, `keywords`
+- Client data migrated from `clients` table into matching contacts
+- `contact_id` added to `emails` and `actions` tables
+- Legacy `client_id` columns dropped (migration 030)
+- `clients` table renamed to `clients_deprecated` (migration 030)
+- Hub priority scoring reads exclusively from contacts (`is_client = true`)
 
 ### Email Sending (migration 026)
 - Send emails via Gmail API (from user's real address)
@@ -67,14 +77,17 @@
 - Inline reply with editable subject
 
 ### Data Layer
-- Custom hooks: useEmails, useActions, useClients, useContacts, useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress
+- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress
 - REST API routes for all entities with Zod validation
 - Page-based pagination with URL state
 - Optimistic UI updates with rollback
 
 ### UI Components
 - Full component library: Button, Card, Badge, Dialog, Toast, Skeleton, Spinner, Input, Select, Switch, Checkbox, Pagination
-- Layout: Navbar (search, sync indicator), Sidebar (nav, category filters, client quick-access, upcoming events), PageHeader (breadcrumbs)
+- Layout: Navbar (search, sync indicator), Sidebar (5-item nav, category filters, top contacts, upcoming events), PageHeader (breadcrumbs)
+- Tab containers: InboxTabs, ContactsTabs, TasksTabs (all URL-synced via `?tab=`)
+- Extracted content components: ActionsContent, CampaignsContent, TemplatesContent, DiscoverContent, ArchiveContent
+- Shared components: PriorityCard (used by Home page)
 - Category enhancements: urgency dots, AI briefings, key points, relationship health
 - Contact sync progress banner (global)
 
@@ -95,7 +108,7 @@
 - Focus Mode for category view
 
 ### Known Issues
-- `urgency_score` and `relationship_signal` exist in TypeScript types for `emails` table but have **no database migration** - reads will return null. Need a migration to add these columns if denormalization is desired.
+- `urgency_score` and `relationship_signal` exist in TypeScript types for `emails` table but have **no database migration** — reads will return null. Need a migration to add these columns if denormalization is desired.
 
 ---
 
@@ -116,3 +129,4 @@
 | 12 | Jan 2026 | Contact pagination, sync progress banner, CRM contact detail |
 | 13 | Jan 2026 | Enhanced category view (urgency dots, AI briefings, key points, relationship health) |
 | 14+ | Jan 2026 | Push notifications, sender type classification, content digest, historical sync, email sending, category cleanup |
+| Nav Redesign | Feb 2026 | 4-phase navigation overhaul: sidebar from 11→5 items, new routes, tabbed UIs, clients merged into contacts, old pages deleted |

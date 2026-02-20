@@ -45,7 +45,7 @@ No ORM. Uses Supabase.js SDK with typed queries:
 ```typescript
 const { data } = await supabase
   .from('emails')
-  .select('*, client:clients(name), analyses:email_analyses(*)')
+  .select('*, contact:contacts(name, is_client, client_priority), analyses:email_analyses(*)')
   .eq('user_id', userId)
   .eq('category', 'client_pipeline');
 ```
@@ -53,6 +53,7 @@ const { data } = await supabase
 - **RLS** protects all tables (users see only their own data)
 - **Service role key** bypasses RLS for server-side bulk operations
 - **Types** from `src/types/database.ts` (20+ tables typed)
+- **Clients merged into contacts** — the `contacts` table has `is_client`, `client_status`, `client_priority` columns. The legacy `clients` table has been renamed to `clients_deprecated`.
 
 ## Folder Structure
 
@@ -60,25 +61,30 @@ const { data } = await supabase
 src/
   app/
     (auth)/                     # Protected routes (requires login)
-      inbox/                    # Main email inbox view
-      discover/                 # Discovery dashboard (category overview)
+      home/                     # Daily briefing dashboard (replaces hub)
+      inbox/                    # Email inbox with tabs: Categories, Priority, Archive
         [category]/             # Category deep-dive views
-      hub/                      # Priority/urgent items dashboard
-      clients/                  # Client management
-      contacts/                 # Contact management
-      actions/                  # To-do list from email analysis
-      events/                   # Calendar events from email analysis
-      timeline/                 # Upcoming dates/deadlines
-      archive/                  # Archived emails
+          [emailId]/            # Single email detail
+      contacts/                 # Contact management with tabs: All, Clients, Personal, Subscriptions
+        [id]/                   # Contact detail (CRM-style)
+      calendar/                 # Unified calendar (events + timeline merged)
+      tasks/                    # Tasks with tabs: To-dos, Campaigns, Templates
+        campaigns/
+          [id]/                 # Campaign detail
+          new/                  # Create campaign
       sent/                     # Sent emails, compose, outbox
       settings/                 # User preferences + cost tracking
     api/
       auth/                     # OAuth callbacks
       emails/                   # sync/, send/, analyze/, rescan/, bulk-archive/
-      contacts/                 # CRUD, import-google/, historical-sync/, vip-suggestions/
+      contacts/                 # CRUD, import-google/, historical-sync/, vip-suggestions/, promote/, stats/
       hub/                      # Hub prioritization endpoints
       settings/                 # Settings + usage stats
       onboarding/               # Initial sync endpoints
+      campaigns/                # Campaign CRUD
+      templates/                # Template CRUD
+      actions/                  # Action/to-do CRUD
+      events/                   # Event CRUD
     onboarding/                 # Multi-step onboarding wizard
     dev/                        # Development utilities
 
@@ -112,25 +118,30 @@ src/
   components/
     ui/                         # Base UI library (Button, Card, Dialog, etc.)
     email/                      # Email display (list, detail, compose)
-    actions/                    # Action/to-do components
-    clients/                    # Client management
-    contacts/                   # Contact management
-    discover/                   # Discovery dashboard cards + grid
+    home/                       # Home page: DailyBriefingHeader, TodaySchedule, PendingTasksList
+    inbox/                      # Inbox page: InboxTabs, PriorityEmailList
+    actions/                    # ActionsContent (extracted from old actions page)
+    archive/                    # ArchiveContent (extracted from old archive page)
+    campaigns/                  # CampaignsContent (extracted from old campaigns page)
+    templates/                  # TemplatesContent (extracted from old templates page)
+    contacts/                   # ContactsTabs, PromoteToClientDialog
+    calendar/                   # CalendarStats
+    tasks/                      # TasksTabs
+    shared/                     # PriorityCard (shared across pages)
+    discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions
     categories/                 # Category view (EmailCard, intelligence bar)
-    events/                     # Event calendar display
-    timeline/                   # Timeline view
-    hub/                        # Hub dashboard
     layout/                     # Navbar, Sidebar, PageHeader
     onboarding/                 # Onboarding wizard steps
 
   hooks/                        # Custom React hooks
     useEmails.ts                # Email list, search, filters
     useActions.ts               # Action management
-    useClients.ts               # Client management
-    useContacts.ts              # Contact management
+    useContacts.ts              # Contact + client management (unified)
     useSupabase.ts              # Supabase client access
     useEmailAnalysis.ts         # Parse analysis JSONB
     useInitialSyncProgress.ts   # Poll sync status during onboarding
+    useEvents.ts                # Event data
+    useExtractedDates.ts        # Extracted date data (deadlines, birthdays, etc.)
 
   lib/
     ai/                         # OpenAI client (GPT-4.1-mini, function calling)
@@ -151,7 +162,7 @@ src/
     app.ts                      # App configuration
 
 supabase/
-  migrations/                   # 28 SQL migration files (001-028)
+  migrations/                   # 30 SQL migration files (001-030)
 
 scripts/
   seed.ts                       # Database seeding

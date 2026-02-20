@@ -28,6 +28,8 @@
 | Content Digest | Separate analyzer | Gist + key points for non-reading triage |
 | Multi-Action | Array in JSONB | One email can produce multiple to-do items |
 | Historical Sync | Metadata-only | Enrich contacts without full email download |
+| Navigation | 5 items with tabs | 11→5 items, tabbed UIs for merged pages |
+| Client Tracking | Merged into contacts | `is_client` flag + client columns on contacts table |
 
 ---
 
@@ -373,6 +375,54 @@ CREATE TABLE api_usage_logs (
 
 ---
 
+### 15. Navigation Redesign: 11 Items → 5 (Feb 2026)
+
+**Decision:** Consolidate the sidebar from 11 top-level navigation items to 5 (Home, Inbox, Contacts, Calendar, Tasks), using tabbed UIs to absorb merged pages.
+
+**Alternatives Considered:**
+- Keep all 11 items (too cluttered for users)
+- Use a hamburger menu with nested groups (hides features)
+- Reduce to 3 items with deeper nesting (too much clicking)
+
+**Rationale:**
+- 11 items overwhelms the sidebar and makes navigation feel unfocused
+- Many pages are closely related and benefit from being tabs under one parent (e.g., Actions + Campaigns + Templates → Tasks)
+- Tabbed UIs preserve full functionality while reducing cognitive load
+- URL-synced tabs (`?tab=`) maintain deep-linkability
+
+**Impact:**
+- 4-phase implementation: routing shell → page builds → contacts/tasks restructure → cleanup
+- Old routes redirected via `next.config.mjs` (permanent redirects)
+- Clients entity merged into Contacts table (`is_client` flag, migration 029)
+- Legacy `client_id` columns dropped, `clients` table renamed to `clients_deprecated` (migration 030)
+- Old page directories deleted, content extracted into reusable `*Content` components
+- Hub priority scoring updated to read from contacts instead of legacy clients table
+
+---
+
+### 16. Clients Merged into Contacts (Feb 2026)
+
+**Decision:** Merge the separate `clients` table into the `contacts` table using an `is_client` boolean flag plus client-specific columns (`client_status`, `client_priority`, `email_domains`, `keywords`).
+
+**Alternatives Considered:**
+- Keep clients as a separate entity (creates dual management burden)
+- Use a generic `entity_type` column on contacts (too loose)
+
+**Rationale:**
+- Clients are just contacts with business context — no need for a separate table
+- Unified view lets users see all people in one place and promote contacts to clients
+- Simpler data model: one table with optional client fields vs. two tables with join logic
+- Hub priority scoring simplifies to a single contacts query
+
+**Impact:**
+- Migration 029: Add 5 columns to contacts, migrate client data, add `contact_id` FK to emails/actions
+- Migration 030: Drop `client_id` from emails/actions, rename `clients` → `clients_deprecated`
+- `useContacts` hook extended with client filtering (`isClient`, `clientStatus`, `clientPriority`)
+- `useClients` hook and `/api/clients/` routes deleted
+- New "Promote to Client" dialog on contacts pages
+
+---
+
 ## Decision Template (For Future Decisions)
 
 When making new architectural decisions, document them here using this template:
@@ -403,3 +453,4 @@ When making new architectural decisions, document them here using this template:
 | Jan 2026 | Initial decisions documented | Claude (planning session) |
 | Jan 2026 | Sender classification, email sending, content digest, historical sync | Claude |
 | Feb 2026 | Updated references, added missing decisions | Claude (audit) |
+| Feb 2026 | Navigation redesign (11→5 items), clients merged into contacts | Claude (nav redesign) |

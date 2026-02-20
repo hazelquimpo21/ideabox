@@ -47,52 +47,69 @@ Open [http://localhost:3000](http://localhost:3000).
 ```
 src/
   app/
-    (auth)/           # Protected routes: inbox, discover, hub, clients,
-                      # contacts, actions, events, timeline, archive, sent, settings
-    api/              # API routes: emails, contacts, hub, settings, onboarding, auth
+    (auth)/           # Protected routes (5 main nav items + sent + settings)
+      home/           # Daily briefing dashboard
+      inbox/          # Tabbed email view (Categories, Priority, Archive)
+        [category]/   # Category deep-dive + email detail
+      contacts/       # Tabbed contacts (All, Clients, Personal, Subscriptions)
+        [id]/         # Contact detail (CRM-style)
+      calendar/       # Unified calendar (events + extracted dates)
+      tasks/          # Tabbed tasks (To-dos, Campaigns, Templates)
+        campaigns/    # Campaign detail + create routes
+      sent/           # Email composition, outbox, sent history
+      settings/       # User preferences + cost tracking
+    api/              # API routes: emails, contacts, hub, settings, onboarding, auth,
+                      # campaigns, templates, actions, events
     onboarding/       # Multi-step onboarding wizard
   components/
     ui/               # Base UI library (Button, Card, Dialog, etc.)
     email/            # Email display components
-    actions/          # Action/to-do components
-    clients/          # Client management components
-    contacts/         # Contact management components
-    discover/         # Discovery dashboard components
+    home/             # DailyBriefingHeader, TodaySchedule, PendingTasksList
+    inbox/            # InboxTabs, PriorityEmailList
+    actions/          # ActionsContent
+    archive/          # ArchiveContent
+    campaigns/        # CampaignsContent
+    templates/        # TemplatesContent
+    contacts/         # ContactsTabs, PromoteToClientDialog
+    calendar/         # CalendarStats
+    tasks/            # TasksTabs
+    shared/           # PriorityCard (reusable across pages)
+    discover/         # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions
     categories/       # Category-specific UI (EmailCard, etc.)
-    events/           # Event calendar components
-    timeline/         # Timeline view components
-    hub/              # Hub dashboard components
-    layout/           # Navbar, Sidebar
+    layout/           # Navbar, Sidebar, PageHeader
     onboarding/       # Onboarding wizard UI
   services/
     analyzers/        # 8 AI analyzers (categorizer, action-extractor, etc.)
     processors/       # Email processing orchestration
     sync/             # Initial sync, sender patterns, pre-filtering
     contacts/         # Contact enrichment service
-    hub/              # Priority scoring
+    hub/              # Priority scoring (reads from contacts, not legacy clients)
     user-context/     # AI personalization
     jobs/             # Background jobs
-  hooks/              # useEmails, useActions, useClients, useContacts, etc.
+  hooks/              # useEmails, useActions, useContacts, useEvents, etc.
   lib/                # Shared: ai/, auth/, gmail/, google/, supabase/, utils/
   types/              # database.ts (20+ table types), discovery.ts
   config/             # App config, analyzer config
 supabase/
-  migrations/         # 28 SQL migration files (001-028)
+  migrations/         # 30 SQL migration files (001-030)
 scripts/              # seed.ts, verify-migrations.ts
 ```
 
 ## Features
 
 **Implemented:**
+- Streamlined 5-item navigation: Home, Inbox, Contacts, Calendar, Tasks
 - Multi-Gmail account sync (push notifications + scheduled polling)
 - 8 AI analyzers running in parallel (categorizer, action extractor, client tagger, event detector, date extractor, content digest, contact enricher, sender type classifier)
 - 12 life-bucket email categories with auto-categorization
+- Home page with daily briefing, AI priorities, today's schedule, pending tasks
+- Inbox with tabbed views: Categories (discover dashboard), Priority (AI-ranked), Archive
+- Unified contacts with clients merged in — tabbed filtering by All, Clients, Personal, Subscriptions
+- Unified calendar merging events + extracted dates with list/grid views and type filters
+- Task management with To-dos, Campaigns, and Templates tabs
 - Action tracking with multi-action support
-- Client management and auto-tagging
-- Contact intelligence with sender type classification
+- Contact intelligence with sender type classification and client promotion
 - Event detection with locality awareness
-- Discovery dashboard with category overview
-- Timeline view for upcoming dates/deadlines
 - Email sending with templates, campaigns, open tracking
 - Onboarding wizard with initial sync
 - Google Contacts import

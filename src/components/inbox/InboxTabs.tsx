@@ -36,9 +36,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
 import { LayoutGrid, TrendingUp, Archive } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
-// ─── Lazy-loaded tab content to avoid loading all pages upfront ─────────────
-import DiscoverPage from '@/app/(auth)/discover/page';
-import ArchivePage from '@/app/(auth)/archive/page';
+// ─── Extracted content components (Phase 4) ─────────────────────────────────
+import { DiscoverContent } from '@/components/discover';
+import { ArchiveContent } from '@/components/archive';
 import { PriorityEmailList } from '@/components/inbox/PriorityEmailList';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -136,7 +136,7 @@ export function InboxTabs() {
 
       {/* ─── Tab Content: Categories ─────────────────────────────────────── */}
       <TabsContent value="categories">
-        <DiscoverPage />
+        <DiscoverContent />
       </TabsContent>
 
       {/* ─── Tab Content: Priority ───────────────────────────────────────── */}
@@ -146,7 +146,7 @@ export function InboxTabs() {
 
       {/* ─── Tab Content: Archive ────────────────────────────────────────── */}
       <TabsContent value="archive">
-        <ArchivePage />
+        <ArchiveContent />
       </TabsContent>
     </Tabs>
   );

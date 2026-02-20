@@ -19,7 +19,7 @@ AI-powered email processing system with specialized analyzers that:
   - **Family & Personal**: `family_kids_school`, `family_health_appointments`, `personal_friends_family`
   - **Life Admin**: `finance`, `travel`, `shopping`, `local` (community/events)
   - **Information**: `newsletters_general`, `news_politics`, `product_updates`
-- **Track client relationships**: Link emails to clients separately from categorization
+- **Track client relationships**: Clients unified into contacts (`is_client` flag, `client_status`, `client_priority`)
 - **Extract actions**: Build dedicated to-do list from email content
 - **Save content**: URLs, tweet ideas, networking opportunities (future)
 - **Detect events**: Auto-extract event details for calendar (implemented)
@@ -160,7 +160,7 @@ These decisions were made after careful analysis and should guide all implementa
 | **AI Model** | GPT-4.1-mini only | Best value (~$3-5/month), optimized for function calling, 1M context |
 | **No AI Fallback** | Single model | Fallback adds complexity without proportional benefit |
 | **Categories** | Life-bucket system (12 categories) | Categories represent what part of life the email touches (work, family, admin, info) - REFACTORED Jan 2026 |
-| **Client Tracking** | Via `client_id` + filtering | Cleaner than category; allows `client_pipeline` emails linked to specific clients |
+| **Client Tracking** | Via `contact_id` + `is_client` flag on contacts | Clients merged into contacts table (Feb 2026); `client_id` deprecated |
 | **Events** | Label-based (`has_event`) | Events are no longer a category - detected via labels, can appear in any life-bucket |
 | **Urgency** | Score-based (1-10) | No separate "action_required" category; urgency tracked via score across all categories |
 | **Background Jobs** | Supabase pg_cron + Edge Functions | Already using Supabase; avoids Vercel Cron limitations |

@@ -1,18 +1,26 @@
 /**
- * 📦 Archive Page for IdeaBox
+ * Archive Content Component
  *
- * Displays archived emails with filtering and bulk actions.
+ * Extracted from the archive page for use inside the Inbox tabbed UI.
+ * Contains all archive list functionality without the PageHeader wrapper.
  *
- * @module app/(auth)/archive/page
+ * @module components/archive/ArchiveContent
+ * @since February 2026 — Phase 4 Navigation Redesign
  */
 
 'use client';
 
 import * as React from 'react';
-import { PageHeader } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input, Skeleton } from '@/components/ui';
 import { useEmails, type Email, type EmailCategory } from '@/hooks';
 import { Archive, ArchiveRestore, Trash2, Search, Mail, Calendar, Newspaper, Tag, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { createLogger } from '@/lib/utils/logger';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('ArchiveContent');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -30,27 +38,17 @@ function formatRelativeTime(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
-/**
- * Get badge display config for a category.
- *
- * REFACTORED (Jan 2026): Updated for life-bucket categories.
- * Categories now represent what part of life the email touches.
- */
 function getCategoryBadge(category: EmailCategory | null) {
   const map: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string; icon: React.ReactNode }> = {
-    // Work & Business
     client_pipeline: { variant: 'destructive', label: 'Client', icon: <AlertCircle className="h-3 w-3" /> },
     business_work_general: { variant: 'default', label: 'Work', icon: <Mail className="h-3 w-3" /> },
-    // Family & Personal
     family_kids_school: { variant: 'default', label: 'School', icon: <Calendar className="h-3 w-3" /> },
     family_health_appointments: { variant: 'default', label: 'Health', icon: <Calendar className="h-3 w-3" /> },
     personal_friends_family: { variant: 'outline', label: 'Personal', icon: <Mail className="h-3 w-3" /> },
-    // Life Admin
     finance: { variant: 'secondary', label: 'Finance', icon: <Mail className="h-3 w-3" /> },
     travel: { variant: 'default', label: 'Travel', icon: <Calendar className="h-3 w-3" /> },
     shopping: { variant: 'outline', label: 'Shopping', icon: <Tag className="h-3 w-3" /> },
     local: { variant: 'default', label: 'Local', icon: <Calendar className="h-3 w-3" /> },
-    // Information
     newsletters_general: { variant: 'secondary', label: 'Newsletter', icon: <Newspaper className="h-3 w-3" /> },
     news_politics: { variant: 'secondary', label: 'News', icon: <Newspaper className="h-3 w-3" /> },
     product_updates: { variant: 'outline', label: 'Updates', icon: <Archive className="h-3 w-3" /> },
@@ -58,10 +56,6 @@ function getCategoryBadge(category: EmailCategory | null) {
   return map[category || ''] || { variant: 'outline' as const, label: 'Archived', icon: <Archive className="h-3 w-3" /> };
 }
 
-/**
- * Categories typically shown in archive view.
- * REFACTORED (Jan 2026): Updated for life-bucket categories.
- */
 const ARCHIVE_CATEGORIES = [
   { value: 'all', label: 'All' },
   { value: 'newsletters_general', label: 'Newsletters' },
@@ -129,7 +123,11 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }) {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export default function ArchivePage() {
+/**
+ * ArchiveContent — archive email list with filtering and bulk actions.
+ * Extracted from ArchivePage for use inside InboxTabs.
+ */
+export function ArchiveContent() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [categoryFilter, setCategoryFilter] = React.useState<string>('all');
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
@@ -139,20 +137,10 @@ export default function ArchivePage() {
     limit: 100, category: categoryFilter !== 'all' ? (categoryFilter as EmailCategory) : undefined,
   });
 
-  // Archive/delete an email by setting is_archived flag
-  const archiveEmail = async (id: string) => {
-    await updateEmail(id, { is_archived: true });
-  };
+  const archiveEmail = async (id: string) => { await updateEmail(id, { is_archived: true }); };
 
-  // Filter emails to show archiveable categories
-  // REFACTORED (Jan 2026): Updated for life-bucket categories
   const archivedEmails = React.useMemo(() => {
-    const archiveCategories = [
-      'newsletters_general',
-      'news_politics',
-      'product_updates',
-      'shopping',
-    ];
+    const archiveCategories = ['newsletters_general', 'news_politics', 'product_updates', 'shopping'];
     return emails.filter((email) => {
       if (categoryFilter !== 'all' && email.category !== categoryFilter) return false;
       if (categoryFilter === 'all' && !archiveCategories.includes(email.category || '')) return false;
@@ -166,7 +154,6 @@ export default function ArchivePage() {
   }, [emails, categoryFilter, searchQuery]);
 
   const handleRefresh = async () => { setIsRefreshing(true); await refetch(); setIsRefreshing(false); };
-  // REFACTORED (Jan 2026): 'personal' → 'personal_friends_family'
   const handleUnarchive = async (id: string) => { await updateEmail(id, { category: 'personal_friends_family' }); };
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to archive this email?')) {
@@ -183,15 +170,13 @@ export default function ArchivePage() {
 
   return (
     <div>
-      <PageHeader title="Archive" description="Archived emails stored for reference" breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Archive' }]}
-        actions={<Button variant="outline" size="sm" className="gap-2" onClick={handleRefresh} disabled={isRefreshing}>{isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{isRefreshing ? 'Refreshing...' : 'Refresh'}</Button>} />
-
       {error && <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg"><p className="text-sm text-destructive"><strong>Error:</strong> {error.message}</p></div>}
 
       <div className="mb-6 space-y-4">
         <div className="flex flex-wrap gap-4">
           <div className="relative flex-1 min-w-[200px]"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search archived emails..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" /></div>
           <div className="flex gap-2">{ARCHIVE_CATEGORIES.map((cat) => (<Button key={cat.value} variant={categoryFilter === cat.value ? 'default' : 'outline'} size="sm" onClick={() => setCategoryFilter(cat.value)}>{cat.label}</Button>))}</div>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleRefresh} disabled={isRefreshing}>{isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{isRefreshing ? 'Refreshing...' : 'Refresh'}</Button>
         </div>
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">

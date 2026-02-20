@@ -1,8 +1,8 @@
 /**
- * 📋 Actions Page for IdeaBox
+ * Actions Content Component
  *
- * Displays extracted action items from emails, organized by status and priority.
- * Actions are automatically extracted by the AI analyzer system.
+ * Extracted body content from the Actions page for use in tab containers.
+ * Renders everything the ActionsPage renders EXCEPT the PageHeader.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * FEATURES
@@ -14,13 +14,12 @@
  * - Deadline highlighting with urgency indicators
  * - Real-time stats
  *
- * @module app/(auth)/actions/page
+ * @module components/actions/ActionsContent
  */
 
 'use client';
 
 import * as React from 'react';
-import { PageHeader } from '@/components/layout';
 import {
   Card,
   CardContent,
@@ -43,7 +42,13 @@ import {
   Filter,
   Loader2,
 } from 'lucide-react';
+import { createLogger } from '@/lib/utils/logger';
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('ActionsContent');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -176,10 +181,10 @@ function ActionListItem({ action, onToggleComplete }: ActionListItemProps) {
               From email
             </span>
           )}
-          {action.client_id && (
+          {action.contact_id && (
             <span className="flex items-center gap-1">
               <Circle className="h-3 w-3" />
-              Client linked
+              Contact linked
             </span>
           )}
           {deadlineInfo && (
@@ -242,11 +247,12 @@ function EmptyState() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Actions page component.
+ * Actions content component.
  *
- * Displays actions from Supabase with filtering and optimistic updates.
+ * Renders the actions body content (error banner, stats cards, action list)
+ * without the PageHeader. Designed to be embedded in tab containers.
  */
-export default function ActionsPage() {
+export function ActionsContent() {
   const [filter, setFilter] = React.useState<'all' | 'pending' | 'completed'>('all');
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
@@ -287,34 +293,6 @@ export default function ActionsPage() {
 
   return (
     <div>
-      {/* ─────────────────────────────────────────────────────────────────────
-          Page Header
-          ───────────────────────────────────────────────────────────────────── */}
-      <PageHeader
-        title="Actions"
-        description="Tasks and action items extracted from your emails"
-        breadcrumbs={[
-          { label: 'Home', href: '/' },
-          { label: 'Actions' },
-        ]}
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-          >
-            {isRefreshing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Filter className="h-4 w-4" />
-            )}
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
-        }
-      />
-
       {/* ─────────────────────────────────────────────────────────────────────
           Error Banner
           ───────────────────────────────────────────────────────────────────── */}

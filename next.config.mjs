@@ -14,6 +14,10 @@ const nextConfig = {
   // This ensures bookmarks, shared links, and cached navigation state continue
   // to work after the navigation restructure.
   //
+  // TRANSITION PERIOD: Keep these redirects for at least 6 months (until August 2026)
+  // to allow cached bookmarks and external links to resolve. After that, they can
+  // be removed if analytics show negligible redirect traffic.
+  //
   // Next.js redirects run BEFORE page resolution, so they take priority
   // even when old page files still exist at the source path.
   // Query params in destination URLs are fully supported.
