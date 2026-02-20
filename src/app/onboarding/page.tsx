@@ -201,36 +201,44 @@ export default function OnboardingPage() {
     const pollInterval = 2000; // Poll every 2 seconds
 
     const poll = async () => {
+      if (cancelled) return;
+
       try {
         const response = await fetch('/api/onboarding/sync-status', {
           credentials: 'include',
         });
-        if (!response.ok || cancelled) return;
-
-        const data = await response.json();
 
         if (cancelled) return;
 
-        setSyncProgress({
-          status: data.status,
-          progress: data.progress ?? 0,
-          currentStep: data.currentStep ?? 'Processing...',
-          discoveries: data.discoveries ?? { actionItems: 0, events: 0, clientsDetected: [] },
-          error: data.error,
-        });
+        if (!response.ok) {
+          // Don't stop polling on transient server errors - retry on next interval
+          logger.debug('Sync status poll returned non-200', { status: response.status });
+        } else {
+          const data = await response.json();
 
-        // If completed, redirect to inbox
-        if (data.status === 'completed') {
-          logger.info('Initial sync completed, redirecting to inbox');
-          await refreshSession();
-          router.replace('/inbox');
-          return;
-        }
+          if (cancelled) return;
 
-        // If failed, stop polling (user can retry)
-        if (data.status === 'failed') {
-          logger.warn('Initial sync failed', { error: data.error });
-          return;
+          setSyncProgress({
+            status: data.status,
+            progress: data.progress ?? 0,
+            currentStep: data.currentStep ?? 'Processing...',
+            discoveries: data.discoveries ?? { actionItems: 0, events: 0, clientsDetected: [] },
+            error: data.error,
+          });
+
+          // If completed, redirect to inbox
+          if (data.status === 'completed') {
+            logger.info('Initial sync completed, redirecting to inbox');
+            await refreshSession();
+            router.replace('/inbox');
+            return;
+          }
+
+          // If failed, stop polling (user can retry)
+          if (data.status === 'failed') {
+            logger.warn('Initial sync failed', { error: data.error });
+            return;
+          }
         }
       } catch (err) {
         logger.debug('Sync status poll failed', {
@@ -238,7 +246,7 @@ export default function OnboardingPage() {
         });
       }
 
-      // Continue polling
+      // Continue polling (even after transient errors)
       if (!cancelled) {
         setTimeout(poll, pollInterval);
       }

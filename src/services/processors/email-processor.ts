@@ -88,6 +88,7 @@ import {
   type SenderTypeDetectionResult,
 } from '@/services/sync/sender-type-detector';
 import type { Email } from '@/types/database';
+import { normalizeCategory } from '@/types/discovery';
 import type {
   EmailInput,
   UserContext,
@@ -1234,9 +1235,12 @@ export class EmailProcessor {
       analyzed_at: new Date().toISOString(),
     };
 
-    // Only set category if we have one from analysis
+    // Only set category if we have a valid one from analysis
     if (analysis.categorization?.category) {
-      emailUpdate.category = analysis.categorization.category;
+      const validCategory = normalizeCategory(analysis.categorization.category);
+      if (validCategory) {
+        emailUpdate.category = validCategory;
+      }
     }
 
     const { error: updateError } = await supabase
@@ -1684,9 +1688,10 @@ export class EmailProcessor {
   ): Promise<void> {
     const supabase = await createServerClient();
 
-    // Build update object
+    // Build update object (normalize category to prevent DB constraint violations)
+    const validCategory = normalizeCategory(categorization.category) ?? categorization.category;
     const updates: Record<string, unknown> = {
-      category: categorization.category,
+      category: validCategory,
       summary: categorization.summary || null,
       quick_action: categorization.quickAction || null,
       labels: categorization.labels || null,
