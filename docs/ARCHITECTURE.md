@@ -157,16 +157,16 @@ src/
     ui/                         # Base UI library (Button, Card, Dialog, etc.)
     email/                      # Email display (list, detail, compose)
     home/                       # Home page: DailyBriefingHeader, TodaySchedule, PendingTasksList
-    inbox/                      # Inbox page: InboxTabs, PriorityEmailList
+    inbox/                      # Inbox page: InboxTabs, PriorityEmailList (all 12 category colors)
     actions/                    # ActionsContent (extracted from old actions page)
-    archive/                    # ArchiveContent (extracted from old archive page)
+    archive/                    # ArchiveContent — queries is_archived emails, supports restore/hard-delete/click-to-detail
     campaigns/                  # CampaignsContent (extracted from old campaigns page)
     templates/                  # TemplatesContent (extracted from old templates page)
     contacts/                   # ContactsTabs, PromoteToClientDialog
     calendar/                   # CalendarStats
     tasks/                      # TasksTabs
     shared/                     # PriorityCard (shared across pages)
-    discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions
+    discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions, FailureSummary (wired to retry API)
     categories/                 # Category view (EmailCard, intelligence bar)
     layout/                     # Navbar, Sidebar, PageHeader
     onboarding/                 # Onboarding wizard steps (5 steps, lazy-loaded 3+) + MadLibsProfileStep, MadLibsField

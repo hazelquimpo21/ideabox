@@ -4,13 +4,22 @@
  * Full-page view of a single email with AI analysis.
  * Route: /inbox/[category]/[emailId]
  *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * FIX LOG (February 2026)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * - FIXED: "Back to Inbox" now preserves the originating tab context via the
+ *   `?from=` query parameter. If the user navigated here from the Priority or
+ *   Archive tab, the back button returns them to that tab instead of always
+ *   landing on the default Categories tab.
+ *
  * @module app/(auth)/inbox/[category]/[emailId]/page
  */
 
 'use client';
 
 import * as React from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Archive, Star, Mail, MailOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,9 +38,14 @@ const logger = createLogger('InboxEmailDetailPage');
 export default function InboxEmailDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const category = params.category as string;
   const emailId = params.emailId as string;
   const supabase = React.useMemo(() => createClient(), []);
+
+  // Read the originating tab so "Back" returns the user to the correct tab.
+  // Example URL: /inbox/finance/abc123?from=priority
+  const fromTab = searchParams.get('from');
 
   const isValidCategory = EMAIL_CATEGORIES_SET.has(category);
   const categoryDisplay = isValidCategory
@@ -91,8 +105,17 @@ export default function InboxEmailDetailPage() {
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
+  /**
+   * Navigate back to the inbox, preserving the originating tab context.
+   * If the user came from ?from=priority, they'll return to /inbox?tab=priority.
+   */
   const handleBack = () => {
-    router.push('/inbox');
+    const backUrl =
+      fromTab && fromTab !== 'categories'
+        ? `/inbox?tab=${fromTab}`
+        : '/inbox';
+    logger.info('Navigating back to inbox', { fromTab, backUrl });
+    router.push(backUrl);
   };
 
   const handleStar = async () => {
@@ -128,7 +151,12 @@ export default function InboxEmailDetailPage() {
       if (updateError) throw updateError;
 
       logDiscover.emailAction({ category, emailId, action: 'archive' });
-      router.push('/inbox');
+      // Preserve originating tab when navigating back after archive
+      const backUrl =
+        fromTab && fromTab !== 'categories'
+          ? `/inbox?tab=${fromTab}`
+          : '/inbox';
+      router.push(backUrl);
     } catch (err) {
       logger.error('Failed to archive', { error: String(err) });
     }

@@ -32,14 +32,7 @@ import { EMAIL_CATEGORIES_SET, isLegacyCategory } from '@/types/discovery';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+// Dialog imports removed — CategoryModal handles its own Dialog component
 import {
   DiscoveryHero,
   CategoryCardGrid,
@@ -53,7 +46,6 @@ import { SyncProgressCard } from '@/components/discover/SyncProgressCard';
 import { useToast } from '@/components/ui/use-toast';
 import { useInitialSyncProgress } from '@/hooks/useInitialSyncProgress';
 import { createLogger } from '@/lib/utils/logger';
-import { CATEGORY_DISPLAY } from '@/types/discovery';
 import type { InitialSyncResponse, EmailCategory, CategorySummary } from '@/types/discovery';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -398,10 +390,51 @@ export function DiscoverContent() {
     router.push(`/contacts?tab=clients&add=${encodeURIComponent(clientName)}`);
   };
 
+  /**
+   * Retry AI analysis for emails that previously failed.
+   * Calls the real POST /api/emails/retry-analysis endpoint.
+   */
   const handleRetryFailures = async (failureIds: string[]) => {
-    toast({ title: 'Retrying...', description: `Retrying ${failureIds.length} failed analyses` });
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    toast({ title: 'Retry complete', description: 'Some emails may have been re-analyzed' });
+    logger.info('Retrying failed analyses', { count: failureIds.length, emailIds: failureIds });
+    setIsRetrying(true);
+    toast({ title: 'Retrying...', description: `Re-analyzing ${failureIds.length} failed email${failureIds.length !== 1 ? 's' : ''}` });
+
+    try {
+      const response = await fetch('/api/emails/retry-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ emailIds: failureIds }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Retry failed (HTTP ${response.status})`);
+      }
+
+      const data = await response.json();
+      const summary = data.data?.summary || data.summary || {};
+
+      logger.success('Retry analysis complete', {
+        succeeded: summary.succeeded,
+        failed: summary.failed,
+        totalTokens: summary.totalTokensUsed,
+      });
+
+      toast({
+        title: 'Retry complete',
+        description: `${summary.succeeded || 0} succeeded, ${summary.failed || 0} failed`,
+      });
+
+      // Refresh the dashboard to reflect updated analysis results
+      await refreshResults();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Retry failed';
+      logger.error('Retry analysis failed', { error: message });
+      toast({ variant: 'destructive', title: 'Retry failed', description: message });
+    } finally {
+      setIsRetrying(false);
+    }
   };
 
   const handleGoToInbox = () => { router.push('/inbox'); };

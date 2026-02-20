@@ -120,6 +120,7 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 
 ### Known Issues
 - `urgency_score` and `relationship_signal` exist in TypeScript types for `emails` table but have **no database migration** — reads will return null. Need a migration to add these columns if denormalization is desired.
+- ComposeEmail component exists but is not accessible from the inbox or email detail views (no reply/compose button wired up in inbox flows)
 
 ---
 
@@ -142,3 +143,4 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | 14+ | Jan 2026 | Push notifications, sender type classification, content digest, historical sync, email sending, category cleanup |
 | Nav Redesign | Feb 2026 | 4-phase navigation overhaul: sidebar from 11→5 items, new routes, tabbed UIs, clients merged into contacts, old pages deleted |
 | Superadmin | Feb 2026 | Superadmin dashboard (/admin), account reset API, superadmin access control config, two-step confirmation UI |
+| Inbox Audit | Feb 2026 | Fixed 9 inbox issues: archive tab now queries archived emails correctly, unarchive/delete handlers fixed, archived emails clickable, back button preserves tab context, retry failures wired to real API, "View All" navigates to full page, all 12 category colors in Priority tab, unused imports cleaned up |

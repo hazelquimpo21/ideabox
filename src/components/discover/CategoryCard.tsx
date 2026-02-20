@@ -202,6 +202,17 @@ export function CategoryCard({
     }
   };
 
+  /**
+   * Navigate directly to the full category page (bypasses modal).
+   * Used by the "View All N" button so users can go straight to the
+   * full list without an intermediate modal step.
+   */
+  const handleViewAllClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't trigger card-level onClick (modal)
+    logDiscover.navigateToDetail({ category: summary.category });
+    router.push(`/inbox/${summary.category}`);
+  };
+
   const handleNeedsAttentionClick = (item: NeedsAttentionItem, e: React.MouseEvent) => {
     e.stopPropagation();
     logDiscover.navigateToEmail({
@@ -443,6 +454,7 @@ export function CategoryCard({
 
         {/* ─────────────────────────────────────────────────────────────────────
             FOOTER: View All button (enhanced mode)
+            Navigates directly to the full category page (skips modal).
         ───────────────────────────────────────────────────────────────────── */}
         {enhanced && (
           <div className="flex justify-center pt-2">
@@ -450,7 +462,7 @@ export function CategoryCard({
               variant="ghost"
               size="sm"
               className={cn('text-xs gap-1', display.color)}
-              onClick={handleClick}
+              onClick={handleViewAllClick}
             >
               View All {summary.count}
               <ChevronRight className="h-3 w-3" />
