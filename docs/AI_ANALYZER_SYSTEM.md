@@ -134,54 +134,77 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 
 ## Phase 1 Analyzers
 
-### 1. Categorizer Analyzer (ENHANCED Jan 2026)
+### 1. Categorizer Analyzer (ENHANCED Jan 2026, Feb 2026)
 
-**Purpose:** Classify email + generate assistant-style summary + suggest quick action
+**Purpose:** Classify email + assess signal quality + determine reply worthiness + detect noise + generate summary + suggest quick action
 
-> **IMPORTANT:** "client" is NOT a category. Client relationship is tracked via `client_id` in the database.
+> **IMPORTANT:** "client" is NOT a category. Client relationship is tracked via `contact_id` in the database.
 > This design allows a client email to be categorized into a life-bucket category (e.g., `client_pipeline`) rather than hidden in a "client" bucket.
 
-**ENHANCED (Jan 2026):** Now also generates:
-- `summary`: One-sentence assistant-style overview (e.g., "Sarah from Acme wants you to review the proposal by Friday")
-- `quick_action`: Suggested quick action for ALL emails (respond, review, archive, save, calendar, unsubscribe, follow_up, none)
+**ENHANCED (Jan 2026):** Added `summary` and `quick_action` fields.
+
+**ENHANCED (Feb 2026):** Added signal strength, reply worthiness, and noise detection:
+- `signal_strength`: How important is this email? (high/medium/low/noise)
+- `reply_worthiness`: Should the user reply? (must_reply/should_reply/optional_reply/no_reply)
+- `labels` now include noise-type labels: `sales_pitch`, `webinar_invite`, `fake_recognition`, `mass_outreach`, `promotional`
+- Prompt overhauled with "think like a protective assistant" framing
+- Blunt summaries for noise emails (e.g., "Sales pitch from DataCo - skip")
 
 **Function Schema:**
 ```typescript
 {
   name: 'categorize_email',
-  description: 'Categorizes an email by what action (if any) is needed from the user',
+  description: 'Categorizes an email and assesses its signal quality and reply worthiness',
   parameters: {
     type: 'object',
     properties: {
       category: {
         type: 'string',
         enum: [
-          // ═══════════════════════════════════════════════════════════════════════
-          // LIFE-BUCKET CATEGORIES (REFACTORED Jan 2026)
-          // Categories represent what part of life the email touches
-          // ═══════════════════════════════════════════════════════════════════════
-
-          // Work & Business
-          'client_pipeline',          // Active client work needing attention
-          'business_work_general',    // Professional/work emails
-
-          // Family & Personal
-          'family_kids_school',       // Kids, school, activities
-          'family_health_appointments', // Health, medical, appointments
-          'personal_friends_family',  // Friends, family, social correspondence
-
-          // Life Admin
-          'finance',                  // Bills, banking, payments
-          'travel',                   // Flights, hotels, trips
-          'shopping',                 // Orders, shipping, deals, promos
-          'local',                    // Community, local events
-
-          // Information
-          'newsletters_general',      // Substacks, digests, publications
-          'news_politics',            // News outlets, political updates
-          'product_updates',          // SaaS updates, tech products
+          // LIFE-BUCKET CATEGORIES (12 values)
+          'client_pipeline', 'business_work_general',
+          'family_kids_school', 'family_health_appointments', 'personal_friends_family',
+          'finance', 'travel', 'shopping', 'local',
+          'newsletters_general', 'news_politics', 'product_updates',
         ],
-        description: 'Primary life-bucket category (NOT action-focused - use urgency_score for that)',
+        description: 'Primary life-bucket category',
+      },
+      labels: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: [
+            // Action labels
+            'needs_reply', 'needs_decision', 'needs_review', 'needs_approval',
+            // Urgency labels
+            'urgent', 'has_deadline', 'time_sensitive',
+            // Relationship labels
+            'from_vip', 'new_contact', 'networking_opportunity',
+            // Content labels
+            'has_attachment', 'has_link', 'has_question',
+            // Other labels
+            'local_event', 'family_related', 'community',
+            'invoice', 'receipt', 'payment_due',
+            'meeting_request', 'rsvp_needed', 'appointment',
+            'educational', 'industry_news', 'job_opportunity',
+            'has_event',
+            // NOISE LABELS (NEW Feb 2026)
+            'sales_pitch', 'webinar_invite', 'fake_recognition', 'mass_outreach', 'promotional',
+          ],
+        },
+        maxItems: 5,
+        description: 'Secondary labels for flexible filtering (0-5). Include noise labels when applicable.',
+      },
+      // NEW FIELDS (Feb 2026)
+      signal_strength: {
+        type: 'string',
+        enum: ['high', 'medium', 'low', 'noise'],
+        description: 'How important is this email? high=direct human correspondence, medium=useful info, low=background noise, noise=auto-archive candidate',
+      },
+      reply_worthiness: {
+        type: 'string',
+        enum: ['must_reply', 'should_reply', 'optional_reply', 'no_reply'],
+        description: 'Should the user reply? must_reply=someone waiting, should_reply=smart networking move, optional_reply=could if interested, no_reply=no response expected',
       },
       confidence: {
         type: 'number',
@@ -191,17 +214,16 @@ async analyze(email: Email): Promise<AnalyzerResult> {
       },
       reasoning: {
         type: 'string',
-        description: 'Brief explanation of why this category was chosen',
+        description: 'Brief explanation of why this category was chosen and signal/reply assessment',
       },
       topics: {
         type: 'array',
         items: { type: 'string' },
         description: 'Key topics extracted from email: billing, meeting, feedback, etc.',
       },
-      // NEW FIELDS (Jan 2026)
       summary: {
         type: 'string',
-        description: 'One-sentence assistant-style summary. Example: "Sarah from Acme wants you to review the proposal by Friday"',
+        description: 'One-sentence assistant-style summary. For noise: "Sales pitch from [company] - skip"',
       },
       quick_action: {
         type: 'string',
@@ -209,22 +231,51 @@ async analyze(email: Email): Promise<AnalyzerResult> {
         description: 'Suggested quick action for inbox triage',
       },
     },
-    required: ['category', 'confidence', 'reasoning', 'summary', 'quick_action'],
+    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action'],
   },
 }
 ```
 
+**Signal Strength Guide:**
+
+| Level | Meaning | Examples |
+|-------|---------|----------|
+| `high` | Direct human correspondence requiring attention | Client emails, personal messages, work requests |
+| `medium` | Useful information worth seeing | Order confirmations, appointment reminders, relevant newsletters |
+| `low` | Background noise, can be batched/skipped | Marketing newsletters, product updates from rarely-used tools |
+| `noise` | Pure noise, auto-archive candidate | Cold sales, fake awards, mass outreach, webinar spam |
+
+**Reply Worthiness Guide:**
+
+| Level | Meaning | Examples |
+|-------|---------|----------|
+| `must_reply` | Someone is waiting for a response | Client asking a question, friend inviting you, boss assigning work |
+| `should_reply` | Smart networking/relationship move | Interesting newsletter author, potential collaboration, warm intro |
+| `optional_reply` | Could reply if interested | Survey from a tool you use, optional RSVP, FYI from colleague |
+| `no_reply` | No reply expected or useful | Automated notifications, receipts, broadcast newsletters, noise |
+
+**Noise Detection Labels:**
+
+| Label | Pattern | Example |
+|-------|---------|---------|
+| `sales_pitch` | Unknown sender selling a product/service | "Let me show you how our platform can..." |
+| `webinar_invite` | Mass webinar/event invitation from unknown | "Join our exclusive webinar on..." |
+| `fake_recognition` | Flattery-based cold outreach | "You've been selected for our Top 40 Under 40..." |
+| `mass_outreach` | Templated outreach to many recipients | "I came across your profile and..." |
+| `promotional` | Discount/sale from company you barely use | "50% off for the next 24 hours!" |
+
 **Output Examples:**
 
-| Email Type | Summary | Quick Action |
-|------------|---------|--------------|
-| Client request | "Sarah from Acme wants you to review the Q1 proposal by Friday" | respond |
-| AWS bill | "Your AWS bill for January is $142.67 - payment processed" | archive |
-| LinkedIn digest | "LinkedIn: 5 people viewed your profile this week" | review |
-| Event invite | "Milwaukee Tech Meetup on Jan 25 at 6pm - RSVP requested" | calendar |
-| Spam-ish newsletter | "Marketing email from SaaS tool you signed up for once" | unsubscribe |
+| Email Type | Signal | Reply | Summary | Quick Action |
+|------------|--------|-------|---------|--------------|
+| Client request | high | must_reply | "Sarah from Acme wants you to review the Q1 proposal by Friday" | respond |
+| AWS bill | medium | no_reply | "Your AWS bill for January is $142.67 - payment processed" | archive |
+| Interesting newsletter | medium | should_reply | "Morning Brew covers Fed rate decision - relevant to your finance clients" | review |
+| Event invite | medium | optional_reply | "Milwaukee Tech Meetup on Jan 25 at 6pm - RSVP requested" | calendar |
+| Cold sales pitch | noise | no_reply | "Sales pitch from DataCo wanting a demo call - skip" | archive |
+| Fake award email | noise | no_reply | "Fake recognition email from BusinessWeekly - mass outreach" | archive |
 
-**Cost:** ~$0.00015 per email (GPT-4.1-mini, increased tokens for summary)
+**Cost:** ~$0.00018 per email (GPT-4.1-mini, 600 max tokens for expanded output)
 
 ---
 
@@ -306,7 +357,7 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 Legacy fields (`actionType`, `actionTitle`, etc.) are still populated from the primary action.
 Existing code continues to work without changes.
 
-**System Prompt:**
+**System Prompt (summary):**
 ```
 You are an action extraction specialist. Find ALL action items in an email.
 
@@ -320,6 +371,13 @@ Look for:
 
 Be conservative: not every email requires action. FYI emails, newsletters,
 automated notifications typically don't require action.
+
+NOISE EMAILS ARE NEVER ACTIONS (ENHANCED Feb 2026):
+- Cold sales pitches, fake awards, mass outreach, webinar invitations from
+  unknown senders are NEVER real actions, even if they use urgent language.
+- If the sender is unknown AND they want something FROM the user, it is
+  almost never a real action.
+- Return has_action: false and urgency_score: 1 for these.
 
 For urgency scoring:
 - 1-3: Can wait a week or more
@@ -909,11 +967,18 @@ this.log('error', 'API call failed', {
 
 | Factor | Description | Multiplier Range |
 |--------|-------------|------------------|
+| Signal Strength (NEW Feb 2026) | AI-assessed email relevance | 0.05x (noise) - 1.8x (high) |
+| Reply Worthiness (NEW Feb 2026) | AI-assessed reply need | 0.8x (no_reply) - 1.6x (must_reply) |
 | Deadline Proximity | Items with approaching deadlines get boosted | 1.0x - 2.0x |
 | Client Importance | VIP clients get higher baseline priority | 1.0x - 1.5x |
 | Staleness | Old unactioned items surface for attention | 1.0x - 1.3x |
 
-**Formula:** `final_priority = base_urgency * deadline_factor * client_factor * staleness_factor`
+**Signal Strength Multipliers:** high=1.8x, medium=1.0x, low=0.3x, noise=0.05x
+**Reply Worthiness Boosts:** must_reply=1.6x, should_reply=1.3x, optional_reply=1.0x, no_reply=0.8x
+
+**Formula:** `final_priority = base_urgency * signal_strength * reply_worthiness * deadline_factor * client_factor * staleness_factor`
+
+> **NOTE (Feb 2026):** Noise emails (signal_strength=noise) get a 0.05x multiplier, effectively removing them from the Hub. This is the primary mechanism for noise suppression in the UI.
 
 **Usage:**
 ```typescript
@@ -1046,20 +1111,22 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 
 ---
 
-## Analyzer Execution Flow (ENHANCED Jan 2026)
+## Analyzer Execution Flow (ENHANCED Jan 2026, Feb 2026)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                        EMAIL PROCESSING PIPELINE (ENHANCED Jan 2026)                      │
+│                   EMAIL PROCESSING PIPELINE (ENHANCED Jan+Feb 2026)                       │
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                          │
 │  PHASE 1: Core Analyzers (run in parallel)                                               │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       │
 │  │ Categorizer │ │  Content    │ │   Action    │ │   Client    │ │    Date     │       │
-│  │             │ │   Digest    │ │  Extractor  │ │   Tagger    │ │  Extractor  │       │
-│  │ + category  │ │  (NEW)      │ │ (ENHANCED)  │ │             │ │             │       │
+│  │  (ENH Feb)  │ │   Digest    │ │  Extractor  │ │   Tagger    │ │  Extractor  │       │
+│  │ + category  │ │             │ │ (ENHANCED)  │ │             │ │             │       │
 │  │ + labels    │ │ + gist      │ │ + MULTIPLE  │ │             │ │ deadlines,  │       │
-│  │ + summary   │ │ + keyPoints │ │   actions!  │ │             │ │ payments    │       │
+│  │ + signal ◀──│─│─ NEW Feb ──│─│── actions!  │ │             │ │ payments    │       │
+│  │ + reply  ◀──│─│─ NEW Feb ──│─│── + noise   │ │             │ │             │       │
+│  │ + summary   │ │ + keyPoints │ │   rejection │ │             │ │             │       │
 │  │   has_event │ │ + links     │ │ + priority  │ │             │ │             │       │
 │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘       │
 │         │               │               │               │               │               │
@@ -1103,10 +1170,12 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │  │  ┌─────────────────────────┐                                                     │  │
 │  │  │ emails table (denorm)   │                                                     │  │
 │  │  │                         │                                                     │  │
-│  │  │ + gist (NEW)            │   ← Fast list display without JOIN                  │  │
-│  │  │ + key_points (NEW)      │                                                     │  │
+│  │  │ + gist                  │   ← Fast list display without JOIN                  │  │
+│  │  │ + key_points            │                                                     │  │
 │  │  │ + summary               │                                                     │  │
 │  │  │ + category, labels      │                                                     │  │
+│  │  │ + signal_strength (NEW) │   ← Hub priority scoring + noise filtering          │  │
+│  │  │ + reply_worthiness (NEW)│                                                     │  │
 │  │  └─────────────────────────┘                                                     │  │
 │  └───────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                          │

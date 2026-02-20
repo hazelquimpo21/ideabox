@@ -1,7 +1,7 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
 > **Last Updated:** February 2026
-> **Source of Truth:** `supabase/migrations/001-028`
+> **Source of Truth:** `supabase/migrations/001-032`
 > **TypeScript Types:** `src/types/database.ts`
 
 ## Schema Overview
@@ -360,6 +360,10 @@ CREATE TABLE emails (
   gist TEXT,              -- 1-2 sentence content briefing
   key_points TEXT[],      -- Key bullet points
 
+  -- Signal quality fields (migration 032)
+  signal_strength TEXT,   -- high, medium, low, noise (AI-assessed relevance)
+  reply_worthiness TEXT,  -- must_reply, should_reply, optional_reply, no_reply
+
   -- Relations
   client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
   project_tags TEXT[],
@@ -418,7 +422,7 @@ CREATE TABLE email_analyses (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   -- Analysis results (JSONB)
-  categorization JSONB,       -- {category, confidence, reasoning, topics, summary, quick_action, labels}
+  categorization JSONB,       -- {category, labels, signal_strength, reply_worthiness, confidence, reasoning, topics, summary, quick_action}
   action_extraction JSONB,    -- {has_action, actions[], urgency_score} (supports multi-action)
   client_tagging JSONB,       -- {client_match, client_id, client_name, confidence, relationship_signal}
   event_detection JSONB,      -- {has_event, event_title, event_date, event_locality, ...}
@@ -886,6 +890,7 @@ All tables have RLS enabled. Policy pattern:
 | 029 | merge_clients_into_contacts.sql | Merge clients table into contacts |
 | 030 | cleanup_client_id_columns.sql | Remove deprecated client_id columns |
 | 031 | profile_suggestions.sql | Add profile_suggestions JSONB + timestamp to user_context |
+| 032 | signal_strength_reply_worthiness.sql | Add signal_strength + reply_worthiness columns to emails, with indexes for Hub queries |
 
 ---
 
