@@ -58,7 +58,7 @@ const DEFAULT_LIMIT = 50;
  *
  * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
  */
-const EMAIL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, gist, summary, priority_score, key_points, topics, labels, analyzed_at, analysis_error, client_id' as const;
+const EMAIL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, gist, summary, priority_score, key_points, topics, labels, analyzed_at, analysis_error, contact_id' as const;
 
 /** Logger instance for this hook */
 const logger = createLogger('useEmails');
@@ -343,9 +343,9 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       }
 
       // Category filtering
-      // "clients" is a special filter that checks for non-null client_id
+      // "clients" is a special filter that checks for non-null contact_id
       if (category === 'clients') {
-        query = query.not('client_id', 'is', null);
+        query = query.not('contact_id', 'is', null);
       } else if (category !== 'all') {
         query = query.eq('category', category);
       }
@@ -359,7 +359,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
 
       // Client ID filter
       if (clientId) {
-        query = query.eq('client_id', clientId);
+        query = query.eq('contact_id', clientId);
       }
 
       // Execute query
@@ -552,7 +552,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       }
 
       if (category === 'clients') {
-        query = query.not('client_id', 'is', null);
+        query = query.not('contact_id', 'is', null);
       } else if (category !== 'all') {
         query = query.eq('category', category);
       }
@@ -563,7 +563,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       }
 
       if (clientId) {
-        query = query.eq('client_id', clientId);
+        query = query.eq('contact_id', clientId);
       }
 
       const { data, error: queryError } = await query;
