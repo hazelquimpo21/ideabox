@@ -122,7 +122,6 @@ export const emailUpdateSchema = z.object({
   is_starred: z.boolean().optional(),
   is_archived: z.boolean().optional(),
   category: emailCategorySchema.optional(),
-  client_id: uuidSchema.nullable().optional(),
 }).refine((data) => Object.keys(data).length > 0, {
   message: 'At least one field must be provided',
 });
@@ -196,7 +195,6 @@ export const actionCreateSchema = z.object({
   deadline: z.string().datetime().optional(),
   estimated_minutes: z.number().int().positive().optional(),
   email_id: uuidSchema.optional(),
-  client_id: uuidSchema.optional(),
 });
 
 export type ActionCreateInput = z.infer<typeof actionCreateSchema>;
@@ -217,91 +215,14 @@ export const actionUpdateSchema = z.object({
   deadline: z.string().datetime().nullable().optional(),
   estimated_minutes: z.number().int().positive().nullable().optional(),
   status: actionStatusSchema.optional(),
-  client_id: uuidSchema.nullable().optional(),
 }).refine((data) => Object.keys(data).length > 0, {
   message: 'At least one field must be provided',
 });
 
 export type ActionUpdateInput = z.infer<typeof actionUpdateSchema>;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CLIENT SCHEMAS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Valid client statuses.
- */
-export const clientStatusSchema = z.enum([
-  'active',
-  'inactive',
-  'archived',
-]);
-
-/**
- * Valid client priority levels.
- */
-export const clientPrioritySchema = z.enum([
-  'low',
-  'medium',
-  'high',
-  'vip',
-]);
-
-/**
- * Client list query parameters.
- *
- * @example
- * GET /api/clients?status=active&priority=vip
- */
-export const clientQuerySchema = paginationSchema.extend({
-  status: clientStatusSchema.optional(),
-  priority: clientPrioritySchema.optional(),
-  search: z.string().min(1).max(100).optional(),
-});
-
-export type ClientQueryParams = z.infer<typeof clientQuerySchema>;
-
-/**
- * Client creation schema.
- *
- * @example
- * POST /api/clients
- * { "name": "Acme Corp", "company": "Acme Corporation", "email": "contact@acme.com" }
- */
-export const clientCreateSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  company: z.string().max(100).optional(),
-  email: z.string().email().optional(),
-  status: clientStatusSchema.default('active'),
-  priority: clientPrioritySchema.default('medium'),
-  email_domains: z.array(z.string()).optional(),
-  keywords: z.array(z.string()).optional(),
-  notes: z.string().max(1000).optional(),
-});
-
-export type ClientCreateInput = z.infer<typeof clientCreateSchema>;
-
-/**
- * Client update schema (partial updates allowed).
- *
- * @example
- * PATCH /api/clients/[id]
- * { "priority": "vip", "notes": "Key enterprise client" }
- */
-export const clientUpdateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  company: z.string().max(100).nullable().optional(),
-  email: z.string().email().nullable().optional(),
-  status: clientStatusSchema.optional(),
-  priority: clientPrioritySchema.optional(),
-  email_domains: z.array(z.string()).optional(),
-  keywords: z.array(z.string()).optional(),
-  notes: z.string().max(1000).nullable().optional(),
-}).refine((data) => Object.keys(data).length > 0, {
-  message: 'At least one field must be provided',
-});
-
-export type ClientUpdateInput = z.infer<typeof clientUpdateSchema>;
+// CLIENT SCHEMAS removed — clients table archived in migration 030.
+// Use contact schemas with is_client filter instead.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // USER CONTEXT SCHEMAS (NEW - Jan 2026)

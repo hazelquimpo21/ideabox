@@ -23,14 +23,14 @@
  *
  * // With breadcrumbs and actions
  * <PageHeader
- *   title="Client Details"
- *   description="View and manage client information"
+ *   title="Contact Details"
+ *   description="View and manage contact information"
  *   breadcrumbs={[
- *     { label: 'Clients', href: '/clients' },
+ *     { label: 'Contacts', href: '/contacts' },
  *     { label: 'Acme Corp' },
  *   ]}
  *   actions={
- *     <Button>Edit Client</Button>
+ *     <Button>Edit Contact</Button>
  *   }
  * />
  * ```
@@ -170,9 +170,9 @@ function Breadcrumbs({
  * // Full featured
  * <PageHeader
  *   title="Acme Corp"
- *   description="Active client since January 2024"
+ *   description="Active contact since January 2024"
  *   breadcrumbs={[
- *     { label: 'Clients', href: '/clients' },
+ *     { label: 'Contacts', href: '/contacts' },
  *     { label: 'Acme Corp' },
  *   ]}
  *   badge={<Badge variant="secondary">Active</Badge>}

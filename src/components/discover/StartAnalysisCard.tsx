@@ -4,22 +4,9 @@
  * UI for users to initiate their first email analysis from the Discover page.
  * Provides options for Quick (10), Standard (25), or Deep (50) analysis.
  *
- * ═══════════════════════════════════════════════════════════════════════════════
- * TERMINOLOGY (STANDARDIZED)
- * ═══════════════════════════════════════════════════════════════════════════════
+ * Moved from src/app/(auth)/discover/components/ in Phase 4.
  *
- * Throughout IdeaBox, we use consistent language:
- *
- * - "Analyze" = Run AI on emails to categorize, extract actions, etc.
- * - "Refresh" = Fetch new emails from Gmail AND analyze them
- * - "Sync" = Internal term for the full fetch + analyze process
- *
- * For users, we show:
- * - "Analyze X emails" - Clear what AI will do
- * - Estimated time and cost - Transparency
- * - "You can change this in Settings" - Reassurance
- *
- * @module app/(auth)/discover/components/StartAnalysisCard
+ * @module components/discover/StartAnalysisCard
  * @since January 2026
  */
 
@@ -37,13 +24,9 @@ import Link from 'next/link';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface StartAnalysisCardProps {
-  /** Error message from previous failed analysis attempt */
   error: string | null;
-  /** Whether analysis is currently starting */
   isStartingSync: boolean;
-  /** Callback when user selects an analysis option */
   onStartAnalysis: (emailCount: number) => void;
-  /** Callback when user skips analysis */
   onSkip: () => void;
 }
 
@@ -51,10 +34,6 @@ interface StartAnalysisCardProps {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Analysis options with user-friendly descriptions.
- * Cost estimates based on ~$0.0006 per email at GPT-4.1-mini rates.
- */
 const ANALYSIS_OPTIONS = [
   {
     count: 10,
@@ -92,15 +71,6 @@ const ANALYSIS_OPTIONS = [
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Card displayed on the Discover page for first-time analysis.
- *
- * Shows three options with clear terminology:
- * - What will happen (analyze X emails)
- * - How long it takes
- * - Estimated cost
- * - Reassurance that settings can be changed later
- */
 export function StartAnalysisCard({
   error,
   isStartingSync,
@@ -111,7 +81,6 @@ export function StartAnalysisCard({
     <div className="container max-w-2xl mx-auto py-12 px-4">
       <Card className="border-border/50">
         <CardContent className="pt-8 pb-8">
-          {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
               <Sparkles className="h-8 w-8 text-primary" />
@@ -123,59 +92,37 @@ export function StartAnalysisCard({
             </p>
           </div>
 
-          {/* Error message if previous analysis failed */}
           {error && (
             <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-4 mb-6 text-center">
               <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
             </div>
           )}
 
-          {/* Analysis Options */}
           <div className="space-y-4">
             <div className="text-center text-sm text-muted-foreground mb-4">
               Choose how many emails to analyze:
             </div>
-
             {ANALYSIS_OPTIONS.map((option) => {
               const Icon = option.icon;
               const isPrimary = option.variant === 'primary';
-
               return (
                 <button
                   key={option.count}
                   onClick={() => onStartAnalysis(option.count)}
                   disabled={isStartingSync}
-                  className={`
-                    w-full p-4 rounded-lg transition-colors text-left
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    ${isPrimary
-                      ? 'border-2 border-primary bg-primary/5 hover:bg-primary/10'
-                      : 'border border-border hover:border-primary/50 hover:bg-accent/50'
-                    }
-                  `}
+                  className={`w-full p-4 rounded-lg transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${isPrimary ? 'border-2 border-primary bg-primary/5 hover:bg-primary/10' : 'border border-border hover:border-primary/50 hover:bg-accent/50'}`}
                 >
                   <div className="flex items-start gap-4">
-                    <div
-                      className={`
-                        w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
-                        ${isPrimary ? 'bg-primary/20' : 'bg-muted'}
-                      `}
-                    >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isPrimary ? 'bg-primary/20' : 'bg-muted'}`}>
                       <Icon className={`h-5 w-5 ${isPrimary ? 'text-primary' : 'text-muted-foreground'}`} />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{option.name}</span>
-                        {option.isRecommended && (
-                          <Badge variant="secondary" className="text-xs">Recommended</Badge>
-                        )}
+                        {option.isRecommended && <Badge variant="secondary" className="text-xs">Recommended</Badge>}
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {option.description}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {option.count} emails &middot; {option.time} &middot; {option.cost}
-                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">{option.description}</p>
+                      <p className="text-xs text-muted-foreground mt-2">{option.count} emails &middot; {option.time} &middot; {option.cost}</p>
                     </div>
                   </div>
                 </button>
@@ -183,30 +130,22 @@ export function StartAnalysisCard({
             })}
           </div>
 
-          {/* Loading indicator when starting */}
           {isStartingSync && (
             <div className="flex items-center justify-center gap-2 mt-6 text-muted-foreground">
-              <Spinner size="sm" />
-              <span>Starting analysis...</span>
+              <Spinner size="sm" /><span>Starting analysis...</span>
             </div>
           )}
 
-          {/* Info note about settings */}
           <div className="flex items-start gap-2 mt-6 p-3 bg-muted/50 rounded-lg">
             <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
             <p className="text-xs text-muted-foreground">
               You can always analyze more emails later or change these settings in{' '}
-              <Link href="/settings?tab=ai" className="text-primary hover:underline">
-                Settings → AI Analysis
-              </Link>.
+              <Link href="/settings?tab=ai" className="text-primary hover:underline">Settings</Link>.
             </p>
           </div>
 
-          {/* Skip option */}
           <div className="text-center mt-6">
-            <Button variant="ghost" onClick={onSkip}>
-              Skip for now
-            </Button>
+            <Button variant="ghost" onClick={onSkip}>Skip for now</Button>
           </div>
         </CardContent>
       </Card>

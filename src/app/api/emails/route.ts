@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         user_id: user.id,
         is_archived: archived === true ? true : false,
         ...(category && { category }),
-        ...(clientId && { client_id: clientId }),
+        ...(clientId && { contact_id: clientId }),
         ...(unread !== undefined && { is_read: !unread }),
         ...(starred !== undefined && { is_starred: starred }),
       };
@@ -155,8 +155,8 @@ export async function GET(request: NextRequest) {
         sentQuery = sentQuery.eq('category', category);
       }
       if (clientId) {
-        receivedQuery = receivedQuery.eq('client_id', clientId);
-        sentQuery = sentQuery.eq('client_id', clientId);
+        receivedQuery = receivedQuery.eq('contact_id', clientId);
+        sentQuery = sentQuery.eq('contact_id', clientId);
       }
       if (unread !== undefined) {
         receivedQuery = receivedQuery.eq('is_read', !unread);
@@ -245,7 +245,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (clientId) {
-      query = query.eq('client_id', clientId);
+      query = query.eq('contact_id', clientId);
     }
 
     if (unread !== undefined) {

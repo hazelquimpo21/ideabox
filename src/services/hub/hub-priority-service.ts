@@ -608,7 +608,6 @@ interface EmailCandidate {
   date: string;
   category: string | null;
   priority_score: number;
-  client_id: string | null;
   analyzed_at: string | null;
   is_read: boolean;
   thread_id: string;
@@ -626,7 +625,6 @@ interface ActionCandidate {
   urgency_score: number;
   deadline: string | null;
   status: string;
-  client_id: string | null;
   email_id: string | null;
   created_at: string;
 }
@@ -690,7 +688,7 @@ async function fetchEmailCandidates(supabase: any, userId: string): Promise<Emai
     .from('emails')
     .select(`
       id, subject, snippet, sender_name, sender_email, date, category,
-      priority_score, client_id, analyzed_at, is_read, thread_id
+      priority_score, contact_id, analyzed_at, is_read, thread_id
     `)
     .eq('user_id', userId)
     .eq('is_archived', false)
@@ -742,7 +740,7 @@ async function fetchActionCandidates(supabase: any, userId: string): Promise<Act
     .from('actions')
     .select(`
       id, title, description, action_type, urgency_score,
-      deadline, status, client_id, email_id, created_at
+      deadline, status, contact_id, email_id, created_at
     `)
     .eq('user_id', userId)
     .eq('status', 'pending')
@@ -788,26 +786,21 @@ async function fetchEventCandidates(supabase: any, userId: string): Promise<Even
 }
 
 /**
- * Fetches client data from the contacts table (Phase 3: merged).
- * Falls back to the legacy clients table if contacts query returns empty.
- *
- * The returned map is keyed by contact.id (for contact_id lookups) AND
- * also stores entries under the original client_id (via a separate legacy query)
- * for backward compatibility until Phase 4 removes client_id columns.
+ * Fetches client data from the contacts table.
+ * Returns a map of contact ID → { name, priority } for contacts with is_client = true.
  *
  * @param supabase - Supabase client instance
  * @param userId - User ID to fetch clients for
- * @returns Map of id → { name, priority } for both contact IDs and legacy client IDs
+ * @returns Map of contact ID → { name, priority }
  *
- * @since February 2026 — Phase 3 Navigation Redesign (updated from clients table)
+ * @since February 2026 — Phase 3 Navigation Redesign
+ * Updated Phase 4: Removed legacy clients table fallback (clients table archived).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchClientMap(supabase: any, userId: string): Promise<Map<string, { name: string; priority: ClientPriority }>> {
   const map = new Map<string, { name: string; priority: ClientPriority }>();
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Primary source: contacts table (NEW Phase 3)
-  // ─────────────────────────────────────────────────────────────────────────────
+  // Contacts with is_client = true
   const { data: contactClients, error: contactError } = await supabase
     .from('contacts')
     .select('id, name, email, client_priority')
@@ -823,28 +816,6 @@ async function fetchClientMap(supabase: any, userId: string): Promise<Map<string
       map.set(c.id, { name: c.name || c.email, priority });
     }
     logger.debug('Client contacts fetched from contacts table', { count: contactClients.length });
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Fallback: legacy clients table (for client_id references on emails/actions)
-  // This ensures emails/actions with client_id (but no contact_id) still resolve.
-  // Will be removed in Phase 4 after client_id columns are dropped.
-  // ─────────────────────────────────────────────────────────────────────────────
-  const { data: legacyClients, error: legacyError } = await supabase
-    .from('clients')
-    .select('id, name, priority')
-    .eq('user_id', userId)
-    .eq('status', 'active');
-
-  if (legacyError) {
-    logger.warn('Failed to fetch legacy clients', { error: legacyError.message });
-  } else if (legacyClients) {
-    for (const client of legacyClients) {
-      // Only add if not already in the map (contacts take precedence)
-      if (!map.has(client.id)) {
-        map.set(client.id, { name: client.name, priority: client.priority });
-      }
-    }
   }
 
   return map;
@@ -970,12 +941,12 @@ function scoreEmail(
     baseScore *= 1 + (email.priority_score * config.urgencyWeight) / 10;
   }
 
-  // Client factor — check contact_id first (Phase 3), then fall back to client_id
+  // Client factor — use contact_id exclusively (Phase 4)
   let clientFactor = 1.0;
   let clientName: string | undefined;
-  const resolvedClientId = (email as Record<string, unknown>).contact_id as string | null || email.client_id;
-  if (resolvedClientId && clientMap.has(resolvedClientId)) {
-    const client = clientMap.get(resolvedClientId)!;
+  const clientContactId = (email as Record<string, unknown>).contact_id as string | null;
+  if (clientContactId && clientMap.has(clientContactId)) {
+    const client = clientMap.get(clientContactId)!;
     clientName = client.name;
     clientFactor = config.clientMultipliers[client.priority] ?? 1.0;
   }
@@ -1057,10 +1028,10 @@ function scoreAction(
   // Urgency from AI analysis
   baseScore *= 1 + (action.urgency_score * config.urgencyWeight);
 
-  // Client factor — check contact_id first (Phase 3), then fall back to client_id
+  // Client factor — use contact_id exclusively (Phase 4)
   let clientFactor = 1.0;
   let clientName: string | undefined;
-  const resolvedActionClientId = (action as Record<string, unknown>).contact_id as string | null || action.client_id;
+  const resolvedActionClientId = (action as Record<string, unknown>).contact_id as string | null;
   if (resolvedActionClientId && clientMap.has(resolvedActionClientId)) {
     const client = clientMap.get(resolvedActionClientId)!;
     clientName = client.name;

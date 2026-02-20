@@ -51,13 +51,8 @@ export type {
   ActionStats,
 } from './useActions';
 
-export { useClients, default as useClientsDefault } from './useClients';
-export type {
-  UseClientsOptions,
-  UseClientsReturn,
-  ClientWithStats,
-  ClientStats,
-} from './useClients';
+// useClients removed — clients table archived in migration 030.
+// Use useContacts with isClient filter instead.
 
 export { useSyncStatus, default as useSyncStatusDefault } from './useSyncStatus';
 export type {

@@ -864,7 +864,7 @@ export default function NewCampaignPage() {
 
       if (result) {
         logger.success('Campaign created', { id: result.id });
-        router.push(`/campaigns/${result.id}`);
+        router.push(`/tasks/campaigns/${result.id}`);
       } else {
         throw new Error('Failed to create campaign');
       }
@@ -893,7 +893,7 @@ export default function NewCampaignPage() {
         description="Set up a new email campaign with merge fields"
         breadcrumbs={[
           { label: 'Home', href: '/' },
-          { label: 'Campaigns', href: '/campaigns' },
+          { label: 'Campaigns', href: '/tasks?tab=campaigns' },
           { label: 'New' },
         ]}
       />

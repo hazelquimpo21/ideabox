@@ -1,17 +1,25 @@
 /**
- * Email Campaigns Page
+ * Campaigns Content Component
  *
- * Lists all email campaigns with status filtering, progress tracking,
- * and quick actions (start/pause/cancel).
+ * Extracted from the campaigns page for use inside the Tasks tabbed UI.
+ * Contains all campaign list functionality without the PageHeader wrapper.
  *
- * @module app/(auth)/campaigns/page
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * USAGE
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * ```tsx
+ * import { CampaignsContent } from '@/components/campaigns';
+ * ```
+ *
+ * @module components/campaigns/CampaignsContent
+ * @since February 2026 — Phase 4 Navigation Redesign
  */
 
 'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
-import { PageHeader } from '@/components/layout';
 import {
   Card,
   CardContent,
@@ -50,7 +58,6 @@ import {
   Users,
   MousePointerClick,
   MessageSquare,
-  ChevronRight,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
@@ -58,15 +65,12 @@ import { createLogger } from '@/lib/utils/logger';
 // LOGGER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const logger = createLogger('CampaignsPage');
+const logger = createLogger('CampaignsContent');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Returns badge configuration for a campaign status.
- */
 function getStatusBadge(status: CampaignStatus): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
   label: string;
@@ -83,9 +87,6 @@ function getStatusBadge(status: CampaignStatus): {
   return map[status] || { variant: 'outline', label: status, icon: null };
 }
 
-/**
- * Formats a date string for display.
- */
 function formatDate(dateString: string | null): string {
   if (!dateString) return '-';
   const date = new Date(dateString);
@@ -99,7 +100,7 @@ function formatDate(dateString: string | null): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CAMPAIGN LIST ITEM
+// SUB-COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface CampaignListItemProps {
@@ -129,16 +130,13 @@ function CampaignListItem({
 
   return (
     <div className="flex items-start gap-4 p-4 border-b border-border/50 hover:bg-muted/30 transition-colors">
-      {/* Icon */}
       <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
         <Mail className="h-5 w-5 text-primary" />
       </div>
-
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <Link
-            href={`/campaigns/${campaign.id}`}
+            href={`/tasks/campaigns/${campaign.id}`}
             className="font-medium truncate hover:underline"
           >
             {campaign.name}
@@ -148,8 +146,6 @@ function CampaignListItem({
             {statusBadge.label}
           </Badge>
         </div>
-
-        {/* Progress bar for running campaigns */}
         {(campaign.status === 'in_progress' || campaign.status === 'paused') && (
           <div className="mt-2 mb-2">
             <Progress value={campaign.progressPercent} className="h-1.5" />
@@ -163,8 +159,6 @@ function CampaignListItem({
             </p>
           </div>
         )}
-
-        {/* Stats */}
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <Users className="h-3 w-3" />
@@ -188,8 +182,6 @@ function CampaignListItem({
             </span>
           )}
         </div>
-
-        {/* Timestamps */}
         <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
           {campaign.scheduled_at && campaign.status === 'scheduled' && (
             <span>Scheduled: {formatDate(campaign.scheduled_at)}</span>
@@ -205,10 +197,7 @@ function CampaignListItem({
           )}
         </div>
       </div>
-
-      {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Quick action buttons */}
         {canStart && (
           <Button
             variant="ghost"
@@ -231,8 +220,6 @@ function CampaignListItem({
             <Pause className="h-4 w-4" />
           </Button>
         )}
-
-        {/* More menu */}
         <div className="relative">
           <Button
             variant="ghost"
@@ -250,7 +237,7 @@ function CampaignListItem({
               />
               <div className="absolute right-0 top-full mt-1 w-48 bg-popover border border-border rounded-md shadow-md z-20">
                 <Link
-                  href={`/campaigns/${campaign.id}`}
+                  href={`/tasks/campaigns/${campaign.id}`}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted"
                   onClick={() => setShowMenu(false)}
                 >
@@ -292,10 +279,6 @@ function CampaignListItem({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SKELETON & EMPTY STATE
-// ═══════════════════════════════════════════════════════════════════════════════
-
 function CampaignListSkeleton() {
   return (
     <div className="space-y-0">
@@ -323,7 +306,7 @@ function EmptyState() {
       <p className="text-muted-foreground max-w-sm mb-4">
         Create your first email campaign to send personalized emails to multiple recipients.
       </p>
-      <Link href="/campaigns/new">
+      <Link href="/tasks/campaigns/new">
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
           Create Campaign
@@ -332,10 +315,6 @@ function EmptyState() {
     </div>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONFIRM DIALOG
-// ═══════════════════════════════════════════════════════════════════════════════
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -395,8 +374,11 @@ function ConfirmDialog({
 
 type StatusFilter = 'all' | 'draft' | 'in_progress' | 'completed' | 'paused';
 
-export default function CampaignsPage() {
-  // State
+/**
+ * CampaignsContent — campaign list with filtering and actions.
+ * Extracted from CampaignsPage for use inside TasksTabs.
+ */
+export function CampaignsContent() {
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all');
   const [isActioning, setIsActioning] = React.useState(false);
   const [confirmDialog, setConfirmDialog] = React.useState<{
@@ -406,7 +388,6 @@ export default function CampaignsPage() {
     campaignName: string;
   }>({ open: false, type: 'cancel', campaignId: '', campaignName: '' });
 
-  // Hooks
   const {
     campaigns,
     isLoading,
@@ -419,17 +400,14 @@ export default function CampaignsPage() {
     refetch,
   } = useCampaigns({
     status: statusFilter === 'all' ? undefined : statusFilter,
-    refreshInterval: 10000, // Refresh every 10 seconds for running campaigns
+    refreshInterval: 10000,
   });
 
-  // Handlers
   const handleStart = async (id: string) => {
     setIsActioning(true);
     logger.info('Starting campaign', { id: id.substring(0, 8) });
     const success = await startCampaign(id);
-    if (success) {
-      await refetch();
-    }
+    if (success) await refetch();
     setIsActioning(false);
   };
 
@@ -437,9 +415,7 @@ export default function CampaignsPage() {
     setIsActioning(true);
     logger.info('Pausing campaign', { id: id.substring(0, 8) });
     const success = await pauseCampaign(id);
-    if (success) {
-      await refetch();
-    }
+    if (success) await refetch();
     setIsActioning(false);
   };
 
@@ -476,22 +452,7 @@ export default function CampaignsPage() {
   };
 
   return (
-    <div>
-      <PageHeader
-        title="Email Campaigns"
-        description="Create and manage bulk email campaigns with merge fields"
-        breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Campaigns' }]}
-        actions={
-          <Link href="/campaigns/new">
-            <Button size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Campaign
-            </Button>
-          </Link>
-        }
-      />
-
-      {/* Error display */}
+    <>
       {error && (
         <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
           <p className="text-sm text-destructive">
@@ -501,7 +462,6 @@ export default function CampaignsPage() {
         </div>
       )}
 
-      {/* Stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card
           className={`cursor-pointer transition-colors ${statusFilter === 'all' ? 'ring-2 ring-primary' : ''}`}
@@ -515,7 +475,6 @@ export default function CampaignsPage() {
             <p className="text-xs text-muted-foreground mt-1">Total Campaigns</p>
           </CardContent>
         </Card>
-
         <Card
           className={`cursor-pointer transition-colors ${statusFilter === 'in_progress' ? 'ring-2 ring-primary' : ''}`}
           onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
@@ -528,7 +487,6 @@ export default function CampaignsPage() {
             <p className="text-xs text-muted-foreground mt-1">Running</p>
           </CardContent>
         </Card>
-
         <Card
           className={`cursor-pointer transition-colors ${statusFilter === 'draft' ? 'ring-2 ring-primary' : ''}`}
           onClick={() => setStatusFilter(statusFilter === 'draft' ? 'all' : 'draft')}
@@ -541,7 +499,6 @@ export default function CampaignsPage() {
             <p className="text-xs text-muted-foreground mt-1">Drafts</p>
           </CardContent>
         </Card>
-
         <Card
           className={`cursor-pointer transition-colors ${statusFilter === 'completed' ? 'ring-2 ring-primary' : ''}`}
           onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
@@ -556,7 +513,6 @@ export default function CampaignsPage() {
         </Card>
       </div>
 
-      {/* Campaign list */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -595,7 +551,6 @@ export default function CampaignsPage() {
         </CardContent>
       </Card>
 
-      {/* Confirm dialog */}
       <ConfirmDialog
         open={confirmDialog.open}
         onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}
@@ -610,6 +565,6 @@ export default function CampaignsPage() {
         onConfirm={handleConfirmAction}
         isLoading={isActioning}
       />
-    </div>
+    </>
   );
 }

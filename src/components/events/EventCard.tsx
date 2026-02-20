@@ -420,7 +420,7 @@ function CompactEventCard({
   const formattedTime = event.event_time ? formatTime12h(event.event_time) : null;
 
   return (
-    <Link href={`/events?highlight=${event.id}`}>
+    <Link href={`/calendar?highlight=${event.id}`}>
       <Card
         className={`
           cursor-pointer transition-all hover:shadow-md hover:border-green-300

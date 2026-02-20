@@ -1243,7 +1243,7 @@ export default function ContactDetailPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-base">Related Dates</CardTitle>
-            <Link href={`/timeline?contactId=${contactId}`}>
+            <Link href={`/calendar?contactId=${contactId}`}>
               <Button variant="ghost" size="sm">
                 View All
                 <ChevronRight className="h-4 w-4 ml-1" />

@@ -350,7 +350,7 @@ function CampaignActions({
 
       {/* Edit button - only for drafts */}
       {canEdit && (
-        <Link href={`/campaigns/${campaign.id}/edit`}>
+        <Link href={`/tasks/campaigns/${campaign.id}/edit`}>
           <Button variant="outline" size="sm" disabled={isActioning}>
             Edit Campaign
           </Button>
@@ -1136,7 +1136,7 @@ export default function CampaignDetailPage() {
       logger.info('Deleting campaign', { id: campaign.id.substring(0, 8) });
       const success = await deleteCampaign(campaign.id);
       if (success) {
-        router.push('/campaigns');
+        router.push('/tasks?tab=campaigns');
         return;
       }
     }
@@ -1157,7 +1157,7 @@ export default function CampaignDetailPage() {
           title="Campaign Details"
           breadcrumbs={[
             { label: 'Home', href: '/' },
-            { label: 'Campaigns', href: '/campaigns' },
+            { label: 'Campaigns', href: '/tasks?tab=campaigns' },
             { label: 'Loading...' },
           ]}
         />
@@ -1174,7 +1174,7 @@ export default function CampaignDetailPage() {
           title="Campaign Not Found"
           breadcrumbs={[
             { label: 'Home', href: '/' },
-            { label: 'Campaigns', href: '/campaigns' },
+            { label: 'Campaigns', href: '/tasks?tab=campaigns' },
             { label: 'Error' },
           ]}
         />
@@ -1185,7 +1185,7 @@ export default function CampaignDetailPage() {
             <p className="text-muted-foreground mb-4">
               {campaignError || "The campaign you're looking for doesn't exist or you don't have access to it."}
             </p>
-            <Link href="/campaigns">
+            <Link href="/tasks?tab=campaigns">
               <Button>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Campaigns
@@ -1205,7 +1205,7 @@ export default function CampaignDetailPage() {
         title={campaign.name}
         breadcrumbs={[
           { label: 'Home', href: '/' },
-          { label: 'Campaigns', href: '/campaigns' },
+          { label: 'Campaigns', href: '/tasks?tab=campaigns' },
           { label: campaign.name },
         ]}
         actions={

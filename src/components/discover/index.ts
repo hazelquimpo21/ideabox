@@ -53,3 +53,13 @@ export type { CategoryPageHeaderProps } from './CategoryPageHeader';
 
 export { CategoryPageToolbar, default as CategoryPageToolbarDefault } from './CategoryPageToolbar';
 export type { CategoryPageToolbarProps } from './CategoryPageToolbar';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Content Components (Phase 4 — extracted from page files)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export { DiscoverContent } from './DiscoverContent';
+
+export { StartAnalysisCard } from './StartAnalysisCard';
+
+export { SyncProgressCard } from './SyncProgressCard';
