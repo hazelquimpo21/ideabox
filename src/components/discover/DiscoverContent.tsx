@@ -88,6 +88,9 @@ export function DiscoverContent() {
   const hasShownLegacyWarning = useRef(false);
   const [hasLegacyCategories, setHasLegacyCategories] = useState(false);
 
+  // Track when we started waiting for a background sync so we can time out
+  const syncWaitStartRef = useRef<number | null>(null);
+
   const {
     progress: syncProgress,
     currentStep: syncStep,
@@ -109,6 +112,8 @@ export function DiscoverContent() {
       logger.error('Sync failed', { error: errorMsg });
       setError(errorMsg);
       setIsSyncing(false);
+      // Fall back to StartAnalysisCard so user can retry manually
+      setNeedsSync(true);
     },
   });
 
@@ -140,6 +145,15 @@ export function DiscoverContent() {
         if (data.status === 'completed' && data.result) { setResult(data.result); }
         else if (data.status === 'failed') { setError(data.error || 'Previous sync failed'); setNeedsSync(true); }
         else if (data.status === 'in_progress') { setIsSyncing(true); startPolling(); }
+        else if (data.status === 'pending' && user?.onboardingCompleted) {
+          // User just completed onboarding — background sync was already triggered.
+          // Show progress UI and poll instead of prompting for a duplicate sync.
+          // Time out after 30s and fall back to manual trigger if sync never starts.
+          logger.info('Sync pending after onboarding, waiting for background sync');
+          syncWaitStartRef.current = Date.now();
+          setIsSyncing(true);
+          startPolling();
+        }
         else { setNeedsSync(true); }
       } catch {
         if (!isMounted) return;
@@ -152,6 +166,21 @@ export function DiscoverContent() {
     return () => { isMounted = false; stopPolling(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Time out if background sync stays 'pending' for too long (30s)
+  useEffect(() => {
+    if (!isSyncing || !syncWaitStartRef.current) return;
+    const timeout = setTimeout(() => {
+      if (syncWaitStartRef.current && syncProgress === 0) {
+        logger.warn('Background sync timed out, falling back to manual trigger');
+        syncWaitStartRef.current = null;
+        setIsSyncing(false);
+        setNeedsSync(true);
+        stopPolling();
+      }
+    }, 30000);
+    return () => clearTimeout(timeout);
+  }, [isSyncing, syncProgress, stopPolling]);
 
   useEffect(() => {
     if (!result?.categories || hasShownLegacyWarning.current) return;
