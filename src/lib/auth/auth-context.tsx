@@ -313,6 +313,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 
   /**
+   * Tracks whether updateUserState is currently in-flight.
+   * Prevents duplicate concurrent profile fetches when multiple auth events
+   * fire at the same time (e.g., refreshSession triggers both a direct call
+   * and a TOKEN_REFRESHED event in onAuthStateChange).
+   */
+  const updateInFlightRef = React.useRef(false);
+
+  /**
    * Updates user state with fresh session and profile data.
    * Called on initial load and auth state changes.
    *
@@ -320,15 +328,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * - If profile fetch succeeds, profileLoaded = true (even if no profile found)
    * - If profile fetch times out/errors, profileLoaded = false
    * - ProtectedRoute uses profileLoaded to avoid redirecting prematurely
+   * - Concurrent calls are deduplicated via updateInFlightRef
    */
   const updateUserState = React.useCallback(
     async (supabaseUser: SupabaseUser | null) => {
-      logger.info('Updating user state', { userId: supabaseUser?.id ?? 'null' });
-
       if (!supabaseUser) {
         setUser(null);
         return;
       }
+
+      // Deduplicate: skip if another updateUserState call is already in-flight.
+      // This prevents double profile fetches when refreshSession() both directly
+      // calls updateUserState AND triggers TOKEN_REFRESHED in onAuthStateChange.
+      if (updateInFlightRef.current) {
+        logger.debug('Skipping concurrent updateUserState call', { userId: supabaseUser.id });
+        return;
+      }
+
+      updateInFlightRef.current = true;
+      logger.info('Updating user state', { userId: supabaseUser.id });
 
       try {
         const { profile, success: profileLoaded } = await fetchUserProfile(supabaseUser.id);
@@ -365,6 +383,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           userId: supabaseUser.id,
           error: String(err)
         });
+      } finally {
+        updateInFlightRef.current = false;
       }
     },
     [fetchUserProfile, mapToAuthUser]

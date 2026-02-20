@@ -224,16 +224,18 @@ export function useSyncStatus(): UseSyncStatusReturn {
       }
 
       // Get latest sync log
+      // Use .maybeSingle() instead of .single() to avoid 406 HTTP errors
+      // when no sync logs exist yet (e.g., new user post-onboarding)
       const { data: syncLog, error: syncLogError } = await supabase
         .from('sync_logs')
         .select('status, error_message, completed_at, emails_fetched, emails_analyzed')
         .eq('user_id', user.id)
         .order('started_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (syncLogError && syncLogError.code !== 'PGRST116') {
-        logger.debug('No sync logs found or error', { error: syncLogError.message });
+      if (syncLogError) {
+        logger.debug('Error fetching sync logs', { error: syncLogError.message });
       }
 
       // Determine status
