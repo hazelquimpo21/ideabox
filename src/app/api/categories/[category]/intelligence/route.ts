@@ -107,6 +107,8 @@ export async function GET(
     // Fetch emails in this category
     // ─────────────────────────────────────────────────────────────────────────
 
+    // NOTE: urgency_score and relationship_signal have no DB columns (see database.ts:293).
+    // They will be null on returned rows; downstream code handles null gracefully.
     const { data: emails, error: emailsError } = await supabase
       .from('emails')
       .select(`
@@ -117,8 +119,6 @@ export async function GET(
         summary,
         quick_action,
         is_read,
-        urgency_score,
-        relationship_signal,
         key_points,
         date
       `)
@@ -177,25 +177,17 @@ export async function GET(
     const count = emailList.length;
     const unreadCount = emailList.filter((e) => !e.is_read).length;
 
-    // Urgency scores
-    const urgencyScores = emailList
-      .filter((e) => e.urgency_score && e.urgency_score > 0)
-      .map((e) => e.urgency_score as number)
-      .sort((a, b) => b - a);
+    // Urgency scores — not available as DB columns yet (see database.ts:293),
+    // so this will always be empty until a migration adds them.
+    const urgencyScores: number[] = [];
 
-    // Health summary (relationship signals)
+    // Health summary — relationship_signal has no DB column yet,
+    // so all emails count as neutral until a migration adds it.
     const healthSummary = {
       positive: 0,
-      neutral: 0,
+      neutral: emailList.length,
       negative: 0,
     };
-
-    emailList.forEach((email) => {
-      const signal = email.relationship_signal;
-      if (signal === 'positive') healthSummary.positive++;
-      else if (signal === 'negative') healthSummary.negative++;
-      else healthSummary.neutral++;
-    });
 
     // Top senders
     const senderCounts = new Map<string, { name: string; email: string; count: number }>();
@@ -223,12 +215,12 @@ export async function GET(
       .slice(0, 3)
       .map((e) => e.subject as string);
 
-    // Needs attention items (from emails with urgency >= 5 or quick_action that requires response)
+    // Needs attention items (quick_action that requires response)
+    // NOTE: urgency_score filter removed — column doesn't exist yet (see database.ts:293)
     const needsAttention: NeedsAttentionItem[] = emailList
       .filter((email) => {
-        const hasUrgency = email.urgency_score && email.urgency_score >= 5;
         const needsAction = ['respond', 'review', 'follow_up'].includes(email.quick_action || '');
-        return hasUrgency || needsAction;
+        return needsAction;
       })
       .slice(0, 5)
       .map((email) => {
@@ -256,7 +248,7 @@ export async function GET(
           senderName: email.sender_name || email.sender_email.split('@')[0],
           company: clientTagging?.client_name,
           deadline: deadline,
-          urgency: email.urgency_score || 5,
+          urgency: 5, // Default — urgency_score column doesn't exist yet
         };
       })
       .sort((a, b) => b.urgency - a.urgency);
