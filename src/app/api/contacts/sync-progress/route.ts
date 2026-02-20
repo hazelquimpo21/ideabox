@@ -188,16 +188,14 @@ export async function updateSyncProgress(
       ...progress,
     };
 
-    // Update in database
+    // Update in database (profile row already exists from signup)
     const { error } = await supabase
       .from('user_profiles')
-      .upsert({
-        id: userId,
+      .update({
         sync_progress: updatedProgress,
         updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'id',
-      });
+      })
+      .eq('id', userId);
 
     if (error) {
       logger.error('Failed to update sync progress', {

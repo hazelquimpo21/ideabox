@@ -216,8 +216,11 @@ export class InitialSyncOrchestrator {
           userId: this.userId,
           gmailAccountId: this.gmailAccountId,
         });
-        // Return empty but successful response
-        return this.buildEmptyResponse(startTime);
+        // Mark onboarding complete and return empty response
+        const emptyResponse = this.buildEmptyResponse(startTime);
+        await this.updateProgress(100, SYNC_STEP_MESSAGES.complete, onProgress);
+        await this.markOnboardingComplete(emptyResponse);
+        return emptyResponse;
       }
 
       // ─────────────────────────────────────────────────────────────────────────
