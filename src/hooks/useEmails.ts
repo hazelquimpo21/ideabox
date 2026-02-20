@@ -49,6 +49,16 @@ import type { Email, EmailCategory, QuickActionDb } from '@/types/database';
 /** Default number of emails to fetch per request */
 const DEFAULT_LIMIT = 50;
 
+/**
+ * Fields needed for email list views.
+ * Excludes body_html, body_text, and other heavy fields that are only
+ * needed in the full email detail view. This reduces data transfer
+ * by ~80-90% compared to select('*').
+ *
+ * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
+ */
+const EMAIL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, urgency_score, gist, summary, priority_score, key_points, topics, labels, relationship_signal, analyzed_at, analysis_error, client_id' as const;
+
 /** Logger instance for this hook */
 const logger = createLogger('useEmails');
 
@@ -72,6 +82,14 @@ export interface UseEmailsOptions {
   limit?: number;
   /** Include archived emails (default: false) */
   includeArchived?: boolean;
+  /**
+   * Only show archived emails (default: false).
+   * When true, adds `.eq('is_archived', true)` to the query so
+   * filtering happens server-side instead of in JavaScript.
+   *
+   * @see INBOX_PERFORMANCE_AUDIT.md — P2-A
+   */
+  archivedOnly?: boolean;
   /** Only show unread emails */
   unreadOnly?: boolean;
   /** Only show starred emails */
@@ -265,6 +283,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     clientId,
     limit = DEFAULT_LIMIT,
     includeArchived = false,
+    archivedOnly = false,
     unreadOnly = false,
     starredOnly = false,
     includeEventData = false,
@@ -298,15 +317,19 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     });
 
     try {
-      // Build the base query
+      // Build the base query — select only list-view fields to avoid
+      // pulling body_html/body_text (~50-100KB per email)
       let query = supabase
         .from('emails')
-        .select('*', { count: 'exact' })
+        .select(EMAIL_LIST_FIELDS, { count: 'exact' })
         .order('date', { ascending: false })
         .limit(limit);
 
-      // Apply filters based on options
-      if (!includeArchived) {
+      // Apply archive filter — archivedOnly takes precedence over includeArchived
+      if (archivedOnly) {
+        // Server-side filtering: only fetch archived emails
+        query = query.eq('is_archived', true);
+      } else if (!includeArchived) {
         query = query.eq('is_archived', false);
       }
 
@@ -487,7 +510,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, category, quickAction, clientId, limit, includeArchived, unreadOnly, starredOnly, includeEventData]);
+  }, [supabase, category, quickAction, clientId, limit, includeArchived, archivedOnly, unreadOnly, starredOnly, includeEventData]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Load More (Pagination)
@@ -505,14 +528,17 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     logger.start('Loading more emails', { currentCount: emails.length });
 
     try {
+      // Load more with same list-view fields (no body content needed)
       let query = supabase
         .from('emails')
-        .select('*')
+        .select(EMAIL_LIST_FIELDS)
         .order('date', { ascending: false })
         .range(emails.length, emails.length + limit - 1);
 
       // Apply the same filters as the main query
-      if (!includeArchived) {
+      if (archivedOnly) {
+        query = query.eq('is_archived', true);
+      } else if (!includeArchived) {
         query = query.eq('is_archived', false);
       }
 
@@ -568,6 +594,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     quickAction,
     clientId,
     includeArchived,
+    archivedOnly,
     unreadOnly,
     starredOnly,
   ]);

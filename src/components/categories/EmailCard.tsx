@@ -173,7 +173,14 @@ function getUrgencyStyle(score: number | null | undefined): {
  * />
  * ```
  */
-export function EmailCard({
+/**
+ * Memoized to prevent re-renders of all list items when a single item
+ * changes (e.g., toggling a star). Without memo, any parent state change
+ * re-renders all 15-50 EmailCards in the list.
+ *
+ * @see INBOX_PERFORMANCE_AUDIT.md — P3
+ */
+export const EmailCard = React.memo(function EmailCard({
   email,
   onClick,
   onToggleStar,
@@ -203,20 +210,6 @@ export function EmailCard({
   const urgencyStyle = getUrgencyStyle(email.urgency_score);
   const hasKeyPoints = enhanced && email.key_points && email.key_points.length > 0;
   const hasTopics = enhanced && email.topics && email.topics.length > 0;
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Debug Logging
-  // ───────────────────────────────────────────────────────────────────────────
-
-  React.useEffect(() => {
-    logger.debug('Rendering email card', {
-      emailId: email.id,
-      isRead: email.is_read,
-      hasKeyPoints: !!email.key_points?.length,
-      hasUrgencyScore: !!email.urgency_score,
-      urgencyScore: email.urgency_score,
-    });
-  }, [email]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Handlers
@@ -412,7 +405,7 @@ export function EmailCard({
       )}
     </Card>
   );
-}
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS

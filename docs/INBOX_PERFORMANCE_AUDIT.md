@@ -367,40 +367,63 @@ This addresses the user's core request: "see email detail in modal before going 
 
 ---
 
-## Priority Implementation Order
+## Implementation Status
 
-| Priority | Issue | Impact | Effort |
-|----------|-------|--------|--------|
-| **P0-A** | Email Detail Modal | Eliminates full-page reloads, enables preview | Medium |
-| **P0-B** | `select('*')` → select specific fields | 80-90% less data transfer | Low |
-| **P1-A** | Fix broken `/inbox/[category]` route | Currently broken page | Low |
-| **P1-B** | Add SWR/React Query cache | Eliminates redundant fetches | Medium |
-| **P2-A** | ArchiveContent server-side filtering | Fetches only archived emails | Low |
-| **P2-B** | Batch bulk operations | 20x → 1 DB calls | Low |
-| **P2-C** | SQL aggregation for stats | Accurate counts, less JS work | Low |
-| **P3** | React.memo, remove debug logging, consolidate date utils | Polish | Low |
+| Priority | Issue | Status | Notes |
+|----------|-------|--------|-------|
+| **P0-A** | Email Detail Modal | **DONE** | EmailDetailModal component + wired into all tabs |
+| **P0-B** | `select('*')` → select specific fields | **DONE** | EMAIL_LIST_FIELDS / MODAL_LIST_FIELDS constants |
+| **P1-A** | Fix broken `/inbox/[category]` route | **DONE** | Rebuilt as inline component using useEmails |
+| **P1-B** | Add SWR/React Query cache | TODO | Deferred — requires new dependency |
+| **P2-A** | ArchiveContent server-side filtering | **DONE** | New `archivedOnly` option in useEmails |
+| **P2-B** | Batch bulk operations | **DONE** | Single `.in('id', ids)` call |
+| **P2-C** | SQL aggregation for stats | TODO | Requires API endpoint |
+| **P3** | React.memo, remove debug logging, fix Supabase client | **DONE** | EmailCard, ArchivedEmailItem, PriorityEmailRow |
 
 ---
 
-## Files That Will Be Modified
+## Files Modified
 
-### For Email Detail Modal (P0-A)
-- `src/components/email/EmailDetailModal.tsx` — **NEW** — modal wrapper around EmailDetail
-- `src/components/inbox/InboxTabs.tsx` — add selectedEmail state + modal
-- `src/components/discover/DiscoverContent.tsx` — pass onEmailSelect instead of router.push
-- `src/components/discover/CategoryModal.tsx` — email click opens detail modal instead of navigating
-- `src/components/inbox/PriorityEmailList.tsx` — email click opens detail modal
-- `src/components/archive/ArchiveContent.tsx` — email click opens detail modal
+### Email Detail Modal (P0-A)
+- `src/components/email/EmailDetailModal.tsx` — **NEW** — slide-over modal wrapping EmailDetail
+- `src/components/inbox/InboxTabs.tsx` — selectedEmail state + EmailDetailModal rendering
+- `src/components/discover/DiscoverContent.tsx` — accepts onEmailSelect, uses modal from CategoryModal
+- `src/components/discover/CategoryModal.tsx` — email click delegates to onEmailSelect when available
+- `src/components/inbox/PriorityEmailList.tsx` — email click uses onEmailSelect callback
+- `src/components/archive/ArchiveContent.tsx` — email click uses onEmailSelect callback
 
-### For Select Optimization (P0-B)
-- `src/hooks/useEmails.ts` — change `select('*')` to specific fields
-- `src/components/discover/CategoryModal.tsx` — change `select('*')` to specific fields
-- `src/components/inbox/PriorityEmailList.tsx` — already uses specific fields (good)
+### Select Optimization (P0-B)
+- `src/hooks/useEmails.ts` — `EMAIL_LIST_FIELDS` constant, replaces `select('*')` in fetchEmails/loadMore
+- `src/components/discover/CategoryModal.tsx` — `MODAL_LIST_FIELDS` constant, replaces `select('*')`
 
-### For Broken Route Fix (P1-A)
-- `src/app/(auth)/inbox/[category]/page.tsx` — replace dead import with inline component
+### Broken Route Fix (P1-A)
+- `src/app/(auth)/inbox/[category]/page.tsx` — rebuilt as standalone component using useEmails
 
-### For Caching (P1-B)
-- `package.json` — add `swr` or `@tanstack/react-query`
-- `src/hooks/useEmails.ts` — wrap in SWR/React Query
-- `src/components/inbox/PriorityEmailList.tsx` — use shared email cache
+### Server-Side Archive Filtering (P2-A)
+- `src/hooks/useEmails.ts` — added `archivedOnly` option with `.eq('is_archived', true)`
+- `src/components/archive/ArchiveContent.tsx` — uses `archivedOnly: true` instead of JS filtering
+
+### Batch Bulk Operations (P2-B)
+- `src/components/archive/ArchiveContent.tsx` — `handleBulkUnarchive` and `handleBulkDelete` use single `.in()` call
+
+### React.memo and Cleanup (P3)
+- `src/components/categories/EmailCard.tsx` — wrapped in React.memo, removed debug useEffect
+- `src/components/archive/ArchiveContent.tsx` — ArchivedEmailItem wrapped in React.memo
+- `src/components/inbox/PriorityEmailList.tsx` — extracted PriorityEmailRow (React.memo), Supabase client at component level
+
+---
+
+## Remaining Work
+
+### P1-B: Client-Side Data Cache
+- Add `swr` or `@tanstack/react-query` to `package.json`
+- Wrap Supabase calls in `useSWR` or `useQuery` hooks
+- Automatic deduplication, stale-while-revalidate, background refetching
+
+### P2-C: SQL Aggregation for Stats
+- Create `/api/emails/stats` endpoint with `GROUP BY category` SQL
+- Replace JS-side stat computation in `useEmails`
+
+### P3 (remaining): Consolidate Date Utilities
+- Create shared `src/lib/utils/date.ts` with single `formatRelativeDate()`
+- Replace 3 separate implementations (PriorityEmailList, ArchiveContent, EmailCard)

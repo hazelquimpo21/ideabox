@@ -146,6 +146,96 @@ function formatRelativeDate(dateStr: string): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SUB-COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Memoized priority email row. Extracted from inline JSX to enable React.memo
+ * and prevent re-renders of all 50 rows when a single row changes.
+ *
+ * When `onEmailSelect` is provided, clicking opens the email in a modal
+ * (keeping the priority list mounted). Otherwise falls back to Link navigation.
+ *
+ * @see INBOX_PERFORMANCE_AUDIT.md — P3, P0-A
+ */
+const PriorityEmailRow = React.memo(function PriorityEmailRow({
+  email,
+  onEmailSelect,
+}: {
+  email: PriorityEmail;
+  onEmailSelect?: (email: PriorityEmail) => void;
+}) {
+  const category = email.category || 'uncategorized';
+  const categoryColor = CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
+  const categoryLabel = CATEGORY_LABELS[category] || category.replace(/_/g, ' ');
+
+  const rowContent = (
+    <>
+      {/* Priority Score Badge */}
+      {email.priority_score !== null && (
+        <Badge className={`shrink-0 gap-1 ${getScoreColor(email.priority_score)}`}>
+          <TrendingUp className="h-3 w-3" />
+          {email.priority_score}
+        </Badge>
+      )}
+
+      {/* Email Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="font-medium text-sm truncate">
+            {email.sender_name || email.sender_email}
+          </span>
+        </div>
+        <p className="text-sm truncate">
+          {email.subject || '(No subject)'}
+        </p>
+        {email.snippet && (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">
+            {email.snippet}
+          </p>
+        )}
+      </div>
+
+      {/* Category Badge */}
+      <Badge className={`text-xs shrink-0 border-0 ${categoryColor}`}>
+        {categoryLabel}
+      </Badge>
+
+      {/* Date */}
+      <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+        {formatRelativeDate(email.date)}
+      </span>
+
+      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+    </>
+  );
+
+  // When onEmailSelect is provided, use a button that opens the email detail
+  // in a modal instead of navigating away (keeps priority list mounted).
+  if (onEmailSelect) {
+    return (
+      <button
+        type="button"
+        onClick={() => onEmailSelect(email)}
+        className="flex items-center gap-4 p-4 border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0 w-full text-left"
+      >
+        {rowContent}
+      </button>
+    );
+  }
+
+  // Fallback: Link navigation (full page route)
+  return (
+    <Link
+      href={`/inbox/${category}/${email.id}?from=priority`}
+      className="flex items-center gap-4 p-4 border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0"
+    >
+      {rowContent}
+    </Link>
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -154,12 +244,16 @@ function formatRelativeDate(dateStr: string): string {
  *
  * Fetches emails from Supabase sorted by priority_score descending.
  * Each row shows sender, subject, priority score badge, category, and date.
- * Clicking a row navigates to the email detail view.
+ * Clicking a row opens the email detail modal (or navigates via Link fallback).
  */
-export function PriorityEmailList() {
+export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: PriorityEmail) => void } = {}) {
   const [emails, setEmails] = React.useState<PriorityEmail[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
+
+  // Memoize Supabase client at component level instead of recreating inside callback
+  // @see INBOX_PERFORMANCE_AUDIT.md — P3
+  const supabase = React.useMemo(() => createClient(), []);
 
   /**
    * Fetch priority-ranked emails from Supabase.
@@ -170,7 +264,6 @@ export function PriorityEmailList() {
     setError(null);
 
     try {
-      const supabase = createClient();
       const { data, error: queryError } = await supabase
         .from('emails')
         .select('id, sender_name, sender_email, subject, category, priority_score, date, snippet')
@@ -192,7 +285,7 @@ export function PriorityEmailList() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [supabase]);
 
   // Fetch on mount
   React.useEffect(() => {
@@ -268,56 +361,13 @@ export function PriorityEmailList() {
 
       <Card>
         <CardContent className="p-0">
-          {emails.map((email) => {
-            const category = email.category || 'uncategorized';
-            const categoryColor = CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
-            const categoryLabel = CATEGORY_LABELS[category] || category.replace(/_/g, ' ');
-
-            return (
-              <Link
-                key={email.id}
-                href={`/inbox/${category}/${email.id}?from=priority`}
-                className="flex items-center gap-4 p-4 border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0"
-              >
-                {/* Priority Score Badge */}
-                {email.priority_score !== null && (
-                  <Badge className={`shrink-0 gap-1 ${getScoreColor(email.priority_score)}`}>
-                    <TrendingUp className="h-3 w-3" />
-                    {email.priority_score}
-                  </Badge>
-                )}
-
-                {/* Email Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-medium text-sm truncate">
-                      {email.sender_name || email.sender_email}
-                    </span>
-                  </div>
-                  <p className="text-sm truncate">
-                    {email.subject || '(No subject)'}
-                  </p>
-                  {email.snippet && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {email.snippet}
-                    </p>
-                  )}
-                </div>
-
-                {/* Category Badge */}
-                <Badge className={`text-xs shrink-0 border-0 ${categoryColor}`}>
-                  {categoryLabel}
-                </Badge>
-
-                {/* Date */}
-                <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                  {formatRelativeDate(email.date)}
-                </span>
-
-                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </Link>
-            );
-          })}
+          {emails.map((email) => (
+            <PriorityEmailRow
+              key={email.id}
+              email={email}
+              onEmailSelect={onEmailSelect}
+            />
+          ))}
         </CardContent>
       </Card>
     </div>
