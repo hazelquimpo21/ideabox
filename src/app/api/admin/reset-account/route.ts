@@ -219,10 +219,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<ResetResp
       const body: ResetRequest = await request.json();
       if (body.targetUserId) {
         targetUserId = body.targetUserId;
-        logger.info('Resetting a different user account', {
+        const isSelfReset = targetUserId === user.id;
+        logger.info(isSelfReset ? 'Resetting own account (explicit targetUserId)' : 'Resetting a different user account', {
           operationId,
           adminUserId: user.id,
           targetUserId,
+          isSelfReset,
         });
       }
     } catch {
@@ -352,11 +354,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ResetResp
     // =========================================================================
     // STEP 6: Reset user_profiles to pre-onboarding state
     // =========================================================================
+    // Split into two updates: core fields first, then sender_patterns separately.
+    // The sender_patterns column (added in migration 018) may not be in the
+    // PostgREST schema cache, so we handle it gracefully to avoid blocking
+    // the critical onboarding reset.
     logger.info('Resetting user_profiles to pre-onboarding state', {
       operationId,
       targetUserId,
     });
 
+    // 6a: Reset core onboarding and sync fields (these are always in schema cache)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: profileResetError } = await (serviceClient as any)
       .from('user_profiles')
@@ -366,19 +373,43 @@ export async function POST(request: NextRequest): Promise<NextResponse<ResetResp
         initial_sync_completed_at: null,
         initial_sync_pending: false,
         initial_sync_triggered_at: null,
-        sender_patterns: '[]',
         updated_at: new Date().toISOString(),
       })
       .eq('id', targetUserId);
 
     if (profileResetError) {
-      logger.error('Failed to reset user_profiles', {
+      logger.error('Failed to reset user_profiles core fields', {
         operationId,
         targetUserId,
         error: profileResetError.message,
       });
     } else {
-      logger.success('user_profiles reset to pre-onboarding state', {
+      logger.success('user_profiles core fields reset', {
+        operationId,
+        targetUserId,
+      });
+    }
+
+    // 6b: Reset sender_patterns separately (may fail if column not in schema cache)
+    // This column was added in migration 018 and may not be in the PostgREST
+    // schema cache if it hasn't been refreshed since that migration was applied.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: patternsResetError } = await (serviceClient as any)
+      .from('user_profiles')
+      .update({
+        sender_patterns: '[]',
+      })
+      .eq('id', targetUserId);
+
+    if (patternsResetError) {
+      // Non-critical: sender patterns will be rebuilt during onboarding anyway
+      logger.warn('Could not reset sender_patterns (column may not be in schema cache)', {
+        operationId,
+        targetUserId,
+        error: patternsResetError.message,
+      });
+    } else {
+      logger.success('sender_patterns reset to empty array', {
         operationId,
         targetUserId,
       });
