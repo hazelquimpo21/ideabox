@@ -130,7 +130,8 @@ export function ClientInsights({
         `}
         onClick={() => {
           if (client.clientId) {
-            router.push(`/clients/${client.clientId}`);
+            // UPDATED (Feb 2026): /clients/[id] → /contacts/[id] per Navigation Redesign
+            router.push(`/contacts/${client.clientId}`);
           }
         }}
       >

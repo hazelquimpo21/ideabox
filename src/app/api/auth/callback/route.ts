@@ -632,8 +632,8 @@ export async function GET(request: Request) {
     // Explicit next parameter (from OAuth options)
     redirectPath = next;
   } else {
-    // Default to discover for returning users
-    redirectPath = '/discover';
+    // Default to inbox for returning users (was /discover — Feb 2026 Navigation Redesign)
+    redirectPath = '/inbox';
   }
 
   logger.success('OAuth callback complete', {

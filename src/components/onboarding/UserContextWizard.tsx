@@ -39,8 +39,8 @@
  * <UserContextWizard
  *   userId={user.id}
  *   initialData={existingContext}  // Optional: resume from saved data
- *   onComplete={() => router.push('/discover')}
- *   onSkip={() => router.push('/discover')}  // Optional: allow skipping
+ *   onComplete={() => router.push('/inbox')}
+ *   onSkip={() => router.push('/inbox')}  // Optional: allow skipping
  * />
  * ```
  *

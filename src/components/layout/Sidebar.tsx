@@ -22,7 +22,7 @@
  * import { Sidebar } from '@/components/layout';
  *
  * <Sidebar
- *   currentPath="/discover"
+ *   currentPath="/inbox"
  *   categoryCounts={{ client_pipeline: 5, newsletters_general: 12 }}
  *   clients={[{ id: '1', name: 'Acme Corp' }]}
  *   isOpen={sidebarOpen}
@@ -42,7 +42,6 @@ import {
   CheckSquare,
   Users,
   Settings,
-  Archive,
   X,
   ChevronRight,
   AlertCircle,
@@ -50,16 +49,11 @@ import {
   Newspaper,
   Tag,
   Building2,
-  Sparkles,
-  Target,
-  // ─── Email Intelligence P6 icons ───────────────────────────────────────────
-  BookUser,      // Contacts page - represents address book / contact management
-  CalendarDays,  // Timeline page - represents date-based timeline view
-  // ─── Events Page Enhancement (Jan 2026) ────────────────────────────────────
-  CalendarCheck, // For event cards in sidebar
-  // ─── Gmail Campaign Management (Jan 2026) ──────────────────────────────────
-  Send,          // Campaigns page - represents email outreach campaigns
-  FileText,      // Templates page - represents email template management
+  // ─── Navigation Redesign (Feb 2026) ────────────────────────────────────────
+  Home,          // Home page - daily briefing / priorities
+  Mail,          // Inbox page - email intelligence hub
+  // ─── Sidebar section icons ─────────────────────────────────────────────────
+  CalendarCheck, // For event cards in sidebar (Upcoming Events preview)
 } from 'lucide-react';
 
 import { createLogger } from '@/lib/utils/logger';
@@ -185,73 +179,41 @@ interface NavItem {
   countKey?: keyof CategoryCounts;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NAVIGATION REDESIGN (February 2026) — Phase 1
+// Consolidated from 11 items to 5 main nav items:
+//   Home     → /home      (was Hub /hub)
+//   Inbox    → /inbox     (was Discover /discover, absorbs Archive)
+//   Contacts → /contacts  (unchanged, will absorb Clients in Phase 3)
+//   Calendar → /calendar  (was Events /events + Timeline /timeline)
+//   Tasks    → /tasks     (was Actions /actions, absorbs Campaigns + Templates)
+// Old routes are preserved via redirects in next.config.mjs.
+// ─────────────────────────────────────────────────────────────────────────────
 const mainNavItems: NavItem[] = [
   {
-    label: 'Hub',
-    href: '/hub',
-    icon: Target,
+    label: 'Home',
+    href: '/home',
+    icon: Home,
   },
   {
-    label: 'Discover',
-    href: '/discover',
-    icon: Sparkles,
+    label: 'Inbox',
+    href: '/inbox',
+    icon: Mail,
   },
-  {
-    label: 'Actions',
-    href: '/actions',
-    icon: CheckSquare,
-    badge: 'count',
-    countKey: 'client_pipeline', // REFACTORED (Jan 2026): was 'action_required'
-  },
-  {
-    label: 'Clients',
-    href: '/clients',
-    icon: Users,
-  },
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Gmail Campaign Management: January 2026
-  // Campaign builder and template management for bulk email outreach.
-  // ─────────────────────────────────────────────────────────────────────────────
-  {
-    label: 'Campaigns',
-    href: '/campaigns',
-    icon: Send,
-  },
-  {
-    label: 'Templates',
-    href: '/templates',
-    icon: FileText,
-  },
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Email Intelligence P6: Contact & Timeline Navigation
-  // Added: January 2026
-  // These pages surface the contact intelligence and extracted dates features.
-  // ─────────────────────────────────────────────────────────────────────────────
   {
     label: 'Contacts',
     href: '/contacts',
-    icon: BookUser,
+    icon: Users,
   },
   {
-    label: 'Timeline',
-    href: '/timeline',
-    icon: CalendarDays,
-  },
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Events Page Enhancement: January 2026
-  // Dedicated events page with friendly event cards, separate from Timeline.
-  // Events are detected via the `has_event` label since the Jan 2026 refactor.
-  // ─────────────────────────────────────────────────────────────────────────────
-  {
-    label: 'Events',
-    href: '/events',
+    label: 'Calendar',
+    href: '/calendar',
     icon: Calendar,
   },
-  // ─────────────────────────────────────────────────────────────────────────────
   {
-    label: 'Archive',
-    href: '/archive',
-    icon: Archive,
+    label: 'Tasks',
+    href: '/tasks',
+    icon: CheckSquare,
   },
 ];
 
@@ -432,6 +394,10 @@ function CategoryLink({
 /**
  * Client quick-access link.
  */
+/**
+ * Client/contact quick-access link.
+ * UPDATED (Feb 2026): Links to /contacts/[id] instead of /clients/[id].
+ */
 function ClientLink({
   client,
   isActive,
@@ -443,7 +409,7 @@ function ClientLink({
 }) {
   return (
     <Link
-      href={`/clients/${client.id}`}
+      href={`/contacts/${client.id}`}
       onClick={onClick}
       className={cn(
         'flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors',
@@ -493,7 +459,7 @@ function CompactEventCard({
   });
 
   return (
-    <Link href={`/events?highlight=${event.id}`} onClick={onClick}>
+    <Link href={`/calendar?highlight=${event.id}`} onClick={onClick}>
       <Card
         className={cn(
           'cursor-pointer transition-all hover:shadow-sm hover:border-green-300 dark:hover:border-green-700',
@@ -577,9 +543,9 @@ function UpcomingEventsPreview({
           />
         ))}
 
-        {/* View all link */}
+        {/* View all link — now routes to /calendar (was /events) */}
         <Link
-          href="/events"
+          href="/calendar"
           onClick={onEventClick}
           className="flex items-center justify-center gap-1 rounded-md py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -598,11 +564,18 @@ function UpcomingEventsPreview({
 /**
  * Main sidebar navigation component.
  *
- * Provides hierarchical navigation with:
- * - Main navigation (Hub, Inbox, Actions, Events, Clients, Contacts, Timeline, Archive)
- * - Category quick filters (Action Required, Newsletters, Promo)
- * - Upcoming Events preview cards (P6 Enhancement - January 2026)
- * - Client quick-access list
+ * UPDATED (Feb 2026): Navigation Redesign Phase 1
+ * Consolidated from 11 items to 5 main nav items:
+ * - Home (/home) — Daily briefing, priorities
+ * - Inbox (/inbox) — Email categories, archive
+ * - Contacts (/contacts) — People & businesses
+ * - Calendar (/calendar) — Events, deadlines, dates
+ * - Tasks (/tasks) — Actions, campaigns, templates
+ *
+ * Additional sidebar sections:
+ * - Category quick filters (link to /inbox/[category])
+ * - Upcoming Events preview cards (link to /calendar)
+ * - Top Contacts quick-access list (link to /contacts/[id])
  *
  * On mobile, renders as an overlay that can be toggled open/closed.
  * On desktop, renders as a fixed sidebar.
@@ -650,10 +623,22 @@ export function Sidebar({
    * Check if a path is currently active.
    * Supports both exact matches and prefix matches for nested routes.
    */
+  /**
+   * Check if a path is currently active.
+   * Supports exact matches and prefix matches for nested routes.
+   *
+   * UPDATED (Feb 2026): Handles new consolidated routes:
+   *   /inbox matches /inbox, /inbox/[category], /inbox/[category]/[emailId]
+   *   /tasks matches /tasks, /tasks/campaigns/*, etc.
+   */
   const isActivePath = (href: string): boolean => {
-    if (href === '/discover') {
-      // Discover is active for /discover and /discover/[category] routes
-      return activePath === '/discover' || activePath.startsWith('/discover/');
+    if (href === '/inbox') {
+      // Inbox is active for /inbox and /inbox/[category] routes
+      return activePath === '/inbox' || activePath.startsWith('/inbox/');
+    }
+    if (href === '/tasks') {
+      // Tasks is active for /tasks and /tasks/campaigns/* routes
+      return activePath === '/tasks' || activePath.startsWith('/tasks/');
     }
     return activePath === href || activePath.startsWith(`${href}/`);
   };
@@ -685,15 +670,15 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* Category Filters */}
+      {/* Category Quick Filters — link to /inbox/[category] (was /discover/[category]) */}
       <SidebarSection title="Categories">
         {categoryItems.map((item) => (
           <CategoryLink
             key={item.category}
-            href={`/discover/${item.category}`}
+            href={`/inbox/${item.category}`}
             icon={item.icon}
             label={item.label}
-            isActive={activePath === `/discover/${item.category}`}
+            isActive={activePath === `/inbox/${item.category}`}
             count={categoryCounts[item.category]}
             iconColor={item.color}
             onClick={handleLinkClick}
@@ -712,24 +697,25 @@ export function Sidebar({
         />
       )}
 
-      {/* Clients */}
+      {/* Top Contacts — renamed from "Clients" (Feb 2026 Navigation Redesign) */}
+      {/* Links point to /contacts/[id] which is unchanged in Phase 1 */}
       {clients.length > 0 && (
-        <SidebarSection title="Clients">
+        <SidebarSection title="Top Contacts">
           {clients.slice(0, 5).map((client) => (
             <ClientLink
               key={client.id}
               client={client}
-              isActive={isActivePath(`/clients/${client.id}`)}
+              isActive={isActivePath(`/contacts/${client.id}`)}
               onClick={handleLinkClick}
             />
           ))}
           {clients.length > 5 && (
             <Link
-              href="/clients"
+              href="/contacts"
               onClick={handleLinkClick}
               className="flex items-center gap-3 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              View all {clients.length} clients...
+              View all {clients.length} contacts...
             </Link>
           )}
         </SidebarSection>

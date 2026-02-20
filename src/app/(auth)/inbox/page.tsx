@@ -1,52 +1,89 @@
 /**
- * Inbox Page Redirect
+ * Inbox Page — Email Intelligence Hub
  *
- * DEPRECATED (Jan 2026): The inbox has been replaced by the Discover-first architecture.
- * This page redirects all traffic to /discover for backwards compatibility.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * NAVIGATION REDESIGN — Phase 1 (February 2026)
+ * ═══════════════════════════════════════════════════════════════════════════════
  *
- * If a category filter is present (?category=X), it opens the category modal.
+ * This page replaces / absorbs:
+ *   - Discover page (/discover) → default view (categories)
+ *   - Archive page (/archive)   → accessible via ?tab=archive
+ *
+ * Previously this file was a deprecated redirect page that sent users from
+ * /inbox to /discover. Now /inbox IS the primary email interface.
+ *
+ * Currently a thin wrapper that renders the appropriate existing page component
+ * based on the `tab` query parameter:
+ *   - (default)      → DiscoverPage (Categories + analysis)
+ *   - ?tab=archive   → ArchivePage
+ *
+ * Phase 2 will build out the full InboxTabs component with:
+ *   - Categories tab (default) — category cards with counts
+ *   - Priority tab — emails ranked by AI priority score
+ *   - Archive tab — archived emails with search/restore/delete
+ *
+ * Route: /inbox
+ * Redirects:
+ *   /discover → /inbox   (configured in next.config.mjs)
+ *   /archive  → /inbox?tab=archive (redirect page file)
+ *
+ * Query Parameters:
+ *   - tab:      'archive' to show archive content (default: categories/discover)
+ *   - modal:    Category name to open category modal (passed to DiscoverPage)
+ *   - category: Legacy param — preserved for backwards compatibility
  *
  * @module app/(auth)/inbox/page
- * @see /discover for the new primary email interface
+ * @since February 2026 (replaces old InboxRedirect page)
+ * @see NAVIGATION_REDESIGN_PLAN.md for full context
  */
 
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Spinner } from '@/components/ui/spinner';
+import { useSearchParams } from 'next/navigation';
 import { createLogger } from '@/lib/utils/logger';
 
-const logger = createLogger('InboxRedirect');
+// ─── Import existing page components used as tab content ─────────────────────
+import DiscoverPage from '@/app/(auth)/discover/page';
+import ArchivePage from '@/app/(auth)/archive/page';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('InboxPage');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Redirects to Discover page.
- * Preserves category filter by redirecting to /discover?modal=category
+ * Inbox page — routes to the correct tab content based on query param.
+ *
+ * Phase 1: Renders existing page components based on `tab` param.
+ *   - No tab / invalid tab → DiscoverPage (Categories)
+ *   - ?tab=archive         → ArchivePage
+ *
+ * Phase 2: Will replace with InboxTabs component providing a unified tabbed UI
+ *          with Categories, Priority, and Archive tabs.
  */
-export default function InboxRedirectPage() {
-  const router = useRouter();
+export default function InboxPage() {
   const searchParams = useSearchParams();
+  const tab = searchParams.get('tab');
 
-  useEffect(() => {
-    const category = searchParams.get('category');
+  logger.info('Rendering Inbox page', { tab: tab || 'categories (default)' });
 
-    if (category) {
-      // Redirect to discover with modal open for that category
-      logger.info('Redirecting inbox to discover with category', { category });
-      router.replace(`/discover?modal=${category}`);
-    } else {
-      // Simple redirect to discover
-      logger.info('Redirecting inbox to discover');
-      router.replace('/discover');
-    }
-  }, [router, searchParams]);
+  // ─── Route to the correct tab content ──────────────────────────────────────
+  switch (tab) {
+    case 'archive':
+      // Show archived emails — replaces /archive route
+      logger.debug('Rendering Archive tab content');
+      return <ArchivePage />;
 
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="text-center">
-        <Spinner size="lg" />
-        <p className="mt-4 text-muted-foreground">Redirecting to Discover...</p>
-      </div>
-    </div>
-  );
+    default:
+      // Default to Discover/Categories view — the primary inbox content
+      // All query params (modal, category) are passed through automatically
+      // via useSearchParams() inside DiscoverPage
+      logger.debug('Rendering Categories tab content (DiscoverPage)');
+      return <DiscoverPage />;
+  }
 }
