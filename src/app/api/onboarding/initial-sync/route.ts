@@ -46,8 +46,9 @@
  * IMPORTANT NOTES
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * - This endpoint assumes emails have already been synced from Gmail to the database
- * - It only performs AI analysis on unanalyzed emails
+ * - This endpoint fetches emails from Gmail for ALL connected accounts first,
+ *   then runs AI analysis on the fetched emails (fixed Feb 2026 - previously
+ *   it only read from the database, which was empty after account reset)
  * - Progress updates are stored in user_profiles.sync_progress for polling
  * - The frontend should poll /api/onboarding/sync-status for progress
  *
@@ -59,6 +60,11 @@ import { createServerClient } from '@/lib/supabase/server';
 import { createLogger } from '@/lib/utils/logger';
 import { createInitialSyncOrchestrator } from '@/services/sync';
 import { INITIAL_SYNC_CONFIG } from '@/config/initial-sync';
+import {
+  GmailService,
+  TokenManager,
+  EmailParser,
+} from '@/lib/gmail';
 import type {
   InitialSyncRequest,
   InitialSyncResponse,
@@ -70,6 +76,12 @@ import type {
 // =============================================================================
 
 const logger = createLogger('API:InitialSync');
+
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const MAX_BODY_CHARS = parseInt(process.env.MAX_BODY_CHARS || '16000', 10);
 
 // =============================================================================
 // TYPE GUARDS
@@ -197,14 +209,13 @@ export async function POST(
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Get user's Gmail account
+    // Get user's Gmail accounts (ALL sync-enabled, not just first)
     // ─────────────────────────────────────────────────────────────────────────
     const { data: gmailAccounts, error: accountError } = await supabase
       .from('gmail_accounts')
-      .select('id, email')
+      .select('*')
       .eq('user_id', user.id)
-      .eq('sync_enabled', true)
-      .limit(1);
+      .eq('sync_enabled', true);
 
     if (accountError || !gmailAccounts || gmailAccounts.length === 0) {
       logger.error('No Gmail account found', {
@@ -221,31 +232,157 @@ export async function POST(
       );
     }
 
-    const gmailAccount = gmailAccounts[0];
-
-    logger.info('Found Gmail account for sync', {
+    logger.info('Found Gmail accounts for sync', {
       userId: user.id,
-      gmailAccountId: gmailAccount.id,
-      email: gmailAccount.email,
+      accountCount: gmailAccounts.length,
+      emails: gmailAccounts.map((a: { id: string; email: string }) => a.email),
     });
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Create and execute orchestrator
+    // Step 1: Fetch emails from Gmail for ALL accounts
+    //
+    // The orchestrator only reads from the database, so we must
+    // first fetch emails from Gmail and store them in the DB.
+    // This was the root cause of the "0 emails" bug after account reset.
     // ─────────────────────────────────────────────────────────────────────────
+    const maxEmails = body.maxEmails ?? INITIAL_SYNC_CONFIG.maxEmails;
+    const tokenManager = new TokenManager(supabase);
+    const emailParser = new EmailParser();
+    let totalEmailsFetched = 0;
+
+    for (const account of gmailAccounts) {
+      try {
+        logger.info('Fetching emails from Gmail for account', {
+          accountId: account.id,
+          email: account.email,
+        });
+
+        // Get valid access token (handles refresh automatically)
+        const accessToken = await tokenManager.getValidToken(account);
+        const gmailService = new GmailService(accessToken, account.id);
+
+        // Fetch message list from Gmail
+        const listResponse = await gmailService.listMessages({
+          maxResults: maxEmails,
+          query: INITIAL_SYNC_CONFIG.excludeQuery,
+        });
+
+        const messageIds = listResponse.messages?.map((m) => m.id) || [];
+
+        if (messageIds.length === 0) {
+          logger.info('No messages found in Gmail for account', {
+            accountId: account.id,
+            email: account.email,
+          });
+          continue;
+        }
+
+        // Check which messages we already have in the database
+        const { data: existing } = await supabase
+          .from('emails')
+          .select('gmail_id')
+          .eq('user_id', user.id)
+          .in('gmail_id', messageIds);
+
+        const existingIds = new Set(
+          existing?.map((e: { gmail_id: string }) => e.gmail_id) || []
+        );
+        const newMessageIds = messageIds.filter((id) => !existingIds.has(id));
+
+        if (newMessageIds.length === 0) {
+          logger.info('All messages already in database for account', {
+            accountId: account.id,
+            email: account.email,
+            total: messageIds.length,
+          });
+          continue;
+        }
+
+        // Fetch full message content
+        const messages = await gmailService.getMessages(newMessageIds);
+
+        // Parse and store each message
+        let stored = 0;
+        for (const message of messages) {
+          try {
+            const parsed = emailParser.parse(message, MAX_BODY_CHARS);
+            const insertData = emailParser.toInsertData(parsed, user.id, account.id);
+
+            const { error: insertError } = await supabase
+              .from('emails')
+              .insert(insertData);
+
+            if (insertError) {
+              if (insertError.code === '23505') {
+                // Unique constraint violation - already exists
+                continue;
+              }
+              logger.warn('Failed to insert email', {
+                messageId: message.id,
+                error: insertError.message,
+              });
+            } else {
+              stored++;
+            }
+          } catch (parseErr) {
+            logger.warn('Failed to parse email', {
+              messageId: message.id,
+              error: parseErr instanceof Error ? parseErr.message : 'Unknown',
+            });
+          }
+        }
+
+        totalEmailsFetched += stored;
+
+        // Update account sync metadata
+        await supabase
+          .from('gmail_accounts')
+          .update({ last_sync_at: new Date().toISOString() })
+          .eq('id', account.id);
+
+        logger.info('Gmail fetch complete for account', {
+          accountId: account.id,
+          email: account.email,
+          fetched: messageIds.length,
+          newStored: stored,
+        });
+      } catch (fetchErr) {
+        // Don't fail the whole sync if one account fails - try the next one
+        logger.warn('Failed to fetch emails for account, continuing with next', {
+          accountId: account.id,
+          email: account.email,
+          error: fetchErr instanceof Error ? fetchErr.message : 'Unknown',
+        });
+      }
+    }
+
+    logger.info('Gmail fetch phase complete', {
+      userId: user.id,
+      totalEmailsFetched,
+      accountsProcessed: gmailAccounts.length,
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 2: Run the analysis orchestrator
+    // ─────────────────────────────────────────────────────────────────────────
+    const primaryAccount = gmailAccounts[0];
+
     const orchestrator = createInitialSyncOrchestrator({
       userId: user.id,
-      gmailAccountId: gmailAccount.id,
-      maxEmails: body.maxEmails ?? INITIAL_SYNC_CONFIG.maxEmails,
+      gmailAccountId: primaryAccount.id,
+      gmailAccountIds: gmailAccounts.map((a: { id: string; email: string }) => a.id),
+      maxEmails,
       includeRead: body.includeRead ?? INITIAL_SYNC_CONFIG.includeRead,
     });
 
     logger.info('Starting initial sync orchestrator', {
       userId: user.id,
-      gmailAccountId: gmailAccount.id,
-      maxEmails: body.maxEmails ?? INITIAL_SYNC_CONFIG.maxEmails,
+      accountCount: gmailAccounts.length,
+      maxEmails,
+      totalEmailsFetched,
     });
 
-    // Execute the sync
+    // Execute the analysis
     const result = await orchestrator.execute();
 
     const totalTime = Date.now() - startTime;
