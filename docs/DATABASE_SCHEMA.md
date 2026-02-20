@@ -139,6 +139,12 @@ CREATE TABLE user_context (
   onboarding_completed_at TIMESTAMPTZ,
   onboarding_step INTEGER DEFAULT 0,
 
+  -- Profile suggestions (migration 031)
+  -- AI-generated suggestions for Mad Libs onboarding step
+  -- NOT auto-saved to role/company/etc. — user must confirm in Phase 3
+  profile_suggestions JSONB DEFAULT NULL,
+  profile_suggestions_generated_at TIMESTAMPTZ DEFAULT NULL,
+
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -877,6 +883,9 @@ All tables have RLS enabled. Policy pattern:
 | 026 | email_sending.sql | Templates, campaigns, outbound, tracking, quotas |
 | 027 | backfill_email_categories.sql | Data migration: backfill categories |
 | 028 | category_cleanup_and_cache_clear.sql | Data migration: final category cleanup |
+| 029 | merge_clients_into_contacts.sql | Merge clients table into contacts |
+| 030 | cleanup_client_id_columns.sql | Remove deprecated client_id columns |
+| 031 | profile_suggestions.sql | Add profile_suggestions JSONB + timestamp to user_context |
 
 ---
 

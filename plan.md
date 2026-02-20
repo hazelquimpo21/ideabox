@@ -111,7 +111,7 @@ AboutYouStep). Saves ~40KB from initial bundle.
 - When permission is granted: show "Import Contacts" button directly
 - After import: brief success message with count, then suggestions appear
 
-### Phase 2: AI-Powered Profile Autofill
+### Phase 2: AI-Powered Profile Autofill ✅ DONE (Feb 2026)
 
 **2a. New API endpoint: `POST /api/onboarding/profile-suggestions`**
 - Analyzes the user's recently synced emails + contacts to extract:
@@ -245,9 +245,13 @@ Rationale:
 - `src/app/api/contacts/import-google/route.ts` — Parallel account processing
 - `src/app/onboarding/components/ContactImportStep.tsx` — Permission UX + skip redundant fetch
 
-### Phase 2
-- `src/app/api/onboarding/profile-suggestions/route.ts` — New endpoint
-- `src/services/onboarding/profile-analyzer.ts` — New service (or extend existing)
+### Phase 2 ✅ DONE
+- `src/app/api/onboarding/profile-suggestions/route.ts` — API endpoint (POST, cached)
+- `src/services/onboarding/profile-analyzer.ts` — AI profile extraction (GPT-4.1-mini, function calling)
+- `src/services/onboarding/work-hours-analyzer.ts` — Statistical work hours inference
+- `src/services/user-context/user-context-service.ts` — Added `saveProfileSuggestions()`
+- `src/types/database.ts` — Added `ProfileSuggestions` interface + updated user_context types
+- `supabase/migrations/031_profile_suggestions.sql` — New JSONB column on user_context
 
 ### Phase 3
 - `src/app/onboarding/components/MadLibsProfileStep.tsx` — New component (replaces AboutYouStep)
@@ -255,3 +259,264 @@ Rationale:
 
 ### Phase 4
 - `src/app/onboarding/components/OnboardingWizard.tsx` — Reorder steps, remove ClientsStep, lazy load
+
+---
+
+## Phase 3 Implementation Prompt (for next Claude Code session)
+
+The following prompt is designed to be copy-pasted into a new Claude Code session to implement Phase 3 of the onboarding overhaul.
+
+```
+You are working on the IdeaBox app (Next.js 14 App Router, TypeScript, Supabase, Tailwind).
+Your task is Phase 3 of the onboarding overhaul: Build the "Mad Libs" Profile Card.
+Read plan.md for full context, and read docs/ARCHITECTURE.md and docs/DATABASE_SCHEMA.md
+to understand the codebase. Make sure to have great logging for troubleshooting and excellent
+comments. At the end update all documentation too.
+
+## Target User
+Solopreneur, 1-3 Gmail accounts (personal / day job / side business). Busy, impatient.
+50-500 Google contacts. Moderate email volume.
+
+## Problem
+The current "About You" onboarding step (AboutYouStep.tsx) is a boring form with text
+inputs. Users abandon it or provide minimal info. Phase 2 built an AI-powered endpoint
+(POST /api/onboarding/profile-suggestions) that analyzes the user's sent emails and
+returns role, company, industry, projects, priorities, and work hours — all with
+confidence scores. But nothing consumes these suggestions yet.
+
+## Goal
+Replace the "About You" step with an interactive "Mad Libs" fill-in-the-blank card
+that pre-fills AI suggestions and lets users confirm/edit them conversationally.
+
+## What the Mad Libs Card Looks Like
+
+```
+I'm a [__freelance designer__] working on [__my own__].
+
+Right now I'm focused on [__landing new clients__] and [__finishing my portfolio site__].
+
+I usually work [__Mon-Fri__], [__9am__] to [__5pm__].
+
+The people I care most about hearing from:
+  [sarah@bigclient.co ×] [mike@agency.com ×] [+ add]
+```
+
+Each blank is an inline editable field. AI-suggested values appear pre-filled with a
+subtle "AI" indicator. Empty blanks pulse gently to invite interaction.
+
+## Architecture
+
+### Phase 2 Recap (Already Built)
+- `POST /api/onboarding/profile-suggestions` returns `ProfileSuggestions` type
+  (defined in `src/types/database.ts`)
+- Response includes: role, company, industry, workHours, projects, priorities
+- Each field has `{ value, confidence, source }` or null
+- Work hours have `{ start, end, days, confidence, source }`
+- Cached in user_context.profile_suggestions for 1 hour
+- Endpoint returns empty suggestions gracefully if no emails synced
+
+### New Files to Create
+
+**1. `src/app/onboarding/components/MadLibsProfileStep.tsx`** — Main component
+
+This replaces AboutYouStep as the profile collection step.
+
+Responsibilities:
+- On mount, call `POST /api/onboarding/profile-suggestions` to get AI suggestions
+- Render the Mad Libs card with pre-filled blanks from suggestions
+- Handle inline editing of each field
+- On "Looks good!" click, save confirmed values to user_context via
+  `updateUserContext()` (existing function in user-context-service.ts)
+- Support "Skip for now" — all fields are optional
+
+Props (same interface as AboutYouStep for drop-in replacement):
+```typescript
+interface MadLibsProfileStepProps {
+  user: AuthUser;
+  onNext: () => void;
+  onBack: () => void;
+  isFirst?: boolean;
+  isLast?: boolean;
+}
+```
+
+State management:
+```typescript
+// Fetched AI suggestions
+const [suggestions, setSuggestions] = useState<ProfileSuggestions | null>(null);
+const [loading, setLoading] = useState(true);
+
+// User-editable values (initialized from suggestions)
+const [role, setRole] = useState('');
+const [company, setCompany] = useState('');
+const [priorities, setPriorities] = useState<string[]>([]);
+const [workStart, setWorkStart] = useState('09:00');
+const [workEnd, setWorkEnd] = useState('17:00');
+const [workDays, setWorkDays] = useState<number[]>([1,2,3,4,5]);
+const [vipEmails, setVipEmails] = useState<string[]>([]);
+
+// Track which fields the user has edited (vs AI-suggested)
+const [editedFields, setEditedFields] = useState<Set<string>>(new Set());
+```
+
+Loading state:
+- While fetching suggestions, show a skeleton/shimmer version of the card
+- Use the card shape itself as the skeleton (blanks appear as shimmer bars)
+- If suggestions return empty (no emails synced), blanks appear empty but
+  the card is still interactive
+
+**2. `src/app/onboarding/components/MadLibsField.tsx`** — Reusable blank component
+
+A generic inline-editable "blank" that renders in two modes:
+- **Display mode**: Shows value as styled underlined text (or empty pulse if no value)
+- **Edit mode**: Shows an inline input (text, select, or chip list)
+
+```typescript
+interface MadLibsFieldProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  /** Whether this value came from AI suggestions */
+  isAiSuggested?: boolean;
+  /** Confidence score from AI (shown as visual indicator) */
+  confidence?: number;
+  /** Field type determines the edit UI */
+  type?: 'text' | 'time' | 'days' | 'chips';
+  /** For chips type: the list of items */
+  chipValues?: string[];
+  onChipAdd?: (value: string) => void;
+  onChipRemove?: (value: string) => void;
+}
+```
+
+Visual behavior:
+- Underlined text that looks like a fill-in-the-blank
+- Small "✨" or "AI" badge next to AI-suggested values (only show if isAiSuggested
+  and user hasn't edited yet)
+- Click → transitions to inline input with a subtle animation
+- Press Enter or blur → saves and transitions back to display mode
+- Empty fields show placeholder text with a gentle pulse animation
+- High-confidence AI values (>0.8) appear slightly bolder/more prominent
+- Low-confidence values (<0.3) appear with a "?" or lighter styling
+
+### Files to Modify
+
+**3. `src/app/onboarding/components/OnboardingWizard.tsx`** — Wire up new step
+
+Replace the AboutYouStep import and usage with MadLibsProfileStep:
+- Change import from AboutYouStep to MadLibsProfileStep
+- Update the step definition: id stays 'about-you' for now (less disruption)
+- Pass the same props (user, onNext, onBack)
+
+**4. `src/app/onboarding/components/AboutYouStep.tsx`** — Deprecate
+
+Add a comment at the top noting this is deprecated and replaced by MadLibsProfileStep.
+Don't delete it yet (in case we need to revert).
+
+## VIP Contacts Handling
+
+The VIP chips section should show contacts that were selected in the previous
+VIP Contacts step. During onboarding, VIPs are already saved to the contacts table
+(is_vip = true). Query them:
+
+```typescript
+const { data: vips } = await supabase
+  .from('contacts')
+  .select('email, name')
+  .eq('user_id', userId)
+  .eq('is_vip', true);
+```
+
+Show these as pre-filled chips. User can add more or remove existing ones.
+
+## Saving Confirmed Values
+
+When user clicks "Looks good!", save ONLY the fields that have values:
+
+```typescript
+import { updateUserContext } from '@/services/user-context/user-context-service';
+
+await updateUserContext(userId, {
+  role: role || null,
+  company: company || null,
+  priorities: priorities.length > 0 ? priorities : undefined,
+  work_hours_start: workStart,
+  work_hours_end: workEnd,
+  work_days: workDays,
+  vip_emails: vipEmails.length > 0 ? vipEmails : undefined,
+});
+```
+
+This writes to the REAL user_context fields (not profile_suggestions). Once confirmed,
+these values are used by all AI analyzers for personalized email processing.
+
+## UI/UX Requirements
+
+- **Card-like layout**: The Mad Libs card should feel like a greeting card or letter,
+  not a form. White card with subtle shadow, generous padding, readable font size.
+- **Sentence flow**: The blanks are embedded in natural English sentences. Reading
+  the card should feel like reading a short bio paragraph.
+- **Tailwind styling**: Use Tailwind classes. The blank underlines can be done with
+  `border-b-2 border-dashed` in display mode.
+- **AI indicator**: Small sparkle icon (✨ from Lucide's Sparkles) next to AI-filled
+  values. Disappears when user edits.
+- **Responsive**: Card should work on mobile (stack to single column if needed).
+- **Loading skeleton**: While fetching suggestions, show shimmer/skeleton that matches
+  the final card shape.
+- **Transitions**: Use subtle CSS transitions for edit mode toggle (not jarring).
+
+## Edge Cases
+
+1. **No suggestions available**: All blanks appear empty. Card is still usable.
+2. **Partial suggestions**: Some fields filled, others empty. Mix of AI and manual.
+3. **User clears an AI-suggested value**: Blank returns to empty state, AI indicator gone.
+4. **Multiple priorities**: Show as comma-separated in the sentence, click to edit as chips.
+5. **Work days display**: Show as "Mon-Fri" (abbreviated), click to toggle individual days.
+6. **Skip button**: Always visible. Saves nothing, advances to next step.
+
+## Existing Patterns to Follow
+
+- **Component style**: Look at existing onboarding components in
+  `src/app/onboarding/components/` for the pattern (props interface, logger, etc.)
+- **Logging**: Use `createLogger('MadLibsProfileStep')` from `@/lib/utils/logger`
+- **API calls**: Use fetch with proper error handling (see other onboarding steps)
+- **UI components**: Import from `@/components/ui` (Button, Badge, Input, Label)
+- **Icons**: Use Lucide React icons (`lucide-react`)
+- **Auth**: The `user` prop provides `user.id` for API calls
+
+## Verification
+
+After implementing, verify:
+
+**Happy path (user with AI suggestions):**
+1. Navigate to onboarding, reach the profile step
+2. Card loads with AI-suggested values in the blanks
+3. AI indicators (sparkle) visible next to pre-filled values
+4. Click a blank → inline editor appears
+5. Edit value, press Enter → value updates, AI indicator disappears
+6. Click "Looks good!" → values saved to user_context
+7. Advancing to next step works
+
+**Edge case (no suggestions):**
+1. User hasn't synced emails yet
+2. Card loads with all empty blanks (pulsing placeholders)
+3. User can manually fill in values
+4. "Looks good!" saves manual values
+
+**Edge case (skip):**
+1. User clicks "Skip for now"
+2. No values saved
+3. Next step loads correctly
+
+## Files to Create
+- `src/app/onboarding/components/MadLibsProfileStep.tsx`
+- `src/app/onboarding/components/MadLibsField.tsx`
+
+## Files to Modify
+- `src/app/onboarding/components/OnboardingWizard.tsx` — swap AboutYouStep for MadLibsProfileStep
+- `src/app/onboarding/components/AboutYouStep.tsx` — add deprecation comment
+- `docs/ARCHITECTURE.md` — document the new components
+- `plan.md` — mark Phase 3 as done
+
+Commit your work with clear messages and push to your branch when done.
+```
