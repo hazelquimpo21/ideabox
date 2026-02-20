@@ -32,16 +32,12 @@ import Link from 'next/link';
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Badge,
   Button,
   Skeleton,
 } from '@/components/ui';
 import {
   TrendingUp,
-  Mail,
-  Calendar,
   AlertTriangle,
   RefreshCw,
   ArrowRight,
@@ -80,15 +76,27 @@ interface PriorityEmail {
 const MAX_EMAILS = 50;
 
 /**
- * Category badge color mapping.
+ * Category badge color mapping for all 12 life-bucket categories.
+ * Each category gets a distinct color for visual differentiation in the
+ * priority list. Colors are consistent with the design system.
  */
 const CATEGORY_COLORS: Record<string, string> = {
+  // Work & Business
   client_pipeline: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   business_work_general: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  // Family & Personal
   family_kids_school: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  family_health_appointments: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  personal_friends_family: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+  // Life Admin
   finance: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  newsletters_general: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+  travel: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
   shopping: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  local: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  // Information
+  newsletters_general: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+  news_politics: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400',
+  product_updates: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-400',
 };
 
 /** Friendly category labels. */
@@ -268,7 +276,7 @@ export function PriorityEmailList() {
             return (
               <Link
                 key={email.id}
-                href={`/inbox/${category}/${email.id}`}
+                href={`/inbox/${category}/${email.id}?from=priority`}
                 className="flex items-center gap-4 p-4 border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0"
               >
                 {/* Priority Score Badge */}

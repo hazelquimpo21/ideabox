@@ -27,6 +27,9 @@
 | Send Rate Limit | 400/day per user | Respects Gmail API limits |
 | Content Digest | Separate analyzer | Gist + key points for non-reading triage |
 | Multi-Action | Array in JSONB | One email can produce multiple to-do items |
+| Archive Delete | Hard delete (Supabase) | Archived emails can be permanently deleted; soft-delete was a no-op |
+| Back Navigation | `?from=` query param | Preserves originating tab on email detail back button |
+| View All | Direct navigation | "View All" on category card goes to full page, not modal |
 | Historical Sync | Metadata-only | Enrich contacts without full email download |
 | Navigation | 5 items with tabs | 11→5 items, tabbed UIs for merged pages |
 | Client Tracking | Merged into contacts | `is_client` flag + client columns on contacts table |
