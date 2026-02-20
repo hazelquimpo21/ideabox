@@ -107,7 +107,7 @@ export async function GET() {
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('sync_progress')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single();
 
     if (profileError) {
@@ -177,7 +177,7 @@ export async function updateSyncProgress(
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('sync_progress')
-      .eq('user_id', userId)
+      .eq('id', userId)
       .single();
 
     const currentProgress: SyncProgressData = profile?.sync_progress || DEFAULT_PROGRESS;
@@ -192,11 +192,11 @@ export async function updateSyncProgress(
     const { error } = await supabase
       .from('user_profiles')
       .upsert({
-        user_id: userId,
+        id: userId,
         sync_progress: updatedProgress,
         updated_at: new Date().toISOString(),
       }, {
-        onConflict: 'user_id',
+        onConflict: 'id',
       });
 
     if (error) {
