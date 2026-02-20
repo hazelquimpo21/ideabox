@@ -45,6 +45,7 @@
 'use client';
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button, Badge, Checkbox } from '@/components/ui';
 import { createLogger } from '@/lib/utils/logger';
 import type { AuthUser } from '@/lib/auth';
@@ -226,9 +227,19 @@ export function ContactImportStep({
   // Load suggestions on mount
   // ─────────────────────────────────────────────────────────────────────────────
 
+  const searchParams = useSearchParams();
+
   React.useEffect(() => {
     loadSuggestions();
   }, []);
+
+  // Auto-trigger import when returning from OAuth with contacts scope granted
+  React.useEffect(() => {
+    if (searchParams.get('scope_added') === 'true') {
+      logger.info('Returned from OAuth with contacts scope granted, auto-importing');
+      handleImportFromGoogle();
+    }
+  }, [searchParams]);
 
   /**
    * Fetches VIP suggestions from the API.
@@ -336,7 +347,7 @@ export function ContactImportStep({
         setImportStatus('Redirecting to grant permission...');
 
         // Redirect to OAuth with contacts scope
-        window.location.href = '/api/auth/google?scope=contacts';
+        window.location.href = '/api/auth/add-contacts-scope?returnTo=' + encodeURIComponent(window.location.pathname);
         return;
       } else {
         setImportStatus('Import failed. Try again later.');
