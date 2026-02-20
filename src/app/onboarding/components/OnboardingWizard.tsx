@@ -7,11 +7,19 @@
  * navigation, and collects user data across steps.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * STEP FLOW (Updated Jan 2026)
+ * STEP FLOW (Updated Feb 2026 — Phase 4 Overhaul)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * 1. Welcome → 2. Accounts → 3. Sync Config → 4. Clients →
- * 5. VIP Contacts → 6. About You (Mad Libs Profile Card) → Complete
+ * 1. Welcome → 2. Accounts → 3. VIP Contacts → 4. About You (Mad Libs) →
+ * 5. Sync Config ("Get Started") → Complete
+ *
+ * Phase 4 changes (Feb 2026):
+ * - Removed Clients step (clients are auto-detected by ClientTaggerAnalyzer)
+ * - Moved VIP Contacts earlier (right after Accounts) so VIP selections
+ *   seed the Mad Libs Profile step
+ * - Moved Sync Config to last position as the "Finish Setup" moment
+ * - Added React.lazy() for steps 3+ to reduce initial bundle size
+ * - Net effect: 6 steps → 5 steps, less friction, faster load
  *
  * The "VIP Contacts" step (Jan 2026) helps users identify important contacts:
  * - Imports contacts from Google (if permission granted)
@@ -29,7 +37,7 @@
  * Users can:
  * - Navigate forward with "Next"/"Continue"
  * - Navigate back with "Back"
- * - Skip optional steps (Clients, VIP Contacts, About You)
+ * - Skip optional steps (VIP Contacts, About You)
  * - Configure initial sync settings (email count, read/unread)
  *
  * @module app/onboarding/components/OnboardingWizard
@@ -44,10 +52,15 @@ import { createLogger } from '@/lib/utils/logger';
 import type { AuthUser } from '@/lib/auth';
 import { WelcomeStep } from './WelcomeStep';
 import { AccountsStep } from './AccountsStep';
-import { ClientsStep } from './ClientsStep';
-import { SyncConfigStep, type SyncConfig } from './SyncConfigStep';
-import { ContactImportStep } from './ContactImportStep';
-import { MadLibsProfileStep } from './MadLibsProfileStep';
+import type { SyncConfig } from './SyncConfigStep';
+
+// Lazy load steps 3+ (VIP Contacts, Mad Libs Profile, Sync Config).
+// The user won't see these until several seconds after page load, so deferring
+// their bundles reduces the initial JS payload. Each component must have a
+// `default` export for React.lazy to work.
+const ContactImportStep = React.lazy(() => import('./ContactImportStep'));
+const MadLibsProfileStep = React.lazy(() => import('./MadLibsProfileStep'));
+const SyncConfigStep = React.lazy(() => import('./SyncConfigStep'));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -71,9 +84,9 @@ export interface OnboardingWizardProps {
 
 /**
  * Wizard step identifiers.
- * Updated Jan 2026: Added 'vip-contacts' step for contact import and VIP selection.
+ * Updated Feb 2026 (Phase 4): Removed 'clients' — auto-detected by ClientTaggerAnalyzer.
  */
-type WizardStep = 'welcome' | 'accounts' | 'sync-config' | 'clients' | 'vip-contacts' | 'about-you';
+type WizardStep = 'welcome' | 'accounts' | 'vip-contacts' | 'about-you' | 'sync-config';
 
 /**
  * Step configuration.
@@ -90,7 +103,13 @@ interface StepConfig {
 
 /**
  * Ordered list of wizard steps.
- * Updated Jan 2026: Added 'vip-contacts' step for Google Contacts import and VIP selection.
+ *
+ * Updated Feb 2026 (Phase 4):
+ * - Removed 'clients' step (auto-detected by ClientTaggerAnalyzer from email patterns)
+ * - Moved 'vip-contacts' to position 3 (right after accounts, seeds the Mad Libs step)
+ * - Moved 'about-you' (MadLibsProfileStep) to position 4
+ * - Moved 'sync-config' to position 5 (last step — the "Finish Setup" moment)
+ * - Net effect: 6 steps → 5 steps
  */
 const STEPS: StepConfig[] = [
   {
@@ -104,26 +123,38 @@ const STEPS: StepConfig[] = [
     description: 'Connect your Gmail accounts',
   },
   {
-    id: 'sync-config',
-    title: 'Analysis',
-    description: 'Configure initial email analysis',
-  },
-  {
-    id: 'clients',
-    title: 'Clients',
-    description: 'Add your main clients (optional)',
-  },
-  {
     id: 'vip-contacts',
     title: 'VIP Contacts',
-    description: 'Select your most important contacts (optional)',
+    description: 'Select your most important contacts',
   },
   {
     id: 'about-you',
     title: 'About You',
-    description: 'Confirm your AI-generated profile (optional)',
+    description: 'AI-powered profile card',
+  },
+  {
+    id: 'sync-config',
+    title: 'Get Started',
+    description: 'Configure and launch email analysis',
   },
 ];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOADING FALLBACK (for React.lazy Suspense boundary)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Minimal loading fallback shown while a lazy-loaded step chunk is fetched.
+ * Matches the card dimensions so the layout doesn't shift when the step loads.
+ */
+function StepLoadingFallback() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-3">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <p className="text-sm text-muted-foreground">Loading step...</p>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
@@ -259,6 +290,12 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
       case 'accounts':
         return <AccountsStep user={user} {...commonProps} />;
 
+      case 'vip-contacts':
+        return <ContactImportStep user={user} {...commonProps} />;
+
+      case 'about-you':
+        return <MadLibsProfileStep user={user} {...commonProps} />;
+
       case 'sync-config':
         return (
           <SyncConfigStep
@@ -267,15 +304,6 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
             onConfigUpdate={handleSyncConfigUpdate}
           />
         );
-
-      case 'clients':
-        return <ClientsStep user={user} {...commonProps} />;
-
-      case 'vip-contacts':
-        return <ContactImportStep user={user} {...commonProps} />;
-
-      case 'about-you':
-        return <MadLibsProfileStep user={user} {...commonProps} />;
 
       default:
         return null;
@@ -291,10 +319,12 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
       {/* Step indicator */}
       {renderStepIndicator()}
 
-      {/* Step content card */}
+      {/* Step content card — Suspense boundary for lazy-loaded step components */}
       <Card className="border-border/50">
         <CardContent className="pt-6">
-          {renderStepContent()}
+          <React.Suspense fallback={<StepLoadingFallback />}>
+            {renderStepContent()}
+          </React.Suspense>
         </CardContent>
       </Card>
 

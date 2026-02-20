@@ -183,7 +183,7 @@ Notes on persona flexibility:
 - "Looks good!" button at bottom to confirm and continue
 - "Skip for now" still available — all fields optional
 
-### Phase 4: Streamline the Step Order
+### Phase 4: Streamline the Step Order ✅ DONE (Feb 2026)
 
 **Current:** Welcome → Accounts → Sync Config → Clients → VIP Contacts → About You
 
@@ -233,8 +233,8 @@ Rationale:
 3. **Phase 2** (AI autofill): Build the profile-suggestions API to power the Mad Libs
    defaults. This can be done incrementally — start with role/company extraction, add
    work hours and projects later.
-4. **Phase 4** (step reorder + polish): Reorder steps, remove Clients step, add lazy
-   loading for later steps, React.memo optimizations.
+4. **Phase 4** ✅ (step reorder + polish): Reorder steps, remove Clients step, add lazy
+   loading for later steps.
 
 ---
 
@@ -259,8 +259,10 @@ Rationale:
 - `src/app/onboarding/components/OnboardingWizard.tsx` — Swapped AboutYouStep → MadLibsProfileStep
 - `src/app/onboarding/components/AboutYouStep.tsx` — Deprecated (kept for rollback)
 
-### Phase 4
-- `src/app/onboarding/components/OnboardingWizard.tsx` — Reorder steps, remove ClientsStep, lazy load
+### Phase 4 ✅ DONE
+- `src/app/onboarding/components/OnboardingWizard.tsx` — Reordered steps (5 steps), removed ClientsStep, added React.lazy + Suspense
+- `src/app/onboarding/components/ClientsStep.tsx` — Deprecated from onboarding (kept for Settings)
+- `docs/ARCHITECTURE.md` — Updated step flow, added lazy loading pattern
 
 ---
 
@@ -270,213 +272,14 @@ Phase 3 has been implemented. See the commit on `claude/build-profile-card-QqeOq
 
 ---
 
-## Phase 4 Implementation Prompt (for next Claude Code session)
+## Phase 4 Implementation Prompt ✅ DONE
 
-The following prompt is designed to be copy-pasted into a new Claude Code session to implement Phase 4 of the onboarding overhaul.
+Phase 4 has been implemented. See the commit on `claude/streamline-onboarding-steps-EmMLL`.
 
-```
-You are working on the IdeaBox app (Next.js 14 App Router, TypeScript, Supabase, Tailwind).
-Your task is Phase 4 of the onboarding overhaul: Streamline the Step Order.
-Read plan.md for full context, and read docs/ARCHITECTURE.md and docs/DATABASE_SCHEMA.md
-to understand the codebase. Make sure to have great logging for troubleshooting and excellent
-comments. At the end update all documentation too.
-
-## Target User
-
-Solopreneur, 1-3 Gmail accounts (personal / day job / side business). Busy, impatient.
-50-500 Google contacts. Moderate email volume.
-
-## Problem
-
-The current onboarding wizard has 6 steps in a suboptimal order:
-
-  1. Welcome → 2. Accounts → 3. Sync Config → 4. Clients → 5. VIP Contacts → 6. About You
-
-Issues:
-- **Clients step is redundant**: Clients are better detected automatically by the
-  ClientTaggerAnalyzer from email patterns. Manual client entry during onboarding is
-  tedious and adds friction for solopreneurs who may not think in "clients" terms.
-- **VIP Contacts is too late**: It should come right after Accounts so the user's VIP
-  selections can seed the Mad Libs Profile step.
-- **Sync Config should be last**: It's the "let's get started" moment — configure how
-  much to analyze, then click "Finish" and launch the initial sync.
-- **All 6 step components are eagerly imported**: User only sees one step at a time,
-  so steps 3+ should be lazy loaded to reduce the initial bundle.
-
-## Goal
-
-Reorder to 5 steps, remove Clients, add lazy loading:
-
-  1. Welcome → 2. Accounts → 3. VIP Contacts → 4. Mad Libs Profile → 5. Sync Config
-
-Net effect: 6 steps → 5 steps, less manual entry, more intelligence, faster load.
-
-## Architecture
-
-### Phases 1-3 Recap (Already Built)
-- **Phase 1**: Fixed contacts import (batch upserts, parallel multi-account, VIP suggestions)
-- **Phase 2**: Built `POST /api/onboarding/profile-suggestions` (AI profile extraction from
-  sent emails, statistical work hours inference, cached in user_context.profile_suggestions)
-- **Phase 3**: Built MadLibsProfileStep and MadLibsField — interactive "Mad Libs" fill-in-the-blank
-  card that replaces AboutYouStep. Pre-fills from Phase 2 AI suggestions. Already wired up
-  in OnboardingWizard.tsx at the 'about-you' step ID.
-
-### What Phase 4 Changes
-
-**1. Reorder the STEPS array in OnboardingWizard.tsx**
-
-Current STEPS array:
-```typescript
-const STEPS: StepConfig[] = [
-  { id: 'welcome', title: 'Welcome', description: 'Get started with IdeaBox' },
-  { id: 'accounts', title: 'Accounts', description: 'Connect your Gmail accounts' },
-  { id: 'sync-config', title: 'Analysis', description: 'Configure initial email analysis' },
-  { id: 'clients', title: 'Clients', description: 'Add your main clients (optional)' },
-  { id: 'vip-contacts', title: 'VIP Contacts', description: 'Select your most important contacts (optional)' },
-  { id: 'about-you', title: 'About You', description: 'Confirm your AI-generated profile (optional)' },
-];
-```
-
-New STEPS array (5 steps):
-```typescript
-const STEPS: StepConfig[] = [
-  { id: 'welcome', title: 'Welcome', description: 'Get started with IdeaBox' },
-  { id: 'accounts', title: 'Accounts', description: 'Connect your Gmail accounts' },
-  { id: 'vip-contacts', title: 'VIP Contacts', description: 'Select your most important contacts' },
-  { id: 'about-you', title: 'About You', description: 'AI-powered profile card' },
-  { id: 'sync-config', title: 'Get Started', description: 'Configure and launch email analysis' },
-];
-```
-
-Key changes:
-- Remove 'clients' step entirely
-- Move 'vip-contacts' to position 3 (right after accounts)
-- Move 'about-you' (MadLibsProfileStep) to position 4
-- Move 'sync-config' to position 5 (last step — the "Finish" moment)
-- Update the WizardStep type to remove 'clients'
-- Remove the 'clients' case from the switch statement
-- Remove the ClientsStep import
-
-**2. Update SyncConfigStep to be the final "launch" step**
-
-Since SyncConfig is now the last step, its "Continue" button should say "Finish Setup"
-and feel like the natural endpoint. The isLastStep prop already handles this, but verify
-the SyncConfigStep renders appropriately as the final step:
-- The button text should say "Finish Setup" when isLastStep is true
-- Clicking it should trigger onComplete (which fires the initial sync)
-
-**3. Handle OAuth return URL (scope_added=true)**
-
-The current wizard has this logic:
-```typescript
-if (searchParams.get('scope_added') === 'true') {
-  const vipStepIndex = STEPS.findIndex((s) => s.id === 'vip-contacts');
-  // Jump to VIP Contacts step
-}
-```
-
-This still works because 'vip-contacts' still exists, just at a different index.
-Verify this logic still works correctly after the reorder.
-
-**4. Add React.lazy() for later steps**
-
-Lazy load steps 3+ (VIP Contacts, Mad Libs Profile, Sync Config) since the user
-won't see them until several seconds after page load.
-
-```typescript
-import { WelcomeStep } from './WelcomeStep';
-import { AccountsStep } from './AccountsStep';
-
-// Lazy load steps the user won't see immediately
-const ContactImportStep = React.lazy(() => import('./ContactImportStep'));
-const MadLibsProfileStep = React.lazy(() => import('./MadLibsProfileStep'));
-const SyncConfigStep = React.lazy(() => import('./SyncConfigStep'));
-```
-
-Wrap the step content in `<React.Suspense>` with a loading fallback:
-```typescript
-<React.Suspense fallback={<StepLoadingFallback />}>
-  {renderStepContent()}
-</React.Suspense>
-```
-
-The StepLoadingFallback should be a simple centered spinner or skeleton that
-matches the card dimensions.
-
-IMPORTANT: Ensure each lazy-loaded component has a `default` export. Check:
-- ContactImportStep.tsx — needs `export default ContactImportStep`
-- MadLibsProfileStep.tsx — already has `export default MadLibsProfileStep`
-- SyncConfigStep.tsx — needs `export default SyncConfigStep`
-
-Add default exports to any components that are missing them. Named exports
-should remain for backwards compatibility with any existing imports.
-
-**5. Clean up the ClientsStep reference**
-
-- Remove the `import { ClientsStep } from './ClientsStep'` line
-- Remove the 'clients' case from the switch statement
-- Remove 'clients' from the WizardStep type union
-- Do NOT delete ClientsStep.tsx itself — it may be used in Settings or elsewhere.
-  Just add a deprecation comment at the top similar to AboutYouStep.tsx.
-
-## Files to Modify
-
-- `src/app/onboarding/components/OnboardingWizard.tsx` — Main changes:
-  reorder STEPS, remove clients, add lazy loading, add Suspense wrapper
-- `src/app/onboarding/components/ClientsStep.tsx` — Add deprecation comment
-- `src/app/onboarding/components/ContactImportStep.tsx` — Ensure default export exists
-- `src/app/onboarding/components/SyncConfigStep.tsx` — Ensure default export exists,
-  verify "Finish Setup" button text works as last step
-
-## Files to Update (Documentation)
-
-- `docs/ARCHITECTURE.md` — Update step flow comment, mention lazy loading
-- `plan.md` — Mark Phase 4 as done
-
-## Existing Patterns to Follow
-
-- **Component style**: Look at existing onboarding components for the pattern
-- **Logging**: Use `createLogger('OnboardingWizard')` — already present
-- **React.lazy**: Standard React pattern, no special library needed
-- **Icons**: Use Lucide React icons (`lucide-react`)
-
-## Edge Cases
-
-1. **OAuth return**: When returning from Google OAuth with scope_added=true, the wizard
-   should still jump to the VIP Contacts step. Verify this works after reorder.
-2. **Back navigation**: After removing Clients, Back from VIP Contacts should go to
-   Accounts. Back from Mad Libs Profile should go to VIP Contacts. Verify the
-   goToPreviousStep function works correctly with the new step order.
-3. **Lazy load race condition**: If a user somehow navigates very quickly, the Suspense
-   fallback should display cleanly. The spinner/skeleton should be visible but brief.
-4. **Step indicator**: The step circles at the top should show 5 circles instead of 6.
-   Verify the renderStepIndicator function adapts to the shorter STEPS array.
-
-## Verification
-
-After implementing, verify:
-
-**Step order:**
-1. Navigate to /onboarding — should see Welcome step (1 of 5)
-2. Click Next → Accounts (2 of 5)
-3. Click Next → VIP Contacts (3 of 5) — NO Clients step!
-4. Click Next → Mad Libs Profile (4 of 5)
-5. Click Next → Sync Config (5 of 5) with "Finish Setup" button
-
-**Lazy loading:**
-1. Open browser DevTools → Network tab
-2. Load onboarding — only WelcomeStep and AccountsStep bundles loaded
-3. Navigate forward — ContactImportStep, MadLibsProfileStep, SyncConfigStep
-   load on demand
-
-**Back navigation:**
-1. From VIP Contacts → Back → should go to Accounts (not Clients)
-2. From Mad Libs Profile → Back → should go to VIP Contacts
-3. From Sync Config → Back → should go to Mad Libs Profile
-
-**OAuth return:**
-1. Return from OAuth with ?scope_added=true
-2. Should land on VIP Contacts step (now step 3)
-
-Commit your work with clear messages and push to your branch when done.
-```
+Changes made:
+- Reordered STEPS: Welcome → Accounts → VIP Contacts → About You (Mad Libs) → Sync Config
+- Removed Clients step from wizard (auto-detected by ClientTaggerAnalyzer)
+- Added React.lazy() + Suspense for steps 3+ (ContactImportStep, MadLibsProfileStep, SyncConfigStep)
+- Added StepLoadingFallback spinner component
+- Deprecated ClientsStep.tsx with comment (kept for Settings use)
+- Net effect: 6 steps → 5 steps, smaller initial bundle
