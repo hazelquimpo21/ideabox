@@ -248,8 +248,10 @@ export function useInitialSyncProgress(
 
   /**
    * Start polling for progress updates.
+   * @param skipInitialFetch - If true, skip the immediate first fetch
+   *   (useful when the caller already has fresh data from its own fetch).
    */
-  const startPolling = useCallback(() => {
+  const startPolling = useCallback((skipInitialFetch?: boolean) => {
     // Don't start if already polling or if sync is done
     if (intervalRef.current || status === 'completed' || status === 'failed') {
       return;
@@ -257,8 +259,10 @@ export function useInitialSyncProgress(
 
     setIsPolling(true);
 
-    // Fetch immediately
-    fetchProgress();
+    // Fetch immediately unless caller already has fresh data
+    if (!skipInitialFetch) {
+      fetchProgress();
+    }
 
     // Then poll at interval
     intervalRef.current = setInterval(fetchProgress, pollInterval);

@@ -152,6 +152,7 @@ export function DiscoverContent() {
     startPolling,
     stopPolling,
   } = useInitialSyncProgress({
+    pollInterval: 3000,
     onComplete: (completedResult) => {
       logger.success('Sync completed', {
         analyzed: completedResult.stats.analyzed,
@@ -264,7 +265,7 @@ export function DiscoverContent() {
             setNeedsSync(true);
           }
         }
-        else if (data.status === 'in_progress') { setIsSyncing(true); startPolling(); }
+        else if (data.status === 'in_progress') { setIsSyncing(true); startPolling(true); }
         else if (data.status === 'pending' && user?.onboardingCompleted) {
           // User just completed onboarding — background sync was already triggered.
           // Show progress UI and poll instead of prompting for a duplicate sync.
@@ -272,7 +273,7 @@ export function DiscoverContent() {
           logger.info('Sync pending after onboarding, waiting for background sync');
           syncWaitStartRef.current = Date.now();
           setIsSyncing(true);
-          startPolling();
+          startPolling(true);
         }
         else if (user?.onboardingCompleted) {
           // Onboarding done but no cached sync data — show dashboard with
