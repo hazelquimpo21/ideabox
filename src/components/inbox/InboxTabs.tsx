@@ -9,23 +9,27 @@
  * Tab state is persisted in the URL via the `?tab=` query parameter.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
+ * EMAIL DETAIL MODAL (Performance Audit P0-A)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Email clicks from Priority and Archive tabs now open an EmailDetailModal
+ * instead of navigating to a full page. This eliminates the full-page
+ * unmount/remount cycle and makes back-navigation instant.
+ *
+ * The Categories tab continues to use its own CategoryModal for email triage
+ * and delegates to the EmailDetailModal via the onEmailClick callback.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
  * TAB ROUTING
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * - (default)       → Categories tab → DiscoverPage component
+ * - (default)       → Categories tab → DiscoverContent component
  * - ?tab=priority   → Priority tab → PriorityEmailList component
- * - ?tab=archive    → Archive tab → ArchivePage component
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * USAGE
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * ```tsx
- * <InboxTabs />
- * ```
+ * - ?tab=archive    → Archive tab → ArchiveContent component
  *
  * @module components/inbox/InboxTabs
  * @since February 2026 — Phase 2 Navigation Redesign
+ * @see INBOX_PERFORMANCE_AUDIT.md — P0-A
  */
 
 'use client';
@@ -36,10 +40,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
 import { LayoutGrid, TrendingUp, Archive } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
-// ─── Extracted content components (Phase 4) ─────────────────────────────────
+// ─── Content components ─────────────────────────────────────────────────────
 import { DiscoverContent } from '@/components/discover';
 import { ArchiveContent } from '@/components/archive';
 import { PriorityEmailList } from '@/components/inbox/PriorityEmailList';
+import { EmailDetailModal } from '@/components/email/EmailDetailModal';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -68,6 +73,9 @@ const DEFAULT_TAB: InboxTab = 'categories';
  * Reads the `?tab=` query param to determine the active tab.
  * When the user switches tabs, the URL is updated without a full navigation.
  * Each tab renders its content lazily to avoid unnecessary data fetching.
+ *
+ * Email clicks from Priority/Archive tabs open a modal instead of navigating
+ * to a full page, eliminating the full-page re-render cycle.
  */
 export function InboxTabs() {
   const searchParams = useSearchParams();
@@ -80,7 +88,14 @@ export function InboxTabs() {
     ? (tabParam as InboxTab)
     : DEFAULT_TAB;
 
-  logger.debug('InboxTabs rendering', { activeTab, tabParam });
+  // ─── Email Detail Modal State ──────────────────────────────────────────────
+  // Managed at the InboxTabs level so all tabs can open the same modal
+  // and the underlying tab content stays mounted.
+  const [selectedEmailId, setSelectedEmailId] = React.useState<string | null>(null);
+  const [selectedEmailCategory, setSelectedEmailCategory] = React.useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+
+  logger.debug('InboxTabs rendering', { activeTab, tabParam, isModalOpen });
 
   /**
    * Handle tab change by updating the URL query parameter.
@@ -107,48 +122,93 @@ export function InboxTabs() {
     [activeTab, searchParams, pathname, router]
   );
 
+  /**
+   * Open email detail modal — called from Priority and Archive tabs.
+   * Sets the selected email ID and category, then opens the modal.
+   * The inbox stays mounted underneath.
+   */
+  const handleEmailSelect = React.useCallback(
+    (email: { id: string; category?: string | null }) => {
+      logger.info('Email selected for modal', {
+        emailId: email.id,
+        category: email.category,
+        fromTab: activeTab,
+      });
+      setSelectedEmailId(email.id);
+      setSelectedEmailCategory(email.category || 'uncategorized');
+      setIsModalOpen(true);
+    },
+    [activeTab]
+  );
+
+  /**
+   * Close email detail modal. Clears the selected email state
+   * after a brief delay (for close animation).
+   */
+  const handleModalClose = React.useCallback(() => {
+    logger.info('Email detail modal closing', { emailId: selectedEmailId });
+    setIsModalOpen(false);
+    // Delay clearing to allow the close animation to play
+    setTimeout(() => {
+      setSelectedEmailId(null);
+      setSelectedEmailCategory(null);
+    }, 200);
+  }, [selectedEmailId]);
+
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-      {/* ─── Tab Headers ────────────────────────────────────────────────────── */}
-      <TabsList variant="underline" className="mb-6">
-        <TabsTrigger
-          value="categories"
-          variant="underline"
-          icon={<LayoutGrid className="h-4 w-4" />}
-        >
-          Categories
-        </TabsTrigger>
-        <TabsTrigger
-          value="priority"
-          variant="underline"
-          icon={<TrendingUp className="h-4 w-4" />}
-        >
-          Priority
-        </TabsTrigger>
-        <TabsTrigger
-          value="archive"
-          variant="underline"
-          icon={<Archive className="h-4 w-4" />}
-        >
-          Archive
-        </TabsTrigger>
-      </TabsList>
+    <>
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        {/* ─── Tab Headers ────────────────────────────────────────────────── */}
+        <TabsList variant="underline" className="mb-6">
+          <TabsTrigger
+            value="categories"
+            variant="underline"
+            icon={<LayoutGrid className="h-4 w-4" />}
+          >
+            Categories
+          </TabsTrigger>
+          <TabsTrigger
+            value="priority"
+            variant="underline"
+            icon={<TrendingUp className="h-4 w-4" />}
+          >
+            Priority
+          </TabsTrigger>
+          <TabsTrigger
+            value="archive"
+            variant="underline"
+            icon={<Archive className="h-4 w-4" />}
+          >
+            Archive
+          </TabsTrigger>
+        </TabsList>
 
-      {/* ─── Tab Content: Categories ─────────────────────────────────────── */}
-      <TabsContent value="categories">
-        <DiscoverContent />
-      </TabsContent>
+        {/* ─── Tab Content: Categories ─────────────────────────────────── */}
+        <TabsContent value="categories">
+          <DiscoverContent onEmailSelect={handleEmailSelect} />
+        </TabsContent>
 
-      {/* ─── Tab Content: Priority ───────────────────────────────────────── */}
-      <TabsContent value="priority">
-        <PriorityEmailList />
-      </TabsContent>
+        {/* ─── Tab Content: Priority ───────────────────────────────────── */}
+        <TabsContent value="priority">
+          <PriorityEmailList onEmailSelect={handleEmailSelect} />
+        </TabsContent>
 
-      {/* ─── Tab Content: Archive ────────────────────────────────────────── */}
-      <TabsContent value="archive">
-        <ArchiveContent />
-      </TabsContent>
-    </Tabs>
+        {/* ─── Tab Content: Archive ────────────────────────────────────── */}
+        <TabsContent value="archive">
+          <ArchiveContent onEmailSelect={handleEmailSelect} />
+        </TabsContent>
+      </Tabs>
+
+      {/* ─── Email Detail Modal ────────────────────────────────────────── */}
+      {/* Rendered outside the Tabs so it overlays the entire inbox */}
+      <EmailDetailModal
+        emailId={selectedEmailId}
+        category={selectedEmailCategory}
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        fromTab={activeTab}
+      />
+    </>
   );
 }
 

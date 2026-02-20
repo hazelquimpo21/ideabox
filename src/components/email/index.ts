@@ -19,6 +19,9 @@
 export { EmailDetail, default as EmailDetailDefault } from './EmailDetail';
 export type { EmailDetailProps } from './EmailDetail';
 
+export { EmailDetailModal, default as EmailDetailModalDefault } from './EmailDetailModal';
+export type { EmailDetailModalProps } from './EmailDetailModal';
+
 export { EventDetailsCard, default as EventDetailsCardDefault } from './EventDetailsCard';
 export type { EventDetailsCardProps } from './EventDetailsCard';
 

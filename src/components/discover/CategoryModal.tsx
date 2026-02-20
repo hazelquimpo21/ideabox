@@ -51,6 +51,14 @@ const logger = createLogger('CategoryModal');
 /** Maximum emails to show in the modal */
 const MODAL_EMAIL_LIMIT = 15;
 
+/**
+ * Fields needed for the modal list view.
+ * Excludes body_html/body_text since modal only shows summaries.
+ *
+ * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
+ */
+const MODAL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, urgency_score, gist, summary, key_points, topics, labels, relationship_signal, analyzed_at' as const;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -156,9 +164,10 @@ export function CategoryModal({
       // - Legacy categories like 'newsletter' are still in the DB until migrated
       // - After migration 028 runs, all values will be new categories
       // ─────────────────────────────────────────────────────────────────────────
+      // Select only list-view fields (no body_html/body_text)
       const { data, error: queryError, count } = await supabase
         .from('emails')
-        .select('*', { count: 'exact' })
+        .select(MODAL_LIST_FIELDS, { count: 'exact' })
         .eq('category', category) // Use original value - that's what's stored
         .eq('is_archived', false)
         .order('date', { ascending: false })

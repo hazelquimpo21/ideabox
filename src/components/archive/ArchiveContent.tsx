@@ -184,11 +184,12 @@ const ARCHIVE_CATEGORIES = [
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Single archived email row.
- * Clicking the email body navigates to the detail page.
- * Checkbox, Restore, and Delete buttons are separate click targets.
+ * Single archived email row. Memoized to prevent re-renders of all
+ * rows when a single selection changes.
+ *
+ * @see INBOX_PERFORMANCE_AUDIT.md — P3
  */
-function ArchivedEmailItem({
+const ArchivedEmailItem = React.memo(function ArchivedEmailItem({
   email,
   onUnarchive,
   onDelete,
@@ -279,7 +280,7 @@ function ArchivedEmailItem({
       </div>
     </div>
   );
-}
+});
 
 function ArchiveListSkeleton() {
   return (
@@ -333,10 +334,17 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }) {
 /**
  * ArchiveContent — list of archived emails with search, filtering, and bulk actions.
  *
- * Fetches emails with `includeArchived: true` so we get archived emails,
- * then filters client-side for `is_archived === true`.
+ * Uses `archivedOnly: true` for server-side filtering of archived emails.
+ * When `onEmailSelect` is provided, clicks open the email in a modal
+ * instead of navigating to a full page.
+ *
+ * @see INBOX_PERFORMANCE_AUDIT.md — P0-A, P2-A
  */
-export function ArchiveContent() {
+export function ArchiveContent({
+  onEmailSelect,
+}: {
+  onEmailSelect?: (email: { id: string; category?: string | null }) => void;
+} = {}) {
   const router = useRouter();
   const supabase = React.useMemo(() => createClient(), []);
 
@@ -345,31 +353,31 @@ export function ArchiveContent() {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  // FIX #1: Fetch with includeArchived so we actually get archived emails
+  // Use archivedOnly to filter server-side instead of fetching all emails
+  // and filtering in JavaScript. Previously used includeArchived: true then
+  // filtered client-side, which fetched ~100 non-archived emails to find ~10.
+  // @see INBOX_PERFORMANCE_AUDIT.md — P2-A
   const { emails, isLoading, error, refetch, updateEmail } = useEmails({
     limit: 100,
     category:
       categoryFilter !== 'all'
         ? (categoryFilter as EmailCategory)
         : undefined,
-    includeArchived: true,
+    archivedOnly: true,
   });
 
-  // FIX #1 continued: Filter to only show emails where is_archived === true,
-  // then apply search query on top.
+  // Apply search query on server-filtered archived emails
   const archivedEmails = React.useMemo(() => {
-    return emails
-      .filter((email) => email.is_archived)
-      .filter((email) => {
-        if (!searchQuery) return true;
-        const query = searchQuery.toLowerCase();
-        return (
-          email.subject?.toLowerCase().includes(query) ||
-          email.sender_email?.toLowerCase().includes(query) ||
-          email.sender_name?.toLowerCase().includes(query) ||
-          email.snippet?.toLowerCase().includes(query)
-        );
-      });
+    return emails.filter((email) => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        email.subject?.toLowerCase().includes(query) ||
+        email.sender_email?.toLowerCase().includes(query) ||
+        email.sender_name?.toLowerCase().includes(query) ||
+        email.snippet?.toLowerCase().includes(query)
+      );
+    });
   }, [emails, searchQuery]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
@@ -454,14 +462,24 @@ export function ArchiveContent() {
     }
   };
 
-  // FIX #4: Navigate to email detail view when clicking an archived email
+  // Open email in modal when onEmailSelect is provided,
+  // otherwise fall back to full-page navigation.
+  // @see INBOX_PERFORMANCE_AUDIT.md — P0-A
   const handleEmailClick = (email: Email) => {
     const category = email.category || 'uncategorized';
-    logger.info('Navigating to archived email detail', {
-      emailId: email.id,
-      category,
-    });
-    router.push(`/inbox/${category}/${email.id}?from=archive`);
+    if (onEmailSelect) {
+      logger.info('Opening archived email in modal', {
+        emailId: email.id,
+        category,
+      });
+      onEmailSelect({ id: email.id, category: email.category });
+    } else {
+      logger.info('Navigating to archived email detail', {
+        emailId: email.id,
+        category,
+      });
+      router.push(`/inbox/${category}/${email.id}?from=archive`);
+    }
   };
 
   const handleSelect = (id: string) => {
@@ -481,16 +499,34 @@ export function ArchiveContent() {
     }
   };
 
+  // Batch unarchive: single DB call instead of N sequential calls.
+  // @see INBOX_PERFORMANCE_AUDIT.md — P2-B
   const handleBulkUnarchive = async () => {
-    logger.info('Bulk restoring emails', { count: selectedIds.size });
     const ids = Array.from(selectedIds);
+    logger.info('Bulk restoring emails', { count: ids.length });
+
+    // Optimistic update — remove from local list
     for (const id of ids) {
-      await handleUnarchive(id);
+      updateEmail(id, { is_archived: false });
     }
     setSelectedIds(new Set());
-    logger.success('Bulk restore complete', { count: ids.length });
+
+    try {
+      const { error: updateError } = await supabase
+        .from('emails')
+        .update({ is_archived: false })
+        .in('id', ids);
+
+      if (updateError) throw updateError;
+      logger.success('Bulk restore complete', { count: ids.length });
+    } catch (err) {
+      logger.error('Bulk restore failed, refetching', { error: String(err) });
+      await refetch();
+    }
   };
 
+  // Batch delete: single DB call instead of N sequential calls.
+  // @see INBOX_PERFORMANCE_AUDIT.md — P2-B
   const handleBulkDelete = async () => {
     if (
       !confirm(
@@ -499,26 +535,23 @@ export function ArchiveContent() {
     ) {
       return;
     }
-    logger.info('Bulk deleting emails', { count: selectedIds.size });
     const ids = Array.from(selectedIds);
-    for (const id of ids) {
-      try {
-        const { error: deleteError } = await supabase
-          .from('emails')
-          .delete()
-          .eq('id', id);
-
-        if (deleteError) throw deleteError;
-      } catch (err) {
-        logger.error('Failed to delete email in bulk operation', {
-          emailId: id,
-          error: String(err),
-        });
-      }
-    }
+    logger.info('Bulk deleting emails', { count: ids.length });
     setSelectedIds(new Set());
-    await refetch();
-    logger.success('Bulk delete complete', { count: ids.length });
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('emails')
+        .delete()
+        .in('id', ids);
+
+      if (deleteError) throw deleteError;
+      logger.success('Bulk delete complete', { count: ids.length });
+      await refetch();
+    } catch (err) {
+      logger.error('Bulk delete failed, refetching', { error: String(err) });
+      await refetch();
+    }
   };
 
   const hasFilter = searchQuery !== '' || categoryFilter !== 'all';

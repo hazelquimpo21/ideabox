@@ -103,8 +103,16 @@ const EMPTY_RESULT: InitialSyncResponse = {
 /**
  * DiscoverContent — full discovery dashboard content.
  * Extracted from DiscoverPage for use inside InboxTabs.
+ *
+ * @param onEmailSelect - When provided, email clicks from the CategoryModal
+ *   open an EmailDetailModal instead of navigating to a full page.
+ *   @see INBOX_PERFORMANCE_AUDIT.md — P0-A
  */
-export function DiscoverContent() {
+export function DiscoverContent({
+  onEmailSelect,
+}: {
+  onEmailSelect?: (email: { id: string; category?: string | null }) => void;
+} = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -594,14 +602,23 @@ export function DiscoverContent() {
         onClose={handleModalClose}
         onEmailArchived={() => { refreshResults(); }}
         onEmailClick={(email) => {
-          // Signal that we're navigating to an email detail page so
-          // handleModalClose doesn't overwrite the navigation with router.replace.
-          isNavigatingToEmailRef.current = true;
-          const urlCategory = selectedCategory || email.category || 'uncategorized';
-          logger.info('Navigating to email from modal', { emailId: email.id, category: urlCategory });
-          router.push(`/inbox/${urlCategory}/${email.id}?from=categories`);
-          // Close modal state so it doesn't reopen on back-navigation
-          handleModalClose();
+          if (onEmailSelect) {
+            // Open email in the shared EmailDetailModal (keeps inbox mounted)
+            // @see INBOX_PERFORMANCE_AUDIT.md — P0-A
+            logger.info('Opening email from category modal in detail modal', {
+              emailId: email.id,
+              category: email.category,
+            });
+            handleModalClose();
+            onEmailSelect({ id: email.id, category: email.category });
+          } else {
+            // Fallback: full-page navigation
+            isNavigatingToEmailRef.current = true;
+            const urlCategory = selectedCategory || email.category || 'uncategorized';
+            logger.info('Navigating to email from modal', { emailId: email.id, category: urlCategory });
+            router.push(`/inbox/${urlCategory}/${email.id}?from=categories`);
+            handleModalClose();
+          }
         }}
       />
 
