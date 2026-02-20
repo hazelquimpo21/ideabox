@@ -5,6 +5,21 @@
  * Contains the full discovery dashboard (category cards, client insights,
  * quick actions) along with sync/analysis states.
  *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * LIVE DATA FALLBACK (February 2026)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * The cached sync_progress result from onboarding can be stale or empty
+ * (e.g., initial sync found 0 emails but background sync later fetched real
+ * emails). When the cached result is empty/stale, this component now falls
+ * back to live data from GET /api/emails/category-summary, which builds
+ * category summaries directly from the emails table.
+ *
+ * This also fixes the "analysis loop" bug: after onboarding completes,
+ * StartAnalysisCard is no longer shown (it would call initial-sync which
+ * returns 409). Instead, onboarded users see live email data or a helpful
+ * waiting state.
+ *
  * @module components/discover/DiscoverContent
  * @since February 2026 — Phase 4 Navigation Redesign
  */
@@ -57,6 +72,25 @@ interface PendingArchive {
   categoryLabel: string;
 }
 
+/** Response from GET /api/emails/category-summary */
+interface LiveCategorySummaryResponse {
+  categories: CategorySummary[];
+  stats: { total: number; analyzed: number; unanalyzed: number };
+  result: InitialSyncResponse;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if a cached InitialSyncResponse is effectively empty
+ * (i.e., 0 analyzed emails and 0 categories).
+ */
+function isCachedResultEmpty(result: InitialSyncResponse): boolean {
+  return result.categories.length === 0 && result.stats.analyzed === 0;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -91,6 +125,9 @@ export function DiscoverContent() {
   // Track when we started waiting for a background sync so we can time out
   const syncWaitStartRef = useRef<number | null>(null);
 
+  // Live email counts from the category-summary API (used for empty-state decisions)
+  const [liveEmailStats, setLiveEmailStats] = useState<{ total: number; analyzed: number; unanalyzed: number } | null>(null);
+
   const {
     progress: syncProgress,
     currentStep: syncStep,
@@ -112,26 +149,59 @@ export function DiscoverContent() {
       logger.error('Sync failed', { error: errorMsg });
       setError(errorMsg);
       setIsSyncing(false);
-      // Fall back to StartAnalysisCard so user can retry manually
+      // Fall back — but only show StartAnalysisCard for non-onboarded users.
+      // For onboarded users, fetchLiveCategories will handle it.
       setNeedsSync(true);
     },
   });
 
+  // ─── Fetch live category data from the emails table ───────────────────────
+  const fetchLiveCategories = useCallback(async (): Promise<boolean> => {
+    logger.info('Fetching live category data from emails table');
+    try {
+      const response = await fetch('/api/emails/category-summary', { credentials: 'include' });
+      if (!response.ok) return false;
+      const data: LiveCategorySummaryResponse = await response.json();
+      setLiveEmailStats(data.stats);
+
+      if (data.stats.analyzed > 0 && data.categories.length > 0) {
+        logger.success('Live category data loaded', {
+          categories: data.categories.length,
+          analyzed: data.stats.analyzed,
+        });
+        setResult(data.result);
+        setNeedsSync(false);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      logger.warn('Failed to fetch live categories', {
+        error: err instanceof Error ? err.message : 'Unknown',
+      });
+      return false;
+    }
+  }, []);
+
   const refreshResults = useCallback(async () => {
     logger.info('Refreshing results');
     try {
+      // Try live data first (always reflects actual DB state)
+      const gotLive = await fetchLiveCategories();
+      if (gotLive) return;
+
+      // Fall back to cached sync-status
       const response = await fetch('/api/onboarding/sync-status', { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'completed' && data.result) {
-          logger.success('Results refreshed', { categories: data.result.categories.length });
+          logger.success('Results refreshed from cache', { categories: data.result.categories.length });
           setResult(data.result);
         }
       }
     } catch (err) {
       logger.warn('Failed to refresh results', { error: err instanceof Error ? err.message : 'Unknown error' });
     }
-  }, []);
+  }, [fetchLiveCategories]);
 
   useEffect(() => {
     let isMounted = true;
@@ -142,17 +212,58 @@ export function DiscoverContent() {
         if (!response.ok) { setNeedsSync(true); return; }
         const data = await response.json();
         if (!isMounted) return;
-        if (data.status === 'completed' && data.result) { setResult(data.result); }
-        else if (data.status === 'failed') { setError(data.error || 'Previous sync failed'); setNeedsSync(true); }
+
+        if (data.status === 'completed' && data.result) {
+          // Cached result exists — but it may be stale (0 categories from
+          // an initial sync that found no emails). Check if it's empty and
+          // try live data instead.
+          if (isCachedResultEmpty(data.result) && user?.onboardingCompleted) {
+            logger.info('Cached sync result is empty, trying live email data');
+            const gotLive = await fetchLiveCategories();
+            if (!isMounted) return;
+            if (!gotLive) {
+              // No live data either — show the empty result (which will
+              // render the "waiting for emails" state, not StartAnalysisCard)
+              setResult(data.result);
+            }
+          } else {
+            setResult(data.result);
+          }
+        }
+        else if (data.status === 'failed') {
+          // Sync failed — for onboarded users, try live data before falling
+          // back to error state
+          if (user?.onboardingCompleted) {
+            const gotLive = await fetchLiveCategories();
+            if (!isMounted) return;
+            if (!gotLive) {
+              setError(data.error || 'Previous sync failed');
+              setNeedsSync(true);
+            }
+          } else {
+            setError(data.error || 'Previous sync failed');
+            setNeedsSync(true);
+          }
+        }
         else if (data.status === 'in_progress') { setIsSyncing(true); startPolling(); }
         else if (data.status === 'pending' && user?.onboardingCompleted) {
           // User just completed onboarding — background sync was already triggered.
           // Show progress UI and poll instead of prompting for a duplicate sync.
-          // Time out after 30s and fall back to manual trigger if sync never starts.
+          // Time out after 30s and fall back to live data if sync never starts.
           logger.info('Sync pending after onboarding, waiting for background sync');
           syncWaitStartRef.current = Date.now();
           setIsSyncing(true);
           startPolling();
+        }
+        else if (user?.onboardingCompleted) {
+          // Onboarding done but no cached sync data — try live data
+          logger.info('No cached sync data for onboarded user, trying live data');
+          const gotLive = await fetchLiveCategories();
+          if (!isMounted) return;
+          if (!gotLive) {
+            // No emails yet — will show the waiting state (NOT StartAnalysisCard)
+            setNeedsSync(true);
+          }
         }
         else { setNeedsSync(true); }
       } catch {
@@ -167,20 +278,32 @@ export function DiscoverContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Time out if background sync stays 'pending' for too long (30s)
+  // Time out if background sync stays 'pending' for too long (30s).
+  // For onboarded users, try live data instead of showing StartAnalysisCard.
   useEffect(() => {
     if (!isSyncing || !syncWaitStartRef.current) return;
-    const timeout = setTimeout(() => {
+    const timeout = setTimeout(async () => {
       if (syncWaitStartRef.current && syncProgress === 0) {
-        logger.warn('Background sync timed out, falling back to manual trigger');
+        logger.warn('Background sync timed out, trying live data fallback');
         syncWaitStartRef.current = null;
-        setIsSyncing(false);
-        setNeedsSync(true);
         stopPolling();
+
+        if (user?.onboardingCompleted) {
+          const gotLive = await fetchLiveCategories();
+          if (!gotLive) {
+            setIsSyncing(false);
+            setNeedsSync(true);
+          } else {
+            setIsSyncing(false);
+          }
+        } else {
+          setIsSyncing(false);
+          setNeedsSync(true);
+        }
       }
     }, 30000);
     return () => clearTimeout(timeout);
-  }, [isSyncing, syncProgress, stopPolling]);
+  }, [isSyncing, syncProgress, stopPolling, user?.onboardingCompleted, fetchLiveCategories]);
 
   useEffect(() => {
     if (!result?.categories || hasShownLegacyWarning.current) return;
@@ -289,7 +412,27 @@ export function DiscoverContent() {
   }
 
   // ─── Needs Sync State ──────────────────────────────────────────────────────
+  // For onboarded users: NEVER show StartAnalysisCard (calling initial-sync
+  // after onboarding returns 409, creating a confusing error loop).
+  // Instead, show a "waiting for emails" state with a regular refresh option.
   if (needsSync && !isSyncing) {
+    if (user?.onboardingCompleted) {
+      return (
+        <PostOnboardingEmptyState
+          liveEmailStats={liveEmailStats}
+          onRefresh={async () => {
+            setIsLoading(true);
+            const gotLive = await fetchLiveCategories();
+            if (!gotLive) {
+              setIsLoading(false);
+            } else {
+              setNeedsSync(false);
+              setIsLoading(false);
+            }
+          }}
+        />
+      );
+    }
     return (
       <StartAnalysisCard
         error={error}
@@ -332,7 +475,27 @@ export function DiscoverContent() {
     );
   }
 
-  // ─── Success State ─────────────────────────────────────────────────────────
+  // ─── Success State (with empty check) ─────────────────────────────────────
+  // If result has 0 categories AND user is onboarded, show the post-onboarding
+  // empty state instead of a misleading "0 emails analyzed" dashboard.
+  if (isCachedResultEmpty(result) && user?.onboardingCompleted) {
+    return (
+      <PostOnboardingEmptyState
+        liveEmailStats={liveEmailStats}
+        onRefresh={async () => {
+          setIsLoading(true);
+          const gotLive = await fetchLiveCategories();
+          if (!gotLive) {
+            setIsLoading(false);
+          } else {
+            setNeedsSync(false);
+            setIsLoading(false);
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-8">
       <DiscoveryHero stats={result.stats} userName={user?.email?.split('@')[0]} />
@@ -379,6 +542,107 @@ export function DiscoverContent() {
         <br />
         You can always come back to this view from Settings.
       </p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST-ONBOARDING EMPTY STATE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Shown to onboarded users when there are no categorized emails yet.
+ * Replaces the StartAnalysisCard which would incorrectly call initial-sync
+ * (returning 409) and create a confusing loop.
+ *
+ * States:
+ * - Emails exist but aren't analyzed → "Processing your emails"
+ * - No emails yet → "Setting up your inbox"
+ * - Both → appropriate messaging with refresh
+ */
+function PostOnboardingEmptyState({
+  liveEmailStats,
+  onRefresh,
+}: {
+  liveEmailStats: { total: number; analyzed: number; unanalyzed: number } | null;
+  onRefresh: () => void;
+}) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [autoRefreshCount, setAutoRefreshCount] = useState(0);
+  const maxAutoRefreshes = 6;
+
+  // Auto-refresh every 10s to check for newly synced/analyzed emails
+  useEffect(() => {
+    if (autoRefreshCount >= maxAutoRefreshes) return;
+    const timer = setTimeout(() => {
+      setAutoRefreshCount((c) => c + 1);
+      onRefresh();
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [autoRefreshCount, onRefresh]);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await onRefresh();
+    setIsRefreshing(false);
+  };
+
+  const hasUnanalyzedEmails = liveEmailStats && liveEmailStats.unanalyzed > 0;
+  const hasNoEmails = !liveEmailStats || liveEmailStats.total === 0;
+
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="text-center max-w-md">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+          <Spinner size="lg" />
+        </div>
+
+        {hasNoEmails ? (
+          <>
+            <h2 className="text-2xl font-bold mb-2">Setting up your inbox</h2>
+            <p className="text-muted-foreground mb-6">
+              Your emails are being synced from Gmail. This usually happens
+              within a minute or two after setup.
+            </p>
+          </>
+        ) : hasUnanalyzedEmails ? (
+          <>
+            <h2 className="text-2xl font-bold mb-2">Analyzing your emails</h2>
+            <p className="text-muted-foreground mb-6">
+              {liveEmailStats.total} email{liveEmailStats.total !== 1 ? 's' : ''} synced,{' '}
+              {liveEmailStats.unanalyzed} awaiting AI analysis.
+              Categories will appear here once analysis completes.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-2xl font-bold mb-2">Waiting for emails</h2>
+            <p className="text-muted-foreground mb-6">
+              Your inbox is connected and ready. New emails will be automatically
+              fetched and categorized as they arrive.
+            </p>
+          </>
+        )}
+
+        <div className="flex gap-3 justify-center">
+          <Button onClick={handleManualRefresh} disabled={isRefreshing}>
+            {isRefreshing ? (
+              <>
+                <Spinner size="sm" className="mr-2" />
+                Checking...
+              </>
+            ) : (
+              'Check for emails'
+            )}
+          </Button>
+        </div>
+
+        {autoRefreshCount < maxAutoRefreshes && (
+          <p className="text-xs text-muted-foreground mt-4">
+            Automatically checking for new data...
+          </p>
+        )}
+      </div>
     </div>
   );
 }
