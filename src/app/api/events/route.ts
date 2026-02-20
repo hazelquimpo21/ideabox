@@ -392,7 +392,7 @@ export async function GET(request: NextRequest) {
           id,
           name,
           email,
-          is_vip:priority
+          is_vip
         )
       `, { count: 'exact' })
       .eq('user_id', user.id);
