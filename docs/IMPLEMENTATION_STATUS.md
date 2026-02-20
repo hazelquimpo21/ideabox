@@ -55,6 +55,7 @@ The app uses a 5-item sidebar navigation (redesigned Feb 2026):
 | | `/tasks/campaigns/[id]` | Campaign detail |
 | **Sent** | `/sent` | Email composition, outbox, sent history |
 | **Settings** | `/settings` | Preferences, cost tracking, account management |
+| **Admin** | `/admin` | Superadmin dashboard — account reset, user management (restricted access) |
 
 All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clients`, `/campaigns`, `/templates`, `/archive`) redirect to their new equivalents via `next.config.mjs`.
 
@@ -90,6 +91,16 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Shared components: PriorityCard (used by Home page)
 - Category enhancements: urgency dots, AI briefings, key points, relationship health
 - Contact sync progress banner (global)
+
+### Superadmin & Dev Tools
+- Superadmin access control via hardcoded email list (`src/config/superadmin.ts`)
+- Superadmin dashboard (`/admin`) — restricted to authorized emails only
+- Account reset API (`POST /api/admin/reset-account`) — wipes all synced data, resets to pre-onboarding state
+  - Deletes: emails, analyses, actions, contacts, extracted dates, events, campaigns, templates, sent emails, tracking, logs
+  - Resets: onboarding flags, sync progress, sender patterns, Gmail sync state (preserves OAuth tokens)
+  - Preserves: auth record, profile identity, user settings, Gmail OAuth tokens
+- Two-step confirmation UI with detailed per-table deletion results
+- Full audit logging for all reset operations
 
 ---
 
@@ -130,3 +141,4 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | 13 | Jan 2026 | Enhanced category view (urgency dots, AI briefings, key points, relationship health) |
 | 14+ | Jan 2026 | Push notifications, sender type classification, content digest, historical sync, email sending, category cleanup |
 | Nav Redesign | Feb 2026 | 4-phase navigation overhaul: sidebar from 11→5 items, new routes, tabbed UIs, clients merged into contacts, old pages deleted |
+| Superadmin | Feb 2026 | Superadmin dashboard (/admin), account reset API, superadmin access control config, two-step confirmation UI |
