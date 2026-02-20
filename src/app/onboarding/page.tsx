@@ -88,14 +88,26 @@ export default function OnboardingPage() {
 
     try {
       // Mark onboarding as complete immediately so user isn't blocked
+      // Update both user_profiles (used by AuthContext) and user_context (used by AI/APIs)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
+      const sb = supabase as any;
+      await sb
         .from('user_profiles')
         .update({
           onboarding_completed: true,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
+
+      // Keep user_context in sync (best-effort, don't block on failure)
+      sb.from('user_context')
+        .update({
+          onboarding_completed: true,
+          onboarding_completed_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id)
+        .then(() => logger.debug('user_context onboarding flag synced'))
+        .catch(() => logger.warn('Failed to sync user_context onboarding flag'));
 
       // Fire off initial sync in the background (don't await)
       // The orchestrator will mark initial_sync_completed_at when done

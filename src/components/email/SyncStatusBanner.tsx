@@ -292,7 +292,7 @@ export function SyncStatusBanner({
         .eq('user_id', user.id)
         .order('started_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const { count: analyzedCount } = await supabase
         .from('emails')
