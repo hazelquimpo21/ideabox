@@ -111,6 +111,9 @@ export async function GET(request: NextRequest) {
       sortOrder,
       senderType,
       broadcastSubtype,
+      isClient,
+      clientStatus,
+      clientPriority,
     } = queryResult;
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -157,6 +160,25 @@ export async function GET(request: NextRequest) {
         query = query.eq('broadcast_subtype', broadcastSubtype);
         logger.debug('Filtering by broadcast subtype', { broadcastSubtype });
       }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CLIENT FILTERING (NEW Feb 2026 — Phase 3 Navigation Redesign)
+    // Allows filtering contacts by client status: is_client, client_status, client_priority
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (isClient !== undefined) {
+      query = query.eq('is_client', isClient);
+      logger.debug('Filtering by is_client', { isClient });
+    }
+
+    if (clientStatus) {
+      query = query.eq('client_status', clientStatus);
+      logger.debug('Filtering by client_status', { clientStatus });
+    }
+
+    if (clientPriority) {
+      query = query.eq('client_priority', clientPriority);
+      logger.debug('Filtering by client_priority', { clientPriority });
     }
 
     // Apply text search on name and email
@@ -207,6 +229,9 @@ export async function GET(request: NextRequest) {
         relationshipType,
         senderType: senderType ?? 'all',
         broadcastSubtype,
+        isClient,
+        clientStatus,
+        clientPriority,
         search: !!search,
       },
     });

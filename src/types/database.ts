@@ -348,6 +348,8 @@ export interface Database {
           analyzed_at: string | null;
           analysis_error: string | null;
           gmail_label_synced: boolean;
+          // Contact reference (Phase 3 — migration 029)
+          contact_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -482,6 +484,8 @@ export interface Database {
           user_id: string;
           email_id: string | null;
           client_id: string | null;
+          // Contact reference (Phase 3 — migration 029)
+          contact_id: string | null;
           title: string;
           description: string | null;
           action_type: ActionType | null;
@@ -499,6 +503,7 @@ export interface Database {
           user_id: string;
           email_id?: string | null;
           client_id?: string | null;
+          contact_id?: string | null;
           title: string;
           description?: string | null;
           action_type?: ActionType | null;
@@ -516,6 +521,7 @@ export interface Database {
           user_id?: string;
           email_id?: string | null;
           client_id?: string | null;
+          contact_id?: string | null;
           title?: string;
           description?: string | null;
           action_type?: ActionType | null;
@@ -794,6 +800,14 @@ export interface Database {
           google_synced_at: string | null;
           import_source: string;
           notes: string | null;
+          // ═══════════════════════════════════════════════════════════════════
+          // CLIENT FIELDS (NEW Feb 2026 — Phase 3 Navigation Redesign)
+          // ═══════════════════════════════════════════════════════════════════
+          is_client: boolean;
+          client_status: string | null;
+          client_priority: string | null;
+          email_domains: string[] | null;
+          keywords: string[] | null;
           created_at: string;
           updated_at: string;
         };
@@ -839,6 +853,12 @@ export interface Database {
           google_synced_at?: string | null;
           import_source?: string;
           notes?: string | null;
+          // Client fields (Phase 3)
+          is_client?: boolean;
+          client_status?: string | null;
+          client_priority?: string | null;
+          email_domains?: string[] | null;
+          keywords?: string[] | null;
           created_at?: string;
           updated_at?: string;
         };

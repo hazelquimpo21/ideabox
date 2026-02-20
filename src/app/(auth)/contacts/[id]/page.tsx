@@ -56,7 +56,15 @@ import {
   Loader2,
   RefreshCw,
   User,
+  Crown,
+  CheckCircle,
+  XCircle,
+  Archive,
+  Globe,
+  Tag,
 } from 'lucide-react';
+import { PromoteToClientDialog } from '@/components/contacts';
+import type { PromoteToClientData } from '@/components/contacts/PromoteToClientDialog';
 import {
   Button,
   Card,
@@ -125,6 +133,21 @@ interface ContactDetail {
   work_anniversary: string | null;
   /** Enriched field from API - emails in last 30 days */
   recent_email_count: number;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLIENT FIELDS (NEW Feb 2026 — Phase 3 Navigation Redesign)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Whether this contact is a client */
+  is_client?: boolean;
+  /** Client status: active, inactive, or archived */
+  client_status?: string | null;
+  /** Client priority: vip, high, medium, or low */
+  client_priority?: string | null;
+  /** Email domains for auto-matching */
+  email_domains?: string[] | null;
+  /** Keywords for categorization */
+  keywords?: string[] | null;
 }
 
 /**
@@ -287,6 +310,9 @@ export default function ContactDetailPage() {
   /** Loading state for VIP/muted toggles */
   const [isTogglingVip, setIsTogglingVip] = React.useState(false);
   const [isTogglingMuted, setIsTogglingMuted] = React.useState(false);
+
+  /** Promote to Client dialog state (NEW Phase 3) */
+  const [promoteDialogOpen, setPromoteDialogOpen] = React.useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Data Fetching
@@ -557,6 +583,51 @@ export default function ContactDetailPage() {
       const message = err instanceof Error ? err.message : 'Failed to update relationship';
       logger.error('Relationship update failed, rolling back', { error: message });
       toast.error(message);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Promote to Client Handler (NEW Phase 3)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Handles the promote-to-client action from the dialog.
+   * Calls the promote API and updates local state.
+   */
+  const handlePromoteToClient = async (cId: string, data: PromoteToClientData) => {
+    logger.start('Promoting contact to client', { contactId: cId.substring(0, 8) });
+
+    try {
+      const res = await fetch('/api/contacts/promote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactId: cId,
+          clientStatus: data.clientStatus,
+          clientPriority: data.clientPriority,
+          emailDomains: data.emailDomains,
+          keywords: data.keywords,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to promote contact');
+      }
+
+      const result = await res.json();
+      const updatedContact = result.data || result;
+
+      // Update local state
+      setContact((prev) => prev ? { ...prev, ...updatedContact } : prev);
+
+      logger.success('Contact promoted to client', { contactId: cId.substring(0, 8) });
+      toast.success('Contact promoted to client');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to promote contact';
+      logger.error('Promote failed', { error: message });
+      toast.error(message);
+      throw err;
     }
   };
 
@@ -915,6 +986,112 @@ export default function ContactDetailPage() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* Client Section (NEW Phase 3 — shown when is_client = TRUE) */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {contact.is_client ? (
+        <Card className={contact.client_priority === 'vip' ? 'border-yellow-300 dark:border-yellow-700' : ''}>
+          <CardHeader className="flex flex-row items-center gap-2 space-y-0 pb-2">
+            <Crown className="h-4 w-4 text-primary" />
+            <CardTitle className="text-base">Client Details</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Client Status */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Status
+              </label>
+              <div className="flex items-center gap-2">
+                {contact.client_status === 'active' && <CheckCircle className="h-4 w-4 text-green-500" />}
+                {contact.client_status === 'inactive' && <XCircle className="h-4 w-4 text-gray-400" />}
+                {contact.client_status === 'archived' && <Archive className="h-4 w-4 text-gray-400" />}
+                <Badge variant={
+                  contact.client_status === 'active' ? 'default' :
+                  contact.client_status === 'inactive' ? 'secondary' : 'outline'
+                }>
+                  {contact.client_status ? contact.client_status.charAt(0).toUpperCase() + contact.client_status.slice(1) : 'Unknown'}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Client Priority */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Priority
+              </label>
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-muted-foreground" />
+                <Badge variant={
+                  contact.client_priority === 'vip' ? 'destructive' :
+                  contact.client_priority === 'high' ? 'destructive' :
+                  contact.client_priority === 'medium' ? 'default' : 'secondary'
+                }>
+                  {contact.client_priority ? contact.client_priority.toUpperCase() : 'Unknown'}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Email Domains */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Email Domains
+              </label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Globe className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                {contact.email_domains && contact.email_domains.length > 0 ? (
+                  contact.email_domains.map((domain) => (
+                    <Badge key={domain} variant="outline" className="text-xs">
+                      {domain}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">None</span>
+                )}
+              </div>
+            </div>
+
+            {/* Keywords */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Keywords
+              </label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                {contact.keywords && contact.keywords.length > 0 ? (
+                  contact.keywords.map((kw) => (
+                    <Badge key={kw} variant="secondary" className="text-xs">
+                      {kw}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">None</span>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        /* Promote to Client Button (shown when NOT a client) */
+        <Card className="border-dashed">
+          <CardContent className="py-4 flex items-center justify-between">
+            <div>
+              <p className="font-medium text-sm">Not a client yet</p>
+              <p className="text-xs text-muted-foreground">
+                Promote this contact to a client for enhanced tracking and priority scoring.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPromoteDialogOpen(true)}
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Promote to Client
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────── */}
       {/* Notes Section */}
       {/* ─────────────────────────────────────────────────────────────────────── */}
       <Card>
@@ -1114,6 +1291,15 @@ export default function ContactDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ─── Promote to Client Dialog (NEW Phase 3) ─────────────────────────── */}
+      <PromoteToClientDialog
+        open={promoteDialogOpen}
+        onOpenChange={setPromoteDialogOpen}
+        contactId={contactId}
+        contactName={contact.name}
+        onPromote={handlePromoteToClient}
+      />
     </div>
   );
 }

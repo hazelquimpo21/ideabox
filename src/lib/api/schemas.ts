@@ -473,6 +473,15 @@ export const contactQuerySchema = paginationSchema.extend({
   senderType: senderTypeSchema.optional(),
   /** Filter by broadcast subtype (only when senderType=broadcast) */
   broadcastSubtype: broadcastSubtypeSchema.optional(),
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLIENT FILTERING (NEW Feb 2026 — Phase 3 Navigation Redesign)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /** Filter to only client contacts (is_client = TRUE) */
+  isClient: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  /** Filter by client status (active, inactive, archived) */
+  clientStatus: z.enum(['active', 'inactive', 'archived']).optional(),
+  /** Filter by client priority (vip, high, medium, low) */
+  clientPriority: z.enum(['vip', 'high', 'medium', 'low']).optional(),
 });
 
 export type ContactQueryParams = z.infer<typeof contactQuerySchema>;
@@ -498,11 +507,49 @@ export const contactUpdateSchema = z.object({
   // ─── P6 Enhancement: Notes field for contact management ───────────────────
   // Allows users to add personal notes about contacts
   notes: z.string().max(5000).nullable().optional(),
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLIENT FIELDS (NEW Feb 2026 — Phase 3 Navigation Redesign)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /** Whether this contact is a client */
+  is_client: z.boolean().optional(),
+  /** Client status: active, inactive, or archived */
+  client_status: z.enum(['active', 'inactive', 'archived']).nullable().optional(),
+  /** Client priority: vip, high, medium, or low */
+  client_priority: z.enum(['vip', 'high', 'medium', 'low']).nullable().optional(),
+  /** Email domains for auto-matching emails to this client */
+  email_domains: z.array(z.string().max(200)).nullable().optional(),
+  /** Keywords for categorizing emails related to this client */
+  keywords: z.array(z.string().max(100)).nullable().optional(),
 }).refine((data) => Object.keys(data).length > 0, {
   message: 'At least one field must be provided',
 });
 
 export type ContactUpdateInput = z.infer<typeof contactUpdateSchema>;
+
+/**
+ * Promote-to-client request schema.
+ * Used by POST /api/contacts/promote to promote a contact to client status.
+ *
+ * @example
+ * POST /api/contacts/promote
+ * { "contactId": "uuid", "clientStatus": "active", "clientPriority": "high" }
+ *
+ * @since February 2026 — Phase 3 Navigation Redesign
+ */
+export const promoteToClientSchema = z.object({
+  /** UUID of the contact to promote */
+  contactId: uuidSchema,
+  /** Client status (required) */
+  clientStatus: z.enum(['active', 'inactive', 'archived']),
+  /** Client priority (required) */
+  clientPriority: z.enum(['vip', 'high', 'medium', 'low']),
+  /** Email domains for auto-matching (optional) */
+  emailDomains: z.array(z.string().max(200)).optional(),
+  /** Keywords for categorization (optional) */
+  keywords: z.array(z.string().max(100)).optional(),
+});
+
+export type PromoteToClientInput = z.infer<typeof promoteToClientSchema>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXTRACTED DATES SCHEMAS (NEW - Jan 2026)
