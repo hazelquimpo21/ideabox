@@ -60,6 +60,7 @@
 
 import { BaseAnalyzer } from './base-analyzer';
 import { analyzerConfig, EMAIL_CATEGORIES, SIGNAL_STRENGTHS, REPLY_WORTHINESS } from '@/config/analyzers';
+import { normalizeCategory, EMAIL_CATEGORIES_SET } from '@/types/discovery';
 import type { FunctionSchema } from '@/lib/ai/openai-client';
 import type {
   CategorizationData,
@@ -745,9 +746,15 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       ? (rawReplyWorthiness as ReplyWorthiness)
       : 'no_reply'; // Default to 'no_reply' if invalid
 
+    // Validate category - AI sometimes returns labels (e.g. "promotional") as categories
+    const rawCategory = rawData.category as string;
+    const validatedCategory = EMAIL_CATEGORIES_SET.has(rawCategory)
+      ? rawCategory as CategorizationData['category']
+      : (normalizeCategory(rawCategory) ?? 'newsletters_general') as CategorizationData['category'];
+
     return {
       // Core categorization fields
-      category: rawData.category as CategorizationData['category'],
+      category: validatedCategory,
       confidence: (rawData.confidence as number) || 0.5,
       reasoning: (rawData.reasoning as string) || '',
       topics: (rawData.topics as string[]) || [],

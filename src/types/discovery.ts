@@ -94,6 +94,7 @@ export const LEGACY_CATEGORY_MAP: Record<string, EmailCategory> = {
   'event': 'local',
   'newsletter': 'newsletters_general',
   'promo': 'shopping',
+  'promotional': 'shopping',
   'admin': 'finance',
   'personal': 'personal_friends_family',
   'noise': 'newsletters_general',

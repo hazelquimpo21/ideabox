@@ -239,6 +239,25 @@ export async function POST(
     });
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Set initial sync progress so frontend polling sees activity immediately
+    // (Without this, sync_progress is null during the entire Gmail fetch phase,
+    // causing the frontend to show "Waiting to start..." at 0% for a long time)
+    // ─────────────────────────────────────────────────────────────────────────
+    await supabase
+      .from('user_profiles')
+      .update({
+        sync_progress: {
+          status: 'in_progress',
+          progress: 2,
+          currentStep: 'Fetching emails from Gmail...',
+          discoveries: { actionItems: 0, events: 0, clientsDetected: [] },
+          startedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      })
+      .eq('id', user.id);
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Step 1: Fetch emails from Gmail for ALL accounts
     //
     // The orchestrator only reads from the database, so we must
@@ -361,6 +380,21 @@ export async function POST(
       totalEmailsFetched,
       accountsProcessed: gmailAccounts.length,
     });
+
+    // Update progress after Gmail fetch so frontend sees we're moving forward
+    await supabase
+      .from('user_profiles')
+      .update({
+        sync_progress: {
+          status: 'in_progress',
+          progress: 8,
+          currentStep: `Fetched ${totalEmailsFetched} emails, starting analysis...`,
+          discoveries: { actionItems: 0, events: 0, clientsDetected: [] },
+          startedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      })
+      .eq('id', user.id);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Step 2: Run the analysis orchestrator
