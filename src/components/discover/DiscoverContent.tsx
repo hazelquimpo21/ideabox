@@ -457,7 +457,7 @@ export function DiscoverContent() {
    * We detect the "navigating away" case by checking a ref that
    * handleEmailClick sets before calling onClose.
    */
-  const isNavigatingToEmailRef = React.useRef(false);
+  const isNavigatingToEmailRef = useRef(false);
 
   const handleModalClose = () => {
     setIsModalOpen(false);
