@@ -124,12 +124,12 @@ export function useSidebarData(): UseSidebarDataReturn {
           .eq('user_id', user.id)
           .eq('is_archived', false),
 
-        // Get active clients with email counts
+        // Get client contacts (clients table deprecated, use contacts with is_client)
         supabase
-          .from('clients')
+          .from('contacts')
           .select('id, name')
           .eq('user_id', user.id)
-          .eq('status', 'active')
+          .eq('is_client', true)
           .order('name', { ascending: true })
           .limit(10),
 
@@ -158,10 +158,10 @@ export function useSidebarData(): UseSidebarDataReturn {
         setCategoryCounts(counts);
       }
 
-      // Process clients
+      // Process client contacts
       if (clientsResult.data) {
-        // Get unread counts for each client
-        const clientIds = clientsResult.data.map(c => c.id);
+        // Get unread counts for each client contact
+        const contactIds = clientsResult.data.map(c => c.id);
 
         let clientsWithCounts: SidebarClient[] = clientsResult.data.map(c => ({
           id: c.id,
@@ -169,20 +169,20 @@ export function useSidebarData(): UseSidebarDataReturn {
           unreadCount: 0,
         }));
 
-        if (clientIds.length > 0) {
+        if (contactIds.length > 0) {
           const { data: emailCounts } = await supabase
             .from('emails')
-            .select('client_id')
+            .select('contact_id')
             .eq('user_id', user.id)
             .eq('is_read', false)
             .eq('is_archived', false)
-            .in('client_id', clientIds);
+            .in('contact_id', contactIds);
 
           if (emailCounts) {
             const countMap: Record<string, number> = {};
             for (const email of emailCounts) {
-              if (email.client_id) {
-                countMap[email.client_id] = (countMap[email.client_id] || 0) + 1;
+              if (email.contact_id) {
+                countMap[email.contact_id] = (countMap[email.contact_id] || 0) + 1;
               }
             }
             clientsWithCounts = clientsWithCounts.map(c => ({
