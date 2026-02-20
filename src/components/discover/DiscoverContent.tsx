@@ -91,6 +91,19 @@ function isCachedResultEmpty(result: InitialSyncResponse): boolean {
   return result.categories.length === 0 && result.stats.analyzed === 0;
 }
 
+/**
+ * Empty InitialSyncResponse used as a placeholder so the dashboard layout
+ * always renders (hero, category grid, etc.) even when no data exists yet.
+ */
+const EMPTY_RESULT: InitialSyncResponse = {
+  success: true,
+  stats: { totalFetched: 0, preFiltered: 0, analyzed: 0, failed: 0, totalTokensUsed: 0, estimatedCost: 0, processingTimeMs: 0 },
+  categories: [],
+  clientInsights: [],
+  failures: [],
+  suggestedActions: [],
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -127,6 +140,10 @@ export function DiscoverContent() {
 
   // Live email counts from the category-summary API (used for empty-state decisions)
   const [liveEmailStats, setLiveEmailStats] = useState<{ total: number; analyzed: number; unanalyzed: number } | null>(null);
+
+  // When true, polls for live email data every few seconds so categories
+  // populate incrementally as emails are synced/analyzed in the background.
+  const [isPollingForEmails, setIsPollingForEmails] = useState(false);
 
   const {
     progress: syncProgress,
@@ -222,9 +239,10 @@ export function DiscoverContent() {
             const gotLive = await fetchLiveCategories();
             if (!isMounted) return;
             if (!gotLive) {
-              // No live data either — show the empty result (which will
-              // render the "waiting for emails" state, not StartAnalysisCard)
+              // No live data yet — show the dashboard with an inline banner
+              // and start polling so categories populate incrementally.
               setResult(data.result);
+              setIsPollingForEmails(true);
             }
           } else {
             setResult(data.result);
@@ -232,13 +250,14 @@ export function DiscoverContent() {
         }
         else if (data.status === 'failed') {
           // Sync failed — for onboarded users, try live data before falling
-          // back to error state
+          // back to error state. Show dashboard layout either way.
           if (user?.onboardingCompleted) {
             const gotLive = await fetchLiveCategories();
             if (!isMounted) return;
             if (!gotLive) {
-              setError(data.error || 'Previous sync failed');
-              setNeedsSync(true);
+              // Show dashboard with inline banner + start polling
+              setResult(EMPTY_RESULT);
+              setIsPollingForEmails(true);
             }
           } else {
             setError(data.error || 'Previous sync failed');
@@ -256,13 +275,15 @@ export function DiscoverContent() {
           startPolling();
         }
         else if (user?.onboardingCompleted) {
-          // Onboarding done but no cached sync data — try live data
-          logger.info('No cached sync data for onboarded user, trying live data');
+          // Onboarding done but no cached sync data — show dashboard with
+          // inline banner and poll for live data so categories appear as
+          // emails are synced and analyzed.
+          logger.info('No cached sync data for onboarded user, starting live poll');
           const gotLive = await fetchLiveCategories();
           if (!isMounted) return;
           if (!gotLive) {
-            // No emails yet — will show the waiting state (NOT StartAnalysisCard)
-            setNeedsSync(true);
+            setResult(EMPTY_RESULT);
+            setIsPollingForEmails(true);
           }
         }
         else { setNeedsSync(true); }
@@ -288,22 +309,54 @@ export function DiscoverContent() {
         syncWaitStartRef.current = null;
         stopPolling();
 
+        setIsSyncing(false);
         if (user?.onboardingCompleted) {
           const gotLive = await fetchLiveCategories();
           if (!gotLive) {
-            setIsSyncing(false);
-            setNeedsSync(true);
-          } else {
-            setIsSyncing(false);
+            // Show dashboard with inline banner + start polling
+            setResult((prev: InitialSyncResponse | null) => prev ?? EMPTY_RESULT);
+            setIsPollingForEmails(true);
           }
         } else {
-          setIsSyncing(false);
           setNeedsSync(true);
         }
       }
     }, 30000);
     return () => clearTimeout(timeout);
   }, [isSyncing, syncProgress, stopPolling, user?.onboardingCompleted, fetchLiveCategories]);
+
+  // ─── Polling: incrementally populate categories as emails are analyzed ──────
+  useEffect(() => {
+    if (!isPollingForEmails) return;
+
+    let isMounted = true;
+    const POLL_INTERVAL = 5000; // 5 seconds
+    const MAX_POLLS = 60; // 5 minutes max
+    let pollCount = 0;
+
+    const poll = async () => {
+      if (!isMounted || pollCount >= MAX_POLLS) {
+        setIsPollingForEmails(false);
+        return;
+      }
+      pollCount++;
+      const gotData = await fetchLiveCategories();
+      if (gotData) {
+        // Data arrived — stop polling, result is already set by fetchLiveCategories
+        logger.success('Polling found email data, stopping poll');
+        setIsPollingForEmails(false);
+      }
+    };
+
+    // Run immediately once, then on interval
+    poll();
+    const intervalId = setInterval(poll, POLL_INTERVAL);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [isPollingForEmails, fetchLiveCategories]);
 
   useEffect(() => {
     if (!result?.categories || hasShownLegacyWarning.current) return;
@@ -411,28 +464,20 @@ export function DiscoverContent() {
     );
   }
 
-  // ─── Needs Sync State ──────────────────────────────────────────────────────
+  // ─── Redirect onboarded users away from needsSync ──────────────────────────
   // For onboarded users: NEVER show StartAnalysisCard (calling initial-sync
   // after onboarding returns 409, creating a confusing error loop).
-  // Instead, show a "waiting for emails" state with a regular refresh option.
-  if (needsSync && !isSyncing) {
-    if (user?.onboardingCompleted) {
-      return (
-        <PostOnboardingEmptyState
-          liveEmailStats={liveEmailStats}
-          onRefresh={async () => {
-            setIsLoading(true);
-            const gotLive = await fetchLiveCategories();
-            if (!gotLive) {
-              setIsLoading(false);
-            } else {
-              setNeedsSync(false);
-              setIsLoading(false);
-            }
-          }}
-        />
-      );
+  // Instead, show the dashboard with an inline banner and poll for live data.
+  useEffect(() => {
+    if (needsSync && !isSyncing && user?.onboardingCompleted && !result) {
+      setResult(EMPTY_RESULT);
+      setIsPollingForEmails(true);
+      setNeedsSync(false);
     }
+  }, [needsSync, isSyncing, user?.onboardingCompleted, result]);
+
+  // ─── Needs Sync State (non-onboarded users only) ──────────────────────────
+  if (needsSync && !isSyncing && !user?.onboardingCompleted) {
     return (
       <StartAnalysisCard
         error={error}
@@ -475,30 +520,20 @@ export function DiscoverContent() {
     );
   }
 
-  // ─── Success State (with empty check) ─────────────────────────────────────
-  // If result has 0 categories AND user is onboarded, show the post-onboarding
-  // empty state instead of a misleading "0 emails analyzed" dashboard.
-  if (isCachedResultEmpty(result) && user?.onboardingCompleted) {
-    return (
-      <PostOnboardingEmptyState
-        liveEmailStats={liveEmailStats}
-        onRefresh={async () => {
-          setIsLoading(true);
-          const gotLive = await fetchLiveCategories();
-          if (!gotLive) {
-            setIsLoading(false);
-          } else {
-            setNeedsSync(false);
-            setIsLoading(false);
-          }
-        }}
-      />
-    );
-  }
-
+  // ─── Success State ──────────────────────────────────────────────────────────
+  // Always render the full dashboard layout. When result is empty, the inline
+  // banner shows a helpful message while polling fills in categories.
   return (
     <div className="space-y-8">
-      <DiscoveryHero stats={result.stats} userName={user?.email?.split('@')[0]} />
+      {/* Show hero only when we have actual data */}
+      {result.stats.analyzed > 0 && (
+        <DiscoveryHero stats={result.stats} userName={user?.email?.split('@')[0]} />
+      )}
+
+      {/* Inline banner when emails are still being synced/analyzed */}
+      {(isPollingForEmails || isCachedResultEmpty(result)) && user?.onboardingCompleted && (
+        <InlineSyncBanner liveEmailStats={liveEmailStats} isPolling={isPollingForEmails} />
+      )}
 
       {hasLegacyCategories && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4">
@@ -547,101 +582,38 @@ export function DiscoverContent() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// POST-ONBOARDING EMPTY STATE
+// INLINE SYNC BANNER
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Shown to onboarded users when there are no categorized emails yet.
- * Replaces the StartAnalysisCard which would incorrectly call initial-sync
- * (returning 409) and create a confusing loop.
- *
- * States:
- * - Emails exist but aren't analyzed → "Processing your emails"
- * - No emails yet → "Setting up your inbox"
- * - Both → appropriate messaging with refresh
+ * Compact inline banner shown while emails are being synced/analyzed.
+ * Lives within the normal dashboard layout so users can explore the app.
+ * Categories will populate incrementally as polling finds new data.
  */
-function PostOnboardingEmptyState({
+function InlineSyncBanner({
   liveEmailStats,
-  onRefresh,
+  isPolling,
 }: {
   liveEmailStats: { total: number; analyzed: number; unanalyzed: number } | null;
-  onRefresh: () => void;
+  isPolling: boolean;
 }) {
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [autoRefreshCount, setAutoRefreshCount] = useState(0);
-  const maxAutoRefreshes = 6;
-
-  // Auto-refresh every 10s to check for newly synced/analyzed emails
-  useEffect(() => {
-    if (autoRefreshCount >= maxAutoRefreshes) return;
-    const timer = setTimeout(() => {
-      setAutoRefreshCount((c) => c + 1);
-      onRefresh();
-    }, 10000);
-    return () => clearTimeout(timer);
-  }, [autoRefreshCount, onRefresh]);
-
-  const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    await onRefresh();
-    setIsRefreshing(false);
-  };
-
   const hasUnanalyzedEmails = liveEmailStats && liveEmailStats.unanalyzed > 0;
   const hasNoEmails = !liveEmailStats || liveEmailStats.total === 0;
 
+  let message: string;
+  if (hasNoEmails) {
+    message = 'Syncing emails from Gmail — categories will appear here shortly.';
+  } else if (hasUnanalyzedEmails) {
+    message = `${liveEmailStats.total} email${liveEmailStats.total !== 1 ? 's' : ''} synced, ${liveEmailStats.unanalyzed} being analyzed — categories will fill in automatically.`;
+  } else {
+    message = 'Your inbox is connected. New emails will be fetched and categorized automatically.';
+  }
+
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="text-center max-w-md">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-          <Spinner size="lg" />
-        </div>
-
-        {hasNoEmails ? (
-          <>
-            <h2 className="text-2xl font-bold mb-2">Setting up your inbox</h2>
-            <p className="text-muted-foreground mb-6">
-              Your emails are being synced from Gmail. This usually happens
-              within a minute or two after setup.
-            </p>
-          </>
-        ) : hasUnanalyzedEmails ? (
-          <>
-            <h2 className="text-2xl font-bold mb-2">Analyzing your emails</h2>
-            <p className="text-muted-foreground mb-6">
-              {liveEmailStats.total} email{liveEmailStats.total !== 1 ? 's' : ''} synced,{' '}
-              {liveEmailStats.unanalyzed} awaiting AI analysis.
-              Categories will appear here once analysis completes.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="text-2xl font-bold mb-2">Waiting for emails</h2>
-            <p className="text-muted-foreground mb-6">
-              Your inbox is connected and ready. New emails will be automatically
-              fetched and categorized as they arrive.
-            </p>
-          </>
-        )}
-
-        <div className="flex gap-3 justify-center">
-          <Button onClick={handleManualRefresh} disabled={isRefreshing}>
-            {isRefreshing ? (
-              <>
-                <Spinner size="sm" className="mr-2" />
-                Checking...
-              </>
-            ) : (
-              'Check for emails'
-            )}
-          </Button>
-        </div>
-
-        {autoRefreshCount < maxAutoRefreshes && (
-          <p className="text-xs text-muted-foreground mt-4">
-            Automatically checking for new data...
-          </p>
-        )}
+    <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4">
+      <div className="flex items-center gap-3">
+        {isPolling && <Spinner size="sm" className="text-blue-600 shrink-0" />}
+        <p className="text-sm text-blue-700 dark:text-blue-300">{message}</p>
       </div>
     </div>
   );
