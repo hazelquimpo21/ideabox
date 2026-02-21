@@ -262,7 +262,23 @@ export function DiscoverContent({
             setNeedsSync(true);
           }
         }
-        else if (data.status === 'in_progress') { setIsSyncing(true); startPolling(true); }
+        else if (data.status === 'in_progress') {
+          if (user?.onboardingCompleted) {
+            // Onboarded user with sync in progress — show the dashboard
+            // immediately with live polling so emails appear incrementally.
+            // The EmailSyncBanner in the layout handles progress display.
+            logger.info('Sync in progress for onboarded user, showing dashboard with live poll');
+            const gotLive = await fetchLiveCategories();
+            if (!isMounted) return;
+            if (!gotLive) {
+              setResult(EMPTY_RESULT);
+            }
+            setIsPollingForEmails(true);
+          } else {
+            setIsSyncing(true);
+            startPolling(true);
+          }
+        }
         else if (data.status === 'pending' && user?.onboardingCompleted) {
           // Sync hasn't started yet — don't waste requests polling sync-status.
           // Just show the dashboard with an inline banner and poll for live
@@ -315,11 +331,25 @@ export function DiscoverContent({
         return;
       }
       pollCount++;
-      const gotData = await fetchLiveCategories();
-      if (gotData) {
-        // Data arrived — stop polling, result is already set by fetchLiveCategories
-        logger.success('Polling found email data, stopping poll');
-        setIsPollingForEmails(false);
+
+      // Always refresh live categories so new emails appear incrementally
+      await fetchLiveCategories();
+
+      // Check if sync is still in progress — keep polling until it's done
+      try {
+        const statusRes = await fetch('/api/onboarding/sync-status', { credentials: 'include' });
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          if (statusData.status === 'completed' || statusData.status === 'failed') {
+            // Final refresh to get the last batch of emails
+            await fetchLiveCategories();
+            logger.success('Sync finished, stopping poll');
+            setIsPollingForEmails(false);
+            return;
+          }
+        }
+      } catch {
+        // Ignore transient errors, continue polling
       }
     };
 

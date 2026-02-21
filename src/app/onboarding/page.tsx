@@ -191,75 +191,10 @@ export default function OnboardingPage() {
   }, [isLoading, user, router]);
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Poll sync progress
+  // NOTE: Sync progress polling removed — after onboarding, users are
+  // redirected to /inbox immediately while sync runs in the background.
+  // The EmailSyncBanner in the auth layout shows progress.
   // ───────────────────────────────────────────────────────────────────────────
-
-  React.useEffect(() => {
-    if (!isCompleting) return;
-
-    let cancelled = false;
-    const pollInterval = 2000; // Poll every 2 seconds
-
-    const poll = async () => {
-      if (cancelled) return;
-
-      try {
-        const response = await fetch('/api/onboarding/sync-status', {
-          credentials: 'include',
-        });
-
-        if (cancelled) return;
-
-        if (!response.ok) {
-          // Don't stop polling on transient server errors - retry on next interval
-          logger.debug('Sync status poll returned non-200', { status: response.status });
-        } else {
-          const data = await response.json();
-
-          if (cancelled) return;
-
-          setSyncProgress({
-            status: data.status,
-            progress: data.progress ?? 0,
-            currentStep: data.currentStep ?? 'Processing...',
-            discoveries: data.discoveries ?? { actionItems: 0, events: 0, clientsDetected: [] },
-            error: data.error,
-          });
-
-          // If completed, redirect to inbox
-          if (data.status === 'completed') {
-            logger.info('Initial sync completed, redirecting to inbox');
-            await refreshSession();
-            router.replace('/inbox');
-            return;
-          }
-
-          // If failed, stop polling (user can retry)
-          if (data.status === 'failed') {
-            logger.warn('Initial sync failed', { error: data.error });
-            return;
-          }
-        }
-      } catch (err) {
-        logger.debug('Sync status poll failed', {
-          error: err instanceof Error ? err.message : 'Unknown',
-        });
-      }
-
-      // Continue polling (even after transient errors)
-      if (!cancelled) {
-        setTimeout(poll, pollInterval);
-      }
-    };
-
-    // Start polling after a short delay (give the sync time to start)
-    const timer = setTimeout(poll, 1500);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [isCompleting, refreshSession, router]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Handle wizard completion - trigger sync with progress
@@ -270,12 +205,6 @@ export default function OnboardingPage() {
 
     setIsCompleting(true);
     setLastSyncConfig(syncConfig);
-    setSyncProgress({
-      status: 'in_progress',
-      progress: 0,
-      currentStep: 'Connecting to Gmail...',
-      discoveries: { actionItems: 0, events: 0, clientsDetected: [] },
-    });
 
     logger.start('Completing onboarding', {
       userId: user.id,
@@ -304,9 +233,14 @@ export default function OnboardingPage() {
         .then(() => logger.debug('user_context onboarding flag synced'))
         .catch(() => logger.warn('Failed to sync user_context onboarding flag'));
 
-      // Trigger initial sync (now awaited, not fire-and-forget)
-      // The sync-status polling will track progress and redirect when done
-      const syncResponse = await fetch('/api/onboarding/initial-sync', {
+      // Refresh session so auth context has onboarding_completed = true
+      // (needed for ProtectedRoute to not redirect back to onboarding)
+      await refreshSession();
+
+      // Fire off the initial sync request (don't await — it runs in the background).
+      // The server will continue processing even after we navigate away.
+      // The EmailSyncBanner in the auth layout polls for progress.
+      fetch('/api/onboarding/initial-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -314,22 +248,19 @@ export default function OnboardingPage() {
           maxEmails: syncConfig?.initialEmailCount ?? 50,
           includeRead: syncConfig?.includeReadEmails ?? true,
         }),
+      }).catch((err) => {
+        logger.warn('Initial sync request failed (will retry from inbox)', {
+          error: err instanceof Error ? err.message : 'Unknown',
+        });
       });
 
-      if (!syncResponse.ok) {
-        const errorData = await syncResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || `Sync failed (${syncResponse.status})`);
-      }
+      logger.info('Sync triggered, redirecting to inbox');
 
-      logger.info('Initial sync request completed');
-
-      // The polling effect will handle redirect to inbox
-      // But if for some reason polling hasn't caught it yet, redirect now
-      await refreshSession();
+      // Redirect to inbox immediately — emails will appear as they sync
       router.replace('/inbox');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('Failed to complete onboarding sync', { error: message });
+      logger.error('Failed to complete onboarding', { error: message });
 
       setSyncProgress((prev: SyncProgressInfo) => ({
         ...prev,
@@ -364,12 +295,9 @@ export default function OnboardingPage() {
   }
 
   if (isCompleting) {
-    return (
-      <InitialSyncProgress
-        syncProgress={syncProgress}
-        onRetry={handleRetry}
-      />
-    );
+    // Show a brief loading state while we mark onboarding complete and redirect.
+    // The actual sync progress is shown via EmailSyncBanner on the inbox page.
+    return <FullPageLoader message="Setting up your inbox..." />;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
