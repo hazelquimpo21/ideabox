@@ -26,7 +26,7 @@
 import * as React from 'react';
 import { useAuth } from '@/lib/auth';
 import { ProtectedRoute } from '@/components/auth';
-import { Navbar, Sidebar, SyncStatusBanner } from '@/components/layout';
+import { Navbar, Sidebar, SyncStatusBanner, EmailSyncBanner } from '@/components/layout';
 import { useSidebarData, useSyncStatus } from '@/hooks';
 import { ContactsSyncStatusProvider } from '@/lib/contexts/sync-status-context';
 import { createLogger } from '@/lib/utils/logger';
@@ -148,6 +148,9 @@ export default function AuthLayout({
 
           {/* Sync Status Banner - shows during Google contacts import */}
           <SyncStatusBanner />
+
+          {/* Email Sync Banner - shows during initial email sync after onboarding */}
+          <EmailSyncBanner />
 
           {/* Main Content Area */}
           <div className="flex">
