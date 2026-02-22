@@ -141,6 +141,11 @@ export const actionTypeSchema = z.enum([
   'create',
   'schedule',
   'decide',
+  'pay',
+  'submit',
+  'register',
+  'book',
+  'follow_up',
   'none',
 ]);
 

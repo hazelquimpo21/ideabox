@@ -58,13 +58,13 @@
 
 **Cost Analysis:**
 ```
-Per email (3 analyzers):
-  Input:  1,500 tokens × $0.15/1M = $0.000225
-  Output: 300 tokens × $0.60/1M = $0.00018
-  Total:  ~$0.0004 per email
+Per email (9 analyzers):
+  Input:  4,500 tokens × $0.15/1M = $0.000675
+  Output: 900 tokens × $0.60/1M = $0.00054
+  Total:  ~$0.0012 per email
 
-Daily (250 emails): ~$0.10
-Monthly: ~$3.00
+Daily (250 emails): ~$0.30
+Monthly: ~$9.00
 ```
 
 ---
@@ -76,29 +76,34 @@ Monthly: ~$3.00
 **Current Categories (12 life-buckets):**
 | Category | Description |
 |----------|-------------|
-| `newsletters_general` | Substacks, digests, curated content |
+| `clients` | Direct client correspondence, project work |
+| `work` | Team, industry, professional (not direct clients) |
+| `personal_friends_family` | Social, relationships, personal correspondence |
+| `family` | School emails, kid activities, health, appointments, logistics |
+| `finance` | Bills, banking, investments, receipts |
+| `travel` | Flights, hotels, bookings, trip info |
+| `shopping` | Orders, shipping, deals, retail |
+| `local` | Community events, neighborhood, local orgs |
+| `newsletters_creator` | Substacks, digests, curated content |
+| `newsletters_industry` | Industry newsletters, professional digests |
 | `news_politics` | News outlets, political updates |
 | `product_updates` | Tech products, SaaS tools you use |
-| `local` | Community events, neighborhood, local orgs |
-| `shopping` | Orders, shipping, deals, retail |
-| `travel` | Flights, hotels, bookings, trip info |
-| `finance` | Bills, banking, investments, receipts |
-| `family_kids_school` | School emails, kid activities, logistics |
-| `family_health_appointments` | Medical, appointments, family scheduling |
-| `client_pipeline` | Direct client correspondence, project work |
-| `business_work_general` | Team, industry, professional (not direct clients) |
-| `personal_friends_family` | Social, relationships, personal correspondence |
 
 **Legacy Categories (DEPRECATED):**
 | Old Category | Mapped To | Notes |
 |--------------|-----------|-------|
-| `action_required` | `client_pipeline` | Most action items are client/work related |
+| `action_required` | `clients` | Most action items are client/work related |
 | `event` | `local` | Events detected via `has_event` label now |
-| `newsletter` | `newsletters_general` | Direct mapping |
+| `newsletter` | `newsletters_creator` | Direct mapping |
 | `promo` | `shopping` | Promotional emails are shopping-related |
 | `admin` | `finance` | Admin emails often relate to accounts/billing |
 | `personal` | `personal_friends_family` | Direct mapping |
-| `noise` | `newsletters_general` | Low-priority content treated as newsletter |
+| `noise` | `newsletters_industry` | Low-priority content treated as newsletter |
+| `client_pipeline` | `clients` | Renamed for clarity |
+| `business_work_general` | `work` | Renamed for clarity |
+| `family_kids_school` | `family` | Merged into single family category |
+| `family_health_appointments` | `family` | Merged into single family category |
+| `newsletters_general` | `newsletters_creator` | Split into creator/industry |
 
 **Migration:** See `supabase/migrations/028_category_cleanup_and_cache_clear.sql`
 
@@ -223,24 +228,24 @@ function truncateBody(body: string, maxChars = 16000): string {
 
 **Rationale:**
 - Users see categories in Gmail UI
-- Allows searching in Gmail: `label:IdeaBox/client_pipeline`
+- Allows searching in Gmail: `label:IdeaBox/clients`
 - Minimal additional API cost (one modify call per email)
 - Can be disabled via `ENABLE_GMAIL_LABEL_SYNC=false`
 
 **Labels Created (updated Feb 2026 for life-bucket categories):**
 ```
-IdeaBox/newsletters_general
+IdeaBox/clients
+IdeaBox/work
+IdeaBox/personal_friends_family
+IdeaBox/family
+IdeaBox/finance
+IdeaBox/travel
+IdeaBox/shopping
+IdeaBox/local
+IdeaBox/newsletters_creator
+IdeaBox/newsletters_industry
 IdeaBox/news_politics
 IdeaBox/product_updates
-IdeaBox/local
-IdeaBox/shopping
-IdeaBox/travel
-IdeaBox/finance
-IdeaBox/family_kids_school
-IdeaBox/family_health_appointments
-IdeaBox/client_pipeline
-IdeaBox/business_work_general
-IdeaBox/personal_friends_family
 ```
 
 ---

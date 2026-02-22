@@ -494,19 +494,19 @@ const DEFAULT_TIMEZONE = 'America/Chicago';
 // REFACTORED (Jan 2026): Life-bucket categories - what part of life the email touches
 enum EmailCategory {
   // Work & Business
-  ClientPipeline = 'client_pipeline',
-  BusinessWorkGeneral = 'business_work_general',
+  Clients = 'clients',
+  Work = 'work',
   // Family & Personal
-  FamilyKidsSchool = 'family_kids_school',
-  FamilyHealthAppointments = 'family_health_appointments',
   PersonalFriendsFamily = 'personal_friends_family',
+  Family = 'family',
   // Life Admin
   Finance = 'finance',
   Travel = 'travel',
   Shopping = 'shopping',
   Local = 'local',
   // Information
-  NewslettersGeneral = 'newsletters_general',
+  NewslettersCreator = 'newsletters_creator',
+  NewslettersIndustry = 'newsletters_industry',
   NewsPolitics = 'news_politics',
   ProductUpdates = 'product_updates',
 }
@@ -632,8 +632,8 @@ describe('CategorizerAnalyzer', () => {
       const result = await analyzer.analyze(email);
 
       expect(result.success).toBe(true);
-      // Life-bucket category (Jan 2026): client work goes to client_pipeline
-      expect(result.data.category).toBe('client_pipeline');
+      // Life-bucket category (Jan 2026): client work goes to clients
+      expect(result.data.category).toBe('clients');
       // Urgency is now tracked via score, not category
       expect(result.data.urgency_score).toBeGreaterThanOrEqual(6);
       expect(result.confidence).toBeGreaterThan(0.8);

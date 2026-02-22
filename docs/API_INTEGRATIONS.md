@@ -673,19 +673,19 @@ export const CATEGORIZE_FUNCTION: FunctionSchema = {
         type: 'string',
         enum: [
           // Work & Business
-          'client_pipeline',
-          'business_work_general',
+          'clients',
+          'work',
           // Family & Personal
-          'family_kids_school',
-          'family_health_appointments',
           'personal_friends_family',
+          'family',
           // Life Admin
           'finance',
           'travel',
           'shopping',
           'local',
           // Information
-          'newsletters_general',
+          'newsletters_creator',
+          'newsletters_industry',
           'news_politics',
           'product_updates',
         ],
@@ -719,18 +719,18 @@ const MODEL_PRICING = {
 };
 ```
 
-**Estimated Costs for 250 emails/day (3 analyzers each):**
+**Estimated Costs for 250 emails/day (9 analyzers each):**
 ```
 Per email:
-  Input:  ~500 tokens × 3 analyzers = 1,500 tokens
-  Output: ~100 tokens × 3 analyzers = 300 tokens
+  Input:  ~500 tokens × 9 analyzers = 4,500 tokens
+  Output: ~100 tokens × 9 analyzers = 900 tokens
 
 Daily (250 emails):
-  Input:  375,000 tokens × $0.15/1M = $0.056
-  Output: 75,000 tokens × $0.60/1M = $0.045
-  Total:  ~$0.10/day
+  Input:  1,125,000 tokens × $0.15/1M = $0.169
+  Output: 225,000 tokens × $0.60/1M = $0.135
+  Total:  ~$0.30/day
 
-Monthly: ~$3.00/month (well under $50 budget)
+Monthly: ~$9.00/month (well under $50 budget)
 ```
 
 **Body Truncation for Cost Control:**

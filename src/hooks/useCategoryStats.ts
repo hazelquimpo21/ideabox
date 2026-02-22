@@ -22,8 +22,8 @@
  * const { stats } = useCategoryStats();
  *
  * // Access counts
- * stats.newsletters_general.count      // Total emails
- * stats.newsletters_general.unreadCount // Unread emails
+ * stats.newsletters_creator.count      // Total emails
+ * stats.newsletters_creator.unreadCount // Unread emails
  * ```
  *
  * @module hooks/useCategoryStats

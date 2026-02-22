@@ -139,7 +139,7 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 **Purpose:** Classify email + assess signal quality + determine reply worthiness + detect noise + generate summary + suggest quick action
 
 > **IMPORTANT:** "client" is NOT a category. Client relationship is tracked via `contact_id` in the database.
-> This design allows a client email to be categorized into a life-bucket category (e.g., `client_pipeline`) rather than hidden in a "client" bucket.
+> This design allows a client email to be categorized into a life-bucket category (e.g., `clients`) rather than hidden in a generic "client" bucket.
 
 **ENHANCED (Jan 2026):** Added `summary` and `quick_action` fields.
 
@@ -162,10 +162,10 @@ async analyze(email: Email): Promise<AnalyzerResult> {
         type: 'string',
         enum: [
           // LIFE-BUCKET CATEGORIES (12 values)
-          'client_pipeline', 'business_work_general',
-          'family_kids_school', 'family_health_appointments', 'personal_friends_family',
+          'clients', 'work',
+          'family', 'personal_friends_family',
           'finance', 'travel', 'shopping', 'local',
-          'newsletters_general', 'news_politics', 'product_updates',
+          'newsletters_creator', 'newsletters_industry', 'news_politics', 'product_updates',
         ],
         description: 'Primary life-bucket category',
       },
@@ -304,7 +304,7 @@ async analyze(email: Email): Promise<AnalyzerResult> {
         items: {
           type: 'object',
           properties: {
-            type: { type: 'string', enum: ['respond', 'review', 'create', 'schedule', 'decide'] },
+            type: { type: 'string', enum: ['respond', 'review', 'create', 'schedule', 'decide', 'pay', 'submit', 'register', 'book', 'follow_up'] },
             title: { type: 'string', description: 'Short title. E.g., "Review Q1 proposal"' },
             description: { type: 'string' },
             deadline: { type: 'string', description: 'ISO 8601 or relative like "Friday"' },
@@ -870,7 +870,7 @@ Every analyzer logs:
 this.log('debug', 'Starting analysis', { emailId, sender });
 
 // Key decisions
-this.log('info', 'Categorized as client_pipeline', {
+this.log('info', 'Categorized as clients', {
   emailId,
   confidence: 0.95,
   urgencyScore: 8,
@@ -898,7 +898,7 @@ this.log('error', 'API call failed', {
 **When It Runs:** ONLY when Categorizer includes `has_event` in labels array (conditional execution saves tokens)
 
 > **IMPORTANT (Jan 2026 Refactor):** Events are NO LONGER a category. Events can appear in ANY life-bucket
-> category (local, family_kids_school, travel, etc.) and are detected via the `has_event` label.
+> category (local, family, travel, etc.) and are detected via the `has_event` label.
 > This allows proper categorization of WHERE the event fits in your life while still extracting event details.
 
 **Function Schema:**
@@ -1099,11 +1099,69 @@ const result = senderTypeDetector.detect({
 
 ---
 
-## Phase 2+ Analyzer Additions
+### 7. Idea Spark Analyzer (NEW Feb 2026)
+
+**Purpose:** Generate creative, actionable ideas from email content
+
+> This is the most "creative" analyzer in the system. While other analyzers classify, extract, or summarize, this one generates NEW ideas that connect the email's content to the user's actual life.
+
+**When It Runs:** PHASE 2 (conditional). Skipped when `signal_strength = 'noise'` to save tokens (~30% of emails). Uses higher temperature (0.7) for creative output.
+
+**Idea Types:**
+| Type | Description | Example |
+|------|-------------|---------|
+| `social_post` | Content for social media | Tweet about an industry trend from newsletter |
+| `networking` | Reach out, connect, collaborate | Intro to speaker from event invite |
+| `business` | Business opportunity, strategy | Proposal idea inspired by client email |
+| `content_creation` | Blog, article, podcast topic | Article inspired by product update |
+| `hobby` | Personal interests, side projects | DIY project from shopping confirmation |
+| `shopping` | Gift ideas, wishlist items | Gift for spouse based on their interests |
+| `date_night` | Partner/relationship activities | Restaurant from local event email |
+| `family_activity` | Activities with kids, family outings | Science museum from school newsletter |
+| `personal_growth` | Skills to learn, habits to build | Course inspired by industry newsletter |
+| `community` | Local involvement, volunteering | Volunteer opportunity from community email |
+
+**Function Schema:**
+```typescript
+{
+  name: 'generate_idea_sparks',
+  parameters: {
+    type: 'object',
+    properties: {
+      ideas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            idea: { type: 'string', description: '1-2 sentence specific, actionable idea' },
+            type: { type: 'string', enum: ['social_post', 'networking', 'business', 'content_creation', 'hobby', 'shopping', 'date_night', 'family_activity', 'personal_growth', 'community'] },
+            connection: { type: 'string', description: 'How this connects to the user\'s life' },
+            effort: { type: 'string', enum: ['5min', '30min', '1hr', 'half_day', 'ongoing'] },
+          },
+          required: ['idea', 'type', 'connection', 'effort'],
+        },
+        minItems: 1,
+        maxItems: 3,
+      },
+      confidence: { type: 'number', minimum: 0, maximum: 1 },
+    },
+    required: ['ideas', 'confidence'],
+  },
+}
+```
+
+**Database Storage:**
+- `email_analyses.idea_sparks` JSONB: Array of idea objects
+- Promoted ideas saved to `email_ideas` table via POST /api/ideas
+
+**Cost:** ~$0.0003 per email (runs in Phase 2, skipped for noise)
+
+---
+
+## Future Analyzer Additions
 
 Future analyzers to add (same pattern):
 - **URLExtractorAnalyzer**: Find and categorize URLs in email
-- **ContentOpportunityAnalyzer**: Detect tweet ideas, networking chances
 - **UnsubscribeAnalyzer**: Suggest newsletters to unsubscribe from
 - **SentimentAnalyzer**: Detect client relationship health
 
@@ -1134,24 +1192,28 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │                                         │                                                │
 │                                         ▼                                                │
 │  PHASE 2: Conditional Analyzers                                                          │
-│              ┌────────────────────────────────────────────┐                              │
-│              │ labels include 'has_event'?               │                              │
-│              │ (Events are no longer a category -        │                              │
-│              │  they're detected via label in any bucket)│                              │
-│              └───────────────────┬────────────────────────┘                              │
-│                      │                                                                   │
-│           ┌─────────┴─────────┐                                                         │
-│           │ YES               │ NO                                                       │
-│           ▼                   ▼                                                          │
-│    ┌─────────────┐     ┌───────────┐                                                    │
-│    │    Event    │     │   Skip    │                                                    │
-│    │  Detector   │     │  (save $) │                                                    │
-│    │             │     └───────────┘                                                    │
-│    │ + locality  │                                                                       │
-│    │ + location  │     Note: ContentDigest extracts CONTENT substance                   │
-│    │ + RSVP info │           EventDetector extracts EVENT logistics                     │
-│    └──────┬──────┘           Both run for event emails - complementary!                 │
-│           │                                                                              │
+│                                                                                          │
+│    ┌─────────────────────────────┐     ┌────────────────────────────────────────────┐    │
+│    │ signal_strength != 'noise'? │     │ labels include 'has_event'?               │    │
+│    └──────────────┬──────────────┘     └───────────────────┬────────────────────────┘    │
+│         ┌────────┴────────┐                     ┌────────┴────────┐                     │
+│         │ YES             │ NO                   │ YES             │ NO                   │
+│         ▼                 ▼                      ▼                 ▼                      │
+│  ┌─────────────┐   ┌───────────┐         ┌─────────────┐   ┌───────────┐               │
+│  │  IdeaSpark  │   │   Skip    │         │    Event    │   │   Skip    │               │
+│  │  (NEW Feb)  │   │  (save $) │         │  Detector   │   │  (save $) │               │
+│  │             │   └───────────┘         │             │   └───────────┘               │
+│  │ + ideas     │                         │ + locality  │                                │
+│  │ + types     │                         │ + location  │                                │
+│  │ + effort    │                         │ + RSVP info │                                │
+│  └──────┬──────┘                         └──────┬──────┘                                │
+│         │                                       │                                        │
+│         └───────────────┬───────────────────────┘                                        │
+│                         │                                                                │
+│              ┌──────────┴──────────┐                                                     │
+│              │  Contact Enricher   │  (runs selectively)                                 │
+│              └──────────┬──────────┘                                                     │
+│                         │                                                                │
 │           ▼                                                                              │
 │  PHASE 3: Save Results                                                                   │
 │  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
@@ -1165,6 +1227,7 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │  │  │   (now multi-action!)   │              │ EventDetector results:  │            │  │
 │  │  │ - client_tagging        │              │ - date_type: 'event'    │            │  │
 │  │  │ - event_detection       │              │ - event_metadata        │            │  │
+│  │  │ - idea_sparks (NEW)     │              │                         │            │  │
 │  │  └─────────────────────────┘              └─────────────────────────┘            │  │
 │  │                                                                                   │  │
 │  │  ┌─────────────────────────┐                                                     │  │
