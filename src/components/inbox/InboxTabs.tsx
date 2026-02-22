@@ -46,6 +46,8 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
 import { Inbox, TrendingUp, Archive, LayoutGrid } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
+import type { EmailCategory } from '@/types/discovery';
+import { EMAIL_CATEGORIES_SET } from '@/types/discovery';
 
 // ─── Content components (lazy-loaded via tab content) ───────────────────────
 import { InboxFeed } from '@/components/inbox/InboxFeed';
@@ -93,6 +95,13 @@ export function InboxTabs() {
   const activeTab: InboxTab = VALID_TABS.includes(normalizedTab as InboxTab)
     ? (normalizedTab as InboxTab)
     : DEFAULT_TAB;
+
+  // ─── Category Filter from URL (set when navigating from CategoryOverview) ──
+  const categoryParam = searchParams.get('category');
+  const initialCategory: EmailCategory | null =
+    categoryParam && EMAIL_CATEGORIES_SET.has(categoryParam)
+      ? (categoryParam as EmailCategory)
+      : null;
 
   // ─── Email Detail Modal State ──────────────────────────────────────────────
   const [selectedEmailId, setSelectedEmailId] = React.useState<string | null>(null);
@@ -187,7 +196,7 @@ export function InboxTabs() {
 
         {/* ── Tab Content ────────────────────────────────────────────────── */}
         <TabsContent value="inbox">
-          <InboxFeed onEmailSelect={handleEmailSelect} />
+          <InboxFeed onEmailSelect={handleEmailSelect} initialCategory={initialCategory} />
         </TabsContent>
 
         <TabsContent value="priority">
@@ -197,10 +206,11 @@ export function InboxTabs() {
         <TabsContent value="categories">
           <CategoryOverview
             onCategorySelect={(category) => {
-              // Switch to inbox tab with the category filter applied
+              // Switch to inbox tab with the category filter applied via URL param
               logger.info('Category selected from overview', { category });
               const params = new URLSearchParams(searchParams.toString());
               params.delete('tab');
+              params.set('category', category);
               const queryString = params.toString();
               const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
               router.replace(newUrl, { scroll: false });
