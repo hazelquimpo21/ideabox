@@ -197,3 +197,10 @@ export type {
   CreateTemplateData,
   UpdateTemplateData,
 } from './useTemplates';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INBOX UI HOOKS (NEW - Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useEmailThumbnails, default as useEmailThumbnailsDefault } from './useEmailThumbnails';
+export type { UseEmailThumbnailsReturn } from './useEmailThumbnails';

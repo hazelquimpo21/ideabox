@@ -26,7 +26,7 @@
 'use client';
 
 import * as React from 'react';
-import { Star, Mail, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp } from 'lucide-react';
+import { Star, Mail, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
 import { CATEGORY_SHORT_LABELS, CATEGORY_ACCENT_COLORS } from '@/types/discovery';
@@ -233,6 +233,11 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   const priorityScore = email.priority_score;
   const showPriority = priorityScore !== null && priorityScore !== undefined && priorityScore >= 70;
 
+  // Event detection — check labels array for 'has_event' or quick_action 'calendar'
+  const emailLabels = email.labels as string[] | null;
+  const isEvent = (emailLabels && Array.isArray(emailLabels) && emailLabels.includes('has_event')) ||
+    quickAction === 'calendar';
+
   /** Isolate star click from row click */
   const handleStarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -293,6 +298,17 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
               <span className="text-[10px] text-muted-foreground/70 hidden sm:inline">
                 {categoryLabel}
               </span>
+            </span>
+          )}
+
+          {/* Event indicator badge */}
+          {isEvent && (
+            <span
+              className="inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300"
+              title="Contains event"
+            >
+              <Calendar className="h-2.5 w-2.5" />
+              <span className="hidden sm:inline">Event</span>
             </span>
           )}
 

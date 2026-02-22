@@ -44,6 +44,7 @@ import {
   CornerUpRight,
   TrendingUp,
   Mail,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -84,6 +85,8 @@ export interface InboxEmailCardProps {
    * inbox the email belongs to. Useful for multi-account users.
    */
   accountMap?: Record<string, string>;
+  /** Optional thumbnail image URL extracted from the email body */
+  thumbnailUrl?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -204,6 +207,7 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
   onToggleStar,
   showCategory = true,
   accountMap,
+  thumbnailUrl,
 }: InboxEmailCardProps) {
   const isUnread = !email.is_read;
   const category = email.category as EmailCategory | null;
@@ -231,6 +235,11 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
     ? CATEGORY_BADGE_COLORS[category] || 'bg-gray-50 text-gray-600'
     : null;
 
+  // Event detection — check labels array for 'has_event' or quick_action 'calendar'
+  const labels = email.labels as string[] | null;
+  const isEvent = (labels && Array.isArray(labels) && labels.includes('has_event')) ||
+    quickAction === 'calendar';
+
   /** Isolate star click from card click */
   const handleStarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -245,153 +254,188 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
         onClick(email);
       }}
       className={cn(
-        'p-3 cursor-pointer transition-all duration-200',
+        'cursor-pointer transition-all duration-200 overflow-hidden',
         'hover:shadow-md hover:border-border',
         'border-l-2',
         isUnread && 'border-l-blue-500 bg-blue-50/30 dark:bg-blue-950/10',
         !isUnread && 'border-l-transparent',
+        isEvent && 'ring-1 ring-green-200 dark:ring-green-800/50',
       )}
     >
-      {/* ── Row 1: Sender + Account + Date + Star ────────────────────── */}
-      <div className="flex items-center gap-2 mb-1.5">
-        {/* Category icon avatar with sender logo overlay */}
-        <div className="relative shrink-0">
-          <CategoryIcon category={email.category as EmailCategory | null} size="sm" />
-          <div className="absolute -bottom-0.5 -right-0.5 bg-background rounded-full p-px">
-            <SenderLogo senderEmail={email.sender_email} size={12} className="rounded-full" />
-          </div>
-        </div>
-
-        {/* Sender name */}
-        <span
-          className={cn(
-            'text-sm truncate',
-            isUnread ? 'font-semibold text-foreground' : 'text-muted-foreground',
-          )}
-        >
-          {senderName}
-        </span>
-
-        {/* Account indicator — shows which inbox received this email */}
-        {accountEmail && (
-          <span
-            className="inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium bg-muted/60 text-muted-foreground/70"
-            title={accountEmail}
-          >
-            <Mail className="h-2 w-2" />
-            {getAccountUsername(accountEmail)}
-          </span>
-        )}
-
-        {/* Spacer */}
-        <span className="flex-1" />
-
-        {/* Date */}
-        <span className="text-xs text-muted-foreground/70 shrink-0 tabular-nums">
-          {formatSmartDate(email.date)}
-        </span>
-
-        {/* Star */}
-        <button
-          type="button"
-          onClick={handleStarClick}
-          className="p-0.5 rounded hover:bg-muted/80 transition-colors shrink-0"
-          aria-label={email.is_starred ? 'Unstar email' : 'Star email'}
-        >
-          <Star
-            className={cn(
-              'h-3.5 w-3.5 transition-colors',
-              email.is_starred
-                ? 'fill-yellow-400 text-yellow-400'
-                : 'text-muted-foreground/30 hover:text-yellow-400',
-            )}
+      {/* ── Image Thumbnail (if available) ────────────────────────────── */}
+      {thumbnailUrl && (
+        <div className="w-full h-28 bg-muted/30 overflow-hidden">
+          <img
+            src={thumbnailUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            loading="lazy"
+            onError={(e) => {
+              // Hide the thumbnail area if the image fails to load
+              (e.target as HTMLImageElement).parentElement!.style.display = 'none';
+            }}
           />
-        </button>
-      </div>
-
-      {/* ── Row 2: Subject + Priority + Category ─────────────────────── */}
-      <div className="flex items-center gap-1.5 mb-1">
-        <h4
-          className={cn(
-            'text-sm truncate flex-1',
-            isUnread ? 'font-medium text-foreground' : 'text-foreground/80',
-          )}
-        >
-          {email.subject || '(No subject)'}
-        </h4>
-
-        {/* Priority badge */}
-        {showPriority && (
-          <span
-            className={cn(
-              'inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums',
-              priorityScore >= 80
-                ? 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300'
-                : 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300',
-            )}
-            title={`Priority: ${priorityScore}`}
-          >
-            <TrendingUp className="h-2.5 w-2.5" />
-            {priorityScore}
-          </span>
-        )}
-
-        {/* Category badge */}
-        {showCategory && categoryLabel && categoryBadgeColor && (
-          <Badge
-            className={cn('text-[10px] shrink-0 border-0 font-medium px-1.5 py-0', categoryBadgeColor)}
-          >
-            {categoryLabel}
-          </Badge>
-        )}
-      </div>
-
-      {/* ── Row 3: AI Gist ───────────────────────────────────────────── */}
-      {gist && (
-        <p className="text-xs text-muted-foreground/70 line-clamp-2 mb-1.5">
-          {gist}
-        </p>
+        </div>
       )}
 
-      {/* ── Row 4: Topics + Action badge ─────────────────────────────── */}
-      {(email.topics?.length || actionConfig) && (
-        <div className="flex items-center gap-1.5 pt-1.5 border-t border-border/30">
-          {/* Topics — show first 3 */}
-          {email.topics && email.topics.length > 0 && (
-            <div className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
-              {email.topics.slice(0, 3).map((topic, i) => (
-                <span
-                  key={`${topic}-${i}`}
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground truncate"
-                >
-                  {topic}
-                </span>
-              ))}
-              {email.topics.length > 3 && (
-                <span className="text-[10px] text-muted-foreground/50">
-                  +{email.topics.length - 3}
-                </span>
-              )}
+      <div className="p-3">
+        {/* ── Row 1: Sender + Event/Account + Date + Star ──────────────── */}
+        <div className="flex items-center gap-2 mb-1.5">
+          {/* Category icon avatar with sender logo overlay */}
+          <div className="relative shrink-0">
+            <CategoryIcon category={email.category as EmailCategory | null} size="sm" />
+            <div className="absolute -bottom-0.5 -right-0.5 bg-background rounded-full p-px">
+              <SenderLogo senderEmail={email.sender_email} size={12} className="rounded-full" />
             </div>
-          )}
+          </div>
 
-          {/* Spacer if no topics */}
-          {(!email.topics || email.topics.length === 0) && <span className="flex-1" />}
+          {/* Sender name */}
+          <span
+            className={cn(
+              'text-sm truncate',
+              isUnread ? 'font-semibold text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            {senderName}
+          </span>
 
-          {/* Quick action badge */}
-          {actionConfig && (
+          {/* Event indicator badge */}
+          {isEvent && (
             <span
-              className={cn(
-                'inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium',
-                actionConfig.colors,
-              )}
+              className="inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300"
+              title="Contains event"
             >
-              <actionConfig.icon className="h-2.5 w-2.5" />
-              {actionConfig.label}
+              <Calendar className="h-2.5 w-2.5" />
+              Event
             </span>
           )}
+
+          {/* Account indicator — shows which inbox received this email */}
+          {accountEmail && (
+            <span
+              className="inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium bg-muted/60 text-muted-foreground/70"
+              title={accountEmail}
+            >
+              <Mail className="h-2 w-2" />
+              {getAccountUsername(accountEmail)}
+            </span>
+          )}
+
+          {/* Image indicator (when no thumbnail shown but email has images) */}
+          {!thumbnailUrl && email.labels && Array.isArray(email.labels) && email.labels.includes('has_images') && (
+            <ImageIcon className="h-3 w-3 shrink-0 text-muted-foreground/50" title="Contains images" />
+          )}
+
+          {/* Spacer */}
+          <span className="flex-1" />
+
+          {/* Date */}
+          <span className="text-xs text-muted-foreground/70 shrink-0 tabular-nums">
+            {formatSmartDate(email.date)}
+          </span>
+
+          {/* Star */}
+          <button
+            type="button"
+            onClick={handleStarClick}
+            className="p-0.5 rounded hover:bg-muted/80 transition-colors shrink-0"
+            aria-label={email.is_starred ? 'Unstar email' : 'Star email'}
+          >
+            <Star
+              className={cn(
+                'h-3.5 w-3.5 transition-colors',
+                email.is_starred
+                  ? 'fill-yellow-400 text-yellow-400'
+                  : 'text-muted-foreground/30 hover:text-yellow-400',
+              )}
+            />
+          </button>
         </div>
-      )}
+
+        {/* ── Row 2: Subject + Priority + Category ─────────────────────── */}
+        <div className="flex items-center gap-1.5 mb-1">
+          <h4
+            className={cn(
+              'text-sm truncate flex-1',
+              isUnread ? 'font-medium text-foreground' : 'text-foreground/80',
+            )}
+          >
+            {email.subject || '(No subject)'}
+          </h4>
+
+          {/* Priority badge */}
+          {showPriority && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums',
+                priorityScore >= 80
+                  ? 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300'
+                  : 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300',
+              )}
+              title={`Priority: ${priorityScore}`}
+            >
+              <TrendingUp className="h-2.5 w-2.5" />
+              {priorityScore}
+            </span>
+          )}
+
+          {/* Category badge */}
+          {showCategory && categoryLabel && categoryBadgeColor && (
+            <Badge
+              className={cn('text-[10px] shrink-0 border-0 font-medium px-1.5 py-0', categoryBadgeColor)}
+            >
+              {categoryLabel}
+            </Badge>
+          )}
+        </div>
+
+        {/* ── Row 3: AI Gist ───────────────────────────────────────────── */}
+        {gist && (
+          <p className="text-xs text-muted-foreground/70 line-clamp-2 mb-1.5">
+            {gist}
+          </p>
+        )}
+
+        {/* ── Row 4: Topics + Action badge ─────────────────────────────── */}
+        {(email.topics?.length || actionConfig || isEvent) && (
+          <div className="flex items-center gap-1.5 pt-1.5 border-t border-border/30">
+            {/* Topics — show first 3 */}
+            {email.topics && email.topics.length > 0 && (
+              <div className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
+                {email.topics.slice(0, 3).map((topic, i) => (
+                  <span
+                    key={`${topic}-${i}`}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground truncate"
+                  >
+                    {topic}
+                  </span>
+                ))}
+                {email.topics.length > 3 && (
+                  <span className="text-[10px] text-muted-foreground/50">
+                    +{email.topics.length - 3}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Spacer if no topics */}
+            {(!email.topics || email.topics.length === 0) && <span className="flex-1" />}
+
+            {/* Quick action badge */}
+            {actionConfig && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium',
+                  actionConfig.colors,
+                )}
+              >
+                <actionConfig.icon className="h-2.5 w-2.5" />
+                {actionConfig.label}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </Card>
   );
 });

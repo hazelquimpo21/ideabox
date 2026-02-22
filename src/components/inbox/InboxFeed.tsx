@@ -39,7 +39,7 @@
 import * as React from 'react';
 import { RefreshCw, Inbox, Sparkles, Search, X, List, LayoutGrid } from 'lucide-react';
 import { Button, Skeleton, Input } from '@/components/ui';
-import { useEmails, useGmailAccounts } from '@/hooks';
+import { useEmails, useGmailAccounts, useEmailThumbnails } from '@/hooks';
 import { CategoryFilterBar } from './CategoryFilterBar';
 import { CategorySummaryPanel } from './CategorySummaryPanel';
 import { InboxEmailRow } from './InboxEmailRow';
@@ -97,7 +97,7 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
     }
   }, [initialCategory]);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [viewMode, setViewMode] = React.useState<ViewMode>('list');
+  const [viewMode, setViewMode] = React.useState<ViewMode>('cards');
 
   // ─── Gmail Accounts (for account indicator) ─────────────────────────────────
   // Builds a map of gmail_account_id → account email so we can show which
@@ -127,6 +127,11 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
     category: activeCategory || 'all',
     limit: 50,
   });
+
+  // ─── Thumbnail Extraction (card mode only) ──────────────────────────────────
+  // Extracts the first meaningful image from email HTML bodies for card thumbnails.
+  const emailIds = React.useMemo(() => emails.map((e) => e.id), [emails]);
+  const { thumbnails } = useEmailThumbnails(emailIds, viewMode === 'cards');
 
   // ─── Client-Side Search Filter ───────────────────────────────────────────────
   // Filters on subject, sender name/email, snippet, and AI gist.
@@ -329,6 +334,7 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
               onToggleStar={handleToggleStar}
               showCategory={showCat}
               accountMap={accountMap}
+              thumbnailUrl={thumbnails.get(email.id) || null}
             />
           ))}
         </div>
