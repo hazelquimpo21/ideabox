@@ -76,6 +76,7 @@ export type {
   ActionExtractionResult,
   ClientTaggingResult,
   EventDetectionResult,
+  IdeaSparkResult,
 } from './useEmailAnalysis';
 
 export { useSidebarData, default as useSidebarDataDefault } from './useSidebarData';
@@ -204,3 +205,24 @@ export type {
 
 export { useEmailThumbnails, default as useEmailThumbnailsDefault } from './useEmailThumbnails';
 export type { UseEmailThumbnailsReturn } from './useEmailThumbnails';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// IDEAS & REVIEW QUEUE HOOKS (NEW - Feb 2026)
+// Supports the two-tier task system: Review Queue + Real Tasks
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useIdeas, default as useIdeasDefault } from './useIdeas';
+export type {
+  UseIdeasOptions,
+  UseIdeasReturn,
+  IdeaItem,
+  IdeasStats,
+} from './useIdeas';
+
+export { useReviewQueue, default as useReviewQueueDefault } from './useReviewQueue';
+export type {
+  UseReviewQueueOptions,
+  UseReviewQueueReturn,
+  ReviewQueueItem,
+  ReviewQueueStats,
+} from './useReviewQueue';

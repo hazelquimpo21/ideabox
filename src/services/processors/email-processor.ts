@@ -15,19 +15,21 @@
  *   - Upsert contact for sender
  *
  * PHASE 1: Core Analyzers (run in parallel)
- *   - Categorizer: Category, summary, quickAction, labels
- *   - ActionExtractor: Detailed action info
+ *   - Categorizer: Category, summary, quickAction, labels, signal_strength
+ *   - ContentDigest: Gist, key points, links
+ *   - ActionExtractor: Detailed action info (tightened for real tasks)
  *   - ClientTagger: Link to known client
  *   - DateExtractor: Extract timeline dates
  *
  * PHASE 2: Conditional Analyzers (run based on Phase 1 results)
- *   - EventDetector: Only when category === 'event'
+ *   - IdeaSpark: 3 creative ideas (NEW Feb 2026, skipped for noise emails)
+ *   - EventDetector: Only when `has_event` label present
  *   - ContactEnricher: Only when contact needs enrichment
  *
  * PHASE 3: Persistence
- *   - Save analysis to email_analyses table
+ *   - Save analysis to email_analyses table (incl. idea_sparks)
  *   - Save extracted dates to extracted_dates table
- *   - Create action record if action detected
+ *   - Create action record if action detected (GATED: skip noise/low-signal)
  *   - Update email category
  *   - Link email to client if matched
  *   - Update contact enrichment if extracted
@@ -79,6 +81,7 @@ import {
   ContactEnricherAnalyzer,
   shouldEnrichContact,
 } from '@/services/analyzers/contact-enricher';
+import { IdeaSparkAnalyzer } from '@/services/analyzers/idea-spark';
 import { ANALYZER_VERSION } from '@/services/analyzers/base-analyzer';
 import { toEmailInput } from '@/services/analyzers/types';
 import { getUserContext } from '@/services/user-context';
@@ -99,6 +102,7 @@ import type {
   EventDetectionResult,
   DateExtractionResult,
   ContactEnrichmentResult,
+  IdeaSparkResult,
   AggregatedAnalysis,
   EmailProcessingResult,
   ExtractedDate,
@@ -224,6 +228,9 @@ export class EmailProcessor {
   /** Contact enricher analyzer - enriches contact info (selective, NEW Jan 2026) */
   private contactEnricher: ContactEnricherAnalyzer;
 
+  /** Idea spark analyzer - generates creative ideas from email content (NEW Feb 2026) */
+  private ideaSpark: IdeaSparkAnalyzer;
+
   /** Sender type detector - classifies direct vs broadcast senders (NEW Jan 2026) */
   private senderTypeDetector: SenderTypeDetector;
 
@@ -246,6 +253,7 @@ export class EmailProcessor {
     this.eventDetector = new EventDetectorAnalyzer();
     this.dateExtractor = new DateExtractorAnalyzer();
     this.contactEnricher = new ContactEnricherAnalyzer();
+    this.ideaSpark = new IdeaSparkAnalyzer();
     this.senderTypeDetector = new SenderTypeDetector();
 
     logger.debug('EmailProcessor initialized', {
@@ -256,6 +264,7 @@ export class EmailProcessor {
       eventDetectorEnabled: this.eventDetector.isEnabled(),
       dateExtractorEnabled: this.dateExtractor.isEnabled(),
       contactEnricherEnabled: this.contactEnricher.isEnabled(),
+      ideaSparkEnabled: this.ideaSpark.isEnabled(),
       senderTypeDetector: 'enabled',
     });
   }
@@ -357,9 +366,20 @@ export class EmailProcessor {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // PHASE 2: Run conditional analyzers based on Phase 1 results
+    // ENHANCED (Feb 2026): Added IdeaSpark analyzer (runs on non-noise emails)
     // ═══════════════════════════════════════════════════════════════════════════
     let eventResult: EventDetectionResult | undefined;
     let contactEnrichmentResult: ContactEnrichmentResult | undefined;
+    let ideaSparkResult: IdeaSparkResult | undefined;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Determine signal strength from categorizer for Phase 2 gating
+    // Used to skip expensive analyzers on noise/low-signal emails
+    // ─────────────────────────────────────────────────────────────────────────
+    const signalStrength = categorizationResult.success
+      ? categorizationResult.data.signalStrength
+      : undefined;
+    const isNoise = signalStrength === 'noise';
 
     // EventDetector: Only run if email has the 'has_event' label
     // REFACTORED (Jan 2026): Now uses label instead of category since
@@ -373,6 +393,25 @@ export class EmailProcessor {
         category: categorizationResult.data.category,
       });
       eventResult = await this.runEventDetector(emailInput, enrichedContext);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // IdeaSpark: Generate creative ideas from email content + user context
+    // NEW (Feb 2026): Runs on ALL non-noise emails. Skips noise to save tokens.
+    // This is the most "creative" analyzer — higher temperature, lateral thinking.
+    // ─────────────────────────────────────────────────────────────────────────
+    if (!isNoise && this.ideaSpark.isEnabled()) {
+      logger.debug('Running IdeaSpark (signal_strength != noise)', {
+        emailId: emailInput.id,
+        signalStrength: signalStrength ?? 'unknown',
+        hasUserContext: !!(enrichedContext.role || enrichedContext.interests?.length),
+      });
+      ideaSparkResult = await this.runIdeaSpark(emailInput, enrichedContext);
+    } else if (isNoise) {
+      logger.debug('Skipping IdeaSpark — email classified as noise', {
+        emailId: emailInput.id,
+        signalStrength,
+      });
     }
 
     // ContactEnricher: Only run if contact needs enrichment
@@ -403,7 +442,8 @@ export class EmailProcessor {
       clientResult,
       dateResult,
       eventResult,
-      contactEnrichmentResult
+      contactEnrichmentResult,
+      ideaSparkResult
     );
 
     // Collect errors from all analyzers
@@ -414,7 +454,8 @@ export class EmailProcessor {
       clientResult,
       dateResult,
       eventResult,
-      contactEnrichmentResult
+      contactEnrichmentResult,
+      ideaSparkResult
     );
 
     // Determine success (at least one core analyzer succeeded)
@@ -433,6 +474,7 @@ export class EmailProcessor {
         actionExtraction: actionResult,
         clientTagging: clientResult,
         dateExtraction: dateResult,
+        ideaSparks: ideaSparkResult,
         eventDetection: eventResult,
         contactEnrichment: contactEnrichmentResult,
       },
@@ -452,12 +494,24 @@ export class EmailProcessor {
         );
 
         // Create action if detected and enabled
-        if (opts.createActions && actionResult.data.hasAction) {
+        // HARD GATE (NEW Feb 2026): Don't create action records for noise/low-signal emails.
+        // This prevents spam and marketing emails from polluting the task list.
+        // The action extractor may still identify "actions" in spam (e.g., "Buy now!"),
+        // but we suppress them at the persistence level.
+        const actionSignalGatePass = !isNoise && signalStrength !== 'low';
+        if (opts.createActions && actionResult.data.hasAction && actionSignalGatePass) {
           await this.createAction(
             emailInput.id,
             context.userId,
             actionResult.data
           );
+        } else if (opts.createActions && actionResult.data.hasAction && !actionSignalGatePass) {
+          logger.info('Action detected but suppressed — email is noise/low signal', {
+            emailId: emailInput.id,
+            actionType: actionResult.data.actionType,
+            signalStrength: signalStrength ?? 'unknown',
+            reason: 'noise_gate',
+          });
         }
 
         // Update email with analysis fields (category, summary, quick_action, labels, topics)
@@ -600,6 +654,9 @@ export class EmailProcessor {
       datesFound: aggregatedAnalysis.dateExtraction?.dates?.length ?? 0,
       hasEvent: aggregatedAnalysis.eventDetection?.hasEvent ?? false,
       contactEnriched: contactEnrichmentResult?.data?.hasEnrichment ?? false,
+      // Idea sparks (NEW Feb 2026)
+      ideasGenerated: aggregatedAnalysis.ideaSparks?.ideas?.length ?? 0,
+      ideaSparkConfidence: aggregatedAnalysis.ideaSparks?.confidence ?? 0,
       tokensUsed: aggregatedAnalysis.totalTokensUsed,
       totalTimeMs: totalTime,
     });
@@ -762,6 +819,51 @@ export class EmailProcessor {
   }
 
   /**
+   * Runs the IdeaSpark analyzer.
+   *
+   * NEW (Feb 2026): Generates 3 creative ideas from email content + user context.
+   * This is a CONDITIONAL analyzer — only runs when signal_strength != 'noise'.
+   * Skipping noise emails saves ~30% of tokens for this analyzer.
+   *
+   * Uses higher temperature (0.7) for creative output — ideas should be
+   * surprising and lateral, not obvious.
+   *
+   * @param email - Email to generate ideas from
+   * @param context - User context (role, interests, projects, etc.) for personalization
+   * @returns Idea spark result with 3 ideas, or failed result
+   */
+  private async runIdeaSpark(
+    email: EmailInput,
+    context: UserContext
+  ): Promise<IdeaSparkResult> {
+    logger.debug('Running IdeaSpark (Phase 2 conditional analyzer)', {
+      emailId: email.id,
+      hasRole: !!context.role,
+      interestsCount: context.interests?.length ?? 0,
+    });
+
+    try {
+      return await this.ideaSpark.analyze(email, context);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      logger.error('IdeaSpark threw exception — ideas not generated for this email', {
+        emailId: email.id,
+        error: errorMessage,
+      });
+
+      return {
+        success: false,
+        data: { hasIdeas: false, ideas: [], confidence: 0 },
+        confidence: 0,
+        tokensUsed: 0,
+        processingTimeMs: 0,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
    * Runs the ContactEnricher analyzer.
    *
    * This is a SELECTIVE analyzer - only runs when:
@@ -838,7 +940,7 @@ export class EmailProcessor {
 
   /**
    * Aggregates results from all analyzers into a single object.
-   * ENHANCED (Jan 2026): Now includes contentDigest.
+   * ENHANCED (Feb 2026): Now includes ideaSparks.
    */
   private aggregateResults(
     categorization: CategorizationResult,
@@ -847,7 +949,8 @@ export class EmailProcessor {
     client: ClientTaggingResult,
     date: DateExtractionResult,
     event?: EventDetectionResult,
-    contactEnrichment?: ContactEnrichmentResult
+    contactEnrichment?: ContactEnrichmentResult,
+    ideaSparks?: IdeaSparkResult
   ): AggregatedAnalysis {
     // Calculate totals
     const totalTokensUsed =
@@ -857,7 +960,8 @@ export class EmailProcessor {
       client.tokensUsed +
       date.tokensUsed +
       (event?.tokensUsed ?? 0) +
-      (contactEnrichment?.tokensUsed ?? 0);
+      (contactEnrichment?.tokensUsed ?? 0) +
+      (ideaSparks?.tokensUsed ?? 0);
 
     const totalProcessingTimeMs =
       categorization.processingTimeMs +
@@ -866,7 +970,8 @@ export class EmailProcessor {
       client.processingTimeMs +
       date.processingTimeMs +
       (event?.processingTimeMs ?? 0) +
-      (contactEnrichment?.processingTimeMs ?? 0);
+      (contactEnrichment?.processingTimeMs ?? 0) +
+      (ideaSparks?.processingTimeMs ?? 0);
 
     return {
       // Include data from successful analyzers only
@@ -876,7 +981,8 @@ export class EmailProcessor {
       clientTagging: client.success ? client.data : undefined,
       dateExtraction: date.success ? date.data : undefined,
 
-      // Conditional analyzers
+      // Conditional/Phase 2 analyzers
+      ideaSparks: ideaSparks?.success ? ideaSparks.data : undefined,
       eventDetection: event?.success ? event.data : undefined,
       contactEnrichment: contactEnrichment?.success
         ? contactEnrichment.data
@@ -891,7 +997,7 @@ export class EmailProcessor {
 
   /**
    * Collects errors from all analyzers.
-   * ENHANCED (Jan 2026): Now includes contentDigest.
+   * ENHANCED (Feb 2026): Now includes ideaSparks.
    */
   private collectErrors(
     categorization: CategorizationResult,
@@ -900,7 +1006,8 @@ export class EmailProcessor {
     client: ClientTaggingResult,
     date: DateExtractionResult,
     event?: EventDetectionResult,
-    contactEnrichment?: ContactEnrichmentResult
+    contactEnrichment?: ContactEnrichmentResult,
+    ideaSparks?: IdeaSparkResult
   ): Array<{ analyzer: string; error: string }> {
     const errors: Array<{ analyzer: string; error: string }> = [];
 
@@ -918,6 +1025,9 @@ export class EmailProcessor {
     }
     if (!date.success && date.error) {
       errors.push({ analyzer: 'DateExtractor', error: date.error });
+    }
+    if (ideaSparks && !ideaSparks.success && ideaSparks.error) {
+      errors.push({ analyzer: 'IdeaSpark', error: ideaSparks.error });
     }
     if (event && !event.success && event.error) {
       errors.push({ analyzer: 'EventDetector', error: event.error });
@@ -1212,6 +1322,20 @@ export class EmailProcessor {
             cost: analysis.eventDetection.cost,
             additional_details: analysis.eventDetection.additionalDetails,
             confidence: analysis.eventDetection.confidence,
+          }
+        : null,
+
+      // Idea sparks (NEW Feb 2026: creative ideas from email content + user context)
+      idea_sparks: analysis.ideaSparks
+        ? {
+            has_ideas: analysis.ideaSparks.hasIdeas,
+            ideas: analysis.ideaSparks.ideas.map(idea => ({
+              idea: idea.idea,
+              type: idea.type,
+              relevance: idea.relevance,
+              confidence: idea.confidence,
+            })),
+            confidence: analysis.ideaSparks.confidence,
           }
         : null,
 

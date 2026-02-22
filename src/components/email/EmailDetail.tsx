@@ -40,6 +40,8 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Lightbulb,
+  Bookmark,
 } from 'lucide-react';
 import type { Email, EmailCategory } from '@/types/database';
 
@@ -477,6 +479,66 @@ function AnalysisSummary({
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Idea Sparks — AI-generated ideas from this email (NEW Feb 2026) */}
+        {analysis?.ideaSparks?.hasIdeas && analysis.ideaSparks.ideas.length > 0 && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+              <span className="text-sm font-medium">Idea Sparks</span>
+              <span className="text-xs text-muted-foreground">
+                ({analysis.ideaSparks.ideas.length} ideas)
+              </span>
+            </div>
+            <div className="space-y-2 pl-6">
+              {analysis.ideaSparks.ideas.map((idea, index) => (
+                <div
+                  key={index}
+                  className="group flex items-start gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
+                    {idea.type.replace(/_/g, ' ')}
+                  </Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm leading-snug">{idea.idea}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{idea.relevance}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    title="Save idea"
+                    onClick={() => {
+                      // Save idea via Ideas API
+                      fetch('/api/ideas', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          idea: idea.idea,
+                          ideaType: idea.type,
+                          relevance: idea.relevance,
+                          confidence: idea.confidence,
+                          emailId: email.id,
+                        }),
+                      }).then(() => {
+                        logger.info('Idea saved from email detail', {
+                          emailId: email.id.substring(0, 8),
+                          ideaType: idea.type,
+                        });
+                      }).catch(err => {
+                        logger.error('Failed to save idea from detail', {
+                          error: err instanceof Error ? err.message : 'Unknown error',
+                        });
+                      });
+                    }}
+                  >
+                    <Bookmark className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

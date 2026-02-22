@@ -13,6 +13,8 @@
  *   C. Today's Schedule — compact timeline of today's events/deadlines
  *   D. Pending Tasks — top 5 pending tasks with quick-complete checkboxes
  *   E. Profile Completion Nudge — shown when profile < 50% complete
+ *   F. Idea Sparks — AI-generated ideas from email content (NEW Feb 2026)
+ *   G. Daily Review — review queue for scan-worthy emails (NEW Feb 2026)
  *
  * Route: /home
  * Redirect: /hub → /home (configured in next.config.mjs)
@@ -28,7 +30,13 @@ import * as React from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout';
 import { ProfileCompletionNudge } from '@/components/hub';
-import { DailyBriefingHeader, TodaySchedule, PendingTasksList } from '@/components/home';
+import {
+  DailyBriefingHeader,
+  TodaySchedule,
+  PendingTasksList,
+  IdeaSparksCard,
+  DailyReviewCard,
+} from '@/components/home';
 import type { ScheduleItem } from '@/components/home';
 import { PriorityCard, PriorityCardSkeleton } from '@/components/shared';
 import {
@@ -40,7 +48,15 @@ import {
   Button,
   Skeleton,
 } from '@/components/ui';
-import { useHubPriorities, useUserContext, useActions, useExtractedDates, useEvents } from '@/hooks';
+import {
+  useHubPriorities,
+  useUserContext,
+  useActions,
+  useExtractedDates,
+  useEvents,
+  useIdeas,
+  useReviewQueue,
+} from '@/hooks';
 import { useAuth } from '@/lib/auth';
 import {
   Target,
@@ -137,6 +153,22 @@ export default function HomePage() {
     toggleComplete,
     stats: taskStats,
   } = useActions({ status: 'pending', sortBy: 'urgency', limit: 5 });
+
+  // ─── Idea Sparks (Section F — NEW Feb 2026) ────────────────────────────
+  const {
+    items: ideaItems,
+    isLoading: isIdeasLoading,
+    saveIdea,
+    dismissIdea,
+  } = useIdeas({ limit: 10 });
+
+  // ─── Daily Review Queue (Section G — NEW Feb 2026) ────────────────────
+  const {
+    items: reviewItems,
+    stats: reviewStats,
+    isLoading: isReviewLoading,
+    markReviewed,
+  } = useReviewQueue({ limit: 8 });
 
   // ─── Extracted Dates for Today's Schedule (Section C) ──────────────────────
   const today = getTodayString();
@@ -333,6 +365,25 @@ export default function HomePage() {
           tasks={pendingTasks}
           isLoading={isTasksLoading}
           onToggleComplete={toggleComplete}
+        />
+      </div>
+
+      {/* ─── Sections F & G: Idea Sparks + Daily Review (NEW Feb 2026) ──── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Section F: Idea Sparks — AI-generated ideas from email content */}
+        <IdeaSparksCard
+          ideas={ideaItems}
+          isLoading={isIdeasLoading}
+          onSave={saveIdea}
+          onDismiss={dismissIdea}
+        />
+
+        {/* Section G: Daily Review — review queue for scan-worthy emails */}
+        <DailyReviewCard
+          items={reviewItems}
+          isLoading={isReviewLoading}
+          onMarkReviewed={markReviewed}
+          totalInQueue={reviewStats?.totalInQueue}
         />
       </div>
 

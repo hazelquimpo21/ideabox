@@ -1,7 +1,7 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** February 2026
-> **Database Migrations:** 001-032
+> **Database Migrations:** 001-033
 
 ## What's Built
 
@@ -15,21 +15,24 @@
 - Zod validation on all API boundaries
 
 ### AI Analysis Pipeline
-- **8 analyzers** running in parallel via EmailProcessor:
+- **9 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
   - Categorizer (12 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
-  - Action Extractor (multi-action support, urgency scoring)
+  - Action Extractor (multi-action support, urgency scoring, tightened for real tasks with new types: pay, submit, register, book)
   - Client Tagger (fuzzy matching, relationship signals)
   - Event Detector (dates, location, RSVP, locality awareness)
   - Date Extractor (deadlines, payments, birthdays, expirations)
   - Content Digest (gist, key points, links)
   - Contact Enricher (company, job title, relationship from signatures)
   - Sender Type Detector (direct vs broadcast classification)
+  - **Idea Spark** (NEW Feb 2026): Generates 3 creative ideas per email by cross-referencing content with user context (role, interests, projects, family, location, season)
 - Pre-filter system saves 20-30% AI tokens (skip no-reply, auto-categorize by domain)
 - Sender pattern learning for future auto-categorization
 - Two-phase execution (core in parallel, then conditional analyzers)
 - Signal strength + reply worthiness scoring for Hub priority (noise emails suppressed at 0.05x)
 - Noise detection labels (sales_pitch, webinar_invite, fake_recognition, mass_outreach, promotional)
 - Action extractor noise rejection (cold outreach, fake awards never generate actions)
+- **Hard noise gate** (NEW Feb 2026): Emails with signal_strength = 'low' or 'noise' never create action records
+- **Two-tier task system** (NEW Feb 2026): Review Queue for scan-worthy emails + Real Tasks for concrete actions
 
 ### Email Sync
 - Full sync + incremental sync via Gmail API
@@ -46,7 +49,7 @@ The app uses a 5-item sidebar navigation (redesigned Feb 2026):
 
 | Nav Item | Route | Description |
 |----------|-------|-------------|
-| **Home** | `/home` | Daily briefing: greeting, top 3 priorities, today's schedule, pending tasks, profile nudge |
+| **Home** | `/home` | Daily briefing: greeting, top 3 priorities, today's schedule, pending tasks, idea sparks, daily review queue, profile nudge |
 | **Inbox** | `/inbox` | Tabbed email view — Categories (discover dashboard), Priority (AI-ranked), Archive |
 | | `/inbox/[category]` | Category deep-dive (email list for a life-bucket) |
 | | `/inbox/[category]/[emailId]` | Single email detail view |

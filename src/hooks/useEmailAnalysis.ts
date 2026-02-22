@@ -100,6 +100,21 @@ export interface EventDetectionResult {
 }
 
 /**
+ * Idea spark result from the IdeaSpark analyzer (NEW Feb 2026).
+ * Contains 3 creative ideas generated from email content + user context.
+ */
+export interface IdeaSparkResult {
+  hasIdeas: boolean;
+  ideas: {
+    idea: string;
+    type: string;
+    relevance: string;
+    confidence: number;
+  }[];
+  confidence: number;
+}
+
+/**
  * Normalized analysis data structure.
  */
 export interface NormalizedAnalysis {
@@ -107,6 +122,7 @@ export interface NormalizedAnalysis {
   actionExtraction?: ActionExtractionResult;
   clientTagging?: ClientTaggingResult;
   eventDetection?: EventDetectionResult;
+  ideaSparks?: IdeaSparkResult; // NEW Feb 2026
   tokensUsed?: number;
   processingTimeMs?: number;
   analyzerVersion?: string;
@@ -206,6 +222,27 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       locationType: normalized.eventDetection.locationType,
       hasEventSummary: !!normalized.eventDetection.eventSummary,
       keyPointsCount: normalized.eventDetection.keyPoints?.length || 0,
+    });
+  }
+
+  // Normalize idea sparks (NEW Feb 2026)
+  if (raw.idea_sparks) {
+    const sparks = raw.idea_sparks as Record<string, unknown>;
+    const rawIdeas = (sparks.ideas as Array<Record<string, unknown>>) || [];
+    normalized.ideaSparks = {
+      hasIdeas: (sparks.has_ideas as boolean) || (sparks.hasIdeas as boolean) || false,
+      ideas: rawIdeas.map(idea => ({
+        idea: (idea.idea as string) || '',
+        type: (idea.type as string) || 'personal_growth',
+        relevance: (idea.relevance as string) || '',
+        confidence: (idea.confidence as number) || 0.5,
+      })),
+      confidence: (sparks.confidence as number) || 0,
+    };
+    logger.debug('Normalized idea sparks data', {
+      hasIdeas: normalized.ideaSparks.hasIdeas,
+      ideaCount: normalized.ideaSparks.ideas.length,
+      confidence: normalized.ideaSparks.confidence,
     });
   }
 
