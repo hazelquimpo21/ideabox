@@ -413,6 +413,51 @@ This addresses the user's core request: "see email detail in modal before going 
 
 ---
 
+## Inbox UI Redesign v2 (February 2026)
+
+### Summary
+
+The inbox UI has been redesigned with a focus on "at a glance" readability.
+All changes are in the `src/components/inbox/` directory and `src/types/discovery.ts`.
+
+### Key Changes
+
+| Component | What Changed |
+|-----------|-------------|
+| **InboxEmailRow** | Added 3-row layout: sender/category/date → subject/priority badge → gist/action badge/signal dot. Unread emails now have a left blue accent border. Quick action badges (Reply, Review, Schedule, etc.) inline. Priority score badge for high-priority emails. Signal strength indicator dot. |
+| **InboxFeed** | Added search clear button. Search results indicator. Section counts in headers. Improved spacing and visual hierarchy. |
+| **CategoryFilterBar** | Added logger. `aria-pressed` for accessibility. `shadow-sm` on active pills. Transition animation. Uses centralized constants. |
+| **CategorySummaryPanel** | Added logger. `aria-pressed` and `role="complementary"`. Active state ring indicator. Uses centralized constants. |
+| **PriorityEmailList** | Now fetches `gist`, `quick_action`, `signal_strength` fields. Rows show AI gist preview and quick action icon. Uses centralized constants. |
+| **InboxTabs** | Increased tab spacing (`mb-6`). Comprehensive logging. Cleaned up comments. |
+| **Inbox page** | Updated JSDoc to reflect current tab structure. |
+
+### Centralized Constants (New in discovery.ts)
+
+Previously, category labels, colors, and ordering were duplicated across 4 components.
+Now centralized in `src/types/discovery.ts`:
+
+| Export | Purpose |
+|--------|---------|
+| `CATEGORY_SHORT_LABELS` | Singular short labels ("Client", "Work", etc.) |
+| `CATEGORY_SHORT_LABELS_PLURAL` | Plural labels for filter pills ("Clients", "Newsletters") |
+| `CATEGORY_ACCENT_COLORS` | Single `bg-*` Tailwind class per category |
+| `CATEGORY_BADGE_COLORS` | Full badge styling (bg + text + dark mode) |
+| `CATEGORIES_DISPLAY_ORDER` | Ordered array for filter bars and sidebars |
+
+### Files Modified
+
+- `src/components/inbox/InboxEmailRow.tsx` — enhanced 3-row layout with at-a-glance metadata
+- `src/components/inbox/InboxFeed.tsx` — cleaner layout, search UX, section headers
+- `src/components/inbox/InboxTabs.tsx` — spacing, logging, documentation
+- `src/components/inbox/CategoryFilterBar.tsx` — accessibility, centralized constants
+- `src/components/inbox/CategorySummaryPanel.tsx` — accessibility, centralized constants
+- `src/components/inbox/PriorityEmailList.tsx` — gist preview, action icons, centralized constants
+- `src/app/(auth)/inbox/page.tsx` — updated documentation
+- `src/types/discovery.ts` — new centralized display constants
+
+---
+
 ## Remaining Work
 
 ### P1-B: Client-Side Data Cache

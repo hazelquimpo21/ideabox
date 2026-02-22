@@ -1,38 +1,69 @@
 /**
  * InboxEmailRow Component
  *
- * Clean, scannable email row inspired by Gmail/Spark Mail.
- * Shows sender, subject, snippet, category badge, time, and star.
- * Designed for rapid scanning of large email lists.
+ * Enhanced email row designed for rapid "at a glance" scanning.
+ * Each row surfaces the most important metadata inline so users
+ * can triage without opening the email:
+ *
+ *   - AI gist (one-line summary) replaces raw snippet
+ *   - Quick-action badge (respond, review, calendar, etc.)
+ *   - Priority score indicator for high-priority emails
+ *   - Signal strength dot (high/medium/low/noise)
+ *   - Unread state with subtle left accent border
+ *
+ * Layout (3-row structure):
+ *   Row 1: [Avatar] [Sender] [Category pill] ··· [Date]
+ *   Row 2: [Subject]                          ··· [Priority badge]
+ *   Row 3: [Gist]  [Action badge] [Signal dot]    [Star]
+ *
+ * Performance: Wrapped in React.memo to prevent re-renders when
+ * sibling rows change. Star click is isolated via stopPropagation.
  *
  * @module components/inbox/InboxEmailRow
- * @since February 2026
+ * @since February 2026 — Inbox UI Redesign v2
  */
 
 'use client';
 
 import * as React from 'react';
-import { Star } from 'lucide-react';
+import { Star, Zap, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+import { createLogger } from '@/lib/utils/logger';
+import { CATEGORY_SHORT_LABELS, CATEGORY_ACCENT_COLORS } from '@/types/discovery';
 import type { EmailCategory } from '@/types/discovery';
-import type { Email } from '@/types/database';
+import type { Email, QuickActionDb } from '@/types/database';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('InboxEmailRow');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface InboxEmailRowProps {
+  /** The email object to render */
   email: Email;
+  /** Callback when the row is clicked (opens detail view) */
   onClick: (email: Email) => void;
+  /** Callback when star is toggled */
   onToggleStar?: (email: Email) => void;
+  /** Whether to show the category indicator (default: true) */
   showCategory?: boolean;
+  /** Compact mode hides gist line and action badges (default: false) */
   compact?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HELPERS
+// DATE FORMATTING
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Formats a date string into a compact, human-friendly relative time.
+ * Progressively coarsens: "now" → "5m" → "3h" → "Yesterday" → "Mon" → "Jan 15" → "Jan 15, '24"
+ */
 function formatSmartDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -52,44 +83,90 @@ function formatSmartDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
-/** Short category labels for inline badges */
-const SHORT_LABELS: Record<string, string> = {
-  client_pipeline: 'Client',
-  business_work_general: 'Work',
-  family_kids_school: 'School',
-  family_health_appointments: 'Health',
-  personal_friends_family: 'Personal',
-  finance: 'Finance',
-  travel: 'Travel',
-  shopping: 'Shopping',
-  local: 'Local',
-  newsletters_general: 'Newsletter',
-  news_politics: 'News',
-  product_updates: 'Updates',
+// ═══════════════════════════════════════════════════════════════════════════════
+// CATEGORY DISPLAY — uses centralized constants from @/types/discovery
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// QUICK ACTION DISPLAY CONFIG
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Display configuration for each AI-suggested quick action.
+ * icon: Lucide icon component, label: short text, colors: badge styling.
+ * The `none` action is excluded — we only show actionable badges.
+ */
+const QUICK_ACTION_CONFIG: Record<string, {
+  icon: React.ElementType;
+  label: string;
+  colors: string;
+}> = {
+  respond: {
+    icon: MessageSquare,
+    label: 'Reply',
+    colors: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300',
+  },
+  review: {
+    icon: Eye,
+    label: 'Review',
+    colors: 'bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300',
+  },
+  calendar: {
+    icon: Calendar,
+    label: 'Schedule',
+    colors: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300',
+  },
+  follow_up: {
+    icon: CornerUpRight,
+    label: 'Follow up',
+    colors: 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300',
+  },
+  save: {
+    icon: Bookmark,
+    label: 'Save',
+    colors: 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300',
+  },
+  archive: {
+    icon: Archive,
+    label: 'Archive',
+    colors: 'bg-slate-50 text-slate-600 dark:bg-slate-900/30 dark:text-slate-400',
+  },
+  unsubscribe: {
+    icon: BellOff,
+    label: 'Unsub',
+    colors: 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-300',
+  },
 };
 
-/** Category dot colors for visual scanning */
-const DOT_COLORS: Record<string, string> = {
-  client_pipeline: 'bg-blue-500',
-  business_work_general: 'bg-violet-500',
-  family_kids_school: 'bg-amber-500',
-  family_health_appointments: 'bg-rose-500',
-  personal_friends_family: 'bg-pink-500',
-  finance: 'bg-green-600',
-  travel: 'bg-sky-500',
-  shopping: 'bg-orange-500',
-  local: 'bg-teal-500',
-  newsletters_general: 'bg-emerald-500',
-  news_politics: 'bg-slate-500',
-  product_updates: 'bg-indigo-500',
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL STRENGTH DISPLAY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tiny colored dot indicating AI-assessed signal strength.
+ * High = green, medium = yellow, low = slate, noise = hidden.
+ */
+const SIGNAL_DOT_COLORS: Record<string, string> = {
+  high: 'bg-green-500',
+  medium: 'bg-yellow-500',
+  low: 'bg-slate-400',
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// AVATAR HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Extracts the first character for the avatar circle */
 function getSenderInitial(email: Email): string {
   if (email.sender_name) return email.sender_name.charAt(0).toUpperCase();
   return email.sender_email.charAt(0).toUpperCase();
 }
 
-function getSenderAvatarColor(email: Email) {
+/**
+ * Deterministic avatar background color based on sender email hash.
+ * Ensures the same sender always gets the same color across sessions.
+ */
+function getSenderAvatarColor(email: Email): string {
   const str = email.sender_email || email.sender_name || '';
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -121,13 +198,31 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
 }: InboxEmailRowProps) {
   const isUnread = !email.is_read;
   const category = email.category as EmailCategory | null;
-  const dotColor = category ? DOT_COLORS[category] : 'bg-gray-400';
-  const categoryLabel = category ? SHORT_LABELS[category] : null;
+  const dotColor = category ? CATEGORY_ACCENT_COLORS[category] || 'bg-gray-400' : 'bg-gray-400';
+  const categoryLabel = category ? CATEGORY_SHORT_LABELS[category] || null : null;
   const senderName = email.sender_name || email.sender_email.split('@')[0];
+
+  // Prefer AI gist over raw summary/snippet for the preview line
   const gist = email.gist || email.summary || email.snippet;
 
+  // Quick action badge — only show actionable ones (skip 'none')
+  const quickAction = email.quick_action as QuickActionDb | null;
+  const actionConfig = quickAction && quickAction !== 'none'
+    ? QUICK_ACTION_CONFIG[quickAction]
+    : null;
+
+  // Signal strength indicator
+  const signalStrength = email.signal_strength;
+  const signalDot = signalStrength ? SIGNAL_DOT_COLORS[signalStrength] : null;
+
+  // Priority score — only highlight for high-priority emails (≥70)
+  const priorityScore = email.priority_score;
+  const showPriority = priorityScore !== null && priorityScore !== undefined && priorityScore >= 70;
+
+  /** Isolate star click from row click */
   const handleStarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    logger.debug('Star toggled', { emailId: email.id, newState: !email.is_starred });
     onToggleStar?.(email);
   };
 
@@ -136,25 +231,28 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
       type="button"
       onClick={() => onClick(email)}
       className={cn(
-        'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
-        'hover:bg-muted/50 border-b border-border/40',
-        'focus-visible:outline-none focus-visible:bg-muted/50',
-        isUnread && 'bg-blue-50/40 dark:bg-blue-950/10',
+        'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors',
+        'hover:bg-muted/50 focus-visible:outline-none focus-visible:bg-muted/50',
+        'border-b border-border/40',
+        // Unread: subtle left accent + tinted background
+        isUnread && 'bg-blue-50/30 dark:bg-blue-950/10 border-l-2 border-l-blue-500',
+        !isUnread && 'border-l-2 border-l-transparent',
       )}
     >
-      {/* Sender Avatar */}
+      {/* ── Sender Avatar ────────────────────────────────────────────── */}
       <div
         className={cn(
-          'shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold',
+          'shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5',
           getSenderAvatarColor(email),
         )}
+        aria-hidden="true"
       >
         {getSenderInitial(email)}
       </div>
 
-      {/* Main Content */}
+      {/* ── Main Content (3 rows) ────────────────────────────────────── */}
       <div className="flex-1 min-w-0">
-        {/* Row 1: Sender + Date */}
+        {/* Row 1: Sender + Category + Date */}
         <div className="flex items-center gap-2 mb-0.5">
           <span
             className={cn(
@@ -168,23 +266,32 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
           {/* Category dot + label */}
           {showCategory && categoryLabel && (
             <span className="flex items-center gap-1 shrink-0">
-              <span className={cn('w-1.5 h-1.5 rounded-full', dotColor)} />
-              <span className="text-[10px] text-muted-foreground hidden sm:inline">
+              <span className={cn('w-1.5 h-1.5 rounded-full', dotColor)} aria-hidden="true" />
+              <span className="text-[10px] text-muted-foreground/70 hidden sm:inline">
                 {categoryLabel}
               </span>
             </span>
           )}
 
-          {/* Spacer */}
+          {/* Signal strength dot */}
+          {signalDot && (
+            <span
+              className={cn('w-1.5 h-1.5 rounded-full shrink-0', signalDot)}
+              title={`Signal: ${signalStrength}`}
+              aria-label={`Signal strength: ${signalStrength}`}
+            />
+          )}
+
+          {/* Spacer pushes date to far right */}
           <span className="flex-1" />
 
           {/* Date */}
-          <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+          <span className="text-xs text-muted-foreground/70 shrink-0 tabular-nums">
             {formatSmartDate(email.date)}
           </span>
         </div>
 
-        {/* Row 2: Subject */}
+        {/* Row 2: Subject + Priority badge */}
         <div className="flex items-center gap-2">
           <p
             className={cn(
@@ -194,30 +301,64 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
           >
             {email.subject || '(No subject)'}
           </p>
+
+          {/* Priority badge — only for high-priority emails */}
+          {showPriority && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums',
+                priorityScore >= 80
+                  ? 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300'
+                  : 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300',
+              )}
+              title={`Priority score: ${priorityScore}`}
+            >
+              <TrendingUp className="h-2.5 w-2.5" />
+              {priorityScore}
+            </span>
+          )}
         </div>
 
-        {/* Row 3: Snippet/Gist */}
-        {!compact && gist && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
-            {gist}
-          </p>
+        {/* Row 3: Gist + Action badge */}
+        {!compact && (
+          <div className="flex items-center gap-2 mt-0.5">
+            {/* AI gist line — the key "at a glance" feature */}
+            {gist && (
+              <p className="text-xs text-muted-foreground/70 truncate flex-1">
+                {gist}
+              </p>
+            )}
+
+            {/* Quick action badge */}
+            {actionConfig && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium',
+                  actionConfig.colors,
+                )}
+              >
+                <actionConfig.icon className="h-2.5 w-2.5" />
+                <span className="hidden sm:inline">{actionConfig.label}</span>
+              </span>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Star */}
-      <div className="shrink-0 flex items-center">
+      {/* ── Star Button ──────────────────────────────────────────────── */}
+      <div className="shrink-0 flex items-center mt-0.5">
         <button
           type="button"
           onClick={handleStarClick}
           className="p-1 rounded hover:bg-muted/80 transition-colors"
-          aria-label={email.is_starred ? 'Unstar' : 'Star'}
+          aria-label={email.is_starred ? 'Unstar email' : 'Star email'}
         >
           <Star
             className={cn(
-              'h-4 w-4',
+              'h-4 w-4 transition-colors',
               email.is_starred
                 ? 'fill-yellow-400 text-yellow-400'
-                : 'text-muted-foreground/40 hover:text-yellow-400',
+                : 'text-muted-foreground/30 hover:text-yellow-400',
             )}
           />
         </button>
