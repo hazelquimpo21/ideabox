@@ -98,24 +98,19 @@ function getCategoryBadge(category: EmailCategory | null) {
       icon: React.ReactNode;
     }
   > = {
-    client_pipeline: {
+    clients: {
       variant: 'destructive',
       label: 'Client',
       icon: <AlertCircle className="h-3 w-3" />,
     },
-    business_work_general: {
+    work: {
       variant: 'default',
       label: 'Work',
       icon: <Mail className="h-3 w-3" />,
     },
-    family_kids_school: {
+    family: {
       variant: 'default',
-      label: 'School',
-      icon: <Calendar className="h-3 w-3" />,
-    },
-    family_health_appointments: {
-      variant: 'default',
-      label: 'Health',
+      label: 'Family',
       icon: <Calendar className="h-3 w-3" />,
     },
     personal_friends_family: {
@@ -143,9 +138,14 @@ function getCategoryBadge(category: EmailCategory | null) {
       label: 'Local',
       icon: <Calendar className="h-3 w-3" />,
     },
-    newsletters_general: {
+    newsletters_creator: {
       variant: 'secondary',
       label: 'Newsletter',
+      icon: <Newspaper className="h-3 w-3" />,
+    },
+    newsletters_industry: {
+      variant: 'secondary',
+      label: 'Industry Newsletter',
       icon: <Newspaper className="h-3 w-3" />,
     },
     news_politics: {
@@ -157,6 +157,11 @@ function getCategoryBadge(category: EmailCategory | null) {
       variant: 'outline',
       label: 'Updates',
       icon: <Archive className="h-3 w-3" />,
+    },
+    other: {
+      variant: 'outline',
+      label: 'Other',
+      icon: <Mail className="h-3 w-3" />,
     },
   };
   return (
@@ -171,9 +176,9 @@ function getCategoryBadge(category: EmailCategory | null) {
 /** Category filter buttons shown above the archive list. */
 const ARCHIVE_CATEGORIES = [
   { value: 'all', label: 'All' },
-  { value: 'client_pipeline', label: 'Client' },
-  { value: 'business_work_general', label: 'Work' },
-  { value: 'newsletters_general', label: 'Newsletters' },
+  { value: 'clients', label: 'Client' },
+  { value: 'work', label: 'Work' },
+  { value: 'newsletters_creator', label: 'Newsletters' },
   { value: 'news_politics', label: 'News' },
   { value: 'product_updates', label: 'Updates' },
   { value: 'shopping', label: 'Shopping' },

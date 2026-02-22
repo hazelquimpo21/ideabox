@@ -70,11 +70,11 @@ export interface CategoryFilterBarProps {
  * Inactive: subtle hover tint matching the category color family.
  */
 const PILL_COLORS: Record<string, { active: string; inactive: string }> = {
-  client_pipeline: {
+  clients: {
     active: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-800',
     inactive: 'hover:bg-blue-50/80 dark:hover:bg-blue-950/20',
   },
-  business_work_general: {
+  work: {
     active: 'bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-900/50 dark:text-violet-200 dark:border-violet-800',
     inactive: 'hover:bg-violet-50/80 dark:hover:bg-violet-950/20',
   },
@@ -82,13 +82,9 @@ const PILL_COLORS: Record<string, { active: string; inactive: string }> = {
     active: 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/50 dark:text-pink-200 dark:border-pink-800',
     inactive: 'hover:bg-pink-50/80 dark:hover:bg-pink-950/20',
   },
-  family_kids_school: {
+  family: {
     active: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-800',
     inactive: 'hover:bg-amber-50/80 dark:hover:bg-amber-950/20',
-  },
-  family_health_appointments: {
-    active: 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/50 dark:text-rose-200 dark:border-rose-800',
-    inactive: 'hover:bg-rose-50/80 dark:hover:bg-rose-950/20',
   },
   finance: {
     active: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/50 dark:text-green-200 dark:border-green-800',
@@ -106,9 +102,13 @@ const PILL_COLORS: Record<string, { active: string; inactive: string }> = {
     active: 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/50 dark:text-teal-200 dark:border-teal-800',
     inactive: 'hover:bg-teal-50/80 dark:hover:bg-teal-950/20',
   },
-  newsletters_general: {
+  newsletters_creator: {
     active: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-800',
     inactive: 'hover:bg-emerald-50/80 dark:hover:bg-emerald-950/20',
+  },
+  newsletters_industry: {
+    active: 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-900/50 dark:text-cyan-200 dark:border-cyan-800',
+    inactive: 'hover:bg-cyan-50/80 dark:hover:bg-cyan-950/20',
   },
   news_politics: {
     active: 'bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-800/50 dark:text-slate-200 dark:border-slate-700',
@@ -117,6 +117,10 @@ const PILL_COLORS: Record<string, { active: string; inactive: string }> = {
   product_updates: {
     active: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-200 dark:border-indigo-800',
     inactive: 'hover:bg-indigo-50/80 dark:hover:bg-indigo-950/20',
+  },
+  other: {
+    active: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800/50 dark:text-gray-200 dark:border-gray-700',
+    inactive: 'hover:bg-gray-50/80 dark:hover:bg-gray-950/20',
   },
 };
 

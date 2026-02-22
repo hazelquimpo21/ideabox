@@ -27,10 +27,11 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * Categories are organized into four groups matching the filter bar order:
- *   1. Work — client_pipeline, business_work_general
- *   2. Personal — personal_friends_family, family_kids_school, family_health_appointments
+ *   1. Work — clients, work
+ *   2. Personal — personal_friends_family, family
  *   3. Life Admin — finance, travel, shopping, local
- *   4. Information — newsletters_general, news_politics, product_updates
+ *   4. Information — newsletters_creator, newsletters_industry, news_politics, product_updates
+ *   5. Other — other
  *
  * Groups with zero emails are hidden entirely.
  *
@@ -81,11 +82,11 @@ interface CategoryGroup {
 const CATEGORY_GROUPS: CategoryGroup[] = [
   {
     label: 'Work',
-    categories: ['client_pipeline', 'business_work_general'],
+    categories: ['clients', 'work'],
   },
   {
     label: 'Personal',
-    categories: ['personal_friends_family', 'family_kids_school', 'family_health_appointments'],
+    categories: ['personal_friends_family', 'family'],
   },
   {
     label: 'Life Admin',
@@ -93,7 +94,11 @@ const CATEGORY_GROUPS: CategoryGroup[] = [
   },
   {
     label: 'Information',
-    categories: ['newsletters_general', 'news_politics', 'product_updates'],
+    categories: ['newsletters_creator', 'newsletters_industry', 'news_politics', 'product_updates'],
+  },
+  {
+    label: 'Other',
+    categories: ['other'],
   },
 ];
 

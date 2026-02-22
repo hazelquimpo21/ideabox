@@ -23,7 +23,7 @@
  *
  * <Sidebar
  *   currentPath="/inbox"
- *   categoryCounts={{ client_pipeline: 5, newsletters_general: 12 }}
+ *   categoryCounts={{ clients: 5, newsletters_creator: 12 }}
  *   clients={[{ id: '1', name: 'Acme Corp' }]}
  *   isOpen={sidebarOpen}
  *   onClose={() => setSidebarOpen(false)}
@@ -79,18 +79,19 @@ const logger = createLogger('Sidebar');
  * Categories now represent what part of life the email touches.
  */
 export type EmailCategory =
-  | 'newsletters_general'           // Substacks, digests
+  | 'newsletters_creator'           // Substacks, digests
+  | 'newsletters_industry'          // Industry-specific newsletters
   | 'news_politics'                 // News, political updates
   | 'product_updates'               // Tech products, SaaS
   | 'local'                         // Community, local events
   | 'shopping'                      // Orders, shipping, deals
   | 'travel'                        // Flights, hotels, trips
   | 'finance'                       // Bills, banking
-  | 'family_kids_school'            // School, kid activities
-  | 'family_health_appointments'    // Health, appointments
-  | 'client_pipeline'               // Client work
-  | 'business_work_general'         // Work, professional
-  | 'personal_friends_family';      // Friends, family
+  | 'family'                        // School, kids, health, appointments
+  | 'clients'                       // Client work
+  | 'work'                          // Work, professional
+  | 'personal_friends_family'       // Friends, family
+  | 'other';                        // Uncategorized
 
 /**
  * Category counts for sidebar badges.
@@ -238,26 +239,26 @@ interface CategoryItem {
 const categoryItems: CategoryItem[] = [
   {
     label: 'Client Work',
-    category: 'client_pipeline',        // was 'action_required'
+    category: 'clients',
     icon: AlertCircle,
     color: 'text-red-500',
   },
   {
     label: 'Work',
-    category: 'business_work_general',
+    category: 'work',
     icon: Building2,
     color: 'text-purple-500',
   },
   // Note: Events moved to dedicated /events page and main nav (Jan 2026)
   {
     label: 'Newsletters',
-    category: 'newsletters_general',    // was 'newsletter'
+    category: 'newsletters_creator',
     icon: Newspaper,
     color: 'text-blue-500',
   },
   {
     label: 'Shopping',
-    category: 'shopping',               // was 'promo'
+    category: 'shopping',
     icon: Tag,
     color: 'text-orange-500',
   },

@@ -235,18 +235,19 @@ export class DiscoveryBuilderService {
     // not by action type. Actions are tracked separately.
     // ─────────────────────────────────────────────────────────────────────────
     const categoryOrder: EmailCategory[] = [
-      'client_pipeline',              // Direct client work - highest priority
-      'business_work_general',        // Professional/work emails
-      'family_kids_school',           // Kids, school, activities
-      'family_health_appointments',   // Health, medical, appointments
+      'clients',                      // Direct client work - highest priority
+      'work',                         // Professional/work emails
+      'family',                       // Family, kids, school, health, appointments
       'finance',                      // Bills, banking, payments
       'travel',                       // Flights, hotels, trips
       'shopping',                     // Orders, shipping, deals
       'local',                        // Community, local events
       'personal_friends_family',      // Friends, family, social
-      'newsletters_general',          // Substacks, digests
+      'newsletters_creator',          // Substacks, digests
+      'newsletters_industry',         // Industry newsletters
       'news_politics',                // News outlets, political
       'product_updates',              // Tech products, SaaS updates
+      'other',                        // Miscellaneous
     ];
 
     logger.debug('Building summaries for categories', {
@@ -306,10 +307,10 @@ export class DiscoveryBuilderService {
         });
       }
 
-      // Track urgent count for work-related categories (client_pipeline, business_work_general)
+      // Track urgent count for work-related categories (clients, work)
       // REFACTORED (Jan 2026): Changed from action_required to work categories
       if (
-        (email.category === 'client_pipeline' || email.category === 'business_work_general') &&
+        (email.category === 'clients' || email.category === 'work') &&
         email.actionUrgency &&
         email.actionUrgency >= 7
       ) {
@@ -366,13 +367,13 @@ export class DiscoveryBuilderService {
     // Add category-specific fields
     // REFACTORED (Jan 2026): Show urgent count for work categories
     if (
-      (category === 'client_pipeline' || category === 'business_work_general') &&
+      (category === 'clients' || category === 'work') &&
       aggregate.urgentCount > 0
     ) {
       summary.urgentCount = aggregate.urgentCount;
     }
 
-    // Events can now appear in any category (local, family_kids_school, etc.)
+    // Events can now appear in any category (local, family, etc.)
     // Show upcoming event if detected for categories that commonly have events
     if (aggregate.upcomingEvent) {
       summary.upcomingEvent = aggregate.upcomingEvent;
@@ -500,12 +501,12 @@ export class DiscoveryBuilderService {
 
     for (const aggregate of clientAggregates.values()) {
       // ─────────────────────────────────────────────────────────────────────────
-      // Count emails needing attention (client_pipeline replaces action_required)
+      // Count emails needing attention (clients replaces action_required)
       // REFACTORED (Jan 2026): Actions are now tracked via urgency score, not category.
-      // We count client_pipeline emails with high urgency as "needing attention".
+      // We count clients emails with high urgency as "needing attention".
       // ─────────────────────────────────────────────────────────────────────────
       const actionRequiredCount = aggregate.emails.filter(
-        (e) => e.category === 'client_pipeline' && (e.actionUrgency ?? 0) >= 5
+        (e) => e.category === 'clients' && (e.actionUrgency ?? 0) >= 5
       ).length;
 
       logger.debug('Client aggregate action count', {

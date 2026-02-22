@@ -442,9 +442,9 @@ export interface CategorizationData {
    * Primary email category (LIFE BUCKET).
    * What area of the user's life does this email touch?
    *
-   * Categories: newsletters_general, news_politics, product_updates, local,
-   * shopping, travel, finance, family_kids_school, family_health_appointments,
-   * client_pipeline, business_work_general, personal_friends_family
+   * Categories: newsletters_creator, newsletters_industry, news_politics,
+   * product_updates, local, shopping, travel, finance, family,
+   * clients, work, personal_friends_family, other
    */
   category: EmailCategory;
 

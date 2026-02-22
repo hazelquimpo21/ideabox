@@ -19,8 +19,8 @@
  * EXAMPLES
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Get intelligence for client_pipeline category:
- *   GET /api/categories/client_pipeline/intelligence
+ * Get intelligence for clients category:
+ *   GET /api/categories/clients/intelligence
  *
  * @module app/api/categories/[category]/intelligence/route
  */
@@ -55,18 +55,19 @@ interface CategoryIntelligenceResponse {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const VALID_CATEGORIES: EmailCategory[] = [
-  'newsletters_general',
+  'newsletters_creator',
+  'newsletters_industry',
   'news_politics',
   'product_updates',
   'local',
   'shopping',
   'travel',
   'finance',
-  'family_kids_school',
-  'family_health_appointments',
-  'client_pipeline',
-  'business_work_general',
+  'family',
+  'clients',
+  'work',
   'personal_friends_family',
+  'other',
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -432,7 +433,7 @@ function generateBriefing(params: {
   }
 
   // Category-specific additions
-  if (category === 'client_pipeline' && topSenders.length > 0) {
+  if (category === 'clients' && topSenders.length > 0) {
     const waitingClients = topSenders.filter((s) =>
       needsAttention.some((n) => n.senderName === s.name)
     ).length;

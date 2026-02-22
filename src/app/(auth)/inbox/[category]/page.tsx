@@ -13,7 +13,7 @@
  * emails with `useEmails({ category })` directly.
  *
  * Dynamic Params:
- *   - category: Email category slug (e.g., 'client_pipeline', 'newsletters_general')
+ *   - category: Email category slug (e.g., 'clients', 'newsletters_creator')
  *
  * @module app/(auth)/inbox/[category]/page
  * @since February 2026

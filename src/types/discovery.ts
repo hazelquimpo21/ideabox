@@ -19,24 +19,28 @@
  * Categories are life-bucket focused (what part of life this email touches).
  *
  * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
- * Actions are now tracked separately via the `actions` table.
+ * REFACTORED (Feb 2026): Renamed client_pipeline→clients, business_work_general→work,
+ *   merged family_kids_school+family_health_appointments→family,
+ *   split newsletters_general→newsletters_creator+newsletters_industry,
+ *   added 'other' catch-all.
  *
  * The AI analyzer uses human-eye inference to categorize - it considers sender
  * context, domain patterns, and content to make smart categorization decisions.
  */
 export type EmailCategory =
-  | 'newsletters_general'           // Substacks, digests, curated content
+  | 'clients'                       // Direct client correspondence, project work
+  | 'work'                          // Team/internal, industry stuff, professional
+  | 'personal_friends_family'       // Social, relationships, personal correspondence
+  | 'family'                        // Kids, school, health, appointments, family scheduling
+  | 'finance'                       // Bills, banking, investments, receipts
+  | 'travel'                        // Flights, hotels, bookings, trip info
+  | 'shopping'                      // Orders, shipping, deals, retail
+  | 'local'                         // Community events, neighborhood, local orgs
+  | 'newsletters_creator'           // Substacks, personal blogs, creator content
+  | 'newsletters_industry'          // Tech/biz digests, industry roundups, curated content
   | 'news_politics'                 // News outlets, political updates
   | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
-  | 'local'                         // Community events, neighborhood, local orgs
-  | 'shopping'                      // Orders, shipping, deals, retail
-  | 'travel'                        // Flights, hotels, bookings, trip info
-  | 'finance'                       // Bills, banking, investments, receipts
-  | 'family_kids_school'            // School emails, activities, kid logistics
-  | 'family_health_appointments'    // Medical, appointments, family scheduling
-  | 'client_pipeline'               // Direct client correspondence, project work
-  | 'business_work_general'         // Team/internal, industry stuff, professional
-  | 'personal_friends_family';      // Social, relationships, personal correspondence
+  | 'other';                        // Uncategorized, doesn't fit other categories
 
 /**
  * Array of all valid email categories.
@@ -46,18 +50,19 @@ export type EmailCategory =
  * Use this instead of hardcoding category lists elsewhere.
  */
 export const EMAIL_CATEGORIES: EmailCategory[] = [
-  'newsletters_general',
+  'clients',
+  'work',
+  'personal_friends_family',
+  'family',
+  'finance',
+  'travel',
+  'shopping',
+  'local',
+  'newsletters_creator',
+  'newsletters_industry',
   'news_politics',
   'product_updates',
-  'local',
-  'shopping',
-  'travel',
-  'finance',
-  'family_kids_school',
-  'family_health_appointments',
-  'client_pipeline',
-  'business_work_general',
-  'personal_friends_family',
+  'other',
 ] as const;
 
 /**
@@ -71,8 +76,8 @@ export const EMAIL_CATEGORIES_SET = new Set<string>(EMAIL_CATEGORIES);
 // =============================================================================
 
 /**
- * Legacy category values from before the Jan 2026 refactor.
- * These old action-focused categories have been replaced with life-bucket categories.
+ * Legacy category values from previous refactors.
+ * Maps old category strings to current valid categories.
  *
  * This mapping allows graceful handling of emails that haven't been re-analyzed yet,
  * or cached data that contains old category values.
@@ -80,24 +85,38 @@ export const EMAIL_CATEGORIES_SET = new Set<string>(EMAIL_CATEGORIES);
  * @deprecated These categories are deprecated. Use EMAIL_CATEGORIES instead.
  * @see Migration 028_category_cleanup.sql for database-level fixes
  *
- * Mapping rationale:
- * - action_required → client_pipeline (urgent work items are typically client-related)
+ * Mapping rationale (Jan 2026 action-focused → life-bucket):
+ * - action_required → clients (urgent work items are typically client-related)
  * - event → local (events are often community/local activities)
- * - newsletter → newsletters_general (direct mapping)
+ * - newsletter → newsletters_creator (direct mapping)
  * - promo → shopping (promotional emails are shopping-related)
  * - admin → finance (admin emails often relate to accounts/billing)
  * - personal → personal_friends_family (direct mapping)
- * - noise → newsletters_general (low-priority content, treat as newsletter)
+ * - noise → other (low-priority content)
+ *
+ * Mapping rationale (Feb 2026 rename/merge/split):
+ * - client_pipeline → clients
+ * - business_work_general → work
+ * - family_kids_school → family
+ * - family_health_appointments → family
+ * - newsletters_general → newsletters_creator (default; AI will re-sort on re-analysis)
  */
 export const LEGACY_CATEGORY_MAP: Record<string, EmailCategory> = {
-  'action_required': 'client_pipeline',
+  // Jan 2026 legacy (action-focused categories)
+  'action_required': 'clients',
   'event': 'local',
-  'newsletter': 'newsletters_general',
+  'newsletter': 'newsletters_creator',
   'promo': 'shopping',
   'promotional': 'shopping',
   'admin': 'finance',
   'personal': 'personal_friends_family',
-  'noise': 'newsletters_general',
+  'noise': 'other',
+  // Feb 2026 legacy (renamed/merged/split categories)
+  'client_pipeline': 'clients',
+  'business_work_general': 'work',
+  'family_kids_school': 'family',
+  'family_health_appointments': 'family',
+  'newsletters_general': 'newsletters_creator',
 } as const;
 
 /**
@@ -129,8 +148,8 @@ export const LEGACY_CATEGORIES_SET = new Set<string>(Object.keys(LEGACY_CATEGORY
  *
  * @example
  * ```typescript
- * normalizeCategory('client_pipeline')  // → 'client_pipeline' (valid new)
- * normalizeCategory('action_required')  // → 'client_pipeline' (legacy mapped)
+ * normalizeCategory('clients')          // → 'clients' (valid current)
+ * normalizeCategory('client_pipeline')  // → 'clients' (legacy mapped)
  * normalizeCategory('unknown_value')    // → null (unrecognized)
  * ```
  */
@@ -162,7 +181,8 @@ export function normalizeCategory(category: string | null | undefined): EmailCat
  * @example
  * ```typescript
  * isLegacyCategory('action_required')  // → true
- * isLegacyCategory('client_pipeline')  // → false
+ * isLegacyCategory('client_pipeline')  // → true (Feb 2026 legacy)
+ * isLegacyCategory('clients')          // → false (current)
  * ```
  */
 export function isLegacyCategory(category: string | null | undefined): boolean {
@@ -187,12 +207,75 @@ export interface CategoryDisplayConfig {
  * REFACTORED (Jan 2026): Updated for life-bucket categories.
  */
 export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
-  newsletters_general: {
-    label: 'Newsletters - General',
-    icon: '📰',
+  clients: {
+    label: 'Clients',
+    icon: '💼',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-50',
+    description: 'Direct client correspondence and project work',
+  },
+  work: {
+    label: 'Work',
+    icon: '🏢',
+    color: 'text-violet-600',
+    bgColor: 'bg-violet-50',
+    description: 'Team, industry, and professional emails',
+  },
+  personal_friends_family: {
+    label: 'Personal',
+    icon: '👥',
+    color: 'text-pink-600',
+    bgColor: 'bg-pink-50',
+    description: 'Friends, family, and personal correspondence',
+  },
+  family: {
+    label: 'Family',
+    icon: '👨‍👩‍👧‍👦',
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-50',
+    description: 'Kids, school, health, appointments, family scheduling',
+  },
+  finance: {
+    label: 'Finance',
+    icon: '💰',
+    color: 'text-green-700',
+    bgColor: 'bg-green-50',
+    description: 'Bills, banking, investments, and receipts',
+  },
+  travel: {
+    label: 'Travel',
+    icon: '✈️',
+    color: 'text-sky-600',
+    bgColor: 'bg-sky-50',
+    description: 'Flights, hotels, bookings, and trip info',
+  },
+  shopping: {
+    label: 'Shopping',
+    icon: '🛒',
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-50',
+    description: 'Orders, shipping, deals, and retail',
+  },
+  local: {
+    label: 'Local',
+    icon: '📍',
+    color: 'text-teal-600',
+    bgColor: 'bg-teal-50',
+    description: 'Community events, neighborhood, local orgs',
+  },
+  newsletters_creator: {
+    label: 'Creator Newsletters',
+    icon: '✍️',
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-50',
-    description: 'Substacks, digests, and curated content',
+    description: 'Substacks, personal blogs, and creator content',
+  },
+  newsletters_industry: {
+    label: 'Industry Digests',
+    icon: '📰',
+    color: 'text-cyan-600',
+    bgColor: 'bg-cyan-50',
+    description: 'Tech/business digests and industry roundups',
   },
   news_politics: {
     label: 'News & Politics',
@@ -208,68 +291,12 @@ export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
     bgColor: 'bg-indigo-50',
     description: 'Tech products and services you subscribe to',
   },
-  local: {
-    label: 'Local',
-    icon: '📍',
-    color: 'text-teal-600',
-    bgColor: 'bg-teal-50',
-    description: 'Community events, neighborhood, local orgs',
-  },
-  shopping: {
-    label: 'Shopping',
-    icon: '🛒',
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-50',
-    description: 'Orders, shipping, deals, and retail',
-  },
-  travel: {
-    label: 'Travel',
-    icon: '✈️',
-    color: 'text-sky-600',
-    bgColor: 'bg-sky-50',
-    description: 'Flights, hotels, bookings, and trip info',
-  },
-  finance: {
-    label: 'Finance',
-    icon: '💰',
-    color: 'text-green-700',
-    bgColor: 'bg-green-50',
-    description: 'Bills, banking, investments, and receipts',
-  },
-  family_kids_school: {
-    label: 'Family - Kids & School',
-    icon: '🎒',
-    color: 'text-amber-600',
-    bgColor: 'bg-amber-50',
-    description: 'School emails, activities, kid logistics',
-  },
-  family_health_appointments: {
-    label: 'Family - Health',
-    icon: '🏥',
-    color: 'text-rose-600',
-    bgColor: 'bg-rose-50',
-    description: 'Medical, appointments, family scheduling',
-  },
-  client_pipeline: {
-    label: 'Client Pipeline',
-    icon: '💼',
-    color: 'text-blue-700',
-    bgColor: 'bg-blue-50',
-    description: 'Direct client correspondence and project work',
-  },
-  business_work_general: {
-    label: 'Business/Work',
-    icon: '🏢',
-    color: 'text-violet-600',
-    bgColor: 'bg-violet-50',
-    description: 'Team, industry, and professional emails',
-  },
-  personal_friends_family: {
-    label: 'Personal',
-    icon: '👥',
-    color: 'text-pink-600',
-    bgColor: 'bg-pink-50',
-    description: 'Friends, family, and personal correspondence',
+  other: {
+    label: 'Other',
+    icon: '📋',
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-50',
+    description: 'Uncategorized emails that don\'t fit other categories',
   },
 };
 
@@ -291,18 +318,19 @@ export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
  * ```
  */
 export const CATEGORY_SHORT_LABELS: Record<EmailCategory, string> = {
-  client_pipeline: 'Client',
-  business_work_general: 'Work',
-  family_kids_school: 'School',
-  family_health_appointments: 'Health',
+  clients: 'Client',
+  work: 'Work',
   personal_friends_family: 'Personal',
+  family: 'Family',
   finance: 'Finance',
   travel: 'Travel',
   shopping: 'Shopping',
   local: 'Local',
-  newsletters_general: 'Newsletter',
+  newsletters_creator: 'Creator',
+  newsletters_industry: 'Industry',
   news_politics: 'News',
   product_updates: 'Updates',
+  other: 'Other',
 };
 
 /**
@@ -310,18 +338,19 @@ export const CATEGORY_SHORT_LABELS: Record<EmailCategory, string> = {
  * "5 Clients" reads better than "5 Client" in a filter bar.
  */
 export const CATEGORY_SHORT_LABELS_PLURAL: Record<EmailCategory, string> = {
-  client_pipeline: 'Clients',
-  business_work_general: 'Work',
-  family_kids_school: 'School',
-  family_health_appointments: 'Health',
+  clients: 'Clients',
+  work: 'Work',
   personal_friends_family: 'Personal',
+  family: 'Family',
   finance: 'Finance',
   travel: 'Travel',
   shopping: 'Shopping',
   local: 'Local',
-  newsletters_general: 'Newsletters',
+  newsletters_creator: 'Creator',
+  newsletters_industry: 'Industry',
   news_politics: 'News',
   product_updates: 'Updates',
+  other: 'Other',
 };
 
 /**
@@ -329,18 +358,19 @@ export const CATEGORY_SHORT_LABELS_PLURAL: Record<EmailCategory, string> = {
  * Single Tailwind bg-* class per category. Consistent across all inbox components.
  */
 export const CATEGORY_ACCENT_COLORS: Record<EmailCategory, string> = {
-  client_pipeline: 'bg-blue-500',
-  business_work_general: 'bg-violet-500',
-  family_kids_school: 'bg-amber-500',
-  family_health_appointments: 'bg-rose-500',
+  clients: 'bg-blue-500',
+  work: 'bg-violet-500',
   personal_friends_family: 'bg-pink-500',
+  family: 'bg-amber-500',
   finance: 'bg-green-600',
   travel: 'bg-sky-500',
   shopping: 'bg-orange-500',
   local: 'bg-teal-500',
-  newsletters_general: 'bg-emerald-500',
+  newsletters_creator: 'bg-emerald-500',
+  newsletters_industry: 'bg-cyan-500',
   news_politics: 'bg-slate-500',
   product_updates: 'bg-indigo-500',
+  other: 'bg-gray-400',
 };
 
 /**
@@ -349,18 +379,19 @@ export const CATEGORY_ACCENT_COLORS: Record<EmailCategory, string> = {
  * Used in PriorityEmailList badges and other badge-style displays.
  */
 export const CATEGORY_BADGE_COLORS: Record<EmailCategory, string> = {
-  client_pipeline: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300',
-  business_work_general: 'bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300',
-  family_kids_school: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300',
-  family_health_appointments: 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300',
+  clients: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300',
+  work: 'bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300',
   personal_friends_family: 'bg-pink-50 text-pink-700 dark:bg-pink-950/30 dark:text-pink-300',
+  family: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300',
   finance: 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300',
   travel: 'bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300',
   shopping: 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300',
   local: 'bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-300',
-  newsletters_general: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300',
+  newsletters_creator: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300',
+  newsletters_industry: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300',
   news_politics: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300',
   product_updates: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300',
+  other: 'bg-gray-50 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300',
 };
 
 /**
@@ -368,18 +399,19 @@ export const CATEGORY_BADGE_COLORS: Record<EmailCategory, string> = {
  * Grouped: Work → Personal → Life Admin → Information.
  */
 export const CATEGORIES_DISPLAY_ORDER: EmailCategory[] = [
-  'client_pipeline',
-  'business_work_general',
+  'clients',
+  'work',
   'personal_friends_family',
-  'family_kids_school',
-  'family_health_appointments',
+  'family',
   'finance',
   'travel',
   'shopping',
   'local',
-  'newsletters_general',
+  'newsletters_creator',
+  'newsletters_industry',
   'news_politics',
   'product_updates',
+  'other',
 ];
 
 // =============================================================================
