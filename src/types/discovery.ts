@@ -21,8 +21,7 @@
  * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
  * REFACTORED (Feb 2026): Renamed client_pipeline→clients, business_work_general→work,
  *   merged family_kids_school+family_health_appointments→family,
- *   split newsletters_general→newsletters_creator+newsletters_industry,
- *   added 'other' catch-all.
+ *   split newsletters_general→newsletters_creator+newsletters_industry.
  *
  * The AI analyzer uses human-eye inference to categorize - it considers sender
  * context, domain patterns, and content to make smart categorization decisions.
@@ -39,8 +38,7 @@ export type EmailCategory =
   | 'newsletters_creator'           // Substacks, personal blogs, creator content
   | 'newsletters_industry'          // Tech/biz digests, industry roundups, curated content
   | 'news_politics'                 // News outlets, political updates
-  | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
-  | 'other';                        // Uncategorized, doesn't fit other categories
+  | 'product_updates';              // Tech products, SaaS tools, subscriptions you use
 
 /**
  * Array of all valid email categories.
@@ -62,7 +60,6 @@ export const EMAIL_CATEGORIES: EmailCategory[] = [
   'newsletters_industry',
   'news_politics',
   'product_updates',
-  'other',
 ] as const;
 
 /**
@@ -110,7 +107,7 @@ export const LEGACY_CATEGORY_MAP: Record<string, EmailCategory> = {
   'promotional': 'shopping',
   'admin': 'finance',
   'personal': 'personal_friends_family',
-  'noise': 'other',
+  'noise': 'product_updates',
   // Feb 2026 legacy (renamed/merged/split categories)
   'client_pipeline': 'clients',
   'business_work_general': 'work',
@@ -144,18 +141,19 @@ export const LEGACY_CATEGORIES_SET = new Set<string>(Object.keys(LEGACY_CATEGORY
  * - Processing cached sync_progress data
  *
  * @param category - The category string to normalize (can be new, legacy, or unknown)
- * @returns The normalized EmailCategory, or null if the category is unrecognized
+ * @returns The normalized EmailCategory — always returns a valid category (never null)
  *
  * @example
  * ```typescript
  * normalizeCategory('clients')          // → 'clients' (valid current)
  * normalizeCategory('client_pipeline')  // → 'clients' (legacy mapped)
- * normalizeCategory('unknown_value')    // → null (unrecognized)
+ * normalizeCategory('unknown_value')    // → 'personal_friends_family' (unrecognized)
+ * normalizeCategory(null)               // → 'personal_friends_family' (missing)
  * ```
  */
-export function normalizeCategory(category: string | null | undefined): EmailCategory | null {
+export function normalizeCategory(category: string | null | undefined): EmailCategory {
   if (!category) {
-    return null;
+    return 'personal_friends_family';
   }
 
   // Check if it's already a valid new category
@@ -168,8 +166,8 @@ export function normalizeCategory(category: string | null | undefined): EmailCat
     return LEGACY_CATEGORY_MAP[category as LegacyCategory];
   }
 
-  // Unknown category - return null
-  return null;
+  // Unknown category - every email must have a real category
+  return 'personal_friends_family';
 }
 
 /**
@@ -291,13 +289,6 @@ export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
     bgColor: 'bg-indigo-50',
     description: 'Tech products and services you subscribe to',
   },
-  other: {
-    label: 'Other',
-    icon: '📋',
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-50',
-    description: 'Uncategorized emails that don\'t fit other categories',
-  },
 };
 
 // =============================================================================
@@ -330,7 +321,6 @@ export const CATEGORY_SHORT_LABELS: Record<EmailCategory, string> = {
   newsletters_industry: 'Industry',
   news_politics: 'News',
   product_updates: 'Updates',
-  other: 'Other',
 };
 
 /**
@@ -350,7 +340,6 @@ export const CATEGORY_SHORT_LABELS_PLURAL: Record<EmailCategory, string> = {
   newsletters_industry: 'Industry',
   news_politics: 'News',
   product_updates: 'Updates',
-  other: 'Other',
 };
 
 /**
@@ -370,7 +359,6 @@ export const CATEGORY_ACCENT_COLORS: Record<EmailCategory, string> = {
   newsletters_industry: 'bg-cyan-500',
   news_politics: 'bg-slate-500',
   product_updates: 'bg-indigo-500',
-  other: 'bg-gray-400',
 };
 
 /**
@@ -391,7 +379,6 @@ export const CATEGORY_BADGE_COLORS: Record<EmailCategory, string> = {
   newsletters_industry: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300',
   news_politics: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300',
   product_updates: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300',
-  other: 'bg-gray-50 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300',
 };
 
 /**
@@ -411,7 +398,6 @@ export const CATEGORIES_DISPLAY_ORDER: EmailCategory[] = [
   'newsletters_industry',
   'news_politics',
   'product_updates',
-  'other',
 ];
 
 // =============================================================================

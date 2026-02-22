@@ -120,7 +120,7 @@ export function FailureSummary({
           {failures.length === 1
             ? '1 email couldn\'t be analyzed'
             : `${failures.length} emails couldn't be analyzed`}
-          . These are saved but uncategorized.
+          . These are saved but could not be categorized — retry to assign them.
         </CardDescription>
       </CardHeader>
 

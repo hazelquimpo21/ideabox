@@ -73,7 +73,6 @@ export const emailCategorySchema = z.enum([
   'clients',                       // Direct client correspondence, project work
   'work',                          // Team/internal, industry, professional
   'personal_friends_family',       // Social, relationships, personal
-  'other',                         // Uncategorized emails
 ]);
 
 /**

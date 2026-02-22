@@ -150,7 +150,6 @@ export interface CategoryStats {
   product_updates: number;
   local: number;
   travel: number;
-  other: number;
 }
 
 /**
@@ -270,7 +269,6 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       product_updates: 0,
       local: 0,
       travel: 0,
-      other: 0,
     },
   });
   const [eventData, setEventData] = React.useState<Map<string, EventPreviewData>>(new Map());
@@ -408,7 +406,6 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         product_updates: 0,
         local: 0,
         travel: 0,
-        other: 0,
       };
 
       // Count events from labels array (has_event label)
@@ -653,7 +650,6 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
           product_updates: 0,
           local: 0,
           travel: 0,
-          other: 0,
         };
 
         for (const email of updatedEmails) {

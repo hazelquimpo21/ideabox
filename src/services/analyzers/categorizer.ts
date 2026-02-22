@@ -21,7 +21,7 @@
  * - clients: Direct client correspondence, project work
  * - work: Team, industry, professional (not direct clients)
  * - personal_friends_family: Social, relationships, personal correspondence
- * - other: Emails that don't fit other categories
+ * Every email is assigned to one of these — no "other" or uncategorized bucket.
  *
  * Actions are tracked separately via the `actions` table and `has_event` label.
  * Events are now detected via the `has_event` label and processed by EventDetector.
@@ -338,9 +338,10 @@ CATEGORIES (choose ONE primary life bucket)
   Examples: Friends reaching out, family messages, social invitations, personal news
   KEY: Personal relationships (not business, not logistics)
 
-- other: Emails that don't fit neatly into any other category
-  Examples: Miscellaneous notifications, unclassifiable automated emails
-  KEY: Use sparingly - most emails should fit another category
+IMPORTANT: Every email MUST be assigned to one of the 12 categories above. There is
+NO "other" or "uncategorized" option. Pick the BEST FIT even if the match isn't
+perfect. Use your best judgment — lean toward personal_friends_family for personal
+content or product_updates for automated/system content.
 
 ═══════════════════════════════════════════════════════════════════════════════
 DISAMBIGUATION GUIDE
@@ -754,10 +755,11 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       : 'no_reply'; // Default to 'no_reply' if invalid
 
     // Validate category - AI sometimes returns labels (e.g. "promotional") as categories
+    // normalizeCategory() always returns a valid category (never null)
     const rawCategory = rawData.category as string;
     const validatedCategory = EMAIL_CATEGORIES_SET.has(rawCategory)
       ? rawCategory as CategorizationData['category']
-      : (normalizeCategory(rawCategory) ?? 'newsletters_creator') as CategorizationData['category'];
+      : normalizeCategory(rawCategory) as CategorizationData['category'];
 
     return {
       // Core categorization fields

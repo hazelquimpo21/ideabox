@@ -137,11 +137,11 @@ export function InboxTabs() {
     (email: { id: string; category?: string | null }) => {
       logger.info('Email selected for modal', {
         emailId: email.id,
-        category: email.category || 'uncategorized',
+        category: email.category || 'personal_friends_family',
         fromTab: activeTab,
       });
       setSelectedEmailId(email.id);
-      setSelectedEmailCategory(email.category || 'uncategorized');
+      setSelectedEmailCategory(email.category || 'personal_friends_family');
       setIsModalOpen(true);
     },
     [activeTab]

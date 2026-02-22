@@ -129,12 +129,8 @@ function getCategoryBadge(category: EmailCategory | null): {
     case 'travel':
       return { variant: 'outline', label: 'Travel', icon: <Calendar className="h-3 w-3" /> };
 
-    // Other
-    case 'other':
-      return { variant: 'outline', label: 'Other', icon: <Mail className="h-3 w-3" /> };
-
     default:
-      return { variant: 'outline', label: 'Uncategorized', icon: <Mail className="h-3 w-3" /> };
+      return { variant: 'outline', label: category.replace(/_/g, ' '), icon: <Mail className="h-3 w-3" /> };
   }
 }
 

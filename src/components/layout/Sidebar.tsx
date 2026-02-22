@@ -90,8 +90,7 @@ export type EmailCategory =
   | 'family'                        // School, kids, health, appointments
   | 'clients'                       // Client work
   | 'work'                          // Work, professional
-  | 'personal_friends_family'       // Friends, family
-  | 'other';                        // Uncategorized
+  | 'personal_friends_family';      // Friends, family
 
 /**
  * Category counts for sidebar badges.

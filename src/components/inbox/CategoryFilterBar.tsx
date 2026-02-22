@@ -118,10 +118,6 @@ const PILL_COLORS: Record<string, { active: string; inactive: string }> = {
     active: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-200 dark:border-indigo-800',
     inactive: 'hover:bg-indigo-50/80 dark:hover:bg-indigo-950/20',
   },
-  other: {
-    active: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800/50 dark:text-gray-200 dark:border-gray-700',
-    inactive: 'hover:bg-gray-50/80 dark:hover:bg-gray-950/20',
-  },
 };
 
 // SHORT_LABELS — now using centralized CATEGORY_SHORT_LABELS_PLURAL from discovery.ts
