@@ -37,12 +37,13 @@
 'use client';
 
 import * as React from 'react';
-import { RefreshCw, Inbox, Sparkles, Search, X } from 'lucide-react';
+import { RefreshCw, Inbox, Sparkles, Search, X, List, LayoutGrid } from 'lucide-react';
 import { Button, Skeleton, Input } from '@/components/ui';
-import { useEmails } from '@/hooks';
+import { useEmails, useGmailAccounts } from '@/hooks';
 import { CategoryFilterBar } from './CategoryFilterBar';
 import { CategorySummaryPanel } from './CategorySummaryPanel';
 import { InboxEmailRow } from './InboxEmailRow';
+import { InboxEmailCard } from './InboxEmailCard';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
 import type { EmailCategory } from '@/types/discovery';
@@ -64,6 +65,9 @@ const PRIORITY_COUNT = 5;
 /** Minimum priority score to qualify for the priority section */
 const PRIORITY_THRESHOLD = 50;
 
+/** View mode for the email list — list (compact rows) or cards (richer cards) */
+type ViewMode = 'list' | 'cards';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -83,6 +87,21 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
   // ─── Local State ─────────────────────────────────────────────────────────────
   const [activeCategory, setActiveCategory] = React.useState<EmailCategory | null>(null);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [viewMode, setViewMode] = React.useState<ViewMode>('list');
+
+  // ─── Gmail Accounts (for account indicator) ─────────────────────────────────
+  // Builds a map of gmail_account_id → account email so we can show which
+  // inbox an email belongs to. Only fetched once on mount.
+  const { accounts } = useGmailAccounts();
+  const accountMap = React.useMemo(() => {
+    if (!accounts || accounts.length <= 1) return undefined; // No indicator needed for single account
+    const map: Record<string, string> = {};
+    for (const acct of accounts) {
+      map[acct.id] = acct.email;
+    }
+    logger.debug('Built account map', { accountCount: accounts.length });
+    return map;
+  }, [accounts]);
 
   // ─── Fetch Emails ────────────────────────────────────────────────────────────
   const {
@@ -283,30 +302,113 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
   // MAIN VIEW
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  /**
+   * Renders an email list section (priority or recent) in either
+   * list mode (InboxEmailRow) or card mode (InboxEmailCard).
+   * Extracted to avoid duplicating the view-mode conditional.
+   */
+  const renderEmailSection = (sectionEmails: Email[], showCat: boolean) => {
+    if (viewMode === 'cards') {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {sectionEmails.map((email: Email) => (
+            <InboxEmailCard
+              key={email.id}
+              email={email}
+              onClick={handleEmailClick}
+              onToggleStar={handleToggleStar}
+              showCategory={showCat}
+              accountMap={accountMap}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    // List mode (default)
+    return (
+      <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+        {sectionEmails.map((email: Email) => (
+          <InboxEmailRow
+            key={email.id}
+            email={email}
+            onClick={handleEmailClick}
+            onToggleStar={handleToggleStar}
+            showCategory={showCat}
+            accountMap={accountMap}
+          />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div>
-      {/* ── Search + Category Filter ───────────────────────────────────────── */}
+      {/* ── Search + View Toggle + Category Filter ─────────────────────────── */}
       <div className="space-y-3 mb-5">
-        {/* Search input with clear button */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            type="text"
-            placeholder="Search emails..."
-            value={searchQuery}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-8 h-9 text-sm bg-muted/30 border-border/50 focus:bg-background transition-colors"
-          />
-          {searchQuery && (
+        {/* Search + View toggle row */}
+        <div className="flex items-center gap-2">
+          {/* Search input with clear button */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search emails..."
+              value={searchQuery}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-8 h-9 text-sm bg-muted/30 border-border/50 focus:bg-background transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-muted transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          {/* View mode toggle — List / Cards */}
+          <div className="flex items-center border border-border/50 rounded-lg overflow-hidden shrink-0" role="radiogroup" aria-label="View mode">
             <button
               type="button"
-              onClick={handleClearSearch}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-muted transition-colors"
-              aria-label="Clear search"
+              onClick={() => {
+                logger.info('View mode changed', { mode: 'list' });
+                setViewMode('list');
+              }}
+              className={cn(
+                'p-2 transition-colors',
+                viewMode === 'list'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+              )}
+              aria-label="List view"
+              aria-checked={viewMode === 'list'}
+              role="radio"
             >
-              <X className="h-3.5 w-3.5 text-muted-foreground" />
+              <List className="h-4 w-4" />
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => {
+                logger.info('View mode changed', { mode: 'cards' });
+                setViewMode('cards');
+              }}
+              className={cn(
+                'p-2 transition-colors',
+                viewMode === 'cards'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+              )}
+              aria-label="Card view"
+              aria-checked={viewMode === 'cards'}
+              role="radio"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Category filter pills */}
@@ -320,7 +422,7 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
 
       {/* ── Two-Column Layout ──────────────────────────────────────────────── */}
       <div className="flex gap-6">
-        {/* Left: Email list */}
+        {/* Left: Email list or card grid */}
         <div className="flex-1 min-w-0">
 
           {/* Empty category state */}
@@ -362,17 +464,7 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
                   {priorityEmails.length}
                 </span>
               </div>
-              <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-                {priorityEmails.map((email: Email) => (
-                  <InboxEmailRow
-                    key={email.id}
-                    email={email}
-                    onClick={handleEmailClick}
-                    onToggleStar={handleToggleStar}
-                    showCategory
-                  />
-                ))}
-              </div>
+              {renderEmailSection(priorityEmails, true)}
             </div>
           )}
 
@@ -391,17 +483,7 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
                 </div>
               )}
 
-              <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-                {recentEmails.map((email: Email) => (
-                  <InboxEmailRow
-                    key={email.id}
-                    email={email}
-                    onClick={handleEmailClick}
-                    onToggleStar={handleToggleStar}
-                    showCategory={!activeCategory}
-                  />
-                ))}
-              </div>
+              {renderEmailSection(recentEmails, !activeCategory)}
 
               {/* Load more trigger */}
               {hasMore && (

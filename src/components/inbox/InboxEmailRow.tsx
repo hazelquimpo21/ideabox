@@ -26,7 +26,7 @@
 'use client';
 
 import * as React from 'react';
-import { Star, Zap, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp } from 'lucide-react';
+import { Star, Mail, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
 import { CATEGORY_SHORT_LABELS, CATEGORY_ACCENT_COLORS } from '@/types/discovery';
@@ -54,6 +54,12 @@ export interface InboxEmailRowProps {
   showCategory?: boolean;
   /** Compact mode hides gist line and action badges (default: false) */
   compact?: boolean;
+  /**
+   * Map of gmail_account_id → account email address.
+   * When provided, shows a small account tag so multi-account users
+   * can tell which inbox received the email.
+   */
+  accountMap?: Record<string, string>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -195,6 +201,7 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   onToggleStar,
   showCategory = true,
   compact = false,
+  accountMap,
 }: InboxEmailRowProps) {
   const isUnread = !email.is_read;
   const category = email.category as EmailCategory | null;
@@ -204,6 +211,11 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
 
   // Prefer AI gist over raw summary/snippet for the preview line
   const gist = email.gist || email.summary || email.snippet;
+
+  // Account indicator — resolve gmail_account_id to display string
+  const accountEmail = accountMap && email.gmail_account_id
+    ? accountMap[email.gmail_account_id]
+    : null;
 
   // Quick action badge — only show actionable ones (skip 'none')
   const quickAction = email.quick_action as QuickActionDb | null;
@@ -262,6 +274,17 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
           >
             {senderName}
           </span>
+
+          {/* Account indicator — which inbox received this email */}
+          {accountEmail && (
+            <span
+              className="inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium bg-muted/60 text-muted-foreground/60"
+              title={accountEmail}
+            >
+              <Mail className="h-2 w-2" />
+              {accountEmail.split('@')[0]}
+            </span>
+          )}
 
           {/* Category dot + label */}
           {showCategory && categoryLabel && (
