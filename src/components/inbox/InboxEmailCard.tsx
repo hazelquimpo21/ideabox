@@ -19,13 +19,14 @@
  *   │  [Topic] [Topic] [Topic]          [Action badge]    │
  *   └────────────────────────────────────────────────────┘
  *
- *   With thumbnail (left-side):
- *   ┌──────┬─────────────────────────────────────────────┐
- *   │      │ [Avatar] [Sender] [Account]   [Date] [Star] │
- *   │ IMG  │ [Subject]           [Priority] [Category]    │
- *   │      │ "AI gist summary..."                         │
- *   │      │ [Topic] [Topic]              [Action badge]  │
- *   └──────┴─────────────────────────────────────────────┘
+ *   With thumbnail (small square replaces category avatar):
+ *   ┌────────────────────────────────────────────────────┐
+ *   │  [IMG] [Sender] [Account tag]   ·· [Date] [Star]   │
+ *   │  [Subject line]              [Priority] [Category]  │
+ *   │  "AI gist summary..."                               │
+ *   │  ─────────────────────────────────────────────────  │
+ *   │  [Topic] [Topic] [Topic]          [Action badge]    │
+ *   └────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * ACCOUNT INDICATOR
@@ -271,34 +272,32 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
         isEvent && 'ring-1 ring-green-200 dark:ring-green-800/50',
       )}
     >
-      <div className={cn('flex', thumbnailUrl && 'flex-row')}>
-        {/* ── Left-side Thumbnail (if available) ───────────────────────── */}
-        {thumbnailUrl && (
-          <div className="w-24 sm:w-28 shrink-0 bg-muted/30 overflow-hidden">
-            <img
-              src={thumbnailUrl}
-              alt=""
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                // Hide the thumbnail area if the image fails to load
-                const container = (e.target as HTMLImageElement).parentElement!;
-                container.style.display = 'none';
-              }}
-            />
-          </div>
-        )}
-
-      <div className="flex-1 min-w-0 p-3">
+      <div className="p-3">
         {/* ── Row 1: Sender + Event/Account + Date + Star ──────────────── */}
         <div className="flex items-center gap-2 mb-1.5">
-          {/* Category icon avatar with sender logo overlay */}
-          <div className="relative shrink-0">
-            <CategoryIcon category={email.category as EmailCategory | null} size="sm" />
-            <div className="absolute -bottom-0.5 -right-0.5 bg-background rounded-full p-px">
-              <SenderLogo senderEmail={email.sender_email} size={12} className="rounded-full" />
+          {/* Avatar area — thumbnail square replaces category icon when available */}
+          {thumbnailUrl ? (
+            <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-muted/30">
+              <img
+                src={thumbnailUrl}
+                alt=""
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  // On error, swap in the category icon fallback
+                  const container = (e.target as HTMLImageElement).parentElement!;
+                  container.style.display = 'none';
+                }}
+              />
             </div>
-          </div>
+          ) : (
+            <div className="relative shrink-0">
+              <CategoryIcon category={email.category as EmailCategory | null} size="sm" />
+              <div className="absolute -bottom-0.5 -right-0.5 bg-background rounded-full p-px">
+                <SenderLogo senderEmail={email.sender_email} size={12} className="rounded-full" />
+              </div>
+            </div>
+          )}
 
           {/* Sender name */}
           <span
@@ -447,7 +446,6 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
           </div>
         )}
       </div>
-      </div>{/* end flex row */}
     </Card>
   );
 });
