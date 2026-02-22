@@ -44,6 +44,7 @@ import { CategoryFilterBar } from './CategoryFilterBar';
 import { CategorySummaryPanel } from './CategorySummaryPanel';
 import { InboxEmailRow } from './InboxEmailRow';
 import { InboxEmailCard } from './InboxEmailCard';
+import { cn } from '@/lib/utils/cn';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
 import type { EmailCategory } from '@/types/discovery';
