@@ -123,7 +123,7 @@ const generateEmails = (userId: string, gmailAccountId: string, clientIds: Recor
     sender_name: 'Sarah Chen',
     date: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 min ago
     snippet: 'Hi, please review the attached budget proposal for Q4. We need your approval by Friday...',
-    category: 'client_pipeline' as const, // REFACTORED: was 'action_required'
+    category: 'clients' as const, // REFACTORED: was 'action_required'
     priority_score: 8,
     is_read: false,
     is_starred: true,
@@ -141,7 +141,7 @@ const generateEmails = (userId: string, gmailAccountId: string, clientIds: Recor
     sender_name: 'XYZ Legal Team',
     date: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(), // 3 hours ago
     snippet: 'Please review the attached contract terms and let us know if you have any concerns...',
-    category: 'client_pipeline' as const, // REFACTORED: was 'action_required'
+    category: 'clients' as const, // REFACTORED: was 'action_required'
     priority_score: 9,
     is_read: false,
     is_starred: true,
@@ -159,7 +159,7 @@ const generateEmails = (userId: string, gmailAccountId: string, clientIds: Recor
     sender_name: 'Mike Johnson',
     date: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
     snippet: 'Hey, quick question - can we push the deadline by a week? Let me know...',
-    category: 'client_pipeline' as const, // REFACTORED: was 'action_required'
+    category: 'clients' as const, // REFACTORED: was 'action_required'
     priority_score: 6,
     is_read: true,
     is_starred: false,
@@ -215,7 +215,7 @@ const generateEmails = (userId: string, gmailAccountId: string, clientIds: Recor
     sender_name: 'TechCrunch',
     date: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
     snippet: 'This week in tech: AI breakthroughs, startup funding rounds, and more...',
-    category: 'newsletters_general' as const, // REFACTORED: was 'newsletter'
+    category: 'newsletters_creator' as const, // REFACTORED: was 'newsletter'
     priority_score: 2,
     is_read: true,
     is_starred: false,
@@ -233,7 +233,7 @@ const generateEmails = (userId: string, gmailAccountId: string, clientIds: Recor
     sender_name: 'JavaScript Weekly',
     date: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     snippet: 'The latest JavaScript news, articles, and tutorials...',
-    category: 'newsletters_general' as const, // REFACTORED: was 'newsletter'
+    category: 'newsletters_creator' as const, // REFACTORED: was 'newsletter'
     priority_score: 2,
     is_read: false,
     is_starred: false,
@@ -327,7 +327,7 @@ const generateEmails = (userId: string, gmailAccountId: string, clientIds: Recor
     sender_name: 'Creative Team',
     date: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
     snippet: 'We have finished the initial mockups. Please review and provide feedback...',
-    category: 'client_pipeline' as const, // REFACTORED: was 'action_required'
+    category: 'clients' as const, // REFACTORED: was 'action_required'
     priority_score: 7,
     is_read: false,
     is_starred: false,
@@ -381,7 +381,7 @@ const generateEmails = (userId: string, gmailAccountId: string, clientIds: Recor
     sender_name: 'TechCorp Research',
     date: new Date(Date.now() - 1000 * 60 * 60 * 10).toISOString(),
     snippet: 'Sharing the latest market research report for your reference. No action needed...',
-    category: 'newsletters_general' as const, // REFACTORED: was 'newsletter'
+    category: 'newsletters_creator' as const, // REFACTORED: was 'newsletter'
     priority_score: 3,
     is_read: true,
     is_starred: false,

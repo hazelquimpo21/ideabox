@@ -21,7 +21,7 @@
  *
  * Archive all newsletters:
  *   POST /api/emails/bulk-archive
- *   { "category": "newsletters_general" }
+ *   { "category": "newsletters_creator" }
  *
  * Archive specific emails:
  *   POST /api/emails/bulk-archive

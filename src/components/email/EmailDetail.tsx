@@ -96,18 +96,16 @@ function getCategoryBadge(category: EmailCategory | null): {
 } {
   switch (category) {
     // Work & Business
-    case 'client_pipeline':
+    case 'clients':
       return { variant: 'default', label: 'Client', icon: <Building2 className="h-3 w-3" /> };
-    case 'business_work_general':
+    case 'work':
       return { variant: 'secondary', label: 'Work', icon: <Building2 className="h-3 w-3" /> };
 
     // Personal & Family
     case 'personal_friends_family':
       return { variant: 'outline', label: 'Personal', icon: <User className="h-3 w-3" /> };
-    case 'family_kids_school':
-      return { variant: 'outline', label: 'Family/School', icon: <User className="h-3 w-3" /> };
-    case 'family_health_appointments':
-      return { variant: 'outline', label: 'Health', icon: <User className="h-3 w-3" /> };
+    case 'family':
+      return { variant: 'outline', label: 'Family', icon: <User className="h-3 w-3" /> };
 
     // Finance & Shopping
     case 'finance':
@@ -116,8 +114,10 @@ function getCategoryBadge(category: EmailCategory | null): {
       return { variant: 'outline', label: 'Shopping', icon: <Mail className="h-3 w-3" /> };
 
     // Content & News
-    case 'newsletters_general':
+    case 'newsletters_creator':
       return { variant: 'secondary', label: 'Newsletter', icon: <Newspaper className="h-3 w-3" /> };
+    case 'newsletters_industry':
+      return { variant: 'secondary', label: 'Industry Newsletter', icon: <Newspaper className="h-3 w-3" /> };
     case 'news_politics':
       return { variant: 'secondary', label: 'News', icon: <Newspaper className="h-3 w-3" /> };
     case 'product_updates':
@@ -128,6 +128,10 @@ function getCategoryBadge(category: EmailCategory | null): {
       return { variant: 'default', label: 'Local', icon: <Calendar className="h-3 w-3" /> };
     case 'travel':
       return { variant: 'outline', label: 'Travel', icon: <Calendar className="h-3 w-3" /> };
+
+    // Other
+    case 'other':
+      return { variant: 'outline', label: 'Other', icon: <Mail className="h-3 w-3" /> };
 
     default:
       return { variant: 'outline', label: 'Uncategorized', icon: <Mail className="h-3 w-3" /> };

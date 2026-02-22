@@ -52,27 +52,28 @@ export const paginationSchema = z.object({
  * Actions are tracked separately via the `actions` table and urgency scores.
  *
  * Migration mapping:
- * - action_required → client_pipeline
+ * - action_required → clients
  * - event → local (events detected via has_event label)
- * - newsletter → newsletters_general
+ * - newsletter → newsletters_creator
  * - promo → shopping
  * - admin → finance
  * - personal → personal_friends_family
- * - noise → newsletters_general
+ * - noise → newsletters_creator
  */
 export const emailCategorySchema = z.enum([
-  'newsletters_general',           // Substacks, digests, curated content
+  'newsletters_creator',           // Substacks, digests, curated content
+  'newsletters_industry',          // Industry-specific newsletters
   'news_politics',                 // News outlets, political updates
   'product_updates',               // Tech products, SaaS tools
   'local',                         // Community events, neighborhood, local orgs
   'shopping',                      // Orders, shipping, deals, retail
   'travel',                        // Flights, hotels, bookings, trip info
   'finance',                       // Bills, banking, investments, receipts
-  'family_kids_school',            // School emails, activities, kid logistics
-  'family_health_appointments',    // Medical, appointments, family scheduling
-  'client_pipeline',               // Direct client correspondence, project work
-  'business_work_general',         // Team/internal, industry, professional
+  'family',                        // School, kids, health, appointments, family scheduling
+  'clients',                       // Direct client correspondence, project work
+  'work',                          // Team/internal, industry, professional
   'personal_friends_family',       // Social, relationships, personal
+  'other',                         // Uncategorized emails
 ]);
 
 /**
@@ -89,7 +90,7 @@ export type EmailDirection = z.infer<typeof emailDirectionSchema>;
  * Email list query parameters.
  *
  * @example Filter by category (life-bucket)
- * GET /api/emails?category=client_pipeline&unread=true&limit=20
+ * GET /api/emails?category=clients&unread=true&limit=20
  *
  * @example Filter by contact email and direction
  * GET /api/emails?contactEmail=john@example.com&direction=all
@@ -548,7 +549,7 @@ export type ExtractedDateActionInput = z.infer<typeof extractedDateActionSchema>
  *
  * @example Archive by category
  * POST /api/emails/bulk-archive
- * { "category": "newsletters_general" }
+ * { "category": "newsletters_creator" }
  *
  * @example Archive by email IDs
  * POST /api/emails/bulk-archive

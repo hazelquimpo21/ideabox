@@ -363,7 +363,7 @@ export class EmailProcessor {
 
     // EventDetector: Only run if email has the 'has_event' label
     // REFACTORED (Jan 2026): Now uses label instead of category since
-    // events can appear in any life-bucket category (local, family_kids_school, etc.)
+    // events can appear in any life-bucket category (local, family, etc.)
     const hasEventLabel = categorizationResult.success &&
       categorizationResult.data.labels?.includes('has_event');
 

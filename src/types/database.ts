@@ -33,18 +33,19 @@
  * context, domain patterns, and content to make smart categorization decisions.
  */
 export type EmailCategory =
-  | 'newsletters_general'           // Substacks, digests, curated content
+  | 'clients'                       // Direct client correspondence, project work
+  | 'work'                          // Team/internal, industry stuff, professional
+  | 'personal_friends_family'       // Social, relationships, personal correspondence
+  | 'family'                        // Kids, school, health, appointments, family scheduling
+  | 'finance'                       // Bills, banking, investments, receipts
+  | 'travel'                        // Flights, hotels, bookings, trip info
+  | 'shopping'                      // Orders, shipping, deals, retail
+  | 'local'                         // Community events, neighborhood, local orgs
+  | 'newsletters_creator'           // Substacks, personal blogs, creator content
+  | 'newsletters_industry'          // Tech/biz digests, industry roundups
   | 'news_politics'                 // News outlets, political updates
   | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
-  | 'local'                         // Community events, neighborhood, local orgs
-  | 'shopping'                      // Orders, shipping, deals, retail
-  | 'travel'                        // Flights, hotels, bookings, trip info
-  | 'finance'                       // Bills, banking, investments, receipts
-  | 'family_kids_school'            // School emails, activities, kid logistics
-  | 'family_health_appointments'    // Medical, appointments, family scheduling
-  | 'client_pipeline'               // Direct client correspondence, project work
-  | 'business_work_general'         // Team/internal, industry stuff, professional
-  | 'personal_friends_family';      // Social, relationships, personal correspondence
+  | 'other';                        // Uncategorized, doesn't fit other categories
 
 /**
  * Action types that can be extracted from emails.

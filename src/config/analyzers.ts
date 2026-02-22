@@ -56,18 +56,19 @@ export interface AnalyzerConfig {
  * context, domain patterns, and content to make smart categorization decisions.
  */
 export const EMAIL_CATEGORIES = [
-  'newsletters_general',           // Substacks, digests, curated content
+  'newsletters_creator',           // Substacks, digests, curated content
+  'newsletters_industry',          // Industry-specific newsletters
   'news_politics',                 // News outlets, political updates
   'product_updates',               // Tech products, SaaS tools, subscriptions you use
   'local',                         // Community events, neighborhood, local orgs
   'shopping',                      // Orders, shipping, deals, retail
   'travel',                        // Flights, hotels, bookings, trip info
   'finance',                       // Bills, banking, investments, receipts
-  'family_kids_school',            // School emails, activities, kid logistics
-  'family_health_appointments',    // Medical, appointments, family scheduling
-  'client_pipeline',               // Direct client correspondence, project work
-  'business_work_general',         // Team/internal, industry stuff, professional
+  'family',                        // School, kids, health, appointments, family scheduling
+  'clients',                       // Direct client correspondence, project work
+  'work',                          // Team/internal, industry stuff, professional
   'personal_friends_family',       // Social, relationships, personal correspondence
+  'other',                         // Uncategorized emails
 ] as const;
 
 export type EmailCategory = typeof EMAIL_CATEGORIES[number];

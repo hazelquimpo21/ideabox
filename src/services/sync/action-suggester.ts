@@ -3,17 +3,17 @@
  *
  * Generates suggested quick actions based on email analysis results.
  * These suggestions help users take immediate action after initial sync:
- * - Archive bulk categories (shopping, newsletters_general)
- * - View urgent items in client_pipeline
+ * - Archive bulk categories (shopping, newsletters_creator)
+ * - View urgent items in clients
  * - Add suggested clients
  * - Review detected events (now in 'local' category)
  *
  * Actions are prioritized and limited to avoid overwhelming the user.
  *
  * REFACTORED (Jan 2026): Updated for life-bucket categories.
- * - action_required → client_pipeline (urgent items via urgency score)
+ * - action_required → clients (urgent items via urgency score)
  * - event → local (events detected via has_event label)
- * - promo/noise → shopping/newsletters_general
+ * - promo/noise → shopping/newsletters_creator
  *
  * @module services/sync/action-suggester
  * @see docs/DISCOVERY_DASHBOARD_PLAN.md
@@ -149,7 +149,7 @@ export class ActionSuggesterService {
   /**
    * Generate "view urgent items" action if there are urgent emails.
    *
-   * REFACTORED (Jan 2026): Now checks client_pipeline and business_work_general
+   * REFACTORED (Jan 2026): Now checks clients and work
    * categories for urgent items (identified by urgentCount from analysis).
    * The old 'action_required' category no longer exists.
    */
@@ -158,17 +158,17 @@ export class ActionSuggesterService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Find work-related categories that may have urgent items
-    // REFACTORED (Jan 2026): action_required → client_pipeline + business_work_general
+    // REFACTORED (Jan 2026): action_required → clients + work
     // ─────────────────────────────────────────────────────────────────────────
-    const clientPipeline = categories.find((c) => c.category === 'client_pipeline');
-    const businessWork = categories.find((c) => c.category === 'business_work_general');
+    const clientsCategory = categories.find((c) => c.category === 'clients');
+    const workCategory = categories.find((c) => c.category === 'work');
 
     // Sum up urgent counts from both work categories
-    const urgentCount = (clientPipeline?.urgentCount || 0) + (businessWork?.urgentCount || 0);
+    const urgentCount = (clientsCategory?.urgentCount || 0) + (workCategory?.urgentCount || 0);
 
     logger.debug('Checking for urgent items', {
-      clientPipelineUrgent: clientPipeline?.urgentCount || 0,
-      businessWorkUrgent: businessWork?.urgentCount || 0,
+      clientsUrgent: clientsCategory?.urgentCount || 0,
+      workUrgent: workCategory?.urgentCount || 0,
       totalUrgent: urgentCount,
     });
 
@@ -198,14 +198,14 @@ export class ActionSuggesterService {
    *
    * REFACTORED (Jan 2026): Events are no longer a separate category.
    * Events are detected via the 'has_event' label and can appear in any
-   * life-bucket category (local, family_kids_school, travel, etc.).
+   * life-bucket category (local, family, travel, etc.).
    * We now check for upcomingEvent across all categories.
    */
   private generateEventActions(categories: CategorySummary[]): SuggestedAction[] {
     const actions: SuggestedAction[] = [];
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Events can now be in any category (local, family_kids_school, travel, etc.)
+    // Events can now be in any category (local, family, travel, etc.)
     // Count categories that have detected events via upcomingEvent field
     // ─────────────────────────────────────────────────────────────────────────
     const categoriesWithEvents = categories.filter((c) => c.upcomingEvent);
@@ -251,7 +251,7 @@ export class ActionSuggesterService {
    *
    * REFACTORED (Jan 2026): Updated for life-bucket categories.
    * - promo → shopping (but only suggest archive for clearly promotional content)
-   * - noise → newsletters_general (suggest archive for high-volume newsletters)
+   * - noise → newsletters_creator (suggest archive for high-volume newsletters)
    * - news_politics and product_updates are also archiveable
    */
   private generateArchiveActions(categories: CategorySummary[]): SuggestedAction[] {
@@ -263,7 +263,7 @@ export class ActionSuggesterService {
     // These are typically informational and safe to archive in bulk
     // ─────────────────────────────────────────────────────────────────────────
     const archiveableCategories: EmailCategory[] = [
-      'newsletters_general',  // Substacks, digests - often pile up
+      'newsletters_creator',  // Substacks, digests - often pile up
       'news_politics',        // News updates - time-sensitive, archive old ones
       'product_updates',      // SaaS updates - usually low priority
     ];
@@ -353,18 +353,19 @@ export class ActionSuggesterService {
     // REFACTORED (Jan 2026): Updated to new life-bucket categories
     // ─────────────────────────────────────────────────────────────────────────
     const categoryLabels: Record<EmailCategory, string> = {
-      newsletters_general: 'newsletter',
+      newsletters_creator: 'newsletter',
+      newsletters_industry: 'industry newsletter',
       news_politics: 'news',
       product_updates: 'product update',
       local: 'local',
       shopping: 'shopping',
       travel: 'travel',
       finance: 'finance',
-      family_kids_school: 'school',
-      family_health_appointments: 'health',
-      client_pipeline: 'client',
-      business_work_general: 'work',
+      family: 'family',
+      clients: 'client',
+      work: 'work',
       personal_friends_family: 'personal',
+      other: 'other',
     };
 
     const categoryLabel = categoryLabels[category] || category;
@@ -389,7 +390,7 @@ export class ActionSuggesterService {
     // REFACTORED (Jan 2026): Updated to new life-bucket categories
     // ─────────────────────────────────────────────────────────────────────────
     const descriptions: Partial<Record<EmailCategory, string>> = {
-      newsletters_general: 'Newsletters and digests safe to archive',
+      newsletters_creator: 'Newsletters and digests safe to archive',
       news_politics: 'News updates that can be archived',
       product_updates: 'Product and service updates',
       shopping: 'Promotional and shopping emails',

@@ -138,18 +138,19 @@ export interface QuickActionStats {
  * ADDED (Jan 2026): For the new interactive filter bar.
  */
 export interface CategoryStats {
-  client_pipeline: number;
-  business_work_general: number;
+  clients: number;
+  work: number;
   personal_friends_family: number;
-  family_kids_school: number;
-  family_health_appointments: number;
+  family: number;
   finance: number;
   shopping: number;
-  newsletters_general: number;
+  newsletters_creator: number;
+  newsletters_industry: number;
   news_politics: number;
   product_updates: number;
   local: number;
   travel: number;
+  other: number;
 }
 
 /**
@@ -257,18 +258,19 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       none: 0,
     },
     categoryStats: {
-      client_pipeline: 0,
-      business_work_general: 0,
+      clients: 0,
+      work: 0,
       personal_friends_family: 0,
-      family_kids_school: 0,
-      family_health_appointments: 0,
+      family: 0,
       finance: 0,
       shopping: 0,
-      newsletters_general: 0,
+      newsletters_creator: 0,
+      newsletters_industry: 0,
       news_politics: 0,
       product_updates: 0,
       local: 0,
       travel: 0,
+      other: 0,
     },
   });
   const [eventData, setEventData] = React.useState<Map<string, EventPreviewData>>(new Map());
@@ -394,18 +396,19 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
 
       // Calculate category stats - count emails by category field
       const categoryStats: CategoryStats = {
-        client_pipeline: 0,
-        business_work_general: 0,
+        clients: 0,
+        work: 0,
         personal_friends_family: 0,
-        family_kids_school: 0,
-        family_health_appointments: 0,
+        family: 0,
         finance: 0,
         shopping: 0,
-        newsletters_general: 0,
+        newsletters_creator: 0,
+        newsletters_industry: 0,
         news_politics: 0,
         product_updates: 0,
         local: 0,
         travel: 0,
+        other: 0,
       };
 
       // Count events from labels array (has_event label)
@@ -638,18 +641,19 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
 
         // Recalculate category stats
         const categoryStats: CategoryStats = {
-          client_pipeline: 0,
-          business_work_general: 0,
+          clients: 0,
+          work: 0,
           personal_friends_family: 0,
-          family_kids_school: 0,
-          family_health_appointments: 0,
+          family: 0,
           finance: 0,
           shopping: 0,
-          newsletters_general: 0,
+          newsletters_creator: 0,
+          newsletters_industry: 0,
           news_politics: 0,
           product_updates: 0,
           local: 0,
           travel: 0,
+          other: 0,
         };
 
         for (const email of updatedEmails) {

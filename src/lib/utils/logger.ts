@@ -665,8 +665,8 @@ export const logAPI = {
  *
  * @example
  * ```typescript
- * logDiscover.cardClick({ category: 'newsletters_general', count: 47 });
- * logDiscover.modalOpen({ category: 'client_pipeline', emailCount: 12 });
+ * logDiscover.cardClick({ category: 'newsletters_creator', count: 47 });
+ * logDiscover.modalOpen({ category: 'clients', emailCount: 12 });
  * logDiscover.categoryMismatch({ category: 'travel', expected: 5, actual: 0 });
  * ```
  */

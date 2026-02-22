@@ -9,18 +9,19 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * Categories are now LIFE-BUCKET focused, not action-focused:
- * - newsletters_general: Substacks, digests, curated content
+ * - newsletters_creator: Substacks, digests, curated content (default for unsorted newsletters)
+ * - newsletters_industry: Industry-specific newsletters, professional reading
  * - news_politics: News outlets, political updates
  * - product_updates: Tech products, SaaS tools you use
  * - local: Community events, neighborhood, local orgs
  * - shopping: Orders, shipping, deals, retail
  * - travel: Flights, hotels, bookings, trip info
  * - finance: Bills, banking, investments, receipts
- * - family_kids_school: School emails, kid activities, logistics
- * - family_health_appointments: Medical, appointments, family scheduling
- * - client_pipeline: Direct client correspondence, project work
- * - business_work_general: Team, industry, professional (not direct clients)
+ * - family: Family, kids, school, health, appointments
+ * - clients: Direct client correspondence, project work
+ * - work: Team, industry, professional (not direct clients)
  * - personal_friends_family: Social, relationships, personal correspondence
+ * - other: Emails that don't fit other categories
  *
  * Actions are tracked separately via the `actions` table and `has_event` label.
  * Events are now detected via the `has_event` label and processed by EventDetector.
@@ -48,7 +49,7 @@
  * });
  *
  * if (result.success) {
- *   console.log(result.data.category);  // 'client_pipeline'
+ *   console.log(result.data.category);  // 'clients'
  *   console.log(result.data.labels);    // ['needs_review', 'has_deadline']
  *   console.log(result.data.summary);   // 'Sarah from Acme Corp wants you to review...'
  * }
@@ -144,13 +145,13 @@ For EVERY email, ask yourself:
 - If a reply is expected, is it worth the user's time to reply?
 
 Use INFERENCE and CONTEXT CLUES:
-- noreply@kumon.com → Family - Kids & School (even without "your child")
+- noreply@kumon.com → Family (even without "your child")
 - Email from *.edu domain → likely school-related
 - "Congratulations! You've been selected..." from unknown sender → fake recognition noise
 - "Quick question" from unknown sender → likely cold sales outreach
 - "I'd love to feature you..." from unknown PR person → mass outreach
 - Figma updates when user is a developer → Product Updates (tool they use)
-- LinkedIn message from potential client → Client Pipeline
+- LinkedIn message from potential client → Clients
 - Newsletter author whose content aligns with user's business → networking opportunity
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -291,8 +292,13 @@ NOT networking opportunities (even if they claim to be):
 CATEGORIES (choose ONE primary life bucket)
 ═══════════════════════════════════════════════════════════════════════════════
 
-- newsletters_general: Substacks, digests, curated content, reading material
-  Examples: Morning Brew, Hacker News digest, industry newsletters
+- newsletters_creator: Substacks, digests, curated content, reading material
+  Examples: Morning Brew, Hacker News digest, creator newsletters
+  KEY: Default for unsorted newsletter content
+
+- newsletters_industry: Industry-specific newsletters, professional reading
+  Examples: Industry trade publications, professional association updates, sector-specific digests
+  KEY: Newsletters focused on a specific industry or profession
 
 - news_politics: News outlets, political updates, current events
   Examples: NYT, CNN, political campaigns, government notices
@@ -314,19 +320,16 @@ CATEGORIES (choose ONE primary life bucket)
 - finance: Bills, banking, investments, financial receipts
   Examples: Bank statements, credit card alerts, invoices, payment confirmations
 
-- family_kids_school: School emails, kid activities, educational logistics
-  Examples: Teacher emails, school newsletters, class signups, activity registrations
-  KEY: Related to children's education, activities, or care
+- family: Family, kids, school, health, appointments, family scheduling
+  Examples: Teacher emails, school newsletters, doctor appointments, health reminders,
+  kid activities, class signups, prescription alerts
+  KEY: Related to family life - children, health, education, activities, care
 
-- family_health_appointments: Medical, health appointments, family scheduling
-  Examples: Doctor appointments, health reminders, prescription alerts, dental
-  KEY: Health-related for any family member
-
-- client_pipeline: Direct client work, project correspondence, billable relationships
+- clients: Direct client work, project correspondence, billable relationships
   Examples: Client emails about projects, contract discussions, deliverable reviews
   KEY: People/companies you do paid work FOR
 
-- business_work_general: Professional but not direct client work
+- work: Professional but not direct client work
   Examples: Internal team emails, industry discussions, professional networking,
   job boards, B2B SaaS marketing, conference invites
   KEY: Work-related but not a paying client relationship
@@ -335,31 +338,35 @@ CATEGORIES (choose ONE primary life bucket)
   Examples: Friends reaching out, family messages, social invitations, personal news
   KEY: Personal relationships (not business, not logistics)
 
+- other: Emails that don't fit neatly into any other category
+  Examples: Miscellaneous notifications, unclassifiable automated emails
+  KEY: Use sparingly - most emails should fit another category
+
 ═══════════════════════════════════════════════════════════════════════════════
 DISAMBIGUATION GUIDE
 ═══════════════════════════════════════════════════════════════════════════════
 
-PRODUCT UPDATES vs BUSINESS/WORK:
+PRODUCT UPDATES vs WORK:
 - Tool you USE daily (Figma, Slack, GitHub) → product_updates
-- Random B2B marketing → business_work_general
+- Random B2B marketing → work
 - Tool for a specific client project → product_updates (still a tool you use)
 
-CLIENT PIPELINE vs BUSINESS/WORK:
-- Email FROM a paying client → client_pipeline
-- Email about industry news → business_work_general
-- LinkedIn recruiter → business_work_general
-- LinkedIn message from potential client → client_pipeline
+CLIENTS vs WORK:
+- Email FROM a paying client → clients
+- Email about industry news → work
+- LinkedIn recruiter → work
+- LinkedIn message from potential client → clients
 
 PERSONAL vs FAMILY:
 - Friend inviting you to dinner → personal_friends_family
-- Kid's school event → family_kids_school
+- Kid's school event → family
 - Mom sharing photos → personal_friends_family
-- Pediatrician appointment → family_health_appointments
+- Pediatrician appointment → family
 
 LOCAL vs OTHER:
 - Event in your metro area → local (even if also tech, art, etc.)
-- Virtual webinar → business_work_general or newsletters_general
-- Conference in another city → travel or business_work_general
+- Virtual webinar → work or newsletters_creator
+- Conference in another city → travel or work
 
 ═══════════════════════════════════════════════════════════════════════════════
 LABELS (choose 0-5 secondary labels)
@@ -750,7 +757,7 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
     const rawCategory = rawData.category as string;
     const validatedCategory = EMAIL_CATEGORIES_SET.has(rawCategory)
       ? rawCategory as CategorizationData['category']
-      : (normalizeCategory(rawCategory) ?? 'newsletters_general') as CategorizationData['category'];
+      : (normalizeCategory(rawCategory) ?? 'newsletters_creator') as CategorizationData['category'];
 
     return {
       // Core categorization fields

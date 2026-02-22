@@ -22,7 +22,7 @@
  * ```tsx
  * <CategoryCard
  *   summary={{
- *     category: 'client_pipeline',
+ *     category: 'clients',
  *     count: 37,
  *     unreadCount: 12,
  *     urgencyScores: [9, 8, 6, 4],

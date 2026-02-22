@@ -46,18 +46,19 @@ const SIZE_CONFIG = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CATEGORY_ICON_COLORS: Record<EmailCategory, { bg: string; fg: string }> = {
-  client_pipeline:           { bg: 'bg-blue-100 dark:bg-blue-900/40',    fg: 'text-blue-600 dark:text-blue-300' },
-  business_work_general:     { bg: 'bg-violet-100 dark:bg-violet-900/40', fg: 'text-violet-600 dark:text-violet-300' },
+  clients:                   { bg: 'bg-blue-100 dark:bg-blue-900/40',    fg: 'text-blue-600 dark:text-blue-300' },
+  work:                      { bg: 'bg-violet-100 dark:bg-violet-900/40', fg: 'text-violet-600 dark:text-violet-300' },
   personal_friends_family:   { bg: 'bg-pink-100 dark:bg-pink-900/40',    fg: 'text-pink-600 dark:text-pink-300' },
-  family_kids_school:        { bg: 'bg-amber-100 dark:bg-amber-900/40',  fg: 'text-amber-600 dark:text-amber-300' },
-  family_health_appointments:{ bg: 'bg-rose-100 dark:bg-rose-900/40',    fg: 'text-rose-600 dark:text-rose-300' },
+  family:                    { bg: 'bg-amber-100 dark:bg-amber-900/40',  fg: 'text-amber-600 dark:text-amber-300' },
   finance:                   { bg: 'bg-green-100 dark:bg-green-900/40',  fg: 'text-green-600 dark:text-green-300' },
   travel:                    { bg: 'bg-sky-100 dark:bg-sky-900/40',      fg: 'text-sky-600 dark:text-sky-300' },
   shopping:                  { bg: 'bg-orange-100 dark:bg-orange-900/40', fg: 'text-orange-600 dark:text-orange-300' },
   local:                     { bg: 'bg-teal-100 dark:bg-teal-900/40',    fg: 'text-teal-600 dark:text-teal-300' },
-  newsletters_general:       { bg: 'bg-emerald-100 dark:bg-emerald-900/40', fg: 'text-emerald-600 dark:text-emerald-300' },
+  newsletters_creator:       { bg: 'bg-emerald-100 dark:bg-emerald-900/40', fg: 'text-emerald-600 dark:text-emerald-300' },
+  newsletters_industry:      { bg: 'bg-cyan-100 dark:bg-cyan-900/40',    fg: 'text-cyan-600 dark:text-cyan-300' },
   news_politics:             { bg: 'bg-slate-200 dark:bg-slate-800/60',  fg: 'text-slate-600 dark:text-slate-300' },
   product_updates:           { bg: 'bg-indigo-100 dark:bg-indigo-900/40', fg: 'text-indigo-600 dark:text-indigo-300' },
+  other:                     { bg: 'bg-gray-100 dark:bg-gray-800/40',    fg: 'text-gray-500 dark:text-gray-400' },
 };
 
 const FALLBACK_COLORS = { bg: 'bg-gray-100 dark:bg-gray-800/40', fg: 'text-gray-500 dark:text-gray-400' };
@@ -85,7 +86,7 @@ function IconSvg({ children, size }: { children: React.ReactNode; size: number }
   );
 }
 
-/** Briefcase — client_pipeline */
+/** Briefcase — clients */
 function BriefcaseIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
@@ -96,7 +97,7 @@ function BriefcaseIcon({ size }: { size: number }) {
   );
 }
 
-/** Building — business_work_general */
+/** Building — work */
 function BuildingIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
@@ -119,25 +120,13 @@ function PeopleHeartIcon({ size }: { size: number }) {
   );
 }
 
-/** Backpack — family_kids_school */
-function BackpackIcon({ size }: { size: number }) {
+/** Home/Family — family (merged kids+health) */
+function FamilyIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
-      <path d="M4 10a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
-      <path d="M9 8V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4" />
-      <path d="M9 14h6" />
-      <path d="M9 18h6" />
-    </IconSvg>
-  );
-}
-
-/** Medical cross — family_health_appointments */
-function MedicalIcon({ size }: { size: number }) {
-  return (
-    <IconSvg size={size}>
-      <rect x="3" y="3" width="18" height="18" rx="4" />
-      <path d="M12 8v8" />
-      <path d="M8 12h8" />
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9" />
+      <path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6" />
     </IconSvg>
   );
 }
@@ -183,8 +172,18 @@ function LocalIcon({ size }: { size: number }) {
   );
 }
 
-/** Newspaper — newsletters_general */
-function NewsletterIcon({ size }: { size: number }) {
+/** Pen/Quill — newsletters_creator (Substacks, personal blogs) */
+function CreatorNewsletterIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+      <path d="m15 5 4 4" />
+    </IconSvg>
+  );
+}
+
+/** Newspaper — newsletters_industry (tech/biz digests) */
+function IndustryNewsletterIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
       <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
@@ -214,6 +213,17 @@ function PackageIcon({ size }: { size: number }) {
   );
 }
 
+/** Clipboard — other/uncategorized */
+function ClipboardIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <rect x="5" y="2" width="14" height="20" rx="2" />
+      <path d="M9 2h6v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V2Z" />
+      <path d="M9 12h6M9 16h4" />
+    </IconSvg>
+  );
+}
+
 /** Fallback — generic mail icon */
 function MailFallbackIcon({ size }: { size: number }) {
   return (
@@ -229,18 +239,19 @@ function MailFallbackIcon({ size }: { size: number }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CATEGORY_ICONS: Record<EmailCategory, React.FC<{ size: number }>> = {
-  client_pipeline: BriefcaseIcon,
-  business_work_general: BuildingIcon,
+  clients: BriefcaseIcon,
+  work: BuildingIcon,
   personal_friends_family: PeopleHeartIcon,
-  family_kids_school: BackpackIcon,
-  family_health_appointments: MedicalIcon,
+  family: FamilyIcon,
   finance: FinanceIcon,
   travel: TravelIcon,
   shopping: ShoppingIcon,
   local: LocalIcon,
-  newsletters_general: NewsletterIcon,
+  newsletters_creator: CreatorNewsletterIcon,
+  newsletters_industry: IndustryNewsletterIcon,
   news_politics: GlobeNewsIcon,
   product_updates: PackageIcon,
+  other: ClipboardIcon,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════

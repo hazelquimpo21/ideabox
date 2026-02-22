@@ -132,14 +132,14 @@ export const AUTO_CATEGORIZE_DOMAINS: Record<string, EmailCategory> = {
   'dhl.com': 'shopping',
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Newsletters - General (substacks, digests, curated content)
+  // Newsletters - Creator (substacks, digests, curated content)
   // ─────────────────────────────────────────────────────────────────────────
-  'substack.com': 'newsletters_general',
-  'substackinc.com': 'newsletters_general',
-  'medium.com': 'newsletters_general',
-  'morningbrew.com': 'newsletters_general',
-  'thehustle.co': 'newsletters_general',
-  'ycombinator.com': 'newsletters_general', // HN digest
+  'substack.com': 'newsletters_creator',
+  'substackinc.com': 'newsletters_creator',
+  'medium.com': 'newsletters_creator',
+  'morningbrew.com': 'newsletters_creator',
+  'thehustle.co': 'newsletters_creator',
+  'ycombinator.com': 'newsletters_creator', // HN digest
 
   // ─────────────────────────────────────────────────────────────────────────
   // News & Politics
@@ -184,17 +184,17 @@ export const AUTO_CATEGORIZE_DOMAINS: Record<string, EmailCategory> = {
   'meetup.com': 'local',
   'evite.com': 'local',
   'paperlesspost.com': 'local',
-  'calendar.google.com': 'business_work_general',
-  'outlook.live.com': 'business_work_general',
+  'calendar.google.com': 'work',
+  'outlook.live.com': 'work',
 
   // ─────────────────────────────────────────────────────────────────────────
   // Product Updates - Social (notifications from social platforms)
   // ─────────────────────────────────────────────────────────────────────────
-  'linkedin.com': 'business_work_general', // Professional network
-  'quora.com': 'newsletters_general',
+  'linkedin.com': 'work', // Professional network
+  'quora.com': 'newsletters_creator',
   'pinterest.com': 'personal_friends_family',
-  'twitter.com': 'newsletters_general',
-  'x.com': 'newsletters_general',
+  'twitter.com': 'newsletters_creator',
+  'x.com': 'newsletters_creator',
   'facebook.com': 'personal_friends_family',
   'facebookmail.com': 'personal_friends_family',
   'instagram.com': 'personal_friends_family',
@@ -226,12 +226,12 @@ export const AUTO_CATEGORIZE_PREFIXES: Record<string, EmailCategory> = {
   billing: 'finance',
   payment: 'finance',
 
-  // Newsletters - General
-  newsletter: 'newsletters_general',
-  newsletters: 'newsletters_general',
-  digest: 'newsletters_general',
-  weekly: 'newsletters_general',
-  daily: 'newsletters_general',
+  // Newsletters - Creator
+  newsletter: 'newsletters_creator',
+  newsletters: 'newsletters_creator',
+  digest: 'newsletters_creator',
+  weekly: 'newsletters_creator',
+  daily: 'newsletters_creator',
   update: 'product_updates',
   updates: 'product_updates',
 
@@ -269,10 +269,15 @@ export const CATEGORY_INSIGHT_TEMPLATES: Record<
     plural: (count: number, urgentCount?: number) => string;
   }
 > = {
-  newsletters_general: {
+  newsletters_creator: {
     empty: 'No newsletters',
     singular: '1 newsletter',
     plural: (count) => `${count} newsletters and digests`,
+  },
+  newsletters_industry: {
+    empty: 'No industry newsletters',
+    singular: '1 industry newsletter',
+    plural: (count) => `${count} industry newsletters`,
   },
   news_politics: {
     empty: 'No news updates',
@@ -304,17 +309,12 @@ export const CATEGORY_INSIGHT_TEMPLATES: Record<
     singular: '1 finance email',
     plural: (count) => `${count} bills, payments, and statements`,
   },
-  family_kids_school: {
-    empty: 'No school emails',
-    singular: '1 school or kids email',
-    plural: (count) => `${count} school and kids emails`,
+  family: {
+    empty: 'No family emails',
+    singular: '1 family email',
+    plural: (count) => `${count} family emails`,
   },
-  family_health_appointments: {
-    empty: 'No health emails',
-    singular: '1 health appointment',
-    plural: (count) => `${count} health and appointment emails`,
-  },
-  client_pipeline: {
+  clients: {
     empty: 'No client emails',
     singular: '1 client email',
     plural: (count, urgentCount) =>
@@ -322,7 +322,7 @@ export const CATEGORY_INSIGHT_TEMPLATES: Record<
         ? `${count} client emails (${urgentCount} need attention)`
         : `${count} client emails`,
   },
-  business_work_general: {
+  work: {
     empty: 'No work emails',
     singular: '1 work email',
     plural: (count) => `${count} work and business emails`,
@@ -331,6 +331,11 @@ export const CATEGORY_INSIGHT_TEMPLATES: Record<
     empty: 'No personal emails',
     singular: '1 personal email',
     plural: (count) => `${count} personal emails`,
+  },
+  other: {
+    empty: 'No other emails',
+    singular: '1 other email',
+    plural: (count) => `${count} other emails`,
   },
 };
 
