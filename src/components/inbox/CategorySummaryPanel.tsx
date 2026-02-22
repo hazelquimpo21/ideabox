@@ -1,33 +1,67 @@
 /**
  * CategorySummaryPanel Component
  *
- * Right sidebar panel showing compact category summaries.
- * Provides quick overview of email distribution and allows
- * clicking to filter the main email list.
+ * Desktop-only right sidebar showing email distribution by category.
+ * Provides a quick overview of where emails land and allows one-click
+ * filtering by clicking any category row.
  *
- * Hidden on mobile, visible on large screens (lg+).
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * LAYOUT
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ *   ┌──────────────────────┐
+ *   │  Categories           │
+ *   │  142 emails · 8 unread│
+ *   ├──────────────────────┤
+ *   │  WORK                 │
+ *   │  💼 Client      12 ██ │
+ *   │  🏢 Work         8 █  │
+ *   ├──────────────────────┤
+ *   │  PERSONAL             │
+ *   │  👫 Personal    15 ██ │
+ *   │  ...                  │
+ *   └──────────────────────┘
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * CATEGORY GROUPS
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Categories are organized into four groups matching the filter bar order:
+ *   1. Work — client_pipeline, business_work_general
+ *   2. Personal — personal_friends_family, family_kids_school, family_health_appointments
+ *   3. Life Admin — finance, travel, shopping, local
+ *   4. Information — newsletters_general, news_politics, product_updates
+ *
+ * Groups with zero emails are hidden entirely.
  *
  * @module components/inbox/CategorySummaryPanel
- * @since February 2026
+ * @since February 2026 — Inbox UI Redesign v2
  */
 
 'use client';
 
 import * as React from 'react';
 import { cn } from '@/lib/utils/cn';
-import { CATEGORY_DISPLAY } from '@/types/discovery';
+import { CATEGORY_DISPLAY, CATEGORY_SHORT_LABELS, CATEGORY_ACCENT_COLORS } from '@/types/discovery';
+import { createLogger } from '@/lib/utils/logger';
 import type { EmailCategory } from '@/types/discovery';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('CategorySummaryPanel');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface CategorySummaryPanelProps {
-  /** Category counts from the email data */
+  /** Category → email count mapping */
   categoryCounts: Partial<Record<string, number>>;
   /** Currently active category filter (null = all) */
   activeCategory: EmailCategory | null;
-  /** Callback when a category is clicked */
+  /** Callback when a category is clicked (toggles filter) */
   onCategoryClick: (category: EmailCategory | null) => void;
   /** Total email count */
   totalCount: number;
@@ -36,7 +70,7 @@ export interface CategorySummaryPanelProps {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CATEGORY GROUPS
+// CATEGORY GROUPS — matches the conceptual ordering used in CategoryFilterBar
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface CategoryGroup {
@@ -63,24 +97,8 @@ const CATEGORY_GROUPS: CategoryGroup[] = [
   },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// BAR COLORS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const BAR_COLORS: Record<string, string> = {
-  client_pipeline: 'bg-blue-500',
-  business_work_general: 'bg-violet-500',
-  personal_friends_family: 'bg-pink-500',
-  family_kids_school: 'bg-amber-500',
-  family_health_appointments: 'bg-rose-500',
-  finance: 'bg-green-600',
-  travel: 'bg-sky-500',
-  shopping: 'bg-orange-500',
-  local: 'bg-teal-500',
-  newsletters_general: 'bg-emerald-500',
-  news_politics: 'bg-slate-500',
-  product_updates: 'bg-indigo-500',
-};
+// BAR_COLORS and SHORT_LABELS — now using centralized CATEGORY_ACCENT_COLORS
+// and CATEGORY_SHORT_LABELS from @/types/discovery
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
@@ -93,14 +111,17 @@ export function CategorySummaryPanel({
   totalCount,
   unreadCount,
 }: CategorySummaryPanelProps) {
+  // Calculate max count for proportional bar widths
   const maxCount = Math.max(
     1,
     ...Object.values(categoryCounts).map((v) => v || 0)
   );
 
+  logger.debug('Rendering sidebar', { totalCount, unreadCount, activeCategory });
+
   return (
-    <div className="space-y-4">
-      {/* Summary header */}
+    <div className="space-y-4" role="complementary" aria-label="Category summary">
+      {/* ── Summary Header ───────────────────────────────────────────── */}
       <div className="px-1">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
           Categories
@@ -112,14 +133,15 @@ export function CategorySummaryPanel({
           </span>
         </div>
         {unreadCount > 0 && (
-          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 font-medium">
             {unreadCount} unread
           </p>
         )}
       </div>
 
-      {/* Category groups */}
+      {/* ── Category Groups ──────────────────────────────────────────── */}
       {CATEGORY_GROUPS.map((group) => {
+        // Only show groups that have at least one email
         const groupCategories = group.categories.filter(
           (cat) => (categoryCounts[cat] || 0) > 0
         );
@@ -127,34 +149,44 @@ export function CategorySummaryPanel({
 
         return (
           <div key={group.label}>
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-1 mb-1.5">
+            {/* Group label */}
+            <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider px-1 mb-1.5">
               {group.label}
             </p>
+
+            {/* Category rows within this group */}
             <div className="space-y-0.5">
               {groupCategories.map((category) => {
                 const count = categoryCounts[category] || 0;
                 const display = CATEGORY_DISPLAY[category];
-                const barColor = BAR_COLORS[category] || 'bg-gray-400';
+                const barColor = CATEGORY_ACCENT_COLORS[category] || 'bg-gray-400';
                 const isActive = activeCategory === category;
+                // Minimum bar width so even small counts are visible
                 const barWidth = Math.max(8, (count / maxCount) * 100);
 
                 return (
                   <button
                     key={category}
                     type="button"
-                    onClick={() =>
-                      onCategoryClick(isActive ? null : category)
-                    }
+                    onClick={() => {
+                      logger.info('Sidebar category clicked', { category, isActive });
+                      onCategoryClick(isActive ? null : category);
+                    }}
                     className={cn(
-                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors group',
+                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left',
+                      'transition-colors group',
                       isActive
-                        ? 'bg-muted/80'
+                        ? 'bg-muted/80 ring-1 ring-border/60'
                         : 'hover:bg-muted/40',
                     )}
+                    aria-pressed={isActive}
                   >
-                    <span className="text-sm leading-none shrink-0">
+                    {/* Category emoji */}
+                    <span className="text-sm leading-none shrink-0" aria-hidden="true">
                       {display?.icon || '📧'}
                     </span>
+
+                    {/* Label + bar chart */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-0.5">
                         <span
@@ -165,7 +197,7 @@ export function CategorySummaryPanel({
                               : 'text-muted-foreground group-hover:text-foreground',
                           )}
                         >
-                          {display?.label?.split(' - ')[0]?.split('/')[0] || category}
+                          {CATEGORY_SHORT_LABELS[category] || display?.label?.split(' - ')[0]?.split('/')[0] || category}
                         </span>
                         <span
                           className={cn(
@@ -178,10 +210,11 @@ export function CategorySummaryPanel({
                           {count}
                         </span>
                       </div>
-                      {/* Mini bar chart */}
+
+                      {/* Mini proportional bar chart */}
                       <div className="h-1 bg-muted rounded-full overflow-hidden">
                         <div
-                          className={cn('h-full rounded-full transition-all', barColor)}
+                          className={cn('h-full rounded-full transition-all duration-300', barColor)}
                           style={{ width: `${barWidth}%` }}
                         />
                       </div>

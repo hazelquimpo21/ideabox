@@ -1,32 +1,42 @@
 /**
- * Inbox Tabs Component
+ * InboxTabs Component
  *
- * Manages the tabbed interface for the Inbox page:
- *   1. Inbox (default) — unified email feed with category filtering (Gmail/Spark style)
- *   2. Priority — emails ranked by AI priority score
- *   3. Archive — archived emails with search/filter/bulk actions
- *
- * Tab state is persisted in the URL via the `?tab=` query parameter.
+ * Manages the tabbed interface for the Inbox page. This is the central
+ * orchestrator that wires together all inbox views and the email detail modal.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * EMAIL DETAIL MODAL (Performance Audit P0-A)
+ * TABS
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Email clicks from all tabs open an EmailDetailModal instead of navigating
- * to a full page. This eliminates the full-page unmount/remount cycle and
- * makes back-navigation instant.
+ *   1. Inbox (default) — unified email feed with search + category filtering
+ *   2. Priority         — emails ranked by AI priority score
+ *   3. Archive          — archived emails with search/filter/bulk actions
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * TAB ROUTING
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * - (default)       → Inbox feed → InboxFeed component (unified email list)
- * - ?tab=priority   → Priority tab → PriorityEmailList component
- * - ?tab=archive    → Archive tab → ArchiveContent component
+ * Tab state is persisted in the URL via the `?tab=` query parameter:
+ *   - (default)       → Inbox feed
+ *   - ?tab=priority   → Priority tab
+ *   - ?tab=archive    → Archive tab
+ *   - ?tab=categories → Legacy alias, maps to Inbox feed
+ *
+ * Tab switches use router.replace() (no scroll) for instant transitions.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * EMAIL DETAIL MODAL
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Email clicks from ALL tabs open an EmailDetailModal instead of navigating
+ * to a full page. This eliminates the full-page unmount/remount cycle:
+ *   - The list stays mounted behind the modal
+ *   - Back-navigation is instant (just close the modal)
+ *   - Modal provides star/archive/read actions with optimistic updates
+ *   - "Open Full Page" button available for users who want the full view
  *
  * @module components/inbox/InboxTabs
- * @since February 2026 — Inbox UI Redesign
- * @see INBOX_PERFORMANCE_AUDIT.md — P0-A
+ * @since February 2026 — Inbox UI Redesign v2
  */
 
 'use client';
@@ -37,7 +47,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
 import { Inbox, TrendingUp, Archive } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
-// ─── Content components ─────────────────────────────────────────────────────
+// ─── Content components (lazy-loaded via tab content) ───────────────────────
 import { InboxFeed } from '@/components/inbox/InboxFeed';
 import { ArchiveContent } from '@/components/archive';
 import { PriorityEmailList } from '@/components/inbox/PriorityEmailList';
@@ -53,11 +63,11 @@ const logger = createLogger('InboxTabs');
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Valid tab values for URL routing. */
+/** All valid tab values — used for URL param validation */
 const VALID_TABS = ['inbox', 'priority', 'archive'] as const;
 type InboxTab = (typeof VALID_TABS)[number];
 
-/** Default tab when no query param is present. */
+/** Default tab when no query param is present */
 const DEFAULT_TAB: InboxTab = 'inbox';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -67,12 +77,9 @@ const DEFAULT_TAB: InboxTab = 'inbox';
 /**
  * InboxTabs — tabbed interface for the Inbox page.
  *
- * Reads the `?tab=` query param to determine the active tab.
- * When the user switches tabs, the URL is updated without a full navigation.
- * Each tab renders its content lazily to avoid unnecessary data fetching.
- *
- * Email clicks from all tabs open a modal instead of navigating
- * to a full page, eliminating the full-page re-render cycle.
+ * Reads `?tab=` from the URL to determine the active tab.
+ * Switches tabs via router.replace() (no full navigation).
+ * All email clicks open a modal overlay.
  */
 export function InboxTabs() {
   const searchParams = useSearchParams();
@@ -81,7 +88,7 @@ export function InboxTabs() {
 
   // ─── Determine Active Tab from URL ─────────────────────────────────────────
   const tabParam = searchParams.get('tab');
-  // Support legacy 'categories' tab param → map to 'inbox'
+  // Legacy support: `?tab=categories` maps to `inbox`
   const normalizedTab = tabParam === 'categories' ? 'inbox' : tabParam;
   const activeTab: InboxTab = VALID_TABS.includes(normalizedTab as InboxTab)
     ? (normalizedTab as InboxTab)
@@ -92,11 +99,9 @@ export function InboxTabs() {
   const [selectedEmailCategory, setSelectedEmailCategory] = React.useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
 
-  logger.debug('InboxTabs rendering', { activeTab, tabParam, isModalOpen });
+  logger.debug('Render', { activeTab, tabParam, isModalOpen });
 
-  /**
-   * Handle tab change by updating the URL query parameter.
-   */
+  // ─── Tab Change Handler ────────────────────────────────────────────────────
   const handleTabChange = React.useCallback(
     (value: string) => {
       const tab = value as InboxTab;
@@ -104,6 +109,7 @@ export function InboxTabs() {
 
       const params = new URLSearchParams(searchParams.toString());
 
+      // Default tab doesn't need a query param
       if (tab === DEFAULT_TAB) {
         params.delete('tab');
       } else {
@@ -117,9 +123,7 @@ export function InboxTabs() {
     [activeTab, searchParams, pathname, router]
   );
 
-  /**
-   * Open email detail modal — called from all tabs.
-   */
+  // ─── Email Selection Handler (opens modal) ────────────────────────────────
   const handleEmailSelect = React.useCallback(
     (email: { id: string; category?: string | null }) => {
       logger.info('Email selected for modal', {
@@ -134,23 +138,23 @@ export function InboxTabs() {
     [activeTab]
   );
 
-  /**
-   * Close email detail modal.
-   */
+  // ─── Modal Close Handler ──────────────────────────────────────────────────
   const handleModalClose = React.useCallback(() => {
     logger.info('Email detail modal closing', { emailId: selectedEmailId });
     setIsModalOpen(false);
+    // Delay state cleanup to allow close animation to finish
     setTimeout(() => {
       setSelectedEmailId(null);
       setSelectedEmailCategory(null);
     }, 200);
   }, [selectedEmailId]);
 
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        {/* ─── Tab Headers ────────────────────────────────────────────────── */}
-        <TabsList variant="underline" className="mb-5">
+        {/* ── Tab Bar ────────────────────────────────────────────────────── */}
+        <TabsList variant="underline" className="mb-6">
           <TabsTrigger
             value="inbox"
             variant="underline"
@@ -174,23 +178,21 @@ export function InboxTabs() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ─── Tab Content: Inbox Feed ───────────────────────────────────── */}
+        {/* ── Tab Content ────────────────────────────────────────────────── */}
         <TabsContent value="inbox">
           <InboxFeed onEmailSelect={handleEmailSelect} />
         </TabsContent>
 
-        {/* ─── Tab Content: Priority ───────────────────────────────────── */}
         <TabsContent value="priority">
           <PriorityEmailList onEmailSelect={handleEmailSelect} />
         </TabsContent>
 
-        {/* ─── Tab Content: Archive ────────────────────────────────────── */}
         <TabsContent value="archive">
           <ArchiveContent onEmailSelect={handleEmailSelect} />
         </TabsContent>
       </Tabs>
 
-      {/* ─── Email Detail Modal ────────────────────────────────────────── */}
+      {/* ── Email Detail Modal (shared across all tabs) ──────────────── */}
       <EmailDetailModal
         emailId={selectedEmailId}
         category={selectedEmailCategory}

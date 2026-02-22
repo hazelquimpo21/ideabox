@@ -1,37 +1,33 @@
 /**
  * Inbox Page — Email Intelligence Hub
  *
+ * The main entry point for the inbox. Renders a page header with
+ * breadcrumbs and delegates all content to the InboxTabs component.
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
- * NAVIGATION REDESIGN — Phase 2 (February 2026)
+ * TABS (managed by InboxTabs)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Full-featured Inbox page with three tabs:
+ *   1. Inbox (default) — unified email feed with "at a glance" metadata
+ *   2. Priority         — emails ranked by AI priority score
+ *   3. Archive          — archived emails with search/filter/bulk actions
  *
- *   1. Categories (default) — email categorization dashboard (DiscoverPage)
- *   2. Priority — emails ranked by AI priority score
- *   3. Archive — archived emails with search/filter/bulk actions
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * ROUTING
+ * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Tab state is persisted in the URL via the `?tab=` query parameter:
- *   - (default)       → Categories tab
- *   - ?tab=priority   → Priority tab
- *   - ?tab=archive    → Archive tab
+ *   Route: /inbox
+ *   Query params: ?tab=inbox|priority|archive (default: inbox)
+ *   Sub-routes (separate pages):
+ *     /inbox/[category]            — category detail page
+ *     /inbox/[category]/[emailId]  — single email detail page
  *
- * Sub-routes `/inbox/[category]` and `/inbox/[category]/[emailId]` are
- * separate pages (thin wrappers) and NOT part of this tabbed UI.
- *
- * Route: /inbox
- * Redirects:
- *   /discover → /inbox   (configured in next.config.mjs)
- *   /archive  → /inbox?tab=archive (redirect page file)
- *
- * Query Parameters:
- *   - tab:      'categories' | 'priority' | 'archive' (default: categories)
- *   - modal:    Category name to open category modal (passed to DiscoverPage)
- *   - category: Legacy param — preserved for backwards compatibility
+ *   Redirects:
+ *     /discover → /inbox           (next.config.mjs)
+ *     /archive  → /inbox?tab=archive
  *
  * @module app/(auth)/inbox/page
- * @since February 2026
- * @see NAVIGATION_REDESIGN_PLAN.md for full context
+ * @since February 2026 — Inbox UI Redesign v2
  */
 
 'use client';
@@ -50,19 +46,12 @@ const logger = createLogger('InboxPage');
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Inbox page — tabbed interface for email management.
- *
- * Phase 2: Full InboxTabs component with Categories, Priority, and Archive tabs.
- * Replaces the Phase 1 thin wrapper that conditionally rendered
- * DiscoverPage/ArchivePage based on the `tab` query param.
- */
 export default function InboxPage() {
-  logger.info('Rendering Inbox page (Phase 2 — tabbed UI)');
+  logger.info('Rendering inbox page');
 
   return (
     <div>
-      {/* ─── Page Header ──────────────────────────────────────────────────── */}
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
       <PageHeader
         title="Inbox"
         description="Your email intelligence hub."
@@ -72,7 +61,7 @@ export default function InboxPage() {
         ]}
       />
 
-      {/* ─── Tabbed Content ───────────────────────────────────────────────── */}
+      {/* ── Tabbed Content ───────────────────────────────────────────────── */}
       <InboxTabs />
     </div>
   );

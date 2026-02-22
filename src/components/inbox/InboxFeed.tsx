@@ -1,26 +1,43 @@
 /**
  * InboxFeed Component
  *
- * Unified inbox view inspired by Spark Mail / Gmail.
- * Replaces the old "Categories" tab grid-of-cards approach with a
- * scannable email list that feels familiar and human-friendly.
+ * The primary inbox view — a unified, scannable email feed inspired by
+ * Gmail / Spark Mail. Designed for rapid triage with "at a glance" metadata
+ * surfaced in each row.
  *
- * Layout:
- *   - Top: Category filter pills (horizontal scroll)
- *   - Left (main): Email list with priority section at top
- *   - Right (desktop): Category summary sidebar with counts + mini bars
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * LAYOUT
+ * ═══════════════════════════════════════════════════════════════════════════════
  *
- * All 12 categories are wired up. Click any category pill or sidebar
- * item to filter. Click an email to open the detail modal.
+ *   ┌─────────────────────────────────────────────────────────────────────────┐
+ *   │  [Search input]                                                        │
+ *   │  [Category filter pills — horizontal scroll]                           │
+ *   ├────────────────────────────────────────────────┬────────────────────────┤
+ *   │  ★ PRIORITY (top 5 high-score emails)          │  CATEGORIES sidebar   │
+ *   │  ─────────────────────────────                  │  (desktop only, lg+)  │
+ *   │  RECENT (remaining emails)                      │  counts + mini bars   │
+ *   │  ─────────────────────────────                  │                       │
+ *   │  [Load more] · [Footer: count, unread, refresh] │                      │
+ *   └────────────────────────────────────────────────┴────────────────────────┘
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * DATA FLOW
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * - `useEmails()` hook fetches lightweight email list fields (no body)
+ * - Category filtering: server-side via hook param
+ * - Search filtering: client-side on subject, sender, snippet, gist
+ * - Priority split: client-side (top 5 with priority_score >= 50)
+ * - Star toggle: optimistic update + Supabase mutation
  *
  * @module components/inbox/InboxFeed
- * @since February 2026
+ * @since February 2026 — Inbox UI Redesign v2
  */
 
 'use client';
 
 import * as React from 'react';
-import { RefreshCw, Inbox, Sparkles, Search } from 'lucide-react';
+import { RefreshCw, Inbox, Sparkles, Search, X } from 'lucide-react';
 import { Button, Skeleton, Input } from '@/components/ui';
 import { useEmails } from '@/hooks';
 import { CategoryFilterBar } from './CategoryFilterBar';
@@ -52,7 +69,7 @@ const PRIORITY_THRESHOLD = 50;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface InboxFeedProps {
-  /** Callback when an email is selected (opens detail modal) */
+  /** Callback when an email is selected (opens detail modal in parent) */
   onEmailSelect?: (email: { id: string; category?: string | null }) => void;
 }
 
@@ -63,11 +80,11 @@ export interface InboxFeedProps {
 export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
   const supabase = React.useMemo(() => createClient(), []);
 
-  // ─── State ──────────────────────────────────────────────────────────────────
+  // ─── Local State ─────────────────────────────────────────────────────────────
   const [activeCategory, setActiveCategory] = React.useState<EmailCategory | null>(null);
   const [searchQuery, setSearchQuery] = React.useState('');
 
-  // ─── Fetch emails ───────────────────────────────────────────────────────────
+  // ─── Fetch Emails ────────────────────────────────────────────────────────────
   const {
     emails,
     isLoading,
@@ -82,10 +99,12 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
     limit: 50,
   });
 
-  // ─── Filter by search query (client-side) ─────────────────────────────────
+  // ─── Client-Side Search Filter ───────────────────────────────────────────────
+  // Filters on subject, sender name/email, snippet, and AI gist.
   const filteredEmails = React.useMemo(() => {
     if (!searchQuery) return emails;
     const q = searchQuery.toLowerCase();
+    logger.debug('Filtering emails by search query', { query: q, total: emails.length });
     return emails.filter(
       (e) =>
         e.subject?.toLowerCase().includes(q) ||
@@ -96,10 +115,11 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
     );
   }, [emails, searchQuery]);
 
-  // ─── Split into priority + rest ─────────────────────────────────────────────
+  // ─── Priority / Recent Split ─────────────────────────────────────────────────
+  // When viewing all categories, the top N high-scoring emails float to a
+  // "Priority" section. When a category filter is active, show one flat list.
   const { priorityEmails, recentEmails } = React.useMemo(() => {
     if (activeCategory) {
-      // When filtered by category, don't split - show all in one list
       return { priorityEmails: [], recentEmails: filteredEmails };
     }
 
@@ -119,31 +139,41 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
       }
     }
 
+    logger.debug('Split emails into priority/recent', {
+      priority: priority.length,
+      recent: rest.length,
+    });
+
     return { priorityEmails: priority, recentEmails: rest };
   }, [filteredEmails, activeCategory]);
 
-  // ─── Handlers ───────────────────────────────────────────────────────────────
+  // ─── Event Handlers ──────────────────────────────────────────────────────────
 
+  /** Update active category filter — triggers server-side refetch */
   const handleCategoryChange = React.useCallback(
     (category: EmailCategory | null) => {
-      logger.info('Category filter changed', { category: category || 'all' });
+      logger.info('Category filter changed', { from: activeCategory, to: category || 'all' });
       setActiveCategory(category);
     },
-    []
+    [activeCategory]
   );
 
+  /** Open the email detail modal in the parent InboxTabs component */
   const handleEmailClick = React.useCallback(
     (email: Email) => {
-      if (onEmailSelect) {
-        onEmailSelect({ id: email.id, category: email.category });
-      }
+      logger.debug('Email row clicked', { emailId: email.id, subject: email.subject });
+      onEmailSelect?.({ id: email.id, category: email.category });
     },
     [onEmailSelect]
   );
 
+  /** Toggle star with optimistic update, rollback on Supabase error */
   const handleToggleStar = React.useCallback(
     async (email: Email) => {
       const newStarred = !email.is_starred;
+      logger.info('Toggling star', { emailId: email.id, starred: newStarred });
+
+      // Optimistic update
       updateEmail(email.id, { is_starred: newStarred });
 
       try {
@@ -153,33 +183,46 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
           .eq('id', email.id);
 
         if (updateError) throw updateError;
+        logger.debug('Star persisted to Supabase', { emailId: email.id });
       } catch (err) {
+        // Rollback on failure
         updateEmail(email.id, { is_starred: !newStarred });
-        logger.error('Failed to toggle star', { emailId: email.id, error: String(err) });
+        logger.error('Failed to toggle star — rolled back', {
+          emailId: email.id,
+          error: String(err),
+        });
       }
     },
     [supabase, updateEmail]
   );
 
-  // ─── Loading State ──────────────────────────────────────────────────────────
+  /** Clear the search input */
+  const handleClearSearch = React.useCallback(() => {
+    logger.debug('Search cleared');
+    setSearchQuery('');
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // LOADING STATE
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   if (isLoading) {
     return (
       <div>
         {/* Filter bar skeleton */}
         <div className="flex gap-2 mb-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+          {Array.from({ length: 6 }, (_, i) => (
             <Skeleton key={i} className="h-8 w-20 rounded-full" />
           ))}
         </div>
-        {/* Email list skeleton */}
+        {/* Two-column skeleton */}
         <div className="flex gap-6">
           <div className="flex-1">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-border/40">
-                <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} className="flex items-start gap-3 px-4 py-3 border-b border-border/40">
+                <Skeleton className="h-9 w-9 rounded-full shrink-0" />
                 <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3.5 w-32" />
+                  <Skeleton className="h-3.5 w-36" />
                   <Skeleton className="h-3.5 w-3/4" />
                   <Skeleton className="h-3 w-1/2" />
                 </div>
@@ -187,11 +230,11 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
               </div>
             ))}
           </div>
-          {/* Sidebar skeleton - hidden on mobile */}
+          {/* Sidebar skeleton — desktop only */}
           <div className="hidden lg:block w-56 shrink-0 space-y-3">
             <Skeleton className="h-4 w-20" />
             <Skeleton className="h-10 w-full" />
-            {[1, 2, 3, 4].map((i) => (
+            {Array.from({ length: 4 }, (_, i) => (
               <Skeleton key={i} className="h-10 w-full rounded-md" />
             ))}
           </div>
@@ -200,9 +243,12 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
     );
   }
 
-  // ─── Error State ────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ERROR STATE
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   if (error) {
+    logger.error('InboxFeed render error', { message: error.message });
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <p className="text-destructive mb-4">{error.message}</p>
@@ -214,7 +260,9 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
     );
   }
 
-  // ─── Empty State ────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // EMPTY STATE
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   if (emails.length === 0 && !activeCategory) {
     return (
@@ -231,25 +279,37 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
     );
   }
 
-  // ─── Main View ──────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // MAIN VIEW
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   return (
     <div>
-      {/* Search + Filter bar */}
-      <div className="space-y-3 mb-4">
-        {/* Search */}
+      {/* ── Search + Category Filter ───────────────────────────────────────── */}
+      <div className="space-y-3 mb-5">
+        {/* Search input with clear button */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
             placeholder="Search emails..."
             value={searchQuery}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 text-sm"
+            className="pl-9 pr-8 h-9 text-sm bg-muted/30 border-border/50 focus:bg-background transition-colors"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-muted transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
 
-        {/* Category pills */}
+        {/* Category filter pills */}
         <CategoryFilterBar
           activeCategory={activeCategory}
           onCategoryChange={handleCategoryChange}
@@ -258,11 +318,12 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
         />
       </div>
 
-      {/* Two-column layout: email list + sidebar */}
+      {/* ── Two-Column Layout ──────────────────────────────────────────────── */}
       <div className="flex gap-6">
-        {/* Main email list */}
+        {/* Left: Email list */}
         <div className="flex-1 min-w-0">
-          {/* Active filter indicator */}
+
+          {/* Empty category state */}
           {activeCategory && filteredEmails.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Inbox className="h-10 w-10 text-muted-foreground mb-3" />
@@ -280,16 +341,28 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
             </div>
           )}
 
-          {/* Priority section */}
+          {/* Search results indicator */}
+          {searchQuery && filteredEmails.length > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 mb-1">
+              <span className="text-xs text-muted-foreground">
+                {filteredEmails.length} result{filteredEmails.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
+              </span>
+            </div>
+          )}
+
+          {/* ── Priority Section ─────────────────────────────────────────── */}
           {priorityEmails.length > 0 && (
-            <div className="mb-2">
+            <div className="mb-3">
               <div className="flex items-center gap-2 px-4 py-2">
                 <Sparkles className="h-3.5 w-3.5 text-amber-500" />
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Priority
                 </span>
+                <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+                  {priorityEmails.length}
+                </span>
               </div>
-              <div className="rounded-lg border border-border/60 bg-card overflow-hidden mb-4">
+              <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
                 {priorityEmails.map((email: Email) => (
                   <InboxEmailRow
                     key={email.id}
@@ -303,16 +376,21 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
             </div>
           )}
 
-          {/* Recent emails section */}
+          {/* ── Recent Section ───────────────────────────────────────────── */}
           {recentEmails.length > 0 && (
             <div>
+              {/* Section header — only show when priority section is visible */}
               {priorityEmails.length > 0 && (
                 <div className="flex items-center gap-2 px-4 py-2">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {activeCategory ? 'Emails' : 'Recent'}
                   </span>
+                  <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+                    {recentEmails.length}
+                  </span>
                 </div>
               )}
+
               <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
                 {recentEmails.map((email: Email) => (
                   <InboxEmailRow
@@ -325,15 +403,10 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
                 ))}
               </div>
 
-              {/* Load more */}
+              {/* Load more trigger */}
               {hasMore && (
                 <div className="flex justify-center pt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={loadMore}
-                    className="gap-2"
-                  >
+                  <Button variant="outline" size="sm" onClick={loadMore} className="gap-2">
                     Load more emails
                   </Button>
                 </div>
@@ -341,13 +414,13 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
             </div>
           )}
 
-          {/* Footer info */}
+          {/* ── Footer: stats + refresh ──────────────────────────────────── */}
           {filteredEmails.length > 0 && (
             <div className="flex items-center justify-between px-4 py-3 mt-2">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground/70">
                 {filteredEmails.length} email{filteredEmails.length !== 1 ? 's' : ''}
                 {activeCategory && ' in this category'}
-                {stats.unread > 0 && !activeCategory && ` \u00b7 ${stats.unread} unread`}
+                {stats.unread > 0 && !activeCategory && ` · ${stats.unread} unread`}
               </p>
               <Button
                 variant="ghost"
@@ -362,7 +435,7 @@ export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
           )}
         </div>
 
-        {/* Right sidebar - category summary (desktop only) */}
+        {/* Right: Category summary sidebar — desktop only */}
         <div className="hidden lg:block w-56 shrink-0">
           <div className="sticky top-4">
             <CategorySummaryPanel

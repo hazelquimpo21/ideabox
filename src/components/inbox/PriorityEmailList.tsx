@@ -1,28 +1,42 @@
 /**
- * Priority Email List Component
+ * PriorityEmailList Component
  *
- * Displays emails ranked by AI priority score. Fetches emails directly from
- * Supabase ordered by `priority_score` descending to surface the most
- * important emails first.
+ * Displays emails ranked by AI priority score, highest first.
+ * This is the content for the "Priority" tab in InboxTabs.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * DATA SOURCE
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * - Supabase: `emails` table ordered by `priority_score` DESC
- * - Shows: sender, subject, priority score badge, category badge, date
- * - Click navigates to `/inbox/[category]/[emailId]`
+ * Fetches directly from Supabase `emails` table (not using useEmails hook)
+ * because it needs a different sort order (priority_score DESC) and only
+ * includes emails that have been scored.
+ *
+ * Fields fetched: id, sender_name, sender_email, subject, category,
+ * priority_score, date, snippet, gist, quick_action, signal_strength
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * USAGE
+ * ROW LAYOUT
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * ```tsx
- * <PriorityEmailList />
- * ```
+ *   [Score Badge] [Sender] [Subject] [Gist snippet] [Category] [Action] [Date] [→]
+ *
+ * Score badge is color-coded:
+ *   - 80+ = red (critical)
+ *   - 60+ = orange (high)
+ *   - 40+ = yellow (medium)
+ *   - <40 = green (low)
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * MODAL vs NAVIGATION
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * When `onEmailSelect` prop is provided, clicking a row opens the email
+ * in a modal (keeps the priority list mounted for instant back-navigation).
+ * Otherwise falls back to Link-based full-page navigation.
  *
  * @module components/inbox/PriorityEmailList
- * @since February 2026 — Phase 2 Navigation Redesign
+ * @since February 2026 — Inbox UI Redesign v2
  */
 
 'use client';
@@ -42,7 +56,14 @@ import {
   RefreshCw,
   ArrowRight,
   Inbox,
+  MessageSquare,
+  Eye,
+  Calendar,
+  CornerUpRight,
+  Bookmark,
 } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
+import { CATEGORY_BADGE_COLORS, CATEGORY_SHORT_LABELS } from '@/types/discovery';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
 
@@ -56,7 +77,7 @@ const logger = createLogger('PriorityEmailList');
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Subset of email fields needed for the priority list display. */
+/** Lightweight email fields needed for the priority list display */
 interface PriorityEmail {
   id: string;
   sender_name: string | null;
@@ -66,53 +87,31 @@ interface PriorityEmail {
   priority_score: number | null;
   date: string;
   snippet: string | null;
+  gist: string | null;
+  quick_action: string | null;
+  signal_strength: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Maximum number of emails to fetch for the priority list. */
+/** Maximum number of emails to fetch for the priority list */
 const MAX_EMAILS = 50;
 
-/**
- * Category badge color mapping for all 12 life-bucket categories.
- * Each category gets a distinct color for visual differentiation in the
- * priority list. Colors are consistent with the design system.
- */
-const CATEGORY_COLORS: Record<string, string> = {
-  // Work & Business
-  client_pipeline: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  business_work_general: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  // Family & Personal
-  family_kids_school: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  family_health_appointments: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
-  personal_friends_family: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-  // Life Admin
-  finance: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  travel: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
-  shopping: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  local: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-  // Information
-  newsletters_general: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
-  news_politics: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400',
-  product_updates: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-400',
-};
+// Category colors and labels — using centralized constants from @/types/discovery
+// CATEGORY_BADGE_COLORS and CATEGORY_SHORT_LABELS are imported above
 
-/** Friendly category labels. */
-const CATEGORY_LABELS: Record<string, string> = {
-  client_pipeline: 'Client',
-  business_work_general: 'Work',
-  family_kids_school: 'School',
-  family_health_appointments: 'Health',
-  personal_friends_family: 'Personal',
-  finance: 'Finance',
-  travel: 'Travel',
-  shopping: 'Shopping',
-  local: 'Local',
-  newsletters_general: 'Newsletter',
-  news_politics: 'News',
-  product_updates: 'Updates',
+/**
+ * Quick action icons for priority list — shows what action the AI suggests.
+ * Only the most common actions are mapped; others are hidden.
+ */
+const ACTION_ICONS: Record<string, React.ElementType> = {
+  respond: MessageSquare,
+  review: Eye,
+  calendar: Calendar,
+  follow_up: CornerUpRight,
+  save: Bookmark,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -120,7 +119,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Returns a color class based on priority score.
+ * Returns a color class for the priority score badge.
+ * Higher scores get warmer (more urgent) colors.
  */
 function getScoreColor(score: number): string {
   if (score >= 80) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
@@ -130,7 +130,8 @@ function getScoreColor(score: number): string {
 }
 
 /**
- * Formats a date string relative to today.
+ * Formats a date string into a compact relative format.
+ * "Today" → "Yesterday" → "3d ago" → "2w ago" → "Jan 15"
  */
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -146,17 +147,16 @@ function formatRelativeDate(dateStr: string): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SUB-COMPONENTS
+// SUB-COMPONENT: PriorityEmailRow
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Memoized priority email row. Extracted from inline JSX to enable React.memo
- * and prevent re-renders of all 50 rows when a single row changes.
+ * Memoized priority email row.
+ * Extracted to enable React.memo and prevent re-renders of all rows
+ * when a single row changes.
  *
- * When `onEmailSelect` is provided, clicking opens the email in a modal
- * (keeping the priority list mounted). Otherwise falls back to Link navigation.
- *
- * @see INBOX_PERFORMANCE_AUDIT.md — P3, P0-A
+ * When `onEmailSelect` is provided, renders as a <button> that opens
+ * the modal. Otherwise renders as a <Link> for full-page navigation.
  */
 const PriorityEmailRow = React.memo(function PriorityEmailRow({
   email,
@@ -166,58 +166,79 @@ const PriorityEmailRow = React.memo(function PriorityEmailRow({
   onEmailSelect?: (email: PriorityEmail) => void;
 }) {
   const category = email.category || 'uncategorized';
-  const categoryColor = CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
-  const categoryLabel = CATEGORY_LABELS[category] || category.replace(/_/g, ' ');
+  const categoryColor = CATEGORY_BADGE_COLORS[category as keyof typeof CATEGORY_BADGE_COLORS] || 'bg-gray-50 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
+  const categoryLabel = CATEGORY_SHORT_LABELS[category as keyof typeof CATEGORY_SHORT_LABELS] || category.replace(/_/g, ' ');
+
+  // Determine quick action icon (if any)
+  const ActionIcon = email.quick_action ? ACTION_ICONS[email.quick_action] : null;
+
+  // Prefer gist over snippet for the preview text
+  const previewText = email.gist || email.snippet;
 
   const rowContent = (
     <>
-      {/* Priority Score Badge */}
+      {/* Priority score badge */}
       {email.priority_score !== null && (
-        <Badge className={`shrink-0 gap-1 ${getScoreColor(email.priority_score)}`}>
+        <Badge className={cn('shrink-0 gap-1 font-semibold tabular-nums', getScoreColor(email.priority_score))}>
           <TrendingUp className="h-3 w-3" />
           {email.priority_score}
         </Badge>
       )}
 
-      {/* Email Info */}
+      {/* Email info — sender, subject, gist */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className="font-medium text-sm truncate">
             {email.sender_name || email.sender_email}
           </span>
+          {/* Quick action icon hint */}
+          {ActionIcon && (
+            <ActionIcon
+              className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0"
+              aria-label={`Suggested action: ${email.quick_action}`}
+            />
+          )}
         </div>
         <p className="text-sm truncate">
           {email.subject || '(No subject)'}
         </p>
-        {email.snippet && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
-            {email.snippet}
+        {/* AI gist preview — the key "at a glance" addition */}
+        {previewText && (
+          <p className="text-xs text-muted-foreground/70 truncate mt-0.5">
+            {previewText}
           </p>
         )}
       </div>
 
-      {/* Category Badge */}
-      <Badge className={`text-xs shrink-0 border-0 ${categoryColor}`}>
+      {/* Category badge */}
+      <Badge className={cn('text-[10px] shrink-0 border-0 font-medium', categoryColor)}>
         {categoryLabel}
       </Badge>
 
       {/* Date */}
-      <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+      <span className="text-xs text-muted-foreground/70 whitespace-nowrap shrink-0 tabular-nums">
         {formatRelativeDate(email.date)}
       </span>
 
-      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+      {/* Arrow indicator */}
+      <ArrowRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
     </>
   );
 
-  // When onEmailSelect is provided, use a button that opens the email detail
-  // in a modal instead of navigating away (keeps priority list mounted).
+  // Modal mode — button that keeps the priority list mounted
   if (onEmailSelect) {
     return (
       <button
         type="button"
-        onClick={() => onEmailSelect(email)}
-        className="flex items-center gap-4 p-4 border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0 w-full text-left"
+        onClick={() => {
+          logger.debug('Priority row clicked (modal)', { emailId: email.id });
+          onEmailSelect(email);
+        }}
+        className={cn(
+          'flex items-center gap-4 p-4 border-b border-border/40',
+          'hover:bg-muted/30 transition-colors last:border-b-0',
+          'w-full text-left',
+        )}
       >
         {rowContent}
       </button>
@@ -228,7 +249,10 @@ const PriorityEmailRow = React.memo(function PriorityEmailRow({
   return (
     <Link
       href={`/inbox/${category}/${email.id}?from=priority`}
-      className="flex items-center gap-4 p-4 border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0"
+      className={cn(
+        'flex items-center gap-4 p-4 border-b border-border/40',
+        'hover:bg-muted/30 transition-colors last:border-b-0',
+      )}
     >
       {rowContent}
     </Link>
@@ -236,14 +260,14 @@ const PriorityEmailRow = React.memo(function PriorityEmailRow({
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// COMPONENT
+// MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Priority Email List — emails ranked by AI priority score.
+ * PriorityEmailList — emails ranked by AI priority score.
  *
  * Fetches emails from Supabase sorted by priority_score descending.
- * Each row shows sender, subject, priority score badge, category, and date.
+ * Each row shows sender, subject, gist, score badge, category, and date.
  * Clicking a row opens the email detail modal (or navigates via Link fallback).
  */
 export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: PriorityEmail) => void } = {}) {
@@ -251,12 +275,12 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
 
-  // Memoize Supabase client at component level instead of recreating inside callback
-  // @see INBOX_PERFORMANCE_AUDIT.md — P3
+  // Memoize Supabase client at component level to avoid recreating per render
   const supabase = React.useMemo(() => createClient(), []);
 
   /**
    * Fetch priority-ranked emails from Supabase.
+   * Selects only lightweight fields needed for list display.
    */
   const fetchEmails = React.useCallback(async () => {
     logger.start('Fetching priority-ranked emails', { limit: MAX_EMAILS });
@@ -266,7 +290,7 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
     try {
       const { data, error: queryError } = await supabase
         .from('emails')
-        .select('id, sender_name, sender_email, subject, category, priority_score, date, snippet')
+        .select('id, sender_name, sender_email, subject, category, priority_score, date, snippet, gist, quick_action, signal_strength')
         .not('priority_score', 'is', null)
         .order('priority_score', { ascending: false })
         .limit(MAX_EMAILS);
@@ -296,12 +320,13 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
   if (isLoading) {
     return (
       <div className="space-y-0">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex items-center gap-4 p-4 border-b border-border/50">
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="flex items-center gap-4 p-4 border-b border-border/40">
             <Skeleton className="h-6 w-12 rounded" />
             <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-36" />
               <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
             </div>
             <Skeleton className="h-5 w-16 rounded" />
             <Skeleton className="h-4 w-14" />
@@ -313,6 +338,7 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
 
   // ─── Error State ────────────────────────────────────────────────────────────
   if (error) {
+    logger.error('Rendering error state', { message: error.message });
     return (
       <Card className="border-destructive/50 bg-destructive/5">
         <CardContent className="py-6">
@@ -340,7 +366,7 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
         <h3 className="text-lg font-medium mb-2">No scored emails yet</h3>
         <p className="text-muted-foreground max-w-sm">
           Emails will appear here once they have been analyzed and scored by AI.
-          Run an analysis from the Categories tab to get started.
+          Run an analysis from Settings to get started.
         </p>
       </div>
     );
@@ -349,9 +375,11 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
   // ─── Email List ─────────────────────────────────────────────────────────────
   return (
     <div>
+      {/* Header with count and refresh */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-muted-foreground">
-          {emails.length} emails ranked by AI priority
+          <span className="font-medium text-foreground tabular-nums">{emails.length}</span>
+          {' '}emails ranked by AI priority
         </p>
         <Button variant="outline" size="sm" onClick={fetchEmails} className="gap-2">
           <RefreshCw className="h-4 w-4" />
@@ -359,7 +387,7 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
         </Button>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           {emails.map((email) => (
             <PriorityEmailRow

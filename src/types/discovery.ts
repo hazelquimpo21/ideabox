@@ -274,6 +274,115 @@ export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
 };
 
 // =============================================================================
+// SHARED INBOX DISPLAY CONSTANTS
+// =============================================================================
+// Centralized here to avoid duplication across inbox components.
+// InboxEmailRow, CategoryFilterBar, CategorySummaryPanel, and PriorityEmailList
+// all import from here instead of defining their own copies.
+
+/**
+ * Short category labels for compact UI elements (pills, badges, inline tags).
+ * These are shorter than CATEGORY_DISPLAY.label and designed for tight layouts.
+ *
+ * @example
+ * ```tsx
+ * import { CATEGORY_SHORT_LABELS } from '@/types/discovery';
+ * <span>{CATEGORY_SHORT_LABELS[email.category]}</span>
+ * ```
+ */
+export const CATEGORY_SHORT_LABELS: Record<EmailCategory, string> = {
+  client_pipeline: 'Client',
+  business_work_general: 'Work',
+  family_kids_school: 'School',
+  family_health_appointments: 'Health',
+  personal_friends_family: 'Personal',
+  finance: 'Finance',
+  travel: 'Travel',
+  shopping: 'Shopping',
+  local: 'Local',
+  newsletters_general: 'Newsletter',
+  news_politics: 'News',
+  product_updates: 'Updates',
+};
+
+/**
+ * Pluralized short labels for filter pills that show counts.
+ * "5 Clients" reads better than "5 Client" in a filter bar.
+ */
+export const CATEGORY_SHORT_LABELS_PLURAL: Record<EmailCategory, string> = {
+  client_pipeline: 'Clients',
+  business_work_general: 'Work',
+  family_kids_school: 'School',
+  family_health_appointments: 'Health',
+  personal_friends_family: 'Personal',
+  finance: 'Finance',
+  travel: 'Travel',
+  shopping: 'Shopping',
+  local: 'Local',
+  newsletters_general: 'Newsletters',
+  news_politics: 'News',
+  product_updates: 'Updates',
+};
+
+/**
+ * Category accent colors — used for dots, bars, and other colored indicators.
+ * Single Tailwind bg-* class per category. Consistent across all inbox components.
+ */
+export const CATEGORY_ACCENT_COLORS: Record<EmailCategory, string> = {
+  client_pipeline: 'bg-blue-500',
+  business_work_general: 'bg-violet-500',
+  family_kids_school: 'bg-amber-500',
+  family_health_appointments: 'bg-rose-500',
+  personal_friends_family: 'bg-pink-500',
+  finance: 'bg-green-600',
+  travel: 'bg-sky-500',
+  shopping: 'bg-orange-500',
+  local: 'bg-teal-500',
+  newsletters_general: 'bg-emerald-500',
+  news_politics: 'bg-slate-500',
+  product_updates: 'bg-indigo-500',
+};
+
+/**
+ * Category badge colors for use in Badge components.
+ * Includes background + text + dark mode variants.
+ * Used in PriorityEmailList badges and other badge-style displays.
+ */
+export const CATEGORY_BADGE_COLORS: Record<EmailCategory, string> = {
+  client_pipeline: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300',
+  business_work_general: 'bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300',
+  family_kids_school: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300',
+  family_health_appointments: 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300',
+  personal_friends_family: 'bg-pink-50 text-pink-700 dark:bg-pink-950/30 dark:text-pink-300',
+  finance: 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300',
+  travel: 'bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300',
+  shopping: 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300',
+  local: 'bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-300',
+  newsletters_general: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300',
+  news_politics: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300',
+  product_updates: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300',
+};
+
+/**
+ * Ordered category list for display in filter bars and sidebars.
+ * Grouped: Work → Personal → Life Admin → Information.
+ */
+export const CATEGORIES_DISPLAY_ORDER: EmailCategory[] = [
+  'client_pipeline',
+  'business_work_general',
+  'personal_friends_family',
+  'family_kids_school',
+  'family_health_appointments',
+  'finance',
+  'travel',
+  'shopping',
+  'local',
+  'newsletters_general',
+  'news_politics',
+  'product_updates',
+];
+
+// =============================================================================
 // INITIAL SYNC REQUEST/RESPONSE
 // =============================================================================
 
