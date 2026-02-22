@@ -38,6 +38,20 @@ const SKIP_DOMAINS = new Set([
   'protonmail.com', 'proton.me', 'fastmail.com', 'zoho.com',
 ]);
 
+/** Subdomains/patterns that are typically transactional/no-favicon — skip to reduce 404 noise */
+function shouldSkipDomain(domain: string): boolean {
+  if (SKIP_DOMAINS.has(domain)) return true;
+  // Common transactional email subdomains that rarely have favicons
+  const parts = domain.split('.');
+  if (parts.length > 2) {
+    const sub = parts[0]!;
+    if (['mail', 'email', 'e', 'info', 'news', 'notify', 'noreply', 'service', 'reminder', 'mail8'].includes(sub)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Extract domain from an email address */
 function getDomain(email: string): string | null {
   const parts = email.split('@');
@@ -74,8 +88,8 @@ export const SenderLogo = React.memo(function SenderLogo({
   const [hasError, setHasError] = React.useState(false);
   const domain = getDomain(senderEmail);
 
-  // Skip personal email domains and previously-failed domains
-  if (!domain || SKIP_DOMAINS.has(domain) || failedDomains.has(domain) || hasError) {
+  // Skip personal email domains, transactional subdomains, and previously-failed domains
+  if (!domain || shouldSkipDomain(domain) || failedDomains.has(domain) || hasError) {
     return null;
   }
 

@@ -76,17 +76,26 @@ type ViewMode = 'list' | 'cards';
 export interface InboxFeedProps {
   /** Callback when an email is selected (opens detail modal in parent) */
   onEmailSelect?: (email: { id: string; category?: string | null }) => void;
+  /** Optional initial category to filter by (e.g. from Category Overview click) */
+  initialCategory?: EmailCategory | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function InboxFeed({ onEmailSelect }: InboxFeedProps) {
+export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedProps) {
   const supabase = React.useMemo(() => createClient(), []);
 
   // ─── Local State ─────────────────────────────────────────────────────────────
-  const [activeCategory, setActiveCategory] = React.useState<EmailCategory | null>(null);
+  const [activeCategory, setActiveCategory] = React.useState<EmailCategory | null>(initialCategory);
+
+  // Sync with initialCategory prop when it changes (e.g. navigating from CategoryOverview)
+  React.useEffect(() => {
+    if (initialCategory !== undefined) {
+      setActiveCategory(initialCategory);
+    }
+  }, [initialCategory]);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [viewMode, setViewMode] = React.useState<ViewMode>('list');
 

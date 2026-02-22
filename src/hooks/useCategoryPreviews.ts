@@ -28,7 +28,7 @@ import type { Email } from '@/types/database';
 const logger = createLogger('useCategoryPreviews');
 
 /** Fields to fetch per email — lightweight for preview cards */
-const PREVIEW_FIELDS = 'id, subject, sender_name, sender_email, date, gist, is_read, priority_score, quick_action' as const;
+const PREVIEW_FIELDS = 'id, subject, sender_name, sender_email, date, gist, is_read, priority_score, quick_action, category' as const;
 
 /** Max emails to fetch per category for preview */
 const EMAILS_PER_CATEGORY = 3;
