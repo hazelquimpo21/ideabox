@@ -151,6 +151,12 @@ export type {
 // ACCOUNT & CONTEXT HOOKS (NEW - Jan 2026)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+export { useCategoryPreviews, default as useCategoryPreviewsDefault } from './useCategoryPreviews';
+export type {
+  CategoryPreview,
+  UseCategoryPreviewsReturn,
+} from './useCategoryPreviews';
+
 export { useGmailAccounts, default as useGmailAccountsDefault } from './useGmailAccounts';
 export type {
   GmailAccountDisplay,

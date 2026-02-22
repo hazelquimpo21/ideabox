@@ -32,6 +32,8 @@ import { createLogger } from '@/lib/utils/logger';
 import { CATEGORY_SHORT_LABELS, CATEGORY_ACCENT_COLORS } from '@/types/discovery';
 import type { EmailCategory } from '@/types/discovery';
 import type { Email, QuickActionDb } from '@/types/database';
+import { CategoryIcon } from './CategoryIcon';
+import { SenderLogo } from './SenderLogo';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -251,15 +253,13 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
         !isUnread && 'border-l-2 border-l-transparent',
       )}
     >
-      {/* ── Sender Avatar ────────────────────────────────────────────── */}
-      <div
-        className={cn(
-          'shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5',
-          getSenderAvatarColor(email),
-        )}
-        aria-hidden="true"
-      >
-        {getSenderInitial(email)}
+      {/* ── Category Icon Avatar ─────────────────────────────────────── */}
+      <div className="relative shrink-0 mt-0.5">
+        <CategoryIcon category={category} size="md" />
+        {/* Sender logo overlay — bottom-right corner */}
+        <div className="absolute -bottom-0.5 -right-0.5 bg-background rounded-full p-px">
+          <SenderLogo senderEmail={email.sender_email} size={14} className="rounded-full" />
+        </div>
       </div>
 
       {/* ── Main Content (3 rows) ────────────────────────────────────── */}
