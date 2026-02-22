@@ -425,7 +425,8 @@ All changes are in the `src/components/inbox/` directory and `src/types/discover
 | Component | What Changed |
 |-----------|-------------|
 | **InboxEmailRow** | Added 3-row layout: sender/category/date → subject/priority badge → gist/action badge/signal dot. Unread emails now have a left blue accent border. Quick action badges (Reply, Review, Schedule, etc.) inline. Priority score badge for high-priority emails. Signal strength indicator dot. |
-| **InboxFeed** | Added search clear button. Search results indicator. Section counts in headers. Improved spacing and visual hierarchy. |
+| **InboxEmailCard** | **NEW** Card-style email display with sender avatar, AI gist (2-line clamp), topics, action badge, priority badge, category badge, and account indicator. Used in card view mode. |
+| **InboxFeed** | Added list/card view toggle. Account indicator (multi-account). Search clear button. Search results indicator. Section counts in headers. Improved spacing and visual hierarchy. |
 | **CategoryFilterBar** | Added logger. `aria-pressed` for accessibility. `shadow-sm` on active pills. Transition animation. Uses centralized constants. |
 | **CategorySummaryPanel** | Added logger. `aria-pressed` and `role="complementary"`. Active state ring indicator. Uses centralized constants. |
 | **PriorityEmailList** | Now fetches `gist`, `quick_action`, `signal_strength` fields. Rows show AI gist preview and quick action icon. Uses centralized constants. |
