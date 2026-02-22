@@ -44,13 +44,14 @@
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
-import { Inbox, TrendingUp, Archive } from 'lucide-react';
+import { Inbox, TrendingUp, Archive, LayoutGrid } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
 // ─── Content components (lazy-loaded via tab content) ───────────────────────
 import { InboxFeed } from '@/components/inbox/InboxFeed';
 import { ArchiveContent } from '@/components/archive';
 import { PriorityEmailList } from '@/components/inbox/PriorityEmailList';
+import { CategoryOverview } from '@/components/inbox/CategoryOverview';
 import { EmailDetailModal } from '@/components/email/EmailDetailModal';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -64,7 +65,7 @@ const logger = createLogger('InboxTabs');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** All valid tab values — used for URL param validation */
-const VALID_TABS = ['inbox', 'priority', 'archive'] as const;
+const VALID_TABS = ['inbox', 'priority', 'categories', 'archive'] as const;
 type InboxTab = (typeof VALID_TABS)[number];
 
 /** Default tab when no query param is present */
@@ -88,8 +89,7 @@ export function InboxTabs() {
 
   // ─── Determine Active Tab from URL ─────────────────────────────────────────
   const tabParam = searchParams.get('tab');
-  // Legacy support: `?tab=categories` maps to `inbox`
-  const normalizedTab = tabParam === 'categories' ? 'inbox' : tabParam;
+  const normalizedTab = tabParam;
   const activeTab: InboxTab = VALID_TABS.includes(normalizedTab as InboxTab)
     ? (normalizedTab as InboxTab)
     : DEFAULT_TAB;
@@ -170,6 +170,13 @@ export function InboxTabs() {
             Priority
           </TabsTrigger>
           <TabsTrigger
+            value="categories"
+            variant="underline"
+            icon={<LayoutGrid className="h-4 w-4" />}
+          >
+            Categories
+          </TabsTrigger>
+          <TabsTrigger
             value="archive"
             variant="underline"
             icon={<Archive className="h-4 w-4" />}
@@ -185,6 +192,21 @@ export function InboxTabs() {
 
         <TabsContent value="priority">
           <PriorityEmailList onEmailSelect={handleEmailSelect} />
+        </TabsContent>
+
+        <TabsContent value="categories">
+          <CategoryOverview
+            onCategorySelect={(category) => {
+              // Switch to inbox tab with the category filter applied
+              logger.info('Category selected from overview', { category });
+              const params = new URLSearchParams(searchParams.toString());
+              params.delete('tab');
+              const queryString = params.toString();
+              const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
+              router.replace(newUrl, { scroll: false });
+            }}
+            onEmailSelect={handleEmailSelect}
+          />
         </TabsContent>
 
         <TabsContent value="archive">

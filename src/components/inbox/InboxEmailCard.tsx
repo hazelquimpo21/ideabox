@@ -56,6 +56,8 @@ import {
 } from '@/types/discovery';
 import type { EmailCategory } from '@/types/discovery';
 import type { Email, QuickActionDb } from '@/types/database';
+import { CategoryIcon } from './CategoryIcon';
+import { SenderLogo } from './SenderLogo';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -252,15 +254,12 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
     >
       {/* ── Row 1: Sender + Account + Date + Star ────────────────────── */}
       <div className="flex items-center gap-2 mb-1.5">
-        {/* Sender avatar */}
-        <div
-          className={cn(
-            'shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold',
-            getSenderAvatarColor(email),
-          )}
-          aria-hidden="true"
-        >
-          {getSenderInitial(email)}
+        {/* Category icon avatar with sender logo overlay */}
+        <div className="relative shrink-0">
+          <CategoryIcon category={email.category as EmailCategory | null} size="sm" />
+          <div className="absolute -bottom-0.5 -right-0.5 bg-background rounded-full p-px">
+            <SenderLogo senderEmail={email.sender_email} size={12} className="rounded-full" />
+          </div>
         </div>
 
         {/* Sender name */}
