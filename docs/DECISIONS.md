@@ -118,12 +118,13 @@ category TEXT,           -- One of the 12 life-bucket categories
 client_id UUID,          -- relationship to clients table (NOT a category)
 topics TEXT[],           -- extracted topics for additional context
 
--- CHECK constraint enforces valid category values
+-- CHECK constraint enforces valid category values (updated Feb 2026)
 CONSTRAINT emails_category_check CHECK (
-  category IN ('newsletters_general', 'news_politics', 'product_updates', 'local',
-               'shopping', 'travel', 'finance', 'family_kids_school',
-               'family_health_appointments', 'client_pipeline',
-               'business_work_general', 'personal_friends_family')
+  category IS NULL OR category IN (
+    'clients', 'work', 'personal_friends_family', 'family',
+    'finance', 'travel', 'shopping', 'local',
+    'newsletters_creator', 'newsletters_industry',
+    'news_politics', 'product_updates')
 )
 ```
 

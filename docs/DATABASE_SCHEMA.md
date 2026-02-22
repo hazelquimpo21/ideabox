@@ -385,13 +385,13 @@ CREATE TABLE emails (
   UNIQUE(user_id, gmail_id)
 );
 
--- Category CHECK constraint (migration 018, re-added in 028)
+-- Category CHECK constraint (migration 018, re-added in 028, updated Feb 2026)
 ALTER TABLE emails ADD CONSTRAINT emails_category_check CHECK (
   category IS NULL OR category IN (
-    'newsletters_general', 'news_politics', 'product_updates', 'local',
-    'shopping', 'travel', 'finance', 'family_kids_school',
-    'family_health_appointments', 'client_pipeline',
-    'business_work_general', 'personal_friends_family'
+    'clients', 'work', 'personal_friends_family', 'family',
+    'finance', 'travel', 'shopping', 'local',
+    'newsletters_creator', 'newsletters_industry',
+    'news_politics', 'product_updates'
   )
 );
 ```
