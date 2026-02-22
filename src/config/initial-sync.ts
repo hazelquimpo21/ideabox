@@ -332,11 +332,6 @@ export const CATEGORY_INSIGHT_TEMPLATES: Record<
     singular: '1 personal email',
     plural: (count) => `${count} personal emails`,
   },
-  other: {
-    empty: 'No other emails',
-    singular: '1 other email',
-    plural: (count) => `${count} other emails`,
-  },
 };
 
 // =============================================================================

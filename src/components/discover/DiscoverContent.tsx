@@ -644,7 +644,7 @@ export function DiscoverContent({
           } else {
             // Fallback: full-page navigation
             isNavigatingToEmailRef.current = true;
-            const urlCategory = selectedCategory || email.category || 'uncategorized';
+            const urlCategory = selectedCategory || email.category || 'personal_friends_family';
             logger.info('Navigating to email from modal', { emailId: email.id, category: urlCategory });
             router.push(`/inbox/${urlCategory}/${email.id}?from=categories`);
             handleModalClose();

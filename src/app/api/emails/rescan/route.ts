@@ -178,6 +178,7 @@ export async function POST(request: Request) {
     });
 
     // Step 2: Clear analysis data for these emails
+    // Category is temporarily null during re-analysis — the analyzer always assigns a valid one.
     // This resets analyzed_at, analysis_error, category, summary, quick_action, labels
     const { error: clearError } = await supabase
       .from('emails')

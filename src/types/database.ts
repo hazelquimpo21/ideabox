@@ -44,8 +44,7 @@ export type EmailCategory =
   | 'newsletters_creator'           // Substacks, personal blogs, creator content
   | 'newsletters_industry'          // Tech/biz digests, industry roundups
   | 'news_politics'                 // News outlets, political updates
-  | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
-  | 'other';                        // Uncategorized, doesn't fit other categories
+  | 'product_updates';              // Tech products, SaaS tools, subscriptions you use
 
 /**
  * Action types that can be extracted from emails.

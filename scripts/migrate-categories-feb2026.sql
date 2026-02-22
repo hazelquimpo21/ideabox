@@ -38,7 +38,7 @@ FROM emails
 WHERE category IN (
   'clients', 'work', 'family', 'newsletters_creator', 'newsletters_industry',
   'personal_friends_family', 'finance', 'travel', 'shopping', 'local',
-  'news_politics', 'product_updates', 'other'
+  'news_politics', 'product_updates'
 )
 GROUP BY category
 ORDER BY count DESC;

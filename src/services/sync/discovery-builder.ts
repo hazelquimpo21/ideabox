@@ -247,7 +247,8 @@ export class DiscoveryBuilderService {
       'newsletters_industry',         // Industry newsletters
       'news_politics',                // News outlets, political
       'product_updates',              // Tech products, SaaS updates
-      'other',                        // Miscellaneous
+
+
     ];
 
     logger.debug('Building summaries for categories', {

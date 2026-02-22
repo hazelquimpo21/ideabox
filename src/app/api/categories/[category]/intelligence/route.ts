@@ -67,7 +67,6 @@ const VALID_CATEGORIES: EmailCategory[] = [
   'clients',
   'work',
   'personal_friends_family',
-  'other',
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

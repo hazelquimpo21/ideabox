@@ -58,7 +58,6 @@ const CATEGORY_ICON_COLORS: Record<EmailCategory, { bg: string; fg: string }> = 
   newsletters_industry:      { bg: 'bg-cyan-100 dark:bg-cyan-900/40',    fg: 'text-cyan-600 dark:text-cyan-300' },
   news_politics:             { bg: 'bg-slate-200 dark:bg-slate-800/60',  fg: 'text-slate-600 dark:text-slate-300' },
   product_updates:           { bg: 'bg-indigo-100 dark:bg-indigo-900/40', fg: 'text-indigo-600 dark:text-indigo-300' },
-  other:                     { bg: 'bg-gray-100 dark:bg-gray-800/40',    fg: 'text-gray-500 dark:text-gray-400' },
 };
 
 const FALLBACK_COLORS = { bg: 'bg-gray-100 dark:bg-gray-800/40', fg: 'text-gray-500 dark:text-gray-400' };
@@ -213,7 +212,7 @@ function PackageIcon({ size }: { size: number }) {
   );
 }
 
-/** Clipboard — other/uncategorized */
+/** Clipboard — unused, kept for potential future use */
 function ClipboardIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
@@ -251,7 +250,6 @@ const CATEGORY_ICONS: Record<EmailCategory, React.FC<{ size: number }>> = {
   newsletters_industry: IndustryNewsletterIcon,
   news_politics: GlobeNewsIcon,
   product_updates: PackageIcon,
-  other: ClipboardIcon,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════

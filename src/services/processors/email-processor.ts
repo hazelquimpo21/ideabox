@@ -1231,17 +1231,12 @@ export class EmailProcessor {
 
     // Update email's category and analyzed_at timestamp
     // FIX: Sync category to emails table so inbox filtering works correctly
-    const emailUpdate: { analyzed_at: string; category?: string } = {
+    // Every email MUST have a category — normalizeCategory always returns a valid one
+    const validCategory = normalizeCategory(analysis.categorization?.category);
+    const emailUpdate: { analyzed_at: string; category: string } = {
       analyzed_at: new Date().toISOString(),
+      category: validCategory,
     };
-
-    // Only set category if we have a valid one from analysis
-    if (analysis.categorization?.category) {
-      const validCategory = normalizeCategory(analysis.categorization.category);
-      if (validCategory) {
-        emailUpdate.category = validCategory;
-      }
-    }
 
     const { error: updateError } = await supabase
       .from('emails')

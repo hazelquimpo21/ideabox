@@ -204,13 +204,12 @@ export function useCategoryStats(): UseCategoryStatsReturn {
       let totalUnread = 0;
 
       for (const email of emails || []) {
-        const category = email.category as EmailCategory | null;
+        const rawCategory = email.category as string | null;
 
-        // Skip emails without a category (shouldn't happen, but defensive)
-        if (!category || !(category in newStats)) {
-          logger.debug('Email without valid category', { category });
-          continue;
-        }
+        // Every email must have a category — normalize any missing/invalid ones
+        const category: EmailCategory = (rawCategory && rawCategory in newStats)
+          ? rawCategory as EmailCategory
+          : 'personal_friends_family';
 
         newStats[category].count++;
         totalCount++;

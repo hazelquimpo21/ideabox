@@ -96,10 +96,6 @@ const CATEGORY_GROUPS: CategoryGroup[] = [
     label: 'Information',
     categories: ['newsletters_creator', 'newsletters_industry', 'news_politics', 'product_updates'],
   },
-  {
-    label: 'Other',
-    categories: ['other'],
-  },
 ];
 
 // BAR_COLORS and SHORT_LABELS — now using centralized CATEGORY_ACCENT_COLORS

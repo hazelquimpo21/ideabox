@@ -158,11 +158,6 @@ function getCategoryBadge(category: EmailCategory | null) {
       label: 'Updates',
       icon: <Archive className="h-3 w-3" />,
     },
-    other: {
-      variant: 'outline',
-      label: 'Other',
-      icon: <Mail className="h-3 w-3" />,
-    },
   };
   return (
     map[category || ''] || {
@@ -471,7 +466,7 @@ export function ArchiveContent({
   // otherwise fall back to full-page navigation.
   // @see INBOX_PERFORMANCE_AUDIT.md — P0-A
   const handleEmailClick = (email: Email) => {
-    const category = email.category || 'uncategorized';
+    const category = email.category || 'personal_friends_family';
     if (onEmailSelect) {
       logger.info('Opening archived email in modal', {
         emailId: email.id,

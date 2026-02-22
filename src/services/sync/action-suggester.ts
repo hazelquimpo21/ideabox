@@ -365,7 +365,6 @@ export class ActionSuggesterService {
       clients: 'client',
       work: 'work',
       personal_friends_family: 'personal',
-      other: 'other',
     };
 
     const categoryLabel = categoryLabels[category] || category;
