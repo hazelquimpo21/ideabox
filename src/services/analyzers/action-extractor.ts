@@ -40,10 +40,14 @@
  *
  * Action types:
  * - respond: Need to reply to this email with information/answer
- * - review: Need to review attached/linked content
+ * - review: Need to review attached/linked content (EXPLICIT requests only)
  * - create: Need to create something (document, code, etc.)
  * - schedule: Need to schedule a meeting or event
  * - decide: Need to make a decision (approve/reject, choose option)
+ * - pay: Need to pay a bill, invoice, or fee [NEW Feb 2026]
+ * - submit: Need to submit a form, application, document [NEW Feb 2026]
+ * - register: Need to register for something [NEW Feb 2026]
+ * - book: Need to book travel, reservations, etc. [NEW Feb 2026]
  * - none: No action required
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -220,15 +224,32 @@ KEY PRINCIPLE: If the sender is unknown AND they want something FROM the user
 Real actions come from people the user has a relationship with.
 
 ═══════════════════════════════════════════════════════════════════════════════
-ACTION TYPES
+ACTION TYPES (ENHANCED Feb 2026)
 ═══════════════════════════════════════════════════════════════════════════════
 
+CORE TYPES:
 - respond: Need to reply with information/answer/file (includes sending things)
-- review: Need to look at/review/check something (documents, proposals, links)
-- create: Need to create something (document, code, design, booking)
+- review: EXPLICIT review request from a known contact — "please review this document/proposal"
+         NOTE: "Review" does NOT mean "this email is worth reading." That's inbox triage, not a task.
+         Only use "review" when someone specifically asks the user to review content.
+- create: Need to create something (document, code, design)
 - schedule: Need to schedule a meeting, call, or event
 - decide: Need to make a decision (approve/reject, choose option)
+
+CONCRETE TYPES (NEW Feb 2026 — for real, verb-oriented tasks):
+- pay: Need to pay a bill, invoice, fee, or subscription renewal
+- submit: Need to submit a form, application, document, or filing
+- register: Need to register or sign up for something (school, event, service)
+- book: Need to book travel, reservations, or appointments
+
+OTHER:
 - none: No action required (use this if has_action is false)
+
+IMPORTANT DISTINCTION (Two-Tier System):
+"Real tasks" are concrete, verb-oriented things you must DO: pay, submit, register, book,
+respond, review (explicit), create, schedule, decide. These create action items.
+"Scan-worthy emails" that are just worth reading go to the Review Queue — NOT here.
+Do NOT create action items for "read this newsletter" or "this email has useful info."
 
 ═══════════════════════════════════════════════════════════════════════════════
 PRIORITY ORDERING
@@ -314,7 +335,7 @@ const FUNCTION_SCHEMA: FunctionSchema = {
             type: {
               type: 'string',
               enum: ACTION_TYPES as unknown as string[],
-              description: 'Type of action: respond, review, create, schedule, decide',
+              description: 'Type of action: respond, review (explicit requests only), create, schedule, decide, pay, submit, register, book',
             },
             title: {
               type: 'string',

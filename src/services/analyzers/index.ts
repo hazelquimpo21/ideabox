@@ -4,28 +4,33 @@
  * Re-exports all analyzer classes and utilities for convenient importing.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * AVAILABLE ANALYZERS (ENHANCED Jan 2026)
+ * AVAILABLE ANALYZERS (ENHANCED Feb 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * 1. CategorizerAnalyzer - Classifies emails by action needed + summary + quickAction + labels
- * 2. ContentDigestAnalyzer - Extracts gist, key points, links (NEW Jan 2026)
- * 3. ActionExtractorAnalyzer - Extracts action details (ENHANCED: multi-action support)
+ * 2. ContentDigestAnalyzer - Extracts gist, key points, links
+ * 3. ActionExtractorAnalyzer - Extracts action details (multi-action, tightened for real tasks)
  * 4. ClientTaggerAnalyzer - Links emails to known clients
  * 5. EventDetectorAnalyzer - Extracts rich event details (runs only for event category)
  * 6. DateExtractorAnalyzer - Extracts timeline dates (deadlines, payments, birthdays)
  * 7. ContactEnricherAnalyzer - Enriches contact info (runs selectively)
+ * 8. IdeaSparkAnalyzer - Generates creative ideas from email content (NEW Feb 2026)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * ANALYZER EXECUTION FLOW (ENHANCED Jan 2026)
+ * ANALYZER EXECUTION FLOW (ENHANCED Feb 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * 1. Categorizer runs (always) → determines category, summary, quickAction, labels
- * 2. ContentDigest runs (always) → extracts gist, key points, links (NEW)
- * 3. ActionExtractor runs (always) → extracts MULTIPLE action items (ENHANCED)
- * 4. ClientTagger runs (always) → links to known clients
- * 5. DateExtractor runs (always) → extracts timeline dates for Hub
- * 6. EventDetector runs (conditional) → only when `has_event` label present
- * 7. ContactEnricher runs (selective) → only for contacts needing enrichment
+ * PHASE 1 (parallel — always run):
+ * 1. Categorizer → determines category, summary, quickAction, labels, signal_strength
+ * 2. ContentDigest → extracts gist, key points, links
+ * 3. ActionExtractor → extracts MULTIPLE action items (tightened for real tasks)
+ * 4. ClientTagger → links to known clients
+ * 5. DateExtractor → extracts timeline dates for Hub
+ *
+ * PHASE 2 (conditional — run after categorizer):
+ * 6. IdeaSpark → generates 3 creative ideas (NEW Feb 2026, skipped for noise emails)
+ * 7. EventDetector → only when `has_event` label present
+ * 8. ContactEnricher → only for contacts needing enrichment
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE EXAMPLES
@@ -113,6 +118,9 @@ export {
   shouldEnrichContact,
 } from './contact-enricher';
 
+// Idea Spark - generates creative ideas from email content (NEW Feb 2026)
+export { IdeaSparkAnalyzer, ideaSparkAnalyzer } from './idea-spark';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -175,6 +183,12 @@ export type {
   ContactEnrichmentResult,
   ContactRelationshipType,
 
+  // Idea spark types - NEW Feb 2026
+  IdeaSparkData,
+  IdeaSparkResult,
+  IdeaSpark,
+  IdeaType,
+
   // Aggregated types
   AggregatedAnalysis,
   EmailProcessingResult,
@@ -187,6 +201,7 @@ export {
   RELATIONSHIP_TYPES,
   LINK_TYPES,
   CONTENT_TYPES,
+  IDEA_TYPES,
 } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════════

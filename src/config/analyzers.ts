@@ -117,13 +117,22 @@ export const REPLY_WORTHINESS = [
 /**
  * Action types that the action extractor can identify.
  * These describe WHAT KIND of action is needed.
+ *
+ * ENHANCED (Feb 2026): Added concrete action types (pay, submit, register, book)
+ * to distinguish "real" tasks from passive review items. This supports the
+ * two-tier system: Review Queue (for scan-worthy emails) vs Real Tasks
+ * (for concrete actions with verbs).
  */
 export const ACTION_TYPES = [
   'respond',   // Need to reply to this email
-  'review',    // Need to review attached/linked content
+  'review',    // Need to review attached/linked content (explicit review requests only)
   'create',    // Need to create something (document, code, etc.)
   'schedule',  // Need to schedule a meeting or event
   'decide',    // Need to make a decision
+  'pay',       // Need to pay a bill, invoice, or fee [NEW Feb 2026]
+  'submit',    // Need to submit a form, application, or document [NEW Feb 2026]
+  'register',  // Need to register or sign up for something [NEW Feb 2026]
+  'book',      // Need to book travel, reservations, or appointments [NEW Feb 2026]
   'none',      // No action required
 ] as const;
 
@@ -133,12 +142,13 @@ export type ActionType = typeof ACTION_TYPES[number];
  * Analyzer configurations.
  * Each analyzer has its own tuned settings.
  *
- * ARCHITECTURE (ENHANCED Jan 2026):
+ * ARCHITECTURE (ENHANCED Feb 2026):
  * - categorizer: Always runs first (determines category + summary + quickAction)
- * - contentDigest: Always runs (extracts gist, key points, links) [NEW]
- * - actionExtractor: Always runs (now supports multiple actions) [ENHANCED]
+ * - contentDigest: Always runs (extracts gist, key points, links)
+ * - actionExtractor: Always runs (multi-action, tightened for real tasks)
  * - clientTagger: Always runs (client linking)
  * - dateExtractor: Always runs (timeline intelligence)
+ * - ideaSpark: Phase 2 — runs on non-noise emails after categorizer [NEW Feb 2026]
  * - eventDetector: Conditionally runs when `has_event` label present
  * - contactEnricher: Selectively runs for contacts needing enrichment
  */
@@ -223,6 +233,27 @@ export const analyzerConfig = {
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for accurate date parsing
     maxTokens: 500,   // Multiple dates possible per email
+  } satisfies AnalyzerConfig,
+
+  /**
+   * Idea Spark: Generates creative ideas from email content + user context.
+   * NEW (Feb 2026): Cross-references email content with user's role, interests,
+   * projects, location, family context, and current date/season to produce
+   * 3 lateral-thinking ideas per email.
+   *
+   * PHASE 2 EXECUTION: Runs AFTER categorizer to gate on signal_strength.
+   * Skipped when signal_strength = 'noise' to save tokens (~30% of emails).
+   *
+   * Higher temperature (0.7) for creative output — ideas should be surprising
+   * and lateral, not obvious. This is the most "creative" analyzer.
+   *
+   * COST: ~$0.0002/email × ~175 emails/day = ~$1.05/month
+   */
+  ideaSpark: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.7, // High for creative, lateral thinking
+    maxTokens: 600,   // 3 ideas with type + relevance + confidence
   } satisfies AnalyzerConfig,
 
   /**
