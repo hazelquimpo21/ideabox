@@ -33,14 +33,11 @@ Open [http://localhost:3000](http://localhost:3000).
 | [Project Overview](docs/PROJECT_OVERVIEW.md) | Vision, goals, and roadmap |
 | [Architecture](docs/ARCHITECTURE.md) | System design and folder structure |
 | [Database Schema](docs/DATABASE_SCHEMA.md) | All 20+ Supabase tables, functions, and migrations |
-| [AI Analyzer System](docs/AI_ANALYZER_SYSTEM.md) | How the 8 AI analyzers work |
+| [AI Analyzer System](docs/AI_ANALYZER_SYSTEM.md) | How the 9 AI analyzers work |
 | [Coding Standards](docs/CODING_STANDARDS.md) | 400-line file limit, conventions |
 | [Decisions](docs/DECISIONS.md) | Architectural decision log |
 | [API Integrations](docs/API_INTEGRATIONS.md) | Gmail, Google People, OpenAI integration details |
-| [Gmail Sending](docs/GMAIL_SENDING_IMPLEMENTATION.md) | Email sending, templates, campaigns |
-| [Edge Functions](docs/SUPABASE_EDGE_FUNCTIONS_SETUP.md) | Scheduled sync setup guide |
-| [Category View UX](docs/CATEGORY_VIEW_UX_DESIGN.md) | Enhanced category view design |
-| [Initial Sync Strategy](docs/INITIAL_SYNC_STRATEGY.md) | First-run sync approach |
+| [Inbox Performance Audit](docs/INBOX_PERFORMANCE_AUDIT.md) | Inbox performance findings and fixes |
 
 ## Project Structure
 
@@ -59,7 +56,7 @@ src/
       sent/           # Email composition, outbox, sent history
       settings/       # User preferences + cost tracking
     api/              # API routes: emails, contacts, hub, settings, onboarding, auth,
-                      # campaigns, templates, actions, events
+                      # campaigns, templates, actions, events, ideas, review-queue, admin
     onboarding/       # Multi-step onboarding wizard
   components/
     ui/               # Base UI library (Button, Card, Dialog, etc.)
@@ -79,19 +76,19 @@ src/
     layout/           # Navbar, Sidebar, PageHeader
     onboarding/       # Onboarding wizard UI
   services/
-    analyzers/        # 8 AI analyzers (categorizer, action-extractor, etc.)
+    analyzers/        # 9 AI analyzers (categorizer, action-extractor, idea-spark, etc.)
     processors/       # Email processing orchestration
     sync/             # Initial sync, sender patterns, pre-filtering
     contacts/         # Contact enrichment service
     hub/              # Priority scoring (reads from contacts, not legacy clients)
     user-context/     # AI personalization
     jobs/             # Background jobs
-  hooks/              # useEmails, useActions, useContacts, useEvents, etc.
+  hooks/              # useEmails, useActions, useContacts, useEvents, useIdeas, useReviewQueue, etc.
   lib/                # Shared: ai/, auth/, gmail/, google/, supabase/, utils/
   types/              # database.ts (20+ table types), discovery.ts
   config/             # App config, analyzer config
 supabase/
-  migrations/         # 30 SQL migration files (001-030)
+  migrations/         # 33 SQL migration files (001-033)
 scripts/              # seed.ts, verify-migrations.ts
 ```
 
@@ -100,7 +97,7 @@ scripts/              # seed.ts, verify-migrations.ts
 **Implemented:**
 - Streamlined 5-item navigation: Home, Inbox, Contacts, Calendar, Tasks
 - Multi-Gmail account sync (push notifications + scheduled polling)
-- 8 AI analyzers running in parallel (categorizer, action extractor, client tagger, event detector, date extractor, content digest, contact enricher, sender type classifier)
+- 9 AI analyzers via two-phase pipeline (categorizer, action extractor, client tagger, event detector, date extractor, content digest, contact enricher, sender type classifier, idea spark)
 - 12 life-bucket email categories with auto-categorization
 - Home page with daily briefing, AI priorities, today's schedule, pending tasks
 - Inbox with tabbed views: Categories (discover dashboard), Priority (AI-ranked), Archive
@@ -111,9 +108,14 @@ scripts/              # seed.ts, verify-migrations.ts
 - Contact intelligence with sender type classification and client promotion
 - Event detection with locality awareness
 - Email sending with templates, campaigns, open tracking
-- Onboarding wizard with initial sync
+- Signal strength + reply worthiness scoring for smart prioritization
+- Noise detection and suppression (sales pitches, fake recognition, mass outreach)
+- Two-tier task system: Review Queue (scan-worthy emails) + Real Tasks (concrete actions)
+- Idea Spark: AI-generated creative ideas from email content
+- Onboarding wizard with AI-powered Mad Libs profile and initial sync
 - Google Contacts import
 - Historical sync for contact enrichment
+- Superadmin dashboard with account reset
 - Cost tracking and budget controls
 
 ## Commands

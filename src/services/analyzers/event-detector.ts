@@ -11,9 +11,9 @@
  * This analyzer runs when the `has_event` LABEL is present (not category).
  * Since categories are now life-buckets, events can appear in any category:
  * - local (community events)
- * - family_kids_school (school events)
- * - business_work_general (conferences)
- * - client_pipeline (client meetings)
+ * - family (school events)
+ * - work (conferences)
+ * - clients (client meetings)
  *
  * The `has_event` label is set by the categorizer when an event is detected.
  *

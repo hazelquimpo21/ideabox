@@ -1,7 +1,7 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
 > **Last Updated:** February 2026
-> **Source of Truth:** `supabase/migrations/001-032`
+> **Source of Truth:** `supabase/migrations/001-033`
 > **TypeScript Types:** `src/types/database.ts`
 
 ## Schema Overview
@@ -13,8 +13,8 @@ auth.users (Supabase Auth)
   ├── user_context           # AI personalization context (role, location, VIPs)
   ├── gmail_accounts         # OAuth tokens, sync state, push notifications
   │   └── gmail_push_logs    # Push notification audit trail
-  ├── clients                # Business client tracking
-  ├── contacts               # Contact intelligence + sender classification
+  ├── clients_deprecated      # Legacy client table (renamed migration 030)
+  ├── contacts               # Contact intelligence + sender classification + client tracking
   │   └── contact_aliases    # Multi-email → single person mapping
   ├── emails                 # Central email storage + denormalized AI fields
   │   ├── email_analyses     # Full AI analyzer outputs (JSONB)
@@ -211,11 +211,12 @@ CREATE TABLE gmail_accounts (
 );
 ```
 
-### clients
-Business client/customer tracking.
+### clients_deprecated
+Formerly `clients`. Renamed in migration 030 after client data was merged into the `contacts` table (migration 029). Kept for data preservation; not used by application code.
 
 ```sql
-CREATE TABLE clients (
+-- Renamed from 'clients' to 'clients_deprecated' (migration 030)
+CREATE TABLE clients_deprecated (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
@@ -282,6 +283,13 @@ CREATE TABLE contacts (
   birthday_year_known BOOLEAN DEFAULT FALSE,
   work_anniversary DATE,
   custom_dates JSONB DEFAULT '[]',
+
+  -- Client tracking (migration 029, merged from clients table)
+  is_client BOOLEAN DEFAULT FALSE,
+  client_status TEXT,            -- active, inactive, archived
+  client_priority TEXT,          -- low, medium, high, vip
+  email_domains TEXT[],          -- ['@clientco.com']
+  keywords TEXT[],               -- Auto-learned keywords
 
   -- User flags
   is_vip BOOLEAN DEFAULT FALSE,
@@ -365,7 +373,7 @@ CREATE TABLE emails (
   reply_worthiness TEXT,  -- must_reply, should_reply, optional_reply, no_reply
 
   -- Relations
-  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,  -- (migration 029, replaces legacy client_id)
   project_tags TEXT[],
 
   -- State
@@ -399,16 +407,16 @@ ALTER TABLE emails ADD CONSTRAINT emails_category_check CHECK (
 #### Life-Bucket Categories (12 values)
 | Group | Category | Description |
 |-------|----------|-------------|
-| Work & Business | `client_pipeline` | Direct client correspondence, project work |
-| Work & Business | `business_work_general` | Team, industry, professional |
-| Family & Personal | `family_kids_school` | School emails, kid activities |
-| Family & Personal | `family_health_appointments` | Medical, appointments |
+| Work & Business | `clients` | Direct client correspondence, project work |
+| Work & Business | `work` | Team, industry, professional |
 | Family & Personal | `personal_friends_family` | Social, relationships |
+| Family & Personal | `family` | School emails, kid activities, medical, appointments |
 | Life Admin | `finance` | Bills, banking, receipts |
 | Life Admin | `travel` | Flights, hotels, bookings |
 | Life Admin | `shopping` | Orders, shipping, deals |
 | Life Admin | `local` | Community events, local orgs |
-| Information | `newsletters_general` | Substacks, digests |
+| Information | `newsletters_creator` | Substacks, individual creator newsletters |
+| Information | `newsletters_industry` | Industry digests, company newsletters |
 | Information | `news_politics` | News outlets, political |
 | Information | `product_updates` | SaaS tools, tech products |
 
@@ -430,6 +438,9 @@ CREATE TABLE email_analyses (
   content_opportunity JSONB,  -- Future
   content_digest JSONB,       -- {gist, key_points, links, content_type} (migration 025)
 
+  -- Idea sparks (migration 033)
+  idea_sparks JSONB,          -- Array of idea spark objects from IdeaSparkAnalyzer
+
   analyzer_version TEXT DEFAULT '1.0',
   tokens_used INTEGER,
   processing_time_ms INTEGER,
@@ -445,11 +456,10 @@ CREATE TABLE actions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
-  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
 
   title TEXT NOT NULL,
   description TEXT,
-  action_type TEXT,          -- respond, review, create, schedule, decide, none
+  action_type TEXT,          -- respond, review, create, schedule, decide, pay, submit, register, book, none
   priority TEXT DEFAULT 'medium', -- low, medium, high, urgent
   urgency_score INTEGER DEFAULT 5,
   deadline TIMESTAMPTZ,
@@ -840,7 +850,7 @@ CREATE TABLE api_usage_logs (
 | `release_sync_lock(account_id)` | VOID | Release sync lock |
 | `cleanup_old_logs()` | VOID | Delete logs > 30 days |
 | `cleanup_old_sync_runs(retention_days)` | VOID | Delete old sync runs |
-| `get_active_clients(user_id)` | SETOF clients | Active clients sorted by priority |
+| `get_active_clients(user_id)` | SETOF contacts | Active client contacts (is_client=true) sorted by client_priority |
 | `create_default_user_settings()` | TRIGGER | Auto-create settings on user signup |
 | `create_default_user_context()` | TRIGGER | Auto-create context on user signup |
 
@@ -855,7 +865,7 @@ All tables have RLS enabled. Policy pattern:
 
 ---
 
-## Migration Files (001-028)
+## Migration Files (001-033)
 
 | # | File | What it does |
 |---|------|-------------|
@@ -891,6 +901,7 @@ All tables have RLS enabled. Policy pattern:
 | 030 | cleanup_client_id_columns.sql | Remove deprecated client_id columns |
 | 031 | profile_suggestions.sql | Add profile_suggestions JSONB + timestamp to user_context |
 | 032 | signal_strength_reply_worthiness.sql | Add signal_strength + reply_worthiness columns to emails, with indexes for Hub queries |
+| 033 | idea_sparks_column.sql | Add idea_sparks JSONB column to email_analyses |
 
 ---
 

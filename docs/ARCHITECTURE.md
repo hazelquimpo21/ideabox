@@ -31,7 +31,7 @@
 
 ### Email Sync
 ```
-Cron/Push → Gmail API → Save raw emails → EmailProcessor → 8 Analyzers (parallel)
+Cron/Push → Gmail API → Save raw emails → EmailProcessor → 9 Analyzers (parallel)
   → Save analysis JSONB → Denormalize to emails table → Extract actions → Update contacts
 ```
 
@@ -82,7 +82,7 @@ const { data } = await supabase
   .from('emails')
   .select('*, contact:contacts(name, is_client, client_priority), analyses:email_analyses(*)')
   .eq('user_id', userId)
-  .eq('category', 'client_pipeline');
+  .eq('category', 'clients');
 ```
 
 - **RLS** protects all tables (users see only their own data)
@@ -111,7 +111,8 @@ src/
       settings/                 # User preferences + cost tracking
     api/
       auth/                     # OAuth callbacks
-      emails/                   # sync/, send/, analyze/, rescan/, bulk-archive/
+      emails/                   # sync/, send/, analyze/, rescan/, bulk-archive/, review-queue/ (GET, PATCH)
+      ideas/                    # Ideas from email analysis (GET, POST, PATCH)
       contacts/                 # CRUD, import-google/, historical-sync/, vip-suggestions/, promote/, stats/
       hub/                      # Hub prioritization endpoints
       settings/                 # Settings + usage stats
@@ -124,7 +125,7 @@ src/
     dev/                        # Development utilities
 
   services/
-    analyzers/                  # 8 AI analyzers
+    analyzers/                  # 9 AI analyzers
       base-analyzer.ts          # Abstract base class
       categorizer.ts            # Life-bucket classification
       action-extractor.ts       # Action item extraction (multi-action)
@@ -133,6 +134,7 @@ src/
       date-extractor.ts         # Timeline date extraction
       content-digest.ts         # Email summary + key points + links
       contact-enricher.ts       # Contact metadata extraction
+      idea-spark.ts             # Idea extraction from emails (NEW Feb 2026)
       types.ts                  # Analyzer result types
     processors/
       email-processor.ts        # Orchestrates all analyzers
@@ -180,6 +182,8 @@ src/
     useInitialSyncProgress.ts   # Poll sync status during onboarding
     useEvents.ts                # Event data
     useExtractedDates.ts        # Extracted date data (deadlines, birthdays, etc.)
+    useIdeas.ts                 # Ideas from email analysis (NEW Feb 2026)
+    useReviewQueue.ts           # Review queue for scan-worthy emails (NEW Feb 2026)
 
   lib/
     ai/                         # OpenAI client (GPT-4.1-mini, function calling)
@@ -200,7 +204,7 @@ src/
     app.ts                      # App configuration
 
 supabase/
-  migrations/                   # 32 SQL migration files (001-032)
+  migrations/                   # 33 SQL migration files (001-033)
 
 scripts/
   seed.ts                       # Database seeding

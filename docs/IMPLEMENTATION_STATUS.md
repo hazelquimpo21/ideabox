@@ -84,7 +84,7 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Inline reply with editable subject
 
 ### Data Layer
-- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress
+- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress, useIdeas, useReviewQueue, useCategoryStats, useCategoryPreviews, useHubPriorities, useSidebarData, useCampaigns, useTemplates, useGmailAccounts, useUserContext, useEmailThumbnails
 - REST API routes for all entities with Zod validation
 - Page-based pagination with URL state
 - Optimistic UI updates with rollback
@@ -114,7 +114,6 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 
 ### Planned Features
 - URL extraction library (save links from emails)
-- Content opportunities (tweet ideas, networking)
 - Daily/weekly digest emails
 - Pattern detection (communication trends)
 - Smart bundling of related emails
@@ -152,3 +151,5 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Inbox Audit | Feb 2026 | Fixed 9 inbox issues: archive tab now queries archived emails correctly, unarchive/delete handlers fixed, archived emails clickable, back button preserves tab context, retry failures wired to real API, "View All" navigates to full page, all 12 category colors in Priority tab, unused imports cleaned up |
 | Inbox Perf | Feb 2026 | Performance overhaul: EmailDetailModal (no full-page reloads), select specific fields (80-90% less data), server-side archive filtering, batch bulk ops, React.memo on list items, fixed broken /inbox/[category] route, removed debug logging |
 | Email Taxonomy | Feb 2026 | Signal strength (high/medium/low/noise) + reply worthiness (must_reply/should_reply/optional_reply/no_reply) added to categorizer. Noise detection labels (sales_pitch, webinar_invite, fake_recognition, mass_outreach, promotional). Action extractor noise rejection. Hub priority scoring with signal/reply multipliers. Migration 032 for denormalized columns + indexes. |
+| Ideas & Review | Feb 2026 | IdeaSparkAnalyzer (Phase 2, 10 idea types, skipped for noise). Ideas API (GET/POST/PATCH /api/ideas). Review Queue API (GET/PATCH /api/emails/review-queue). useIdeas + useReviewQueue hooks. Two-tier task system: scan-worthy emails vs concrete actions. Migration 033 for idea_sparks JSONB column. |
+| Doc Cleanup | Feb 2026 | Updated all docs to reflect current state: fixed outdated category names (client_pipeline→clients, etc.), added IdeaSpark analyzer to AI docs, synced action types, updated migration count to 033, cleaned up redundancies. |
