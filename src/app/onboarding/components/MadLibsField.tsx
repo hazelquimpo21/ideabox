@@ -17,7 +17,7 @@
  * - Small "AI" sparkle badge next to AI-suggested values
  * - Click -> transitions to inline input with subtle animation
  * - Enter or blur -> saves and transitions back to display mode
- * - Empty fields show placeholder text with gentle pulse animation
+ * - Empty fields show placeholder text with italic styling
  * - High-confidence AI values (>0.8) appear slightly bolder
  * - Low-confidence values (<0.3) appear with lighter styling
  *
@@ -431,7 +431,7 @@ export function MadLibsField({
           border-b-2 border-dashed px-1 py-0.5 min-w-[60px] text-center
           transition-all duration-200
           ${isEmpty
-            ? 'border-muted-foreground/40 text-muted-foreground/50 animate-pulse'
+            ? 'border-muted-foreground/40 text-muted-foreground/50 italic'
             : `border-primary/40 text-foreground group-hover:border-primary/70 ${confidenceStyles}`
           }
         `}

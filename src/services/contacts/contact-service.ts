@@ -817,6 +817,48 @@ export class ContactService {
         }));
       }
 
+      // ─────────────────────────────────────────────────────────────────────
+      // Last-resort fallback: If no suggestions found (common after fresh
+      // Google import where all contacts have email_count=0 and none are
+      // starred), show recently imported contacts so the user can still
+      // pick VIPs during onboarding.
+      // ─────────────────────────────────────────────────────────────────────
+      if (suggestions.length === 0) {
+        logger.info('No VIP suggestions from primary query, trying recently imported contacts', {
+          userId: userId.substring(0, 8),
+        });
+
+        const { data: recentContacts, error: recentError } = await supabase
+          .from('contacts')
+          .select('id, email, name, email_count, last_seen_at, relationship_type, is_vip, avatar_url, is_google_starred, google_labels')
+          .eq('user_id', userId)
+          .eq('is_archived', false)
+          .eq('is_vip', false)
+          .not('name', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (!recentError && recentContacts && recentContacts.length > 0) {
+          suggestions = recentContacts.map((row) => ({
+            id: row.id,
+            email: row.email,
+            name: row.name,
+            avatarUrl: row.avatar_url ?? null,
+            emailCount: row.email_count,
+            lastSeenAt: row.last_seen_at,
+            isGoogleStarred: row.is_google_starred ?? false,
+            googleLabels: row.google_labels ?? [],
+            relationshipType: row.relationship_type,
+            suggestionReason: 'Recently imported',
+          }));
+
+          logger.info('Showing recently imported contacts as VIP suggestions', {
+            userId: userId.substring(0, 8),
+            count: suggestions.length,
+          });
+        }
+      }
+
       logger.info('VIP suggestions retrieved', {
         userId: userId.substring(0, 8),
         count: suggestions.length,
