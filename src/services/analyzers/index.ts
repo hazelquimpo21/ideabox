@@ -11,10 +11,14 @@
  * 2. ContentDigestAnalyzer - Extracts gist, key points, links
  * 3. ActionExtractorAnalyzer - Extracts action details (multi-action, tightened for real tasks)
  * 4. ClientTaggerAnalyzer - Links emails to known clients
- * 5. EventDetectorAnalyzer - Extracts rich event details (runs only for event category)
- * 6. DateExtractorAnalyzer - Extracts timeline dates (deadlines, payments, birthdays)
- * 7. ContactEnricherAnalyzer - Enriches contact info (runs selectively)
- * 8. IdeaSparkAnalyzer - Generates creative ideas from email content (NEW Feb 2026)
+ * 5. EventDetectorAnalyzer - Extracts rich event details (runs only when has_event label)
+ * 6. MultiEventDetectorAnalyzer - Extracts multiple events from one email (NEW Feb 2026)
+ * 7. DateExtractorAnalyzer - Extracts timeline dates (deadlines, payments, birthdays)
+ * 8. ContactEnricherAnalyzer - Enriches contact info (runs selectively)
+ * 9. IdeaSparkAnalyzer - Generates creative ideas from email content (NEW Feb 2026)
+ * 10. InsightExtractorAnalyzer - Synthesizes ideas/tips/frameworks from newsletters (NEW Feb 2026)
+ * 11. NewsBriefAnalyzer - Extracts factual news items from news emails (NEW Feb 2026)
+ * 12. SenderTypeDetector - Pre-AI pattern-based sender classification (utility)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * ANALYZER EXECUTION FLOW (ENHANCED Feb 2026)
@@ -29,8 +33,11 @@
  *
  * PHASE 2 (conditional — run after categorizer):
  * 6. IdeaSpark → generates 3 creative ideas (NEW Feb 2026, skipped for noise emails)
- * 7. EventDetector → only when `has_event` label present
- * 8. ContactEnricher → only for contacts needing enrichment
+ * 7. InsightExtractor → ideas/tips from newsletters (NEW Feb 2026, skipped for noise)
+ * 8. NewsBrief → factual news items (NEW Feb 2026, skipped for noise)
+ * 9. EventDetector → only when `has_event` label present (single event)
+ * 10. MultiEventDetector → when `has_event` + `has_multiple_events` (replaces EventDetector)
+ * 11. ContactEnricher → only for contacts needing enrichment
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE EXAMPLES
@@ -43,8 +50,12 @@
  *   ContentDigestAnalyzer,
  *   ActionExtractorAnalyzer,
  *   EventDetectorAnalyzer,
+ *   MultiEventDetectorAnalyzer,
  *   DateExtractorAnalyzer,
  *   ContactEnricherAnalyzer,
+ *   IdeaSparkAnalyzer,
+ *   InsightExtractorAnalyzer,
+ *   NewsBriefAnalyzer,
  * } from '@/services/analyzers';
  *
  * // Import singleton instances
@@ -54,8 +65,10 @@
  *   actionExtractor,
  *   clientTagger,
  *   eventDetector,
+ *   multiEventDetector,
  *   dateExtractor,
  *   contactEnricher,
+ *   ideaSparkAnalyzer,
  * } from '@/services/analyzers';
  *
  * // Import types
@@ -64,8 +77,12 @@
  *   ContentDigestResult,
  *   ActionExtractionResult,
  *   EventDetectionResult,
+ *   MultiEventDetectionResult,
  *   DateExtractionResult,
  *   ContactEnrichmentResult,
+ *   IdeaSparkResult,
+ *   InsightExtractionResult,
+ *   NewsBriefResult,
  *   EmailInput,
  *   QuickAction,
  *   EmailLabel,
@@ -76,8 +93,9 @@
  * ```
  *
  * @module services/analyzers
- * @version 2.0.0
+ * @version 3.0.0
  * @since January 2026 - Added ContentDigest, enhanced ActionExtractor with multi-action
+ * @since February 2026 - Added MultiEventDetector, InsightExtractor, NewsBrief, IdeaSpark
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -118,8 +136,17 @@ export {
   shouldEnrichContact,
 } from './contact-enricher';
 
+// Multi-Event Detector - extracts multiple events from one email (NEW Feb 2026)
+export { MultiEventDetectorAnalyzer, multiEventDetector } from './multi-event-detector';
+
 // Idea Spark - generates creative ideas from email content (NEW Feb 2026)
 export { IdeaSparkAnalyzer, ideaSparkAnalyzer } from './idea-spark';
+
+// Insight Extractor - synthesizes ideas/tips/frameworks from newsletters (NEW Feb 2026)
+export { InsightExtractorAnalyzer } from './insight-extractor';
+
+// News Brief - extracts factual news items from news emails (NEW Feb 2026)
+export { NewsBriefAnalyzer } from './news-brief';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -188,6 +215,18 @@ export type {
   IdeaSparkResult,
   IdeaSpark,
   IdeaType,
+
+  // Multi-event detector types - NEW Feb 2026
+  MultiEventDetectionData,
+  MultiEventDetectionResult,
+
+  // Insight extractor types - NEW Feb 2026
+  InsightExtractionData,
+  InsightExtractionResult,
+
+  // News brief types - NEW Feb 2026
+  NewsBriefData,
+  NewsBriefResult,
 
   // Aggregated types
   AggregatedAnalysis,
