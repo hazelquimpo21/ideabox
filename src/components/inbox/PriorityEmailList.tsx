@@ -61,6 +61,8 @@ import {
   Calendar,
   CornerUpRight,
   Bookmark,
+  Reply,
+  Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { CATEGORY_BADGE_COLORS, CATEGORY_SHORT_LABELS } from '@/types/discovery';
@@ -90,6 +92,8 @@ interface PriorityEmail {
   gist: string | null;
   quick_action: string | null;
   signal_strength: string | null;
+  reply_worthiness: string | null;
+  analyzed_at: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -198,6 +202,20 @@ const PriorityEmailRow = React.memo(function PriorityEmailRow({
               aria-label={`Suggested action: ${email.quick_action}`}
             />
           )}
+          {/* Reply worthiness indicator */}
+          {(email.reply_worthiness === 'must_reply' || email.reply_worthiness === 'should_reply') && (
+            <Reply
+              className={cn(
+                'h-3.5 w-3.5 shrink-0',
+                email.reply_worthiness === 'must_reply' ? 'text-red-500' : 'text-orange-400',
+              )}
+              aria-label={email.reply_worthiness === 'must_reply' ? 'Must reply' : 'Should reply'}
+            />
+          )}
+          {/* Idea spark indicator */}
+          {email.analyzed_at && (
+            <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" aria-label="Has idea sparks" />
+          )}
         </div>
         <p className="text-sm truncate">
           {email.subject || '(No subject)'}
@@ -290,7 +308,7 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
     try {
       const { data, error: queryError } = await supabase
         .from('emails')
-        .select('id, sender_name, sender_email, subject, category, priority_score, date, snippet, gist, quick_action, signal_strength')
+        .select('id, sender_name, sender_email, subject, category, priority_score, date, snippet, gist, quick_action, signal_strength, reply_worthiness, analyzed_at')
         .not('priority_score', 'is', null)
         .order('priority_score', { ascending: false })
         .limit(MAX_EMAILS);
