@@ -78,6 +78,7 @@ import { ContentDigestAnalyzer } from '@/services/analyzers/content-digest';
 import { ActionExtractorAnalyzer } from '@/services/analyzers/action-extractor';
 import { ClientTaggerAnalyzer } from '@/services/analyzers/client-tagger';
 import { EventDetectorAnalyzer } from '@/services/analyzers/event-detector';
+import { MultiEventDetectorAnalyzer } from '@/services/analyzers/multi-event-detector';
 import { DateExtractorAnalyzer } from '@/services/analyzers/date-extractor';
 import {
   ContactEnricherAnalyzer,
@@ -104,6 +105,8 @@ import type {
   ActionExtractionResult,
   ClientTaggingResult,
   EventDetectionResult,
+  EventDetectionData,
+  MultiEventDetectionResult,
   DateExtractionResult,
   ContactEnrichmentResult,
   IdeaSparkResult,
@@ -228,6 +231,9 @@ export class EmailProcessor {
   /** Event detector analyzer - extracts rich event details (conditional) */
   private eventDetector: EventDetectorAnalyzer;
 
+  /** Multi-event detector analyzer - extracts multiple events from one email (NEW Feb 2026) */
+  private multiEventDetector: MultiEventDetectorAnalyzer;
+
   /** Date extractor analyzer - extracts timeline dates (NEW Jan 2026) */
   private dateExtractor: DateExtractorAnalyzer;
 
@@ -263,6 +269,7 @@ export class EmailProcessor {
     this.actionExtractor = new ActionExtractorAnalyzer();
     this.clientTagger = new ClientTaggerAnalyzer();
     this.eventDetector = new EventDetectorAnalyzer();
+    this.multiEventDetector = new MultiEventDetectorAnalyzer();
     this.dateExtractor = new DateExtractorAnalyzer();
     this.contactEnricher = new ContactEnricherAnalyzer();
     this.ideaSpark = new IdeaSparkAnalyzer();
@@ -385,6 +392,7 @@ export class EmailProcessor {
     // ENHANCED (Feb 2026): Added IdeaSpark, InsightExtractor, NewsBrief analyzers
     // ═══════════════════════════════════════════════════════════════════════════
     let eventResult: EventDetectionResult | undefined;
+    let multiEventResult: MultiEventDetectionResult | undefined;
     let contactEnrichmentResult: ContactEnrichmentResult | undefined;
     let ideaSparkResult: IdeaSparkResult | undefined;
     let insightExtractionResult: InsightExtractionResult | undefined;
@@ -399,13 +407,28 @@ export class EmailProcessor {
       : undefined;
     const isNoise = signalStrength === 'noise';
 
-    // EventDetector: Only run if email has the 'has_event' label
-    // REFACTORED (Jan 2026): Now uses label instead of category since
-    // events can appear in any life-bucket category (local, family, etc.)
+    // EventDetector / MultiEventDetector: Route based on labels
+    // ENHANCED (Feb 2026): Added multi-event support for emails with multiple events
     const hasEventLabel = categorizationResult.success &&
       categorizationResult.data.labels?.includes('has_event');
+    const hasMultipleEventsLabel = categorizationResult.success &&
+      categorizationResult.data.labels?.includes('has_multiple_events');
 
-    if (hasEventLabel && this.eventDetector.isEnabled()) {
+    if (hasEventLabel && hasMultipleEventsLabel && this.multiEventDetector.isEnabled()) {
+      // Multi-event path: extract all events from the email
+      // Pass links from ContentDigest for optional link resolution
+      const links = contentDigestResult.success
+        ? contentDigestResult.data.links?.map(l => ({ url: l.url, type: l.type, title: l.title }))
+        : undefined;
+
+      logger.debug('Running MultiEventDetector (has_event + has_multiple_events labels)', {
+        emailId: emailInput.id,
+        category: categorizationResult.data.category,
+        linkCount: links?.length ?? 0,
+      });
+      multiEventResult = await this.runMultiEventDetector(emailInput, enrichedContext, links);
+    } else if (hasEventLabel && this.eventDetector.isEnabled()) {
+      // Single event path (existing behavior)
       logger.debug('Running EventDetector (has_event label detected)', {
         emailId: emailInput.id,
         category: categorizationResult.data.category,
@@ -531,7 +554,8 @@ export class EmailProcessor {
       contactEnrichmentResult,
       ideaSparkResult,
       insightExtractionResult,
-      newsBriefResult
+      newsBriefResult,
+      multiEventResult
     );
 
     // Collect errors from all analyzers
@@ -545,7 +569,8 @@ export class EmailProcessor {
       contactEnrichmentResult,
       ideaSparkResult,
       insightExtractionResult,
-      newsBriefResult
+      newsBriefResult,
+      multiEventResult
     );
 
     // Determine success (at least one core analyzer succeeded)
@@ -568,6 +593,7 @@ export class EmailProcessor {
         insightExtraction: insightExtractionResult,
         newsBrief: newsBriefResult,
         eventDetection: eventResult,
+        multiEventDetection: multiEventResult,
         contactEnrichment: contactEnrichmentResult,
       },
       errors,
@@ -638,14 +664,27 @@ export class EmailProcessor {
           );
         }
 
-        // Save event from EventDetector to extracted_dates
-        // This enables the Events page to display events detected by EventDetector
-        // Events are stored with date_type='event' and rich metadata for EventCard display
+        // Save event(s) to extracted_dates with duplicate detection
+        // ENHANCED (Feb 2026): Supports both single and multi-event results
         if (
+          multiEventResult &&
+          multiEventResult.success &&
+          multiEventResult.data.hasMultipleEvents &&
+          multiEventResult.data.events.length > 0
+        ) {
+          // Multi-event path: save each event with dedup
+          await this.saveMultipleEventsToExtractedDates(
+            context.userId,
+            emailInput.id,
+            contact?.id ?? null,
+            multiEventResult.data.events
+          );
+        } else if (
           eventResult &&
           eventResult.success &&
           eventResult.data.hasEvent
         ) {
+          // Single event path: save with dedup
           await this.saveEventToExtractedDates(
             context.userId,
             emailInput.id,
@@ -917,6 +956,44 @@ export class EmailProcessor {
   }
 
   /**
+   * Runs the MultiEventDetector analyzer.
+   *
+   * NEW (Feb 2026): Handles emails with multiple events/dates.
+   * Runs when both `has_event` and `has_multiple_events` labels are present.
+   * Optionally resolves links for additional event context.
+   */
+  private async runMultiEventDetector(
+    email: EmailInput,
+    context: UserContext,
+    links?: Array<{ url: string; type?: string; title?: string }>
+  ): Promise<MultiEventDetectionResult> {
+    logger.debug('Running MultiEventDetector (conditional analyzer)', {
+      emailId: email.id,
+      linkCount: links?.length ?? 0,
+    });
+
+    try {
+      return await this.multiEventDetector.analyze(email, context, links);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      logger.error('MultiEventDetector threw exception', {
+        emailId: email.id,
+        error: errorMessage,
+      });
+
+      return {
+        success: false,
+        data: {} as MultiEventDetectionResult['data'],
+        confidence: 0,
+        tokensUsed: 0,
+        processingTimeMs: 0,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
    * Runs the IdeaSpark analyzer.
    *
    * NEW (Feb 2026): Generates 3 creative ideas from email content + user context.
@@ -1125,7 +1202,7 @@ export class EmailProcessor {
 
   /**
    * Aggregates results from all analyzers into a single object.
-   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief.
+   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief, multiEvent.
    */
   private aggregateResults(
     categorization: CategorizationResult,
@@ -1137,7 +1214,8 @@ export class EmailProcessor {
     contactEnrichment?: ContactEnrichmentResult,
     ideaSparks?: IdeaSparkResult,
     insightExtraction?: InsightExtractionResult,
-    newsBrief?: NewsBriefResult
+    newsBrief?: NewsBriefResult,
+    multiEvent?: MultiEventDetectionResult
   ): AggregatedAnalysis {
     // Calculate totals
     const totalTokensUsed =
@@ -1150,7 +1228,8 @@ export class EmailProcessor {
       (contactEnrichment?.tokensUsed ?? 0) +
       (ideaSparks?.tokensUsed ?? 0) +
       (insightExtraction?.tokensUsed ?? 0) +
-      (newsBrief?.tokensUsed ?? 0);
+      (newsBrief?.tokensUsed ?? 0) +
+      (multiEvent?.tokensUsed ?? 0);
 
     const totalProcessingTimeMs =
       categorization.processingTimeMs +
@@ -1162,7 +1241,8 @@ export class EmailProcessor {
       (contactEnrichment?.processingTimeMs ?? 0) +
       (ideaSparks?.processingTimeMs ?? 0) +
       (insightExtraction?.processingTimeMs ?? 0) +
-      (newsBrief?.processingTimeMs ?? 0);
+      (newsBrief?.processingTimeMs ?? 0) +
+      (multiEvent?.processingTimeMs ?? 0);
 
     return {
       // Include data from successful analyzers only
@@ -1177,6 +1257,7 @@ export class EmailProcessor {
       insightExtraction: insightExtraction?.success ? insightExtraction.data : undefined,
       newsBrief: newsBrief?.success ? newsBrief.data : undefined,
       eventDetection: event?.success ? event.data : undefined,
+      multiEventDetection: multiEvent?.success ? multiEvent.data : undefined,
       contactEnrichment: contactEnrichment?.success
         ? contactEnrichment.data
         : undefined,
@@ -1190,7 +1271,7 @@ export class EmailProcessor {
 
   /**
    * Collects errors from all analyzers.
-   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief.
+   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief, multiEvent.
    */
   private collectErrors(
     categorization: CategorizationResult,
@@ -1202,7 +1283,8 @@ export class EmailProcessor {
     contactEnrichment?: ContactEnrichmentResult,
     ideaSparks?: IdeaSparkResult,
     insightExtraction?: InsightExtractionResult,
-    newsBrief?: NewsBriefResult
+    newsBrief?: NewsBriefResult,
+    multiEvent?: MultiEventDetectionResult
   ): Array<{ analyzer: string; error: string }> {
     const errors: Array<{ analyzer: string; error: string }> = [];
 
@@ -1232,6 +1314,9 @@ export class EmailProcessor {
     }
     if (event && !event.success && event.error) {
       errors.push({ analyzer: 'EventDetector', error: event.error });
+    }
+    if (multiEvent && !multiEvent.success && multiEvent.error) {
+      errors.push({ analyzer: 'MultiEventDetector', error: multiEvent.error });
     }
     if (contactEnrichment && !contactEnrichment.success && contactEnrichment.error) {
       errors.push({ analyzer: 'ContactEnricher', error: contactEnrichment.error });
@@ -1526,6 +1611,37 @@ export class EmailProcessor {
           }
         : null,
 
+      // Multi-event detection (NEW Feb 2026: multiple events from single email)
+      multi_event_detection: analysis.multiEventDetection
+        ? {
+            has_multiple_events: analysis.multiEventDetection.hasMultipleEvents,
+            event_count: analysis.multiEventDetection.eventCount,
+            source_description: analysis.multiEventDetection.sourceDescription,
+            events: analysis.multiEventDetection.events.map(event => ({
+              event_title: event.eventTitle,
+              event_date: event.eventDate,
+              event_time: event.eventTime,
+              event_end_date: event.eventEndDate,
+              event_end_time: event.eventEndTime,
+              location_type: event.locationType,
+              event_locality: event.eventLocality,
+              location: event.location,
+              rsvp_required: event.rsvpRequired,
+              rsvp_url: event.rsvpUrl,
+              registration_deadline: event.registrationDeadline,
+              organizer: event.organizer,
+              cost: event.cost,
+              additional_details: event.additionalDetails,
+              event_summary: event.eventSummary,
+              key_points: event.keyPoints,
+              is_key_date: event.isKeyDate,
+              key_date_type: event.keyDateType,
+              confidence: event.confidence,
+            })),
+            confidence: analysis.multiEventDetection.confidence,
+          }
+        : null,
+
       // Idea sparks (NEW Feb 2026: creative ideas from email content + user context)
       idea_sparks: analysis.ideaSparks
         ? {
@@ -1797,7 +1913,64 @@ export class EmailProcessor {
       };
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Upsert to prevent duplicates (same email, type, date, title)
+      // DUPLICATE DETECTION (NEW Feb 2026)
+      // Check if this event already exists from a different email
+      // If duplicate: update existing with a one-line note instead of creating new
+      // ─────────────────────────────────────────────────────────────────────────
+      const duplicate = await this.findDuplicateEvent(
+        userId,
+        eventData.eventDate,
+        eventData.eventTitle,
+        eventData.organizer
+      );
+
+      if (duplicate) {
+        // Found a duplicate — update existing event with a note
+        const updateNote = this.generateUpdateNote(
+          duplicate.event_metadata as Record<string, unknown> | null,
+          eventData,
+          emailId
+        );
+
+        const existingMetadata = (duplicate.event_metadata ?? {}) as Record<string, unknown>;
+        const existingUpdates = (existingMetadata.updates ?? []) as Array<Record<string, unknown>>;
+
+        const updatedMetadata = {
+          ...existingMetadata,
+          updates: [
+            ...existingUpdates,
+            {
+              date: new Date().toISOString().split('T')[0],
+              source_email_id: emailId,
+              note: updateNote,
+            },
+          ],
+        };
+
+        const { error: updateError } = await supabase
+          .from('extracted_dates')
+          .update({ event_metadata: updatedMetadata })
+          .eq('id', duplicate.id);
+
+        if (updateError) {
+          logger.warn('Failed to update duplicate event', {
+            emailId,
+            existingEventId: duplicate.id,
+            error: updateError.message,
+          });
+        } else {
+          logger.info('Duplicate event detected — updated existing', {
+            emailId,
+            existingEventId: duplicate.id,
+            existingTitle: duplicate.title?.substring(0, 40),
+            updateNote,
+          });
+        }
+        return;
+      }
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // No duplicate — upsert the new event
       // ─────────────────────────────────────────────────────────────────────────
       const { error } = await supabase.from('extracted_dates').upsert(record, {
         onConflict: 'email_id,date_type,date,title',
@@ -1830,6 +2003,255 @@ export class EmailProcessor {
         error: message,
       });
     }
+  }
+
+  /**
+   * Saves multiple events from MultiEventDetector to extracted_dates.
+   * NEW (Feb 2026): Loops over each event and saves with duplicate detection.
+   *
+   * @param userId - User ID
+   * @param emailId - Source email ID
+   * @param contactId - Associated contact ID (may be null)
+   * @param events - Array of event data from MultiEventDetector
+   */
+  private async saveMultipleEventsToExtractedDates(
+    userId: string,
+    emailId: string,
+    contactId: string | null,
+    events: EventDetectionData[]
+  ): Promise<void> {
+    logger.info('Saving multiple events to extracted_dates', {
+      emailId,
+      eventCount: events.length,
+    });
+
+    let saved = 0;
+    let duplicates = 0;
+    let errors = 0;
+
+    for (const eventData of events) {
+      try {
+        // Skip events without a date
+        if (!eventData.eventDate) {
+          logger.debug('Skipping event without date', {
+            emailId,
+            title: eventData.eventTitle,
+          });
+          continue;
+        }
+
+        // Check for duplicate before saving
+        const duplicate = await this.findDuplicateEvent(
+          userId,
+          eventData.eventDate,
+          eventData.eventTitle,
+          eventData.organizer
+        );
+
+        if (duplicate) {
+          // Update existing with a note
+          const updateNote = this.generateUpdateNote(
+            duplicate.event_metadata as Record<string, unknown> | null,
+            eventData,
+            emailId
+          );
+
+          const existingMetadata = (duplicate.event_metadata ?? {}) as Record<string, unknown>;
+          const existingUpdates = (existingMetadata.updates ?? []) as Array<Record<string, unknown>>;
+
+          const supabase = await createServerClient();
+          await supabase
+            .from('extracted_dates')
+            .update({
+              event_metadata: {
+                ...existingMetadata,
+                updates: [
+                  ...existingUpdates,
+                  {
+                    date: new Date().toISOString().split('T')[0],
+                    source_email_id: emailId,
+                    note: updateNote,
+                  },
+                ],
+              },
+            })
+            .eq('id', duplicate.id);
+
+          duplicates++;
+          continue;
+        }
+
+        // Save as new event using the single-event method
+        await this.saveEventToExtractedDates(userId, emailId, contactId, {
+          ...eventData,
+          hasEvent: true,
+        });
+        saved++;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        logger.warn('Failed to save event from multi-event batch', {
+          emailId,
+          title: eventData.eventTitle,
+          error: message,
+        });
+        errors++;
+      }
+    }
+
+    logger.info('Multi-event save complete', {
+      emailId,
+      total: events.length,
+      saved,
+      duplicates,
+      errors,
+    });
+  }
+
+  /**
+   * Finds a duplicate event in extracted_dates for this user.
+   * NEW (Feb 2026): Cross-email duplicate detection.
+   *
+   * Match criteria:
+   * - Same date (exact)
+   * - Similar title (normalized comparison)
+   * - OR same date + same organizer
+   *
+   * @param userId - User ID
+   * @param eventDate - Event date (YYYY-MM-DD)
+   * @param eventTitle - Event title
+   * @param organizer - Event organizer (optional)
+   * @returns Matching existing event row, or null
+   */
+  private async findDuplicateEvent(
+    userId: string,
+    eventDate: string,
+    eventTitle: string,
+    organizer?: string
+  ): Promise<{ id: string; title: string; event_metadata: unknown } | null> {
+    try {
+      const supabase = await createServerClient();
+
+      // Query events on the same date for this user
+      const { data: existingEvents, error } = await supabase
+        .from('extracted_dates')
+        .select('id, title, event_metadata, related_entity')
+        .eq('user_id', userId)
+        .eq('date', eventDate)
+        .eq('date_type', 'event')
+        .eq('is_hidden', false);
+
+      if (error || !existingEvents || existingEvents.length === 0) {
+        return null;
+      }
+
+      const normalizedNewTitle = this.normalizeTitle(eventTitle);
+
+      for (const existing of existingEvents) {
+        const normalizedExistingTitle = this.normalizeTitle(existing.title || '');
+
+        // Check 1: Exact normalized title match
+        if (normalizedNewTitle === normalizedExistingTitle) {
+          return existing;
+        }
+
+        // Check 2: One title contains the other (handles partial matches)
+        if (
+          normalizedNewTitle.length > 5 &&
+          normalizedExistingTitle.length > 5 &&
+          (normalizedNewTitle.includes(normalizedExistingTitle) ||
+           normalizedExistingTitle.includes(normalizedNewTitle))
+        ) {
+          return existing;
+        }
+
+        // Check 3: Same organizer + same date (covers renamed events)
+        if (
+          organizer &&
+          existing.related_entity &&
+          this.normalizeTitle(organizer) === this.normalizeTitle(existing.related_entity)
+        ) {
+          return existing;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.debug('Duplicate check failed (non-fatal, will save as new)', {
+        eventDate,
+        eventTitle,
+        error: message,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Normalizes an event title for duplicate comparison.
+   * Lowercases, strips punctuation, collapses whitespace.
+   */
+  private normalizeTitle(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '') // Remove punctuation
+      .replace(/\s+/g, ' ')    // Collapse whitespace
+      .trim();
+  }
+
+  /**
+   * Generates a one-line update note describing what changed between
+   * an existing event and new data from another email.
+   *
+   * @param existingMetadata - Existing event metadata from extracted_dates
+   * @param newEventData - New event data from the latest email
+   * @param sourceEmailId - ID of the email that triggered this update
+   * @returns One-line note describing the change
+   */
+  private generateUpdateNote(
+    existingMetadata: Record<string, unknown> | null,
+    newEventData: EventDetectionData,
+    sourceEmailId: string
+  ): string {
+    void sourceEmailId; // Available for future use
+
+    if (!existingMetadata) {
+      return 'Additional email received about this event';
+    }
+
+    const changes: string[] = [];
+
+    // Check for time changes
+    if (newEventData.eventTime && existingMetadata.eventTime !== undefined) {
+      const existingTime = (existingMetadata as Record<string, unknown>).eventTime;
+      if (existingTime && existingTime !== newEventData.eventTime) {
+        changes.push(`time updated to ${newEventData.eventTime}`);
+      }
+    }
+
+    // Check for location changes
+    if (newEventData.location && existingMetadata.location !== undefined) {
+      if (existingMetadata.location && existingMetadata.location !== newEventData.location) {
+        changes.push(`location updated`);
+      }
+    }
+
+    // Check for cost changes
+    if (newEventData.cost && existingMetadata.cost !== undefined) {
+      if (existingMetadata.cost && existingMetadata.cost !== newEventData.cost) {
+        changes.push(`cost: ${newEventData.cost}`);
+      }
+    }
+
+    // Check for RSVP deadline
+    if (newEventData.registrationDeadline && !existingMetadata.rsvpDeadline) {
+      changes.push(`RSVP deadline: ${newEventData.registrationDeadline}`);
+    }
+
+    if (changes.length > 0) {
+      return changes.join('; ');
+    }
+
+    return 'Reminder received — no changes';
   }
 
   /**

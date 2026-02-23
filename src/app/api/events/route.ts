@@ -151,7 +151,9 @@ interface EventDetectionData {
   event_title?: string;
   event_date?: string;
   event_time?: string;
+  event_end_date?: string;
   event_end_time?: string;
+  event_locality?: 'local' | 'out_of_town' | 'virtual';
   location_type?: 'in_person' | 'virtual' | 'hybrid' | 'unknown';
   location?: string;
   registration_deadline?: string;
@@ -160,6 +162,20 @@ interface EventDetectionData {
   organizer?: string;
   cost?: string;
   additional_details?: string;
+  event_summary?: string;
+  key_points?: string[];
+  confidence?: number;
+}
+
+/**
+ * Structure of email_analyses.multi_event_detection JSONB.
+ * NEW (Feb 2026): What MultiEventDetector stores for emails with multiple events.
+ */
+interface MultiEventDetectionData {
+  has_multiple_events: boolean;
+  event_count: number;
+  source_description?: string;
+  events: EventDetectionData[];
   confidence?: number;
 }
 
@@ -187,29 +203,19 @@ function getToday(): string {
 }
 
 /**
- * Transforms raw database row into EventResponse format.
- * This normalizes the data structure to match what the frontend expects.
- *
- * The transformation handles:
- * - Extracting event details from event_detection JSONB
- * - Falling back to email metadata when event_detection is incomplete
- * - Building event_metadata for EventCard consumption
- *
- * @param row - Raw database row from the query
- * @returns Normalized event response object
+ * Builds an EventResponse from a single EventDetectionData object and row context.
+ * Shared by both single-event and multi-event transform paths.
  */
-function transformToEventResponse(row: any): EventResponse {
-  const eventDetection: EventDetectionData | null = row.email_analyses?.event_detection;
-  const categorization: CategorizationData | null = row.email_analyses?.categorization;
+function buildEventResponse(
+  row: any,
+  eventDetection: EventDetectionData,
+  categorization: CategorizationData | null,
+  idSuffix?: string
+): EventResponse {
+  const eventDate = eventDetection.event_date || row.date?.split('T')[0] || getToday();
 
-  // Extract event date - prefer event_detection, fall back to email date
-  // This is critical: we need a valid date for grouping and display
-  const eventDate = eventDetection?.event_date || row.date?.split('T')[0] || getToday();
-
-  // Build event metadata for the EventCard component
-  // This structure matches what EventCard expects from extracted_dates.event_metadata
-  const eventMetadata: EventMetadata | null = eventDetection ? {
-    locality: inferLocality(eventDetection),
+  const eventMetadata: EventMetadata | null = {
+    locality: eventDetection.event_locality || inferLocality(eventDetection),
     locationType: eventDetection.location_type,
     location: eventDetection.location,
     rsvpRequired: eventDetection.rsvp_required,
@@ -218,41 +224,27 @@ function transformToEventResponse(row: any): EventResponse {
     organizer: eventDetection.organizer,
     cost: eventDetection.cost,
     additionalDetails: eventDetection.additional_details,
-  } : null;
+    eventSummary: eventDetection.event_summary,
+    keyPoints: eventDetection.key_points,
+  };
+
+  // For multi-event rows, append index to make IDs unique
+  const eventId = idSuffix ? `${row.id}-${idSuffix}` : row.id;
 
   return {
-    // Use email ID as the event ID - this ensures uniqueness and allows
-    // linking back to the source email
-    id: row.id,
+    id: eventId,
     user_id: row.user_id,
     email_id: row.id,
-
-    // Event title: prefer EventDetector's title, fall back to email subject
-    title: eventDetection?.event_title || row.subject || 'Untitled Event',
-
-    // Description: use categorization summary if no event-specific description
-    description: eventDetection?.additional_details || categorization?.summary || null,
-
-    // Date and time from EventDetector
+    title: eventDetection.event_title || row.subject || 'Untitled Event',
+    description: eventDetection.additional_details || eventDetection.event_summary || categorization?.summary || null,
     date: eventDate,
-    event_time: eventDetection?.event_time || null,
-    end_date: null, // EventDetector doesn't extract end dates yet
-    end_time: eventDetection?.event_end_time || null,
-
-    // Always 'event' for this endpoint
+    event_time: eventDetection.event_time || null,
+    end_date: eventDetection.event_end_date || null,
+    end_time: eventDetection.event_end_time || null,
     date_type: 'event',
-
-    // Default priority - could be enhanced based on urgency signals
     priority_score: 5,
-
-    // Events from this endpoint haven't been acknowledged yet
-    // (acknowledgment is stored in extracted_dates, not here)
     is_acknowledged: false,
-
-    // Rich metadata for EventCard
     event_metadata: eventMetadata,
-
-    // Source email context
     emails: {
       id: row.id,
       subject: row.subject,
@@ -261,12 +253,42 @@ function transformToEventResponse(row: any): EventResponse {
       date: row.date,
       snippet: row.snippet,
     },
-
-    // Contact info (if we have it)
     contacts: row.contacts || null,
-
     created_at: row.created_at,
   };
+}
+
+/**
+ * Transforms raw database row into EventResponse(s).
+ * ENHANCED (Feb 2026): Now handles multi_event_detection — a single email
+ * can produce multiple EventResponse objects.
+ *
+ * @param row - Raw database row from the query
+ * @returns Array of normalized event response objects (usually 1, but may be many)
+ */
+function transformToEventResponses(row: any): EventResponse[] {
+  const eventDetection: EventDetectionData | null = row.email_analyses?.event_detection;
+  const multiEventDetection: MultiEventDetectionData | null = row.email_analyses?.multi_event_detection;
+  const categorization: CategorizationData | null = row.email_analyses?.categorization;
+
+  // Multi-event path: one email → multiple events
+  if (multiEventDetection?.has_multiple_events && multiEventDetection.events?.length > 0) {
+    return multiEventDetection.events.map((event, index) =>
+      buildEventResponse(row, event, categorization, `me${index}`)
+    );
+  }
+
+  // Single event path (existing behavior)
+  if (eventDetection) {
+    return [buildEventResponse(row, eventDetection, categorization)];
+  }
+
+  // Fallback: no event detection data, create minimal event from email metadata
+  return [buildEventResponse(row, {
+    has_event: true,
+    event_title: row.subject,
+    event_date: row.date?.split('T')[0],
+  }, categorization)];
 }
 
 /**
@@ -386,7 +408,8 @@ export async function GET(request: NextRequest) {
         created_at,
         email_analyses!inner (
           categorization,
-          event_detection
+          event_detection,
+          multi_event_detection
         ),
         contacts:contact_id (
           id,
@@ -462,7 +485,7 @@ export async function GET(request: NextRequest) {
     const today = getToday();
 
     let events: EventResponse[] = (data || [])
-      .map(transformToEventResponse)
+      .flatMap(transformToEventResponses)
       // Filter out events without valid dates
       .filter(event => event.date && event.date !== 'Invalid Date');
 

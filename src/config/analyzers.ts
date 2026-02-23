@@ -223,6 +223,26 @@ export const analyzerConfig = {
   } satisfies AnalyzerConfig,
 
   /**
+   * Multi-Event Detector: Extracts multiple events from a single email.
+   * NEW (Feb 2026): Handles course schedules, event roundups, newsletter
+   * event sections, and any email listing several distinct events/dates.
+   *
+   * ONLY runs when BOTH `has_event` AND `has_multiple_events` labels present.
+   * When triggered, runs INSTEAD OF the single EventDetector.
+   *
+   * Higher token limit to accommodate up to 10 events per email.
+   * Can optionally resolve links for additional event details.
+   *
+   * COST: ~$0.0003/email × ~5 emails/day = ~$0.045/month
+   */
+  multiEventDetector: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.2, // Low for accurate date/time extraction
+    maxTokens: 1200,  // Higher to accommodate multiple events (up to 10)
+  } satisfies AnalyzerConfig,
+
+  /**
    * Date Extractor: Extracts timeline-relevant dates from emails.
    * Always runs to power the Hub "upcoming things" view.
    *

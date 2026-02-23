@@ -114,6 +114,7 @@ export const EMAIL_LABELS = [
   'has_link',              // Contains important links
   'has_question',          // Direct question asked
   'has_event',             // Contains a calendar-worthy event with date/time (NEW Jan 2026)
+  'has_multiple_events',   // Email lists multiple distinct events, course dates, or schedules (NEW Feb 2026)
 
   // Location
   'local_event',           // Event in user's metro area
@@ -837,6 +838,53 @@ export interface EventDetectionData {
  * Full result from the event detector analyzer.
  */
 export type EventDetectionResult = AnalyzerResult<EventDetectionData>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MULTI-EVENT DETECTOR TYPES (NEW - Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Result data from the multi-event detector analyzer.
+ *
+ * NEW (Feb 2026): Handles emails that contain lists of multiple events,
+ * course schedules, event roundups, or calendars of upcoming dates.
+ *
+ * Each event in the `events` array has the same shape as EventDetectionData,
+ * making it compatible with the existing event saving and display pipeline.
+ */
+export interface MultiEventDetectionData {
+  /**
+   * Whether multiple events were found.
+   */
+  hasMultipleEvents: boolean;
+
+  /**
+   * Number of events extracted.
+   */
+  eventCount: number;
+
+  /**
+   * Array of extracted events, each with the same shape as EventDetectionData.
+   * Max 10 events per email to cap token cost.
+   */
+  events: EventDetectionData[];
+
+  /**
+   * Description of the source format.
+   * Examples: "Course schedule for Spring 2026", "Community event roundup", "Weekly class schedule"
+   */
+  sourceDescription?: string;
+
+  /**
+   * Confidence in the overall extraction accuracy (0-1).
+   */
+  confidence: number;
+}
+
+/**
+ * Full result from the multi-event detector analyzer.
+ */
+export type MultiEventDetectionResult = AnalyzerResult<MultiEventDetectionData>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DATE EXTRACTOR TYPES (NEW - Jan 2026)
@@ -1729,6 +1777,13 @@ export interface AggregatedAnalysis {
   eventDetection?: EventDetectionData;
 
   /**
+   * Multi-event detection results (NEW Feb 2026).
+   * Only present when both `has_event` AND `has_multiple_events` labels are present.
+   * Contains an array of events extracted from emails with multiple events/dates.
+   */
+  multiEventDetection?: MultiEventDetectionData;
+
+  /**
    * Idea spark results (NEW Feb 2026).
    * Runs on all non-noise emails (Phase 2, after categorizer determines signal_strength).
    * Contains 3 creative ideas inspired by the email + user context.
@@ -1802,6 +1857,7 @@ export interface EmailProcessingResult {
     insightExtraction?: InsightExtractionResult;
     newsBrief?: NewsBriefResult;
     eventDetection?: EventDetectionResult;
+    multiEventDetection?: MultiEventDetectionResult;
     contactEnrichment?: ContactEnrichmentResult;
   };
 
