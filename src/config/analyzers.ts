@@ -149,6 +149,8 @@ export type ActionType = typeof ACTION_TYPES[number];
  * - clientTagger: Always runs (client linking)
  * - dateExtractor: Always runs (timeline intelligence)
  * - ideaSpark: Phase 2 — runs on non-noise emails after categorizer [NEW Feb 2026]
+ * - insightExtractor: Phase 2 — runs on newsletter/substantive content [NEW Feb 2026]
+ * - newsBrief: Phase 2 — runs on news-containing emails [NEW Feb 2026]
  * - eventDetector: Conditionally runs when `has_event` label present
  * - contactEnricher: Selectively runs for contacts needing enrichment
  */
@@ -254,6 +256,48 @@ export const analyzerConfig = {
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.7, // High for creative, lateral thinking
     maxTokens: 600,   // 3 ideas with type + relevance + confidence
+  } satisfies AnalyzerConfig,
+
+  /**
+   * Insight Extractor: Synthesizes interesting ideas, tips, and frameworks.
+   * NEW (Feb 2026): Extracts "what's worth knowing" from email content.
+   *
+   * Unlike ContentDigest (which summarizes WHAT the email says) or IdeaSpark
+   * (which suggests WHAT TO DO), this analyzer identifies the INTERESTING IDEAS
+   * contained in the email — things worth writing in a notebook.
+   *
+   * PHASE 2 EXECUTION: Runs when content type is newsletter/substantive
+   * (multi_topic_digest, single_topic, curated_links) AND signal != noise.
+   * Estimated skip rate: ~70-80% of emails (most personal/transactional don't
+   * contain synthesizable insights).
+   *
+   * COST: ~$0.0002/email × ~40 emails/day = ~$0.24/month
+   */
+  insightExtractor: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.4, // Moderate — synthesis needs some creativity but is grounded in source
+    maxTokens: 500,   // 2-4 insights with type + topics + confidence
+  } satisfies AnalyzerConfig,
+
+  /**
+   * News Brief: Extracts newsworthy facts from email content.
+   * NEW (Feb 2026): Identifies what happened, what launched, what changed.
+   *
+   * The factual complement to InsightExtractor — news is about events
+   * that happened in the world, not ideas or analysis.
+   *
+   * PHASE 2 EXECUTION: Runs when categorizer labels include 'industry_news'
+   * or content type is multi_topic_digest/curated_links AND signal != noise.
+   * Estimated skip rate: ~85-90% of emails.
+   *
+   * COST: ~$0.00015/email × ~25 emails/day = ~$0.11/month
+   */
+  newsBrief: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.2, // Low — factual extraction needs precision, not creativity
+    maxTokens: 400,   // 1-5 news items with headline + detail + topics
   } satisfies AnalyzerConfig,
 
   /**

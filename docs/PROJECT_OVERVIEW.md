@@ -22,6 +22,8 @@ AI-powered email processing system with specialized analyzers that:
 - **Track client relationships**: Clients unified into contacts (`is_client` flag, `client_status`, `client_priority`)
 - **Extract actions**: Build dedicated to-do list from email content
 - **Save content**: URLs, tweet ideas, networking opportunities (future)
+- **Extract insights**: Synthesize ideas, tips, and frameworks from newsletters (implemented Feb 2026)
+- **Extract news**: Identify factual news items from email content (implemented Feb 2026)
 - **Detect events**: Auto-extract event details for calendar (implemented)
 - **Sync to Gmail**: Create IdeaBox labels in Gmail for visibility
 - **Learn continuously**: User preferences, client names, communication patterns

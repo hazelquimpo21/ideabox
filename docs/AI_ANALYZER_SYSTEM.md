@@ -1158,6 +1158,58 @@ const result = senderTypeDetector.detect({
 
 ---
 
+### 8. Insight Extractor Analyzer (NEW Feb 2026)
+
+**Purpose:** Synthesize interesting ideas, tips, frameworks, and observations from email content
+
+> This fills the gap between ContentDigest ("what does the email say") and IdeaSpark ("what should I do about it") with "what's WORTH KNOWING." Think: things you'd highlight in a newsletter or write in a notebook.
+
+**When It Runs:** PHASE 2 (conditional). Runs when content type is `multi_topic_digest`, `single_topic`, or `curated_links` AND `signal_strength != 'noise'`. Estimated skip rate: ~70-80% of emails.
+
+**Insight Types:**
+| Type | Description | Example |
+|------|-------------|---------|
+| `tip` | Practical, actionable advice | "Use structured outputs to reduce hallucination by 40%" |
+| `framework` | Mental model or methodology | "Jobs-to-be-done: people don't buy drills, they buy holes" |
+| `observation` | Interesting analysis or pattern | "The best PMs spend 60% of time on discovery, not delivery" |
+| `counterintuitive` | Challenges assumptions | "Remote teams ship faster than co-located ones" |
+| `trend` | Emerging direction or movement | "Companies replacing fine-tuning with RAG for most use cases" |
+
+**Database Storage:**
+- `email_analyses.insight_extraction` JSONB: Array of insight objects with types, topics, confidence
+- Promoted insights saved to `saved_insights` table via POST /api/insights
+
+**Cost:** ~$0.0002 per email (~40 qualifying emails/day = ~$0.24/month)
+
+---
+
+### 9. News Brief Analyzer (NEW Feb 2026)
+
+**Purpose:** Extract factual news items — what happened, what launched, what changed
+
+> The factual complement to InsightExtractor. Insights are about ideas worth knowing; news is about events that happened in the world. Headlines read like a news ticker — concise, factual, specific.
+
+**When It Runs:** PHASE 2 (conditional). Runs when categorizer labels include `industry_news` OR content type is `multi_topic_digest`/`curated_links` AND `signal_strength != 'noise'`. Estimated skip rate: ~85-90% of emails.
+
+**What Counts as News:**
+- Announcements (product launches, company news, policy changes)
+- Events (acquisitions, regulatory decisions, market shifts)
+- Releases (software versions, reports, studies with findings)
+
+**What Doesn't Count:**
+- Opinions or predictions
+- Generic advice
+- Promotional content
+- Old information repackaged
+
+**Database Storage:**
+- `email_analyses.news_brief` JSONB: Array of news item objects with headline, detail, topics, optional date
+- Promoted news saved to `saved_news` table via POST /api/news
+
+**Cost:** ~$0.00015 per email (~25 qualifying emails/day = ~$0.11/month)
+
+---
+
 ## Future Analyzer Additions
 
 Future analyzers to add (same pattern):
@@ -1193,22 +1245,34 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │                                         ▼                                                │
 │  PHASE 2: Conditional Analyzers                                                          │
 │                                                                                          │
-│    ┌─────────────────────────────┐     ┌────────────────────────────────────────────┐    │
-│    │ signal_strength != 'noise'? │     │ labels include 'has_event'?               │    │
-│    └──────────────┬──────────────┘     └───────────────────┬────────────────────────┘    │
-│         ┌────────┴────────┐                     ┌────────┴────────┐                     │
-│         │ YES             │ NO                   │ YES             │ NO                   │
-│         ▼                 ▼                      ▼                 ▼                      │
-│  ┌─────────────┐   ┌───────────┐         ┌─────────────┐   ┌───────────┐               │
-│  │  IdeaSpark  │   │   Skip    │         │    Event    │   │   Skip    │               │
-│  │  (NEW Feb)  │   │  (save $) │         │  Detector   │   │  (save $) │               │
-│  │             │   └───────────┘         │             │   └───────────┘               │
-│  │ + ideas     │                         │ + locality  │                                │
-│  │ + types     │                         │ + location  │                                │
-│  │ + effort    │                         │ + RSVP info │                                │
-│  └──────┬──────┘                         └──────┬──────┘                                │
-│         │                                       │                                        │
-│         └───────────────┬───────────────────────┘                                        │
+│    ┌─────────────────────────────┐     ┌─────────────────────────┐     ┌──────────────┐ │
+│    │ signal_strength != 'noise'? │     │ substantive content?    │     │ has_event?   │ │
+│    └──────────────┬──────────────┘     └────────────┬────────────┘     └──────┬───────┘ │
+│         ┌────────┴────────┐               ┌────────┴────────┐         ┌──────┴──────┐  │
+│         │ YES             │ NO             │ YES             │ NO       │YES        NO│  │
+│         ▼                 ▼                ▼                 ▼          ▼             ▼  │
+│  ┌─────────────┐   ┌─────────┐     ┌─────────────┐  ┌─────────┐  ┌─────────┐ ┌─────┐ │
+│  │  IdeaSpark  │   │  Skip   │     │  Insight    │  │  Skip   │  │  Event  │ │Skip │ │
+│  │  (NEW Feb)  │   │ (save$) │     │  Extractor  │  │ (save$) │  │Detector │ │     │ │
+│  │ + ideas     │   └─────────┘     │  (NEW Feb)  │  └─────────┘  │         │ └─────┘ │
+│  │ + types     │                   │ + insights  │               │+locality│          │
+│  └──────┬──────┘                   │ + tips      │               │+RSVP    │          │
+│         │                          └──────┬──────┘               └────┬────┘          │
+│         │                                 │                          │                 │
+│         │    ┌─────────────────────────────┤                          │                 │
+│         │    │ has news content?           │                          │                 │
+│         │    └────────────┬────────────────┘                          │                 │
+│         │       ┌────────┴────────┐                                  │                 │
+│         │       │ YES             │ NO                                │                 │
+│         │       ▼                 ▼                                   │                 │
+│         │  ┌─────────────┐ ┌─────────┐                               │                 │
+│         │  │  NewsBrief  │ │  Skip   │                               │                 │
+│         │  │  (NEW Feb)  │ │ (save$) │                               │                 │
+│         │  │ + headlines │ └─────────┘                               │                 │
+│         │  │ + details   │                                           │                 │
+│         │  └──────┬──────┘                                           │                 │
+│         │         │                                                  │                 │
+│         └─────────┴──────────────────────────────────────────────────┘                 │
 │                         │                                                                │
 │              ┌──────────┴──────────┐                                                     │
 │              │  Contact Enricher   │  (runs selectively)                                 │

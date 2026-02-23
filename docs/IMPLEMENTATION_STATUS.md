@@ -1,7 +1,7 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** February 2026
-> **Database Migrations:** 001-033
+> **Database Migrations:** 001-034
 
 ## What's Built
 
@@ -15,7 +15,7 @@
 - Zod validation on all API boundaries
 
 ### AI Analysis Pipeline
-- **9 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
+- **11 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
   - Categorizer (12 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
   - Action Extractor (multi-action support, urgency scoring, tightened for real tasks with new types: pay, submit, register, book)
   - Client Tagger (fuzzy matching, relationship signals)
@@ -25,6 +25,8 @@
   - Contact Enricher (company, job title, relationship from signatures)
   - Sender Type Detector (direct vs broadcast classification)
   - **Idea Spark** (NEW Feb 2026): Generates 3 creative ideas per email by cross-referencing content with user context (role, interests, projects, family, location, season)
+  - **Insight Extractor** (NEW Feb 2026): Synthesizes interesting ideas, tips, frameworks from newsletter/substantive content — "what's worth knowing"
+  - **News Brief** (NEW Feb 2026): Extracts factual news items (launches, announcements, changes) from news/digest emails — "what happened"
 - Pre-filter system saves 20-30% AI tokens (skip no-reply, auto-categorize by domain)
 - Sender pattern learning for future auto-categorization
 - Two-phase execution (core in parallel, then conditional analyzers)
@@ -84,7 +86,7 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Inline reply with editable subject
 
 ### Data Layer
-- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress, useIdeas, useReviewQueue, useCategoryStats, useCategoryPreviews, useHubPriorities, useSidebarData, useCampaigns, useTemplates, useGmailAccounts, useUserContext, useEmailThumbnails
+- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress, useIdeas, useInsights, useNews, useReviewQueue, useCategoryStats, useCategoryPreviews, useHubPriorities, useSidebarData, useCampaigns, useTemplates, useGmailAccounts, useUserContext, useEmailThumbnails
 - REST API routes for all entities with Zod validation
 - Page-based pagination with URL state
 - Optimistic UI updates with rollback
@@ -153,3 +155,4 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Email Taxonomy | Feb 2026 | Signal strength (high/medium/low/noise) + reply worthiness (must_reply/should_reply/optional_reply/no_reply) added to categorizer. Noise detection labels (sales_pitch, webinar_invite, fake_recognition, mass_outreach, promotional). Action extractor noise rejection. Hub priority scoring with signal/reply multipliers. Migration 032 for denormalized columns + indexes. |
 | Ideas & Review | Feb 2026 | IdeaSparkAnalyzer (Phase 2, 10 idea types, skipped for noise). Ideas API (GET/POST/PATCH /api/ideas). Review Queue API (GET/PATCH /api/emails/review-queue). useIdeas + useReviewQueue hooks. Two-tier task system: scan-worthy emails vs concrete actions. Migration 033 for idea_sparks JSONB column. |
 | Doc Cleanup | Feb 2026 | Updated all docs to reflect current state: fixed outdated category names (client_pipeline→clients, etc.), added IdeaSpark analyzer to AI docs, synced action types, updated migration count to 033, cleaned up redundancies. |
+| Insights & News | Feb 2026 | Two new Phase 2 analyzers: InsightExtractor (synthesizes ideas/tips/frameworks from newsletters, temp 0.4, gated on substantive content types) and NewsBrief (extracts factual news items, temp 0.2, gated on industry_news label or digest content). API routes (GET/POST/PATCH /api/insights, /api/news). useInsights + useNews hooks. InsightsCard + NewsBriefCard home widgets. InsightsFeed + NewsFeed full-page components. saved_insights + saved_news tables. Migration 034. |

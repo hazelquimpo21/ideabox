@@ -219,6 +219,23 @@ export type {
   IdeasStats,
 } from './useIdeas';
 
+export { useInsights, default as useInsightsDefault } from './useInsights';
+export type {
+  UseInsightsOptions,
+  UseInsightsReturn,
+  InsightItem,
+  InsightsStats,
+} from './useInsights';
+
+export { useNews, default as useNewsDefault } from './useNews';
+export type {
+  UseNewsOptions,
+  UseNewsReturn,
+  NewsItemDisplay,
+  NewsStats,
+  TopicCount,
+} from './useNews';
+
 export { useReviewQueue, default as useReviewQueueDefault } from './useReviewQueue';
 export type {
   UseReviewQueueOptions,

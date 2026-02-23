@@ -1348,6 +1348,200 @@ export interface IdeaSparkData {
 export type IdeaSparkResult = AnalyzerResult<IdeaSparkData>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// INSIGHT EXTRACTOR TYPES (NEW - Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Types of insights that can be extracted from email content.
+ *
+ * These represent different kinds of "worth knowing" information — ideas,
+ * tips, frameworks, observations, and trends synthesized from email content.
+ * Unlike IdeaSpark (what should I DO?), insights are about what's WORTH KNOWING.
+ *
+ * Examples:
+ * - A product management newsletter → tip ("Best PMs spend 60% on discovery")
+ * - An AI research digest → trend ("RAG is replacing fine-tuning for most use cases")
+ * - A business strategy email → framework ("Jobs-to-be-done for product roadmapping")
+ * - An industry report → counterintuitive ("Remote teams ship faster than co-located")
+ */
+export const INSIGHT_TYPES = [
+  'tip',               // Practical, actionable advice or best practice
+  'framework',         // Mental model, methodology, or structured approach
+  'observation',       // Interesting observation or analysis worth noting
+  'counterintuitive',  // Surprising finding that challenges assumptions
+  'trend',             // Emerging pattern, direction, or industry movement
+] as const;
+
+export type InsightType = typeof INSIGHT_TYPES[number];
+
+/**
+ * A single insight extracted from email content.
+ *
+ * Insights are synthesized takeaways — not just summaries of what the email
+ * says, but distilled ideas worth remembering. Think "what's the interesting
+ * idea here?" not "what does the email say?"
+ *
+ * GOOD insight: "Companies using RAG see 40% fewer hallucinations than
+ *                fine-tuning alone — worth revisiting your prompt architecture"
+ * BAD insight:  "The newsletter discussed AI" (too vague, just a summary)
+ */
+export interface EmailInsight {
+  /**
+   * The insight itself — 1-2 sentences, specific and memorable.
+   * Should feel like something worth writing in a notebook.
+   */
+  insight: string;
+
+  /**
+   * Category of insight — helps with filtering and grouping.
+   */
+  type: InsightType;
+
+  /**
+   * Topic tags for this insight (1-3 short tags).
+   * Used for filtering and connecting related insights.
+   * Example: ["AI", "prompt-engineering"] or ["product-management", "discovery"]
+   */
+  topics: string[];
+
+  /**
+   * Confidence that this is a genuinely interesting/useful insight (0-1).
+   * Higher = more specific, novel, and well-supported by the source content.
+   */
+  confidence: number;
+}
+
+/**
+ * Result data from the insight extractor analyzer.
+ *
+ * NEW (Feb 2026): Synthesizes interesting ideas, tips, and frameworks
+ * from email content — particularly newsletters and substantive content.
+ *
+ * This fills the gap between ContentDigest ("what does the email say")
+ * and IdeaSpark ("what should I do about it") with "what's worth knowing."
+ *
+ * DESIGN PHILOSOPHY:
+ * - Insights should be SYNTHESIZED, not just extracted quotes
+ * - Each insight should be memorable and worth saving to a notebook
+ * - Quality > quantity — 2 great insights beat 4 mediocre ones
+ * - Only generate insights when the content actually has substance
+ */
+export interface InsightExtractionData {
+  /**
+   * Whether meaningful insights were found in the email.
+   * False for emails with no substantive ideas (transactional, personal chat, etc.)
+   */
+  hasInsights: boolean;
+
+  /**
+   * Array of 2-4 insights synthesized from the email content.
+   * Each insight is typed, tagged with topics, and confidence-scored.
+   */
+  insights: EmailInsight[];
+
+  /**
+   * Overall confidence in the extraction quality (0-1).
+   * Lower when the email content is thin or generic.
+   */
+  confidence: number;
+}
+
+/**
+ * Full result from the insight extractor analyzer.
+ */
+export type InsightExtractionResult = AnalyzerResult<InsightExtractionData>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEWS BRIEF TYPES (NEW - Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * A single news item extracted from email content.
+ *
+ * News items are factual, time-stamped items about what HAPPENED — launches,
+ * announcements, regulatory changes, acquisitions, etc. Unlike insights
+ * (ideas worth knowing), news is about events in the world.
+ *
+ * GOOD news item:
+ *   headline: "EU passed AI Act requiring model transparency for high-risk systems"
+ *   detail: "Enforcement begins March 2027; affects companies deploying AI in healthcare, finance, and law enforcement"
+ *
+ * BAD news item:
+ *   headline: "AI regulation news" (too vague, not a specific event)
+ */
+export interface NewsItem {
+  /**
+   * One-line headline of the news item.
+   * Should read like a news ticker — concise, factual, specific.
+   */
+  headline: string;
+
+  /**
+   * One sentence of additional context or detail.
+   * Answers: why does this matter? what are the implications?
+   */
+  detail: string;
+
+  /**
+   * Topic tags for this news item (1-3 short tags).
+   * Used for filtering and connecting related news.
+   * Example: ["AI", "regulation"] or ["Apple", "hardware"]
+   */
+  topics: string[];
+
+  /**
+   * Specific date mentioned in the news item (YYYY-MM-DD), if any.
+   * Example: launch date, effective date, announcement date.
+   */
+  dateMentioned?: string;
+
+  /**
+   * Confidence that this is a genuine, factual news item (0-1).
+   * Higher = specific, verifiable, newsworthy fact.
+   */
+  confidence: number;
+}
+
+/**
+ * Result data from the news brief analyzer.
+ *
+ * NEW (Feb 2026): Extracts newsworthy facts from email content —
+ * what happened, what launched, what changed in the world.
+ *
+ * This is the factual complement to InsightExtractor. Insights are about
+ * ideas worth knowing; news is about events that happened.
+ *
+ * DESIGN PHILOSOPHY:
+ * - News items must be FACTUAL, not opinions or analysis
+ * - Each item should answer "what happened?" not "what does it mean?"
+ * - Time-sensitive: prioritize recent announcements and developments
+ * - Only extract news when the email actually contains newsworthy items
+ */
+export interface NewsBriefData {
+  /**
+   * Whether the email contains newsworthy items.
+   * False for emails with no news (personal correspondence, transactional, etc.)
+   */
+  hasNews: boolean;
+
+  /**
+   * Array of 1-5 news items extracted from the email.
+   * Each item has a headline, detail, topics, and optional date.
+   */
+  newsItems: NewsItem[];
+
+  /**
+   * Overall confidence in the extraction quality (0-1).
+   */
+  confidence: number;
+}
+
+/**
+ * Full result from the news brief analyzer.
+ */
+export type NewsBriefResult = AnalyzerResult<NewsBriefData>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ENHANCED ACTION EXTRACTOR TYPES (Multi-Action Support - Jan 2026)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1545,6 +1739,26 @@ export interface AggregatedAnalysis {
   ideaSparks?: IdeaSparkData;
 
   /**
+   * Insight extraction results (NEW Feb 2026).
+   * Phase 2 — runs on newsletter/substantive content (multi_topic_digest, single_topic, curated_links).
+   * Synthesizes interesting ideas, tips, frameworks, and observations from email content.
+   *
+   * Fills the gap between ContentDigest ("what does the email say") and
+   * IdeaSpark ("what should I do") with "what's worth knowing."
+   */
+  insightExtraction?: InsightExtractionData;
+
+  /**
+   * News brief results (NEW Feb 2026).
+   * Phase 2 — runs on emails with newsworthy content (industry_news label or digest content types).
+   * Extracts factual news items: what happened, what launched, what changed.
+   *
+   * The factual complement to InsightExtractor: news is about events,
+   * insights are about ideas.
+   */
+  newsBrief?: NewsBriefData;
+
+  /**
    * Contact enrichment results (NEW Jan 2026).
    * Only present when contact needs enrichment.
    * Contains extracted company, job title, birthday, etc.
@@ -1585,6 +1799,8 @@ export interface EmailProcessingResult {
     clientTagging?: ClientTaggingResult;
     dateExtraction?: DateExtractionResult;
     ideaSparks?: IdeaSparkResult;
+    insightExtraction?: InsightExtractionResult;
+    newsBrief?: NewsBriefResult;
     eventDetection?: EventDetectionResult;
     contactEnrichment?: ContactEnrichmentResult;
   };

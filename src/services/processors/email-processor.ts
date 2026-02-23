@@ -23,11 +23,13 @@
  *
  * PHASE 2: Conditional Analyzers (run based on Phase 1 results)
  *   - IdeaSpark: 3 creative ideas (NEW Feb 2026, skipped for noise emails)
+ *   - InsightExtractor: Ideas/tips/frameworks from newsletters (NEW Feb 2026)
+ *   - NewsBrief: Factual news items from news emails (NEW Feb 2026)
  *   - EventDetector: Only when `has_event` label present
  *   - ContactEnricher: Only when contact needs enrichment
  *
  * PHASE 3: Persistence
- *   - Save analysis to email_analyses table (incl. idea_sparks)
+ *   - Save analysis to email_analyses table (incl. idea_sparks, insight_extraction, news_brief)
  *   - Save extracted dates to extracted_dates table
  *   - Create action record if action detected (GATED: skip noise/low-signal)
  *   - Update email category
@@ -82,6 +84,8 @@ import {
   shouldEnrichContact,
 } from '@/services/analyzers/contact-enricher';
 import { IdeaSparkAnalyzer } from '@/services/analyzers/idea-spark';
+import { InsightExtractorAnalyzer } from '@/services/analyzers/insight-extractor';
+import { NewsBriefAnalyzer } from '@/services/analyzers/news-brief';
 import { ANALYZER_VERSION } from '@/services/analyzers/base-analyzer';
 import { toEmailInput } from '@/services/analyzers/types';
 import { getUserContext } from '@/services/user-context';
@@ -103,6 +107,8 @@ import type {
   DateExtractionResult,
   ContactEnrichmentResult,
   IdeaSparkResult,
+  InsightExtractionResult,
+  NewsBriefResult,
   AggregatedAnalysis,
   EmailProcessingResult,
   ExtractedDate,
@@ -231,6 +237,12 @@ export class EmailProcessor {
   /** Idea spark analyzer - generates creative ideas from email content (NEW Feb 2026) */
   private ideaSpark: IdeaSparkAnalyzer;
 
+  /** Insight extractor analyzer - synthesizes ideas/tips/frameworks from newsletters (NEW Feb 2026) */
+  private insightExtractor: InsightExtractorAnalyzer;
+
+  /** News brief analyzer - extracts factual news items from email content (NEW Feb 2026) */
+  private newsBrief: NewsBriefAnalyzer;
+
   /** Sender type detector - classifies direct vs broadcast senders (NEW Jan 2026) */
   private senderTypeDetector: SenderTypeDetector;
 
@@ -254,6 +266,8 @@ export class EmailProcessor {
     this.dateExtractor = new DateExtractorAnalyzer();
     this.contactEnricher = new ContactEnricherAnalyzer();
     this.ideaSpark = new IdeaSparkAnalyzer();
+    this.insightExtractor = new InsightExtractorAnalyzer();
+    this.newsBrief = new NewsBriefAnalyzer();
     this.senderTypeDetector = new SenderTypeDetector();
 
     logger.debug('EmailProcessor initialized', {
@@ -265,6 +279,8 @@ export class EmailProcessor {
       dateExtractorEnabled: this.dateExtractor.isEnabled(),
       contactEnricherEnabled: this.contactEnricher.isEnabled(),
       ideaSparkEnabled: this.ideaSpark.isEnabled(),
+      insightExtractorEnabled: this.insightExtractor.isEnabled(),
+      newsBriefEnabled: this.newsBrief.isEnabled(),
       senderTypeDetector: 'enabled',
     });
   }
@@ -366,11 +382,13 @@ export class EmailProcessor {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // PHASE 2: Run conditional analyzers based on Phase 1 results
-    // ENHANCED (Feb 2026): Added IdeaSpark analyzer (runs on non-noise emails)
+    // ENHANCED (Feb 2026): Added IdeaSpark, InsightExtractor, NewsBrief analyzers
     // ═══════════════════════════════════════════════════════════════════════════
     let eventResult: EventDetectionResult | undefined;
     let contactEnrichmentResult: ContactEnrichmentResult | undefined;
     let ideaSparkResult: IdeaSparkResult | undefined;
+    let insightExtractionResult: InsightExtractionResult | undefined;
+    let newsBriefResult: NewsBriefResult | undefined;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Determine signal strength from categorizer for Phase 2 gating
@@ -414,6 +432,74 @@ export class EmailProcessor {
       });
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // InsightExtractor: Synthesize ideas/tips/frameworks from newsletter content
+    // NEW (Feb 2026): Runs on substantive content types (multi_topic_digest,
+    // single_topic, curated_links) AND signal_strength !== 'noise'.
+    // Fills the gap between ContentDigest ("what it says") and IdeaSpark
+    // ("what to do") with "what's worth knowing."
+    // ─────────────────────────────────────────────────────────────────────────
+    const contentType = contentDigestResult.success
+      ? contentDigestResult.data.contentType
+      : undefined;
+    const isInsightEligibleContent =
+      contentType === 'multi_topic_digest' ||
+      contentType === 'single_topic' ||
+      contentType === 'curated_links';
+
+    if (!isNoise && isInsightEligibleContent && this.insightExtractor.isEnabled()) {
+      logger.debug('Running InsightExtractor (substantive content detected)', {
+        emailId: emailInput.id,
+        contentType,
+        signalStrength: signalStrength ?? 'unknown',
+      });
+      insightExtractionResult = await this.runInsightExtractor(emailInput, enrichedContext);
+    } else if (!isNoise && !isInsightEligibleContent) {
+      logger.debug('Skipping InsightExtractor — content type not eligible', {
+        emailId: emailInput.id,
+        contentType: contentType ?? 'unknown',
+        reason: 'content_type_gate',
+      });
+    } else if (isNoise) {
+      logger.debug('Skipping InsightExtractor — email classified as noise', {
+        emailId: emailInput.id,
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // NewsBrief: Extract factual news items from email content
+    // NEW (Feb 2026): Runs on emails with newsworthy content — either
+    // 'industry_news' label from categorizer OR digest/curated_links content
+    // type. Signal_strength must not be 'noise'.
+    // ─────────────────────────────────────────────────────────────────────────
+    const hasNewsLabel = categorizationResult.success &&
+      categorizationResult.data.labels?.includes('industry_news');
+    const isNewsEligibleContent =
+      contentType === 'multi_topic_digest' ||
+      contentType === 'curated_links';
+    const shouldRunNewsBrief = !isNoise && (hasNewsLabel || isNewsEligibleContent);
+
+    if (shouldRunNewsBrief && this.newsBrief.isEnabled()) {
+      logger.debug('Running NewsBrief (news-eligible content detected)', {
+        emailId: emailInput.id,
+        contentType: contentType ?? 'unknown',
+        hasNewsLabel: !!hasNewsLabel,
+        signalStrength: signalStrength ?? 'unknown',
+      });
+      newsBriefResult = await this.runNewsBrief(emailInput, enrichedContext);
+    } else if (!shouldRunNewsBrief && !isNoise) {
+      logger.debug('Skipping NewsBrief — content not news-eligible', {
+        emailId: emailInput.id,
+        contentType: contentType ?? 'unknown',
+        hasNewsLabel: !!hasNewsLabel,
+        reason: 'news_gate',
+      });
+    } else if (isNoise) {
+      logger.debug('Skipping NewsBrief — email classified as noise', {
+        emailId: emailInput.id,
+      });
+    }
+
     // ContactEnricher: Only run if contact needs enrichment
     if (
       opts.enableContactEnrichment &&
@@ -443,7 +529,9 @@ export class EmailProcessor {
       dateResult,
       eventResult,
       contactEnrichmentResult,
-      ideaSparkResult
+      ideaSparkResult,
+      insightExtractionResult,
+      newsBriefResult
     );
 
     // Collect errors from all analyzers
@@ -455,7 +543,9 @@ export class EmailProcessor {
       dateResult,
       eventResult,
       contactEnrichmentResult,
-      ideaSparkResult
+      ideaSparkResult,
+      insightExtractionResult,
+      newsBriefResult
     );
 
     // Determine success (at least one core analyzer succeeded)
@@ -475,6 +565,8 @@ export class EmailProcessor {
         clientTagging: clientResult,
         dateExtraction: dateResult,
         ideaSparks: ideaSparkResult,
+        insightExtraction: insightExtractionResult,
+        newsBrief: newsBriefResult,
         eventDetection: eventResult,
         contactEnrichment: contactEnrichmentResult,
       },
@@ -657,6 +749,12 @@ export class EmailProcessor {
       // Idea sparks (NEW Feb 2026)
       ideasGenerated: aggregatedAnalysis.ideaSparks?.ideas?.length ?? 0,
       ideaSparkConfidence: aggregatedAnalysis.ideaSparks?.confidence ?? 0,
+      // Insight extraction (NEW Feb 2026)
+      insightsExtracted: aggregatedAnalysis.insightExtraction?.insights?.length ?? 0,
+      insightConfidence: aggregatedAnalysis.insightExtraction?.confidence ?? 0,
+      // News brief (NEW Feb 2026)
+      newsItemsExtracted: aggregatedAnalysis.newsBrief?.newsItems?.length ?? 0,
+      newsBriefConfidence: aggregatedAnalysis.newsBrief?.confidence ?? 0,
       tokensUsed: aggregatedAnalysis.totalTokensUsed,
       totalTimeMs: totalTime,
     });
@@ -864,6 +962,93 @@ export class EmailProcessor {
   }
 
   /**
+   * Runs the InsightExtractor analyzer.
+   *
+   * NEW (Feb 2026): Synthesizes interesting ideas, tips, and frameworks from
+   * email content. This is a CONDITIONAL analyzer — only runs when:
+   * 1. Content type is substantive (multi_topic_digest, single_topic, curated_links)
+   * 2. Signal strength is not noise
+   *
+   * Running conditionally saves ~70-80% of tokens (most emails aren't newsletters).
+   *
+   * @param email - Email to extract insights from
+   * @param context - User context (interests, role, projects) for relevance scoring
+   * @returns Insight extraction result with typed insights, or failed result
+   */
+  private async runInsightExtractor(
+    email: EmailInput,
+    context: UserContext
+  ): Promise<InsightExtractionResult> {
+    logger.debug('Running InsightExtractor (Phase 2 conditional analyzer)', {
+      emailId: email.id,
+      hasInterests: !!(context.interests?.length),
+    });
+
+    try {
+      return await this.insightExtractor.analyze(email, context);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      logger.error('InsightExtractor threw exception — insights not generated for this email', {
+        emailId: email.id,
+        error: errorMessage,
+      });
+
+      return {
+        success: false,
+        data: { hasInsights: false, insights: [], confidence: 0 },
+        confidence: 0,
+        tokensUsed: 0,
+        processingTimeMs: 0,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Runs the NewsBrief analyzer.
+   *
+   * NEW (Feb 2026): Extracts factual news items from email content. This is
+   * a CONDITIONAL analyzer — only runs when:
+   * 1. Categorizer labels include 'industry_news' OR content type is digest/curated
+   * 2. Signal strength is not noise
+   *
+   * Running conditionally saves ~85-90% of tokens (most emails aren't news).
+   *
+   * @param email - Email to extract news from
+   * @param context - User context for relevance boosting
+   * @returns News brief result with typed news items, or failed result
+   */
+  private async runNewsBrief(
+    email: EmailInput,
+    context: UserContext
+  ): Promise<NewsBriefResult> {
+    logger.debug('Running NewsBrief (Phase 2 conditional analyzer)', {
+      emailId: email.id,
+    });
+
+    try {
+      return await this.newsBrief.analyze(email, context);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      logger.error('NewsBrief threw exception — news items not generated for this email', {
+        emailId: email.id,
+        error: errorMessage,
+      });
+
+      return {
+        success: false,
+        data: { hasNews: false, newsItems: [], confidence: 0 },
+        confidence: 0,
+        tokensUsed: 0,
+        processingTimeMs: 0,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
    * Runs the ContactEnricher analyzer.
    *
    * This is a SELECTIVE analyzer - only runs when:
@@ -940,7 +1125,7 @@ export class EmailProcessor {
 
   /**
    * Aggregates results from all analyzers into a single object.
-   * ENHANCED (Feb 2026): Now includes ideaSparks.
+   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief.
    */
   private aggregateResults(
     categorization: CategorizationResult,
@@ -950,7 +1135,9 @@ export class EmailProcessor {
     date: DateExtractionResult,
     event?: EventDetectionResult,
     contactEnrichment?: ContactEnrichmentResult,
-    ideaSparks?: IdeaSparkResult
+    ideaSparks?: IdeaSparkResult,
+    insightExtraction?: InsightExtractionResult,
+    newsBrief?: NewsBriefResult
   ): AggregatedAnalysis {
     // Calculate totals
     const totalTokensUsed =
@@ -961,7 +1148,9 @@ export class EmailProcessor {
       date.tokensUsed +
       (event?.tokensUsed ?? 0) +
       (contactEnrichment?.tokensUsed ?? 0) +
-      (ideaSparks?.tokensUsed ?? 0);
+      (ideaSparks?.tokensUsed ?? 0) +
+      (insightExtraction?.tokensUsed ?? 0) +
+      (newsBrief?.tokensUsed ?? 0);
 
     const totalProcessingTimeMs =
       categorization.processingTimeMs +
@@ -971,7 +1160,9 @@ export class EmailProcessor {
       date.processingTimeMs +
       (event?.processingTimeMs ?? 0) +
       (contactEnrichment?.processingTimeMs ?? 0) +
-      (ideaSparks?.processingTimeMs ?? 0);
+      (ideaSparks?.processingTimeMs ?? 0) +
+      (insightExtraction?.processingTimeMs ?? 0) +
+      (newsBrief?.processingTimeMs ?? 0);
 
     return {
       // Include data from successful analyzers only
@@ -983,6 +1174,8 @@ export class EmailProcessor {
 
       // Conditional/Phase 2 analyzers
       ideaSparks: ideaSparks?.success ? ideaSparks.data : undefined,
+      insightExtraction: insightExtraction?.success ? insightExtraction.data : undefined,
+      newsBrief: newsBrief?.success ? newsBrief.data : undefined,
       eventDetection: event?.success ? event.data : undefined,
       contactEnrichment: contactEnrichment?.success
         ? contactEnrichment.data
@@ -997,7 +1190,7 @@ export class EmailProcessor {
 
   /**
    * Collects errors from all analyzers.
-   * ENHANCED (Feb 2026): Now includes ideaSparks.
+   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief.
    */
   private collectErrors(
     categorization: CategorizationResult,
@@ -1007,7 +1200,9 @@ export class EmailProcessor {
     date: DateExtractionResult,
     event?: EventDetectionResult,
     contactEnrichment?: ContactEnrichmentResult,
-    ideaSparks?: IdeaSparkResult
+    ideaSparks?: IdeaSparkResult,
+    insightExtraction?: InsightExtractionResult,
+    newsBrief?: NewsBriefResult
   ): Array<{ analyzer: string; error: string }> {
     const errors: Array<{ analyzer: string; error: string }> = [];
 
@@ -1028,6 +1223,12 @@ export class EmailProcessor {
     }
     if (ideaSparks && !ideaSparks.success && ideaSparks.error) {
       errors.push({ analyzer: 'IdeaSpark', error: ideaSparks.error });
+    }
+    if (insightExtraction && !insightExtraction.success && insightExtraction.error) {
+      errors.push({ analyzer: 'InsightExtractor', error: insightExtraction.error });
+    }
+    if (newsBrief && !newsBrief.success && newsBrief.error) {
+      errors.push({ analyzer: 'NewsBrief', error: newsBrief.error });
     }
     if (event && !event.success && event.error) {
       errors.push({ analyzer: 'EventDetector', error: event.error });
@@ -1336,6 +1537,35 @@ export class EmailProcessor {
               confidence: idea.confidence,
             })),
             confidence: analysis.ideaSparks.confidence,
+          }
+        : null,
+
+      // Insight extraction (NEW Feb 2026: synthesized ideas/tips/frameworks from newsletters)
+      insight_extraction: analysis.insightExtraction
+        ? {
+            has_insights: analysis.insightExtraction.hasInsights,
+            insights: analysis.insightExtraction.insights.map(insight => ({
+              insight: insight.insight,
+              type: insight.type,
+              topics: insight.topics,
+              confidence: insight.confidence,
+            })),
+            confidence: analysis.insightExtraction.confidence,
+          }
+        : null,
+
+      // News brief (NEW Feb 2026: factual news items from email content)
+      news_brief: analysis.newsBrief
+        ? {
+            has_news: analysis.newsBrief.hasNews,
+            news_items: analysis.newsBrief.newsItems.map(item => ({
+              headline: item.headline,
+              detail: item.detail,
+              topics: item.topics,
+              date_mentioned: item.dateMentioned,
+              confidence: item.confidence,
+            })),
+            confidence: analysis.newsBrief.confidence,
           }
         : null,
 
