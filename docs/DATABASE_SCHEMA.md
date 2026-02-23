@@ -1,7 +1,7 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
 > **Last Updated:** February 2026
-> **Source of Truth:** `supabase/migrations/001-033`
+> **Source of Truth:** `supabase/migrations/001-034`
 > **TypeScript Types:** `src/types/database.ts`
 
 ## Schema Overview
@@ -20,6 +20,8 @@ auth.users (Supabase Auth)
   │   ├── email_analyses     # Full AI analyzer outputs (JSONB)
   │   └── extracted_dates    # Timeline dates/events extracted from emails
   ├── actions                # To-do items extracted from emails
+  ├── saved_insights         # User-promoted insights from InsightExtractor (NEW Feb 2026)
+  ├── saved_news             # User-promoted news items from NewsBrief (NEW Feb 2026)
   ├── user_event_states      # User decisions on events (dismiss/maybe/calendar)
   ├── outbound_emails        # Sent/scheduled/draft outgoing emails
   │   └── email_open_events  # Tracking pixel hits
