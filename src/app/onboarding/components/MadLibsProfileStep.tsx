@@ -14,7 +14,7 @@
  * 1. On mount, calls POST /api/onboarding/profile-suggestions to get AI data
  * 2. Renders a "Mad Libs" card with pre-filled blanks from suggestions
  * 3. Each blank is an inline-editable MadLibsField component
- * 4. VIP contacts are loaded from the contacts table (is_vip = true)
+ * 4. VIP contacts are loaded from user_context.vip_emails (saved by mark-vip)
  * 5. On "Looks good!" click, saves confirmed values to user_context
  * 6. "Skip for now" advances without saving — all fields are optional
  *
@@ -38,7 +38,7 @@
  *
  * Suggestions come from POST /api/onboarding/profile-suggestions which returns
  * the ProfileSuggestions type. Each field has { value, confidence, source }.
- * VIP contacts come from the contacts table (selected in the previous step).
+ * VIP contacts come from user_context.vip_emails (saved by mark-vip in the previous step).
  *
  * When the user confirms, ONLY fields with values are saved to user_context
  * via the /api/user/context PUT endpoint. This writes to the REAL user_context
@@ -139,7 +139,6 @@ export function MadLibsProfileStep({
 
     async function fetchSuggestions() {
       logger.start('Fetching profile suggestions', { userId: user.id.substring(0, 8) });
-      setLoading(true);
       setFetchError(null);
 
       try {
@@ -155,7 +154,7 @@ export function MadLibsProfileStep({
             status: response.status,
             error: errorText,
           });
-          setFetchError(`Failed to load suggestions (${response.status})`);
+          if (!cancelled) setFetchError(`Failed to load suggestions (${response.status})`);
           // Continue without suggestions — the card is still usable
           return;
         }
@@ -218,10 +217,6 @@ export function MadLibsProfileStep({
         logger.error('Failed to fetch profile suggestions', { error: message });
         setFetchError(message);
         // Don't block the step — user can still fill in manually
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
       }
     }
 
@@ -241,9 +236,11 @@ export function MadLibsProfileStep({
           return;
         }
 
+        if (cancelled) return;
+
         const contextData = await contextResponse.json();
         const existingVips: string[] = contextData.data?.vip_emails ?? contextData.vip_emails ?? [];
-        if (existingVips.length > 0 && !cancelled) {
+        if (existingVips.length > 0) {
           logger.debug('Found VIP emails in user context', {
             count: existingVips.length,
           });
@@ -258,8 +255,15 @@ export function MadLibsProfileStep({
       }
     }
 
-    // Fire both requests in parallel
-    Promise.all([fetchSuggestions(), fetchVipContacts()]);
+    // Fire both requests in parallel, only clear loading when BOTH complete.
+    // This prevents the card from rendering with empty VIP chips that later
+    // pop in, causing a visual flash.
+    setLoading(true);
+    Promise.all([fetchSuggestions(), fetchVipContacts()]).finally(() => {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    });
 
     return () => {
       cancelled = true;
