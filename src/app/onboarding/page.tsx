@@ -8,15 +8,14 @@
  * - Shows real-time sync progress before redirecting to inbox
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * WIZARD STEPS
+ * WIZARD STEPS (Updated Feb 2026 — Phase 4)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * 1. Welcome - Brief introduction and "Get Started" CTA
  * 2. Accounts - Shows connected Gmail, option to add more
- * 3. Sync Config - Configure initial analysis (email count, read/unread)
- * 4. Clients - Optional client setup (can be skipped)
- * 5. VIP Contacts - Select important contacts (optional)
- * 6. About You - User context for AI personalization (optional)
+ * 3. VIP Contacts - Import Google Contacts, select VIPs (optional)
+ * 4. About You - Mad Libs profile card with AI suggestions (optional)
+ * 5. Sync Config - Configure initial analysis and "Finish Setup"
  *
  * @module app/onboarding/page
  */
