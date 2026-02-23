@@ -47,6 +47,7 @@ import {
   MailOpen,
   Reply,
   Signal,
+  Lightbulb,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import type { ReviewQueueItem } from '@/hooks/useReviewQueue';
@@ -223,6 +224,9 @@ export function DailyReviewCard({
                     )}
                     {(email.reply_worthiness === 'must_reply' || email.reply_worthiness === 'should_reply') && (
                       <Reply className="h-3 w-3 text-orange-500" title="Needs reply" />
+                    )}
+                    {email.gist && (
+                      <Lightbulb className="h-3 w-3 text-amber-400" title="Has idea sparks" />
                     )}
                   </div>
                   {/* Gist/summary if available */}

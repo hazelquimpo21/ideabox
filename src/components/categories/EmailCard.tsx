@@ -36,6 +36,8 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  Lightbulb,
+  Signal,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -269,6 +271,27 @@ export const EmailCard = React.memo(function EmailCard({
             {senderName}
           </span>
 
+          {/* Signal strength indicator (enhanced mode) */}
+          {enhanced && email.signal_strength === 'high' && (
+            <Signal className="h-3 w-3 text-emerald-500 shrink-0" title="High signal" />
+          )}
+
+          {/* Reply worthiness indicator */}
+          {enhanced && (email.reply_worthiness === 'must_reply' || email.reply_worthiness === 'should_reply') && (
+            <Badge
+              variant="outline"
+              className={cn(
+                'text-[10px] px-1 py-0',
+                email.reply_worthiness === 'must_reply'
+                  ? 'text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
+                  : 'text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+              )}
+            >
+              <Reply className="h-2.5 w-2.5 mr-0.5" />
+              {email.reply_worthiness === 'must_reply' ? 'Reply' : 'Reply?'}
+            </Badge>
+          )}
+
           {/* Urgency indicator (enhanced mode) */}
           {enhanced && urgencyStyle.show && (
             <Badge
@@ -392,15 +415,25 @@ export const EmailCard = React.memo(function EmailCard({
             {actionConfig.label}
           </Badge>
 
-          {/* Relationship signal indicator (enhanced) */}
-          {enhanced && email.relationship_signal === 'negative' && (
-            <span
-              className="text-amber-500 text-xs"
-              title="This sender may need extra attention"
-            >
-              😟
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {/* Idea spark indicator — signals ideas are available in detail view */}
+            {enhanced && email.analyzed_at && (
+              <Lightbulb
+                className="h-3.5 w-3.5 text-amber-400"
+                title="Has idea sparks — click to view"
+              />
+            )}
+
+            {/* Relationship signal indicator (enhanced) */}
+            {enhanced && email.relationship_signal === 'negative' && (
+              <span
+                className="text-amber-500 text-xs"
+                title="This sender may need extra attention"
+              >
+                😟
+              </span>
+            )}
+          </div>
         </div>
       )}
     </Card>

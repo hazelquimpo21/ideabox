@@ -44,7 +44,7 @@
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
-import { Inbox, TrendingUp, Archive, LayoutGrid } from 'lucide-react';
+import { Inbox, TrendingUp, Archive, LayoutGrid, Lightbulb } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import type { EmailCategory } from '@/types/discovery';
 import { EMAIL_CATEGORIES_SET } from '@/types/discovery';
@@ -55,6 +55,7 @@ import { ArchiveContent } from '@/components/archive';
 import { PriorityEmailList } from '@/components/inbox/PriorityEmailList';
 import { CategoryOverview } from '@/components/inbox/CategoryOverview';
 import { EmailDetailModal } from '@/components/email/EmailDetailModal';
+import { IdeasFeed } from '@/components/inbox/IdeasFeed';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -67,7 +68,7 @@ const logger = createLogger('InboxTabs');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** All valid tab values — used for URL param validation */
-const VALID_TABS = ['inbox', 'priority', 'categories', 'archive'] as const;
+const VALID_TABS = ['inbox', 'priority', 'categories', 'ideas', 'archive'] as const;
 type InboxTab = (typeof VALID_TABS)[number];
 
 /** Default tab when no query param is present */
@@ -186,6 +187,13 @@ export function InboxTabs() {
             Categories
           </TabsTrigger>
           <TabsTrigger
+            value="ideas"
+            variant="underline"
+            icon={<Lightbulb className="h-4 w-4" />}
+          >
+            Ideas
+          </TabsTrigger>
+          <TabsTrigger
             value="archive"
             variant="underline"
             icon={<Archive className="h-4 w-4" />}
@@ -217,6 +225,10 @@ export function InboxTabs() {
             }}
             onEmailSelect={handleEmailSelect}
           />
+        </TabsContent>
+
+        <TabsContent value="ideas">
+          <IdeasFeed />
         </TabsContent>
 
         <TabsContent value="archive">
