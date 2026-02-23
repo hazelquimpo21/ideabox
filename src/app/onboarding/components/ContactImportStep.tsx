@@ -46,7 +46,7 @@
 
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Button, Badge, Checkbox } from '@/components/ui';
+import { Button, Badge, Checkbox, useToast } from '@/components/ui';
 import { createLogger } from '@/lib/utils/logger';
 import type { AuthUser } from '@/lib/auth';
 import {
@@ -226,6 +226,7 @@ export function ContactImportStep({
   const [importStatus, setImportStatus] = React.useState<string | null>(null);
   /** Tracks whether a Google import has completed at least once in this session */
   const [hasImported, setHasImported] = React.useState(false);
+  const { toast } = useToast();
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Load suggestions on mount (skip if we're about to auto-import)
@@ -348,8 +349,8 @@ export function ContactImportStep({
 
       if (response.ok) {
         const data = await response.json();
-        const starredNote = data.starred > 0 ? ` (${data.starred} starred)` : '';
-        setImportStatus(`Imported ${data.imported} contacts${starredNote}`);
+        const starredNote = data.starred > 0 ? `, ${data.starred} starred` : '';
+        setImportStatus(`Found ${data.imported} contacts${starredNote}`);
         setHasContactsPermission(true);
         setHasImported(true);
 
@@ -367,8 +368,9 @@ export function ContactImportStep({
         logger.info('Contacts permission not granted, redirecting to auth');
         setImportStatus('Redirecting to grant permission...');
 
-        // Redirect to OAuth with contacts scope
-        window.location.href = '/api/auth/add-contacts-scope?returnTo=' + encodeURIComponent(window.location.pathname);
+        // Redirect to OAuth with contacts scope — use pathname only (the
+        // callback appends scope_added=true itself)
+        window.location.href = '/api/auth/add-contacts-scope?returnTo=' + encodeURIComponent('/onboarding');
         return;
       } else {
         setImportStatus('Import failed. Try again later.');
@@ -411,6 +413,11 @@ export function ContactImportStep({
           logger.success('VIPs saved', { marked: data.marked });
         } else {
           logger.warn('Failed to save VIPs', { status: response.status });
+          toast({
+            title: 'Could not save VIP selections',
+            description: 'You can set VIPs later in Contacts settings.',
+            variant: 'destructive',
+          });
         }
       }
 
@@ -418,6 +425,11 @@ export function ContactImportStep({
     } catch (error) {
       logger.error('Error saving VIPs', {
         error: error instanceof Error ? error.message : 'Unknown',
+      });
+      toast({
+        title: 'Could not save VIP selections',
+        description: 'You can set VIPs later in Contacts settings.',
+        variant: 'destructive',
       });
       // Don't block onboarding on error
       onNext();
@@ -588,7 +600,11 @@ export function ContactImportStep({
             <div className="text-center py-8">
               <Mail className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
-                No suggestions yet. Sync some emails first, then come back here.
+                {hasImported
+                  ? 'No VIP suggestions found. You can add VIPs later in Contacts.'
+                  : hasContactsPermission
+                    ? 'Import your contacts to see VIP suggestions.'
+                    : 'Connect Google Contacts above or skip for now.'}
               </p>
             </div>
           )}

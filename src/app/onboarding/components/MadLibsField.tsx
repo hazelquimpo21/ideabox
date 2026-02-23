@@ -88,6 +88,9 @@ const DAY_LABELS: Record<number, string> = {
 const HIGH_CONFIDENCE = 0.8;
 const LOW_CONFIDENCE = 0.3;
 
+/** Basic email validation regex — matches user@domain.tld */
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -212,11 +215,22 @@ export function MadLibsField({
     }
   };
 
-  /** Add a chip value (for the chips type) */
+  /** Add a chip value (for the chips type) — validates email format */
+  const [chipError, setChipError] = React.useState<string | null>(null);
+
   const handleChipAdd = () => {
     const trimmed = chipInput.trim();
-    if (trimmed && onChipAdd) {
+    if (!trimmed) return;
+
+    if (!EMAIL_REGEX.test(trimmed)) {
+      setChipError('Enter a valid email address');
+      logger.debug('MadLibsField: invalid email rejected', { value: trimmed });
+      return;
+    }
+
+    if (onChipAdd) {
       logger.debug('MadLibsField: adding chip', { value: trimmed });
+      setChipError(null);
       onChipAdd(trimmed);
       setChipInput('');
     }
@@ -283,14 +297,22 @@ export function MadLibsField({
         ))}
         {/* Inline add input */}
         <span className="inline-flex items-center gap-1">
-          <Input
-            ref={inputRef}
-            value={chipInput}
-            onChange={(e) => setChipInput(e.target.value)}
-            onKeyDown={handleChipKeyDown}
-            placeholder="add email..."
-            className="h-7 w-36 text-sm px-2 border-dashed"
-          />
+          <span className="inline-flex flex-col">
+            <Input
+              ref={inputRef}
+              value={chipInput}
+              onChange={(e) => {
+                setChipInput(e.target.value);
+                if (chipError) setChipError(null);
+              }}
+              onKeyDown={handleChipKeyDown}
+              placeholder="add email..."
+              className={`h-7 w-36 text-sm px-2 border-dashed ${chipError ? 'border-destructive' : ''}`}
+            />
+            {chipError && (
+              <span className="text-[10px] text-destructive mt-0.5">{chipError}</span>
+            )}
+          </span>
           <button
             onClick={handleChipAdd}
             disabled={!chipInput.trim()}

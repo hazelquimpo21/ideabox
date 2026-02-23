@@ -225,38 +225,32 @@ export function MadLibsProfileStep({
       }
     }
 
-    // Also fetch VIP contacts (selected in the previous step)
+    // Fetch VIP contacts selected in the previous step.
+    // The mark-vip endpoint syncs selections to user_context.vip_emails,
+    // so we read from there directly — no need for the vip-suggestions endpoint
+    // which returns *suggestions*, not already-selected VIPs.
     async function fetchVipContacts() {
-      logger.debug('Fetching VIP contacts', { userId: user.id.substring(0, 8) });
+      logger.debug('Fetching VIP contacts from user context', { userId: user.id.substring(0, 8) });
 
       try {
-        // Use the vip-suggestions endpoint to get VIP contacts already in the DB
-        const response = await fetch('/api/contacts/vip-suggestions');
-        if (!response.ok) {
-          logger.warn('Failed to fetch VIP contacts list, trying direct query');
+        const contextResponse = await fetch('/api/user/context');
+        if (!contextResponse.ok) {
+          logger.warn('Failed to fetch user context for VIP emails', {
+            status: contextResponse.status,
+          });
           return;
         }
 
-        const result = await response.json();
-
-        // Try to extract VIPs from the response
-        // The VIP contacts are stored in the contacts table with is_vip = true
-        // We'll also try to get them from user_context directly
-        const contextResponse = await fetch('/api/user/context');
-        if (contextResponse.ok) {
-          const contextData = await contextResponse.json();
-          const existingVips = contextData.data?.vip_emails ?? contextData.vip_emails ?? [];
-          if (existingVips.length > 0 && !cancelled) {
-            logger.debug('Found existing VIP emails in user context', {
-              count: existingVips.length,
-            });
-            setVipEmails(existingVips);
-            return;
-          }
+        const contextData = await contextResponse.json();
+        const existingVips: string[] = contextData.data?.vip_emails ?? contextData.vip_emails ?? [];
+        if (existingVips.length > 0 && !cancelled) {
+          logger.debug('Found VIP emails in user context', {
+            count: existingVips.length,
+          });
+          setVipEmails(existingVips);
+        } else {
+          logger.debug('No VIP emails found in user context');
         }
-
-        // If no VIPs in context, check if the suggestions endpoint returned any
-        logger.debug('No VIP emails found in user context');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         logger.warn('Error fetching VIP contacts', { error: message });

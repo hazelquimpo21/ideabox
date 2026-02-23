@@ -31,7 +31,7 @@
 
 ### Email Sync
 ```
-Cron/Push → Gmail API → Save raw emails → EmailProcessor → 9 Analyzers (parallel)
+Cron/Push → Gmail API → Save raw emails → EmailProcessor → 12 Analyzers (2-phase)
   → Save analysis JSONB → Denormalize to emails table → Extract actions → Update contacts
 ```
 
@@ -62,9 +62,9 @@ POST /api/onboarding/profile-suggestions
 ```
 MadLibsProfileStep (mounts)
   → POST /api/onboarding/profile-suggestions (fetches AI suggestions)
-  → GET /api/user/context (fetches existing VIP emails)
+  → GET /api/user/context (fetches VIP emails saved by mark-vip in previous step)
   → Pre-fill MadLibsField blanks: role, company, priorities, work hours
-  → Pre-fill VIP chips from contacts table (is_vip = true)
+  → Pre-fill VIP chips from user_context.vip_emails
   → User clicks/edits inline blanks (MadLibsField components)
   → "Looks good!" → PUT /api/user/context (saves confirmed values to user_context)
   → Advances to next onboarding step
@@ -113,6 +113,8 @@ src/
       auth/                     # OAuth callbacks
       emails/                   # sync/, send/, analyze/, rescan/, bulk-archive/, review-queue/ (GET, PATCH)
       ideas/                    # Ideas from email analysis (GET, POST, PATCH)
+      insights/                 # Newsletter insights (GET, POST, PATCH) (NEW Feb 2026)
+      news/                     # News brief items (GET, POST, PATCH) (NEW Feb 2026)
       contacts/                 # CRUD, import-google/, historical-sync/, vip-suggestions/, promote/, stats/
       hub/                      # Hub prioritization endpoints
       settings/                 # Settings + usage stats
@@ -125,16 +127,21 @@ src/
     dev/                        # Development utilities
 
   services/
-    analyzers/                  # 9 AI analyzers
+    analyzers/                  # 12 AI analyzers (Phase 1 parallel + Phase 2 conditional)
       base-analyzer.ts          # Abstract base class
-      categorizer.ts            # Life-bucket classification
+      categorizer.ts            # Life-bucket classification + signal + reply worthiness
       action-extractor.ts       # Action item extraction (multi-action)
       client-tagger.ts          # Client/project matching
-      event-detector.ts         # Event extraction
+      event-detector.ts         # Single event extraction
+      multi-event-detector.ts   # Up to 10 events per email (NEW Feb 2026)
       date-extractor.ts         # Timeline date extraction
       content-digest.ts         # Email summary + key points + links
       contact-enricher.ts       # Contact metadata extraction
-      idea-spark.ts             # Idea extraction from emails (NEW Feb 2026)
+      sender-type-detector.ts   # Direct vs broadcast classification
+      idea-spark.ts             # Creative ideas from emails (NEW Feb 2026)
+      insight-extractor.ts      # Newsletter insights/tips (NEW Feb 2026)
+      news-brief.ts             # Factual news extraction (NEW Feb 2026)
+      link-resolver.ts          # URL expansion for context (NEW Feb 2026)
       types.ts                  # Analyzer result types
     processors/
       email-processor.ts        # Orchestrates all analyzers
@@ -171,19 +178,31 @@ src/
     discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions, FailureSummary (wired to retry API)
     categories/                 # Category view (EmailCard, intelligence bar)
     layout/                     # Navbar, Sidebar, PageHeader
-    onboarding/                 # Onboarding wizard steps (5 steps, lazy-loaded 3+) + MadLibsProfileStep, MadLibsField
+    onboarding/                 # Onboarding wizard steps (5 steps: Welcome, Accounts, VIP Contacts, About You, Sync Config; lazy-loaded 3+)
 
-  hooks/                        # Custom React hooks
+  hooks/                        # 22 custom React hooks
     useEmails.ts                # Email list, search, filters
     useActions.ts               # Action management
     useContacts.ts              # Contact + client management (unified)
-    useSupabase.ts              # Supabase client access
-    useEmailAnalysis.ts         # Parse analysis JSONB
-    useInitialSyncProgress.ts   # Poll sync status during onboarding
     useEvents.ts                # Event data
     useExtractedDates.ts        # Extracted date data (deadlines, birthdays, etc.)
+    useCampaigns.ts             # Campaign management
+    useTemplates.ts             # Email template management
     useIdeas.ts                 # Ideas from email analysis (NEW Feb 2026)
+    useInsights.ts              # Newsletter insights (NEW Feb 2026)
+    useNews.ts                  # News brief data (NEW Feb 2026)
     useReviewQueue.ts           # Review queue for scan-worthy emails (NEW Feb 2026)
+    useEmailAnalysis.ts         # Parse analysis JSONB
+    useEmailThumbnails.ts       # Email avatar/thumbnail images
+    useCategoryStats.ts         # Category email counts
+    useCategoryPreviews.ts      # Preview emails per category
+    useHubPriorities.ts         # Hub priority scoring
+    useSidebarData.ts           # Sidebar navigation data
+    useGmailAccounts.ts         # Linked Gmail accounts
+    useUserContext.ts            # User profile & preferences
+    useSettings.ts              # App settings
+    useSyncStatus.ts            # Real-time sync progress
+    useInitialSyncProgress.ts   # Poll sync status during onboarding
 
   lib/
     ai/                         # OpenAI client (GPT-4.1-mini, function calling)
@@ -204,7 +223,7 @@ src/
     app.ts                      # App configuration
 
 supabase/
-  migrations/                   # 33 SQL migration files (001-033)
+  migrations/                   # 34 SQL migration files (001-034)
 
 scripts/
   seed.ts                       # Database seeding
