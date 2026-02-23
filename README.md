@@ -33,7 +33,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | [Project Overview](docs/PROJECT_OVERVIEW.md) | Vision, goals, and roadmap |
 | [Architecture](docs/ARCHITECTURE.md) | System design and folder structure |
 | [Database Schema](docs/DATABASE_SCHEMA.md) | All 20+ Supabase tables, functions, and migrations |
-| [AI Analyzer System](docs/AI_ANALYZER_SYSTEM.md) | How the 9 AI analyzers work |
+| [AI Analyzer System](docs/AI_ANALYZER_SYSTEM.md) | How the 12 AI analyzers work |
 | [Coding Standards](docs/CODING_STANDARDS.md) | 400-line file limit, conventions |
 | [Decisions](docs/DECISIONS.md) | Architectural decision log |
 | [API Integrations](docs/API_INTEGRATIONS.md) | Gmail, Google People, OpenAI integration details |
@@ -76,7 +76,7 @@ src/
     layout/           # Navbar, Sidebar, PageHeader
     onboarding/       # Onboarding wizard UI
   services/
-    analyzers/        # 9 AI analyzers (categorizer, action-extractor, idea-spark, etc.)
+    analyzers/        # 12 AI analyzers (categorizer, action-extractor, multi-event-detector, etc.)
     processors/       # Email processing orchestration
     sync/             # Initial sync, sender patterns, pre-filtering
     contacts/         # Contact enrichment service
@@ -97,7 +97,7 @@ scripts/              # seed.ts, verify-migrations.ts
 **Implemented:**
 - Streamlined 5-item navigation: Home, Inbox, Contacts, Calendar, Tasks
 - Multi-Gmail account sync (push notifications + scheduled polling)
-- 9 AI analyzers via two-phase pipeline (categorizer, action extractor, client tagger, event detector, date extractor, content digest, contact enricher, sender type classifier, idea spark)
+- 12 AI analyzers via two-phase pipeline (categorizer, content digest, action extractor, client tagger, date extractor, event detector, multi-event detector, contact enricher, sender type classifier, idea spark, insight extractor, news brief)
 - 12 life-bucket email categories with auto-categorization
 - Home page with daily briefing, AI priorities, today's schedule, pending tasks
 - Inbox with tabbed views: Categories (discover dashboard), Priority (AI-ranked), Archive

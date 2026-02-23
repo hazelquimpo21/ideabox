@@ -187,7 +187,7 @@ async analyze(email: Email): Promise<AnalyzerResult> {
             'invoice', 'receipt', 'payment_due',
             'meeting_request', 'rsvp_needed', 'appointment',
             'educational', 'industry_news', 'job_opportunity',
-            'has_event',
+            'has_event', 'has_multiple_events',
             // NOISE LABELS (NEW Feb 2026)
             'sales_pitch', 'webinar_invite', 'fake_recognition', 'mass_outreach', 'promotional',
           ],
@@ -955,6 +955,148 @@ this.log('error', 'API call failed', {
 
 ---
 
+### 4b. Multi-Event Detector Analyzer (NEW Feb 2026)
+
+**Purpose:** Extract multiple events from a single email — course schedules, event roundups, newsletter event sections
+
+> The existing EventDetector handles single events well. This analyzer branches off to handle the multi-event case, extracting up to 10 events from a single email.
+
+**When It Runs:** ONLY when Categorizer includes BOTH `has_event` AND `has_multiple_events` in labels array. When triggered, runs **INSTEAD OF** the single EventDetector.
+
+**Common Patterns:**
+- Community newsletters with "upcoming events" sections
+- Course schedules ("Tuesdays Jan 7 - Mar 11" → each class date extracted separately)
+- Conference agendas with multiple sessions
+- School calendars with key dates
+- Event roundup emails from organizations
+
+**Link Resolution:**
+Optionally resolves links from the email (via ContentDigest) to find additional event details. Useful when emails say "see our full calendar" with a link to a page listing all events.
+
+**Function Schema:**
+```typescript
+{
+  name: 'detect_multiple_events',
+  description: 'Extracts multiple event details from an email containing a list of events, course schedule, or event calendar',
+  parameters: {
+    type: 'object',
+    properties: {
+      has_multiple_events: {
+        type: 'boolean',
+        description: 'Whether multiple events were found',
+      },
+      event_count: {
+        type: 'number',
+        description: 'Number of events extracted',
+      },
+      events: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            event_title: { type: 'string' },
+            event_date: { type: 'string', description: 'YYYY-MM-DD' },
+            event_time: { type: 'string', description: 'HH:MM 24-hour' },
+            event_end_date: { type: 'string' },
+            event_end_time: { type: 'string' },
+            location_type: { type: 'string', enum: ['in_person', 'virtual', 'hybrid', 'unknown'] },
+            event_locality: { type: 'string', enum: ['local', 'out_of_town', 'virtual'] },
+            location: { type: 'string' },
+            rsvp_required: { type: 'boolean' },
+            rsvp_url: { type: 'string' },
+            registration_deadline: { type: 'string' },
+            organizer: { type: 'string' },
+            cost: { type: 'string' },
+            additional_details: { type: 'string' },
+            event_summary: { type: 'string' },
+            key_points: { type: 'array', items: { type: 'string' }, maxItems: 3 },
+            is_key_date: { type: 'boolean' },
+            key_date_type: { type: 'string', enum: ['registration_deadline', 'open_house', 'deadline', 'release_date', 'other'] },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
+          },
+          required: ['event_title', 'event_date', 'location_type', 'rsvp_required', 'is_key_date', 'confidence', 'event_summary'],
+        },
+        maxItems: 10,
+      },
+      source_description: {
+        type: 'string',
+        description: 'Description of event source format (e.g., "Community event roundup")',
+      },
+      confidence: { type: 'number', minimum: 0, maximum: 1 },
+    },
+    required: ['has_multiple_events', 'event_count', 'events', 'confidence'],
+  },
+}
+```
+
+**Output Example:**
+```json
+{
+  "has_multiple_events": true,
+  "event_count": 3,
+  "events": [
+    {
+      "event_title": "Pottery Class - Jan 7",
+      "event_date": "2026-01-07",
+      "event_time": "18:00",
+      "event_end_time": "20:00",
+      "location_type": "in_person",
+      "event_locality": "local",
+      "location": "Milwaukee Art Center, 456 Oak Ave",
+      "rsvp_required": true,
+      "organizer": "MKE Arts Collective",
+      "cost": "$35/session",
+      "event_summary": "Local pottery class at Milwaukee Art Center, Tuesday evening",
+      "is_key_date": false,
+      "confidence": 0.95
+    },
+    {
+      "event_title": "Pottery Class - Jan 14",
+      "event_date": "2026-01-14",
+      "event_time": "18:00",
+      "event_end_time": "20:00",
+      "location_type": "in_person",
+      "event_locality": "local",
+      "location": "Milwaukee Art Center, 456 Oak Ave",
+      "rsvp_required": false,
+      "organizer": "MKE Arts Collective",
+      "cost": "$35/session",
+      "event_summary": "Local pottery class at Milwaukee Art Center, Tuesday evening",
+      "is_key_date": false,
+      "confidence": 0.95
+    },
+    {
+      "event_title": "Registration Deadline - Spring Session",
+      "event_date": "2026-01-03",
+      "location_type": "unknown",
+      "rsvp_required": false,
+      "event_summary": "Registration deadline for spring pottery classes",
+      "is_key_date": true,
+      "key_date_type": "registration_deadline",
+      "confidence": 0.90
+    }
+  ],
+  "source_description": "Spring course schedule with recurring weekly classes",
+  "confidence": 0.93
+}
+```
+
+**Routing Logic in EmailProcessor:**
+```
+has_event + has_multiple_events → MultiEventDetector (extracts all events)
+has_event only                  → EventDetector (extracts single event)
+no has_event                    → Skip both
+```
+
+**Database Storage:**
+- Each extracted event is saved as a separate row in `extracted_dates` with `date_type='event'` + `event_metadata`
+- Deduplication by email_id + event_date + event_title prevents duplicates on re-processing
+- `email_analyses.multi_event_detection` JSONB stores the full extraction result
+
+**Cost:** ~$0.0003 per email (higher token limit for multiple events, runs on ~5 emails/day ≈ $0.045/month)
+
+---
+
 ## Background Jobs
 
 ### Priority Reassessment Job (NEW Jan 2026)
@@ -1245,34 +1387,34 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │                                         ▼                                                │
 │  PHASE 2: Conditional Analyzers                                                          │
 │                                                                                          │
-│    ┌─────────────────────────────┐     ┌─────────────────────────┐     ┌──────────────┐ │
-│    │ signal_strength != 'noise'? │     │ substantive content?    │     │ has_event?   │ │
-│    └──────────────┬──────────────┘     └────────────┬────────────┘     └──────┬───────┘ │
-│         ┌────────┴────────┐               ┌────────┴────────┐         ┌──────┴──────┐  │
-│         │ YES             │ NO             │ YES             │ NO       │YES        NO│  │
-│         ▼                 ▼                ▼                 ▼          ▼             ▼  │
-│  ┌─────────────┐   ┌─────────┐     ┌─────────────┐  ┌─────────┐  ┌─────────┐ ┌─────┐ │
-│  │  IdeaSpark  │   │  Skip   │     │  Insight    │  │  Skip   │  │  Event  │ │Skip │ │
-│  │  (NEW Feb)  │   │ (save$) │     │  Extractor  │  │ (save$) │  │Detector │ │     │ │
-│  │ + ideas     │   └─────────┘     │  (NEW Feb)  │  └─────────┘  │         │ └─────┘ │
-│  │ + types     │                   │ + insights  │               │+locality│          │
-│  └──────┬──────┘                   │ + tips      │               │+RSVP    │          │
-│         │                          └──────┬──────┘               └────┬────┘          │
-│         │                                 │                          │                 │
-│         │    ┌─────────────────────────────┤                          │                 │
-│         │    │ has news content?           │                          │                 │
-│         │    └────────────┬────────────────┘                          │                 │
-│         │       ┌────────┴────────┐                                  │                 │
-│         │       │ YES             │ NO                                │                 │
-│         │       ▼                 ▼                                   │                 │
-│         │  ┌─────────────┐ ┌─────────┐                               │                 │
-│         │  │  NewsBrief  │ │  Skip   │                               │                 │
-│         │  │  (NEW Feb)  │ │ (save$) │                               │                 │
-│         │  │ + headlines │ └─────────┘                               │                 │
-│         │  │ + details   │                                           │                 │
-│         │  └──────┬──────┘                                           │                 │
-│         │         │                                                  │                 │
-│         └─────────┴──────────────────────────────────────────────────┘                 │
+│    ┌─────────────────────────────┐     ┌─────────────────────────┐     ┌──────────────────────────┐ │
+│    │ signal_strength != 'noise'? │     │ substantive content?    │     │ has_event?               │ │
+│    └──────────────┬──────────────┘     └────────────┬────────────┘     └────────────┬─────────────┘ │
+│         ┌────────┴────────┐               ┌────────┴────────┐         ┌────────────┴────────────┐  │
+│         │ YES             │ NO             │ YES             │ NO       │YES                    NO│  │
+│         ▼                 ▼                ▼                 ▼          ▼                         ▼  │
+│  ┌─────────────┐   ┌─────────┐     ┌─────────────┐  ┌─────────┐  ┌──────────────────────┐ ┌─────┐ │
+│  │  IdeaSpark  │   │  Skip   │     │  Insight    │  │  Skip   │  │ has_multiple_events? │ │Skip │ │
+│  │  (NEW Feb)  │   │ (save$) │     │  Extractor  │  │ (save$) │  └──────────┬───────────┘ │     │ │
+│  │ + ideas     │   └─────────┘     │  (NEW Feb)  │  └─────────┘   ┌────────┴────────┐    └─────┘ │
+│  │ + types     │                   │ + insights  │                 │ YES             │ NO          │
+│  └──────┬──────┘                   │ + tips      │                 ▼                 ▼             │
+│         │                          └──────┬──────┘          ┌─────────────┐   ┌─────────┐         │
+│         │                                 │                 │ MultiEvent  │   │  Event  │         │
+│         │    ┌─────────────────────────────┤                 │  Detector   │   │Detector │         │
+│         │    │ has news content?           │                 │  (NEW Feb)  │   │         │         │
+│         │    └────────────┬────────────────┘                 │ + up to 10  │   │+locality│         │
+│         │       ┌────────┴────────┐                         │   events    │   │+RSVP    │         │
+│         │       │ YES             │ NO                       │ + links     │   │         │         │
+│         │       ▼                 ▼                          └──────┬──────┘   └────┬────┘         │
+│         │  ┌─────────────┐ ┌─────────┐                             │               │              │
+│         │  │  NewsBrief  │ │  Skip   │                             │               │              │
+│         │  │  (NEW Feb)  │ │ (save$) │                             │               │              │
+│         │  │ + headlines │ └─────────┘                             │               │              │
+│         │  │ + details   │                                         │               │              │
+│         │  └──────┬──────┘                                         │               │              │
+│         │         │                                                │               │              │
+│         └─────────┴────────────────────────────────────────────────┴───────────────┘              │
 │                         │                                                                │
 │              ┌──────────┴──────────┐                                                     │
 │              │  Contact Enricher   │  (runs selectively)                                 │
@@ -1309,15 +1451,17 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Event Data Flow (Jan 2026 Update)
+### Event Data Flow (Jan 2026, ENHANCED Feb 2026)
 
-Events now flow through a two-part storage system:
+Events now flow through a two-part storage system with single/multi routing:
 
-1. **EventDetector** extracts rich event data when Categorizer labels email with `has_event`
-2. **email_analyses.event_detection** stores the full JSONB for debugging/history
-3. **extracted_dates** stores a simplified record with `date_type='event'` + `event_metadata`
-4. **Events page** queries `extracted_dates` where `date_type='event'`
-5. **EventCard** displays rich data from `event_metadata` (locality badges, location, RSVP)
+1. **Categorizer** labels email with `has_event` (and optionally `has_multiple_events`)
+2. **Routing**: `has_event` + `has_multiple_events` → MultiEventDetector; `has_event` only → EventDetector
+3. **EventDetector** extracts one event; **MultiEventDetector** extracts up to 10 events
+4. **email_analyses** stores the full JSONB (`event_detection` or `multi_event_detection`)
+5. **extracted_dates** stores one row per event with `date_type='event'` + `event_metadata`
+6. **Events page** queries `extracted_dates` where `date_type='event'`
+7. **EventCard** displays rich data from `event_metadata` (locality badges, location, RSVP)
 
 **Key Design Decision**: Store rich metadata in `event_metadata` JSONB to avoid JOINs.
 The Events page only queries `extracted_dates`, not `email_analyses`.

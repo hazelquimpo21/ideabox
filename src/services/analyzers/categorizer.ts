@@ -396,6 +396,7 @@ CONTENT LABELS:
 - has_link: Contains important links
 - has_question: Direct question asked
 - has_event: Contains a calendar-worthy event (date/time)
+- has_multiple_events: Email lists MULTIPLE distinct events, course dates, class schedules, or a calendar of upcoming dates (apply WITH has_event)
 
 FINANCIAL LABELS:
 - invoice: Invoice or bill to pay

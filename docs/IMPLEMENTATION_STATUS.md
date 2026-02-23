@@ -15,13 +15,14 @@
 - Zod validation on all API boundaries
 
 ### AI Analysis Pipeline
-- **11 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
+- **12 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
   - Categorizer (12 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
+  - Content Digest (gist, key points, links)
   - Action Extractor (multi-action support, urgency scoring, tightened for real tasks with new types: pay, submit, register, book)
   - Client Tagger (fuzzy matching, relationship signals)
-  - Event Detector (dates, location, RSVP, locality awareness)
   - Date Extractor (deadlines, payments, birthdays, expirations)
-  - Content Digest (gist, key points, links)
+  - Event Detector (dates, location, RSVP, locality awareness)
+  - **Multi-Event Detector** (NEW Feb 2026): Extracts up to 10 events from a single email — handles course schedules, event roundups, newsletter event sections. Runs INSTEAD OF EventDetector when both `has_event` and `has_multiple_events` labels present. Optional link resolution for additional context.
   - Contact Enricher (company, job title, relationship from signatures)
   - Sender Type Detector (direct vs broadcast classification)
   - **Idea Spark** (NEW Feb 2026): Generates 3 creative ideas per email by cross-referencing content with user context (role, interests, projects, family, location, season)
@@ -155,4 +156,5 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Email Taxonomy | Feb 2026 | Signal strength (high/medium/low/noise) + reply worthiness (must_reply/should_reply/optional_reply/no_reply) added to categorizer. Noise detection labels (sales_pitch, webinar_invite, fake_recognition, mass_outreach, promotional). Action extractor noise rejection. Hub priority scoring with signal/reply multipliers. Migration 032 for denormalized columns + indexes. |
 | Ideas & Review | Feb 2026 | IdeaSparkAnalyzer (Phase 2, 10 idea types, skipped for noise). Ideas API (GET/POST/PATCH /api/ideas). Review Queue API (GET/PATCH /api/emails/review-queue). useIdeas + useReviewQueue hooks. Two-tier task system: scan-worthy emails vs concrete actions. Migration 033 for idea_sparks JSONB column. |
 | Doc Cleanup | Feb 2026 | Updated all docs to reflect current state: fixed outdated category names (client_pipeline→clients, etc.), added IdeaSpark analyzer to AI docs, synced action types, updated migration count to 033, cleaned up redundancies. |
+| Multi-Event | Feb 2026 | MultiEventDetectorAnalyzer: extracts up to 10 events from a single email (course schedules, event roundups, newsletter event sections). Runs instead of EventDetector when both `has_event` + `has_multiple_events` labels present. Optional link resolution via ContentDigest links. `has_multiple_events` label added to categorizer. |
 | Insights & News | Feb 2026 | Two new Phase 2 analyzers: InsightExtractor (synthesizes ideas/tips/frameworks from newsletters, temp 0.4, gated on substantive content types) and NewsBrief (extracts factual news items, temp 0.2, gated on industry_news label or digest content). API routes (GET/POST/PATCH /api/insights, /api/news). useInsights + useNews hooks. InsightsCard + NewsBriefCard home widgets. InsightsFeed + NewsFeed full-page components. saved_insights + saved_news tables. Migration 034. |
