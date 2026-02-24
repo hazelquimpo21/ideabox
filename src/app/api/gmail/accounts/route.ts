@@ -122,13 +122,14 @@ export async function GET() {
     // ─────────────────────────────────────────────────────────────────────────
     // Step 4: Get latest sync log for status info
     // ─────────────────────────────────────────────────────────────────────────
+    // Use .maybeSingle() to avoid 406 when no sync logs exist (e.g., new user)
     const { data: latestSync } = await supabase
       .from('sync_logs')
       .select('status, completed_at, emails_fetched, emails_analyzed, error_message, duration_ms')
       .eq('user_id', user.id)
       .order('completed_at', { ascending: false, nullsFirst: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Step 5: Return response with enhanced data

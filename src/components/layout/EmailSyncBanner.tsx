@@ -123,8 +123,8 @@ export function EmailSyncBanner() {
     // Initial check
     fetchSyncStatus();
 
-    // Poll every 2 seconds
-    pollRef.current = setInterval(fetchSyncStatus, 2000);
+    // Poll every 5 seconds
+    pollRef.current = setInterval(fetchSyncStatus, 5000);
 
     return () => {
       isMountedRef.current = false;
