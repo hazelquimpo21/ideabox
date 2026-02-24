@@ -41,6 +41,7 @@
  */
 
 import { BaseAnalyzer } from './base-analyzer';
+import { analyzerConfig } from '@/config/analyzers';
 import type {
   InsightExtractionData,
   InsightExtractionResult,
@@ -100,8 +101,11 @@ export const INSIGHT_ELIGIBLE_CONTENT_TYPES = [
  * ```
  */
 export class InsightExtractorAnalyzer extends BaseAnalyzer<InsightExtractionData> {
-  readonly name = 'InsightExtractor';
   readonly description = 'Synthesizes interesting ideas, tips, and frameworks from email content';
+
+  constructor() {
+    super('InsightExtractor', analyzerConfig.insightExtractor);
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // SYSTEM PROMPT
