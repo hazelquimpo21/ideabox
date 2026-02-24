@@ -70,6 +70,31 @@ MadLibsProfileStep (mounts)
   → Advances to next onboarding step
 ```
 
+### VIP Suggestion Scoring (Onboarding Phase 4)
+```
+GET /api/contacts/vip-suggestions
+  → Auth check → Try get_vip_suggestions RPC
+  → If RPC returns 0 results OR fails → Scored fallback:
+    → Fetch user profile (full_name, email domain)
+    → Fetch all named, non-archived, non-VIP contacts (cap at 200)
+    → Score each contact using 12 weighted signals:
+      1. Google starred (50pts — strongest explicit signal)
+      2. Google labels: family/VIP/important (40pts), work/clients (30pts), friends (20pts)
+      3. Same last name as user (35pts — family signal)
+      4. Same email domain as user (25pts — coworker signal, skips generic domains)
+      5. Sent count: 10+ (25pts), 3+ (15pts) — user initiates = they care
+      6. Bidirectional communication (10pts)
+      7. Email frequency: 20+ (20pts), 5+ (10pts)
+      8. Recency: <7d (15pts), <30d (10pts), <90d (5pts)
+      9. Longevity: 1+ year (10pts), 3+ months (5pts)
+      10. AI relationship type: family (25pts), client (20pts), friend (15pts), colleague (10pts)
+      11. Sender type penalty: broadcast (-30pts), cold_outreach (-20pts)
+      12. Avatar presence (3pts — real person signal)
+    → Sort by score descending → Take top N
+    → Build suggestion reasons from top 2 scoring signals
+  → Return VipSuggestion[] with id, email, name, avatar, reason
+```
+
 ### User Interaction
 ```
 Component → Hook → API Route → Supabase (RLS-protected) → Response
@@ -154,7 +179,7 @@ src/
       sender-type-detector.ts   # Classify direct vs broadcast senders
       action-suggester.ts       # Generate quick actions
       discovery-builder.ts      # Build Discovery Dashboard response
-    contacts/                   # Contact service layer
+    contacts/                   # Contact service layer (CRUD, Google import, VIP scoring, alias management)
     hub/                        # Hub prioritization service
     user-context/               # AI personalization context
     onboarding/                 # Onboarding intelligence services
@@ -178,7 +203,7 @@ src/
     discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions, FailureSummary (wired to retry API)
     categories/                 # Category view (EmailCard, intelligence bar)
     layout/                     # Navbar, Sidebar, PageHeader
-    onboarding/                 # Onboarding wizard steps (5 steps: Welcome, Accounts, VIP Contacts, About You, Sync Config; lazy-loaded 3+)
+    onboarding/                 # Onboarding wizard steps (5 steps: Welcome, Accounts, VIP Contacts, Mad Libs Profile, Sync Config; lazy-loaded 3+)
 
   hooks/                        # 22 custom React hooks
     useEmails.ts                # Email list, search, filters
@@ -223,7 +248,7 @@ src/
     app.ts                      # App configuration
 
 supabase/
-  migrations/                   # 34 SQL migration files (001-034)
+  migrations/                   # 34 SQL migration files (001-034) — see DATABASE_SCHEMA.md for full list
 
 scripts/
   seed.ts                       # Database seeding
@@ -255,6 +280,10 @@ scripts/
 6. **Lazy loading for onboarding steps** — steps 3+ (VIP Contacts, Mad Libs Profile,
    Sync Config) are loaded via `React.lazy()` + `Suspense` so the initial bundle only
    includes WelcomeStep and AccountsStep. Later steps load on demand as the user navigates.
+7. **Parallel data fetching in Mad Libs step** — `MadLibsProfileStep` fires both
+   `POST /api/onboarding/profile-suggestions` (AI) and `GET /api/user/context` (VIP emails)
+   in parallel via `Promise.all()`, only clearing the loading state when both complete.
+   This prevents VIP chips from flashing in after the card renders.
 
 ## Security
 

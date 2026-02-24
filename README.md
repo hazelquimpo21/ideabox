@@ -56,7 +56,7 @@ src/
       sent/           # Email composition, outbox, sent history
       settings/       # User preferences + cost tracking
     api/              # API routes: emails, contacts, hub, settings, onboarding, auth,
-                      # campaigns, templates, actions, events, ideas, review-queue, admin
+                      # campaigns, templates, actions, events, ideas, insights, news, review-queue, admin
     onboarding/       # Multi-step onboarding wizard
   components/
     ui/               # Base UI library (Button, Card, Dialog, etc.)
@@ -88,7 +88,7 @@ src/
   types/              # database.ts (20+ table types), discovery.ts
   config/             # App config, analyzer config
 supabase/
-  migrations/         # 33 SQL migration files (001-033)
+  migrations/         # 34 SQL migration files (001-034)
 scripts/              # seed.ts, verify-migrations.ts
 ```
 
@@ -112,8 +112,11 @@ scripts/              # seed.ts, verify-migrations.ts
 - Noise detection and suppression (sales pitches, fake recognition, mass outreach)
 - Two-tier task system: Review Queue (scan-worthy emails) + Real Tasks (concrete actions)
 - Idea Spark: AI-generated creative ideas from email content
+- Insight Extractor: Synthesizes tips, frameworks, observations from newsletters
+- News Brief: Extracts factual news items from digests
 - Onboarding wizard with AI-powered Mad Libs profile and initial sync
-- Google Contacts import
+- Google Contacts import with batched upserts
+- Smart VIP suggestion ranking with 12-signal weighted scoring
 - Historical sync for contact enrichment
 - Superadmin dashboard with account reset
 - Cost tracking and budget controls

@@ -528,6 +528,53 @@ CREATE UNIQUE INDEX idx_extracted_dates_dedup
   WHERE email_id IS NOT NULL;
 ```
 
+### saved_insights (migration 034)
+User-promoted insights from the InsightExtractor analyzer.
+
+```sql
+CREATE TABLE saved_insights (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
+
+  insight_type TEXT NOT NULL,      -- tip, framework, observation, counterintuitive, trend
+  content TEXT NOT NULL,           -- The insight text
+  topics TEXT[],                   -- Related topics
+  source_email_subject TEXT,       -- Original email subject for attribution
+  source_email_date TIMESTAMPTZ,  -- Original email date
+
+  is_pinned BOOLEAN DEFAULT FALSE,
+  notes TEXT,                      -- User notes
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### saved_news (migration 034)
+User-promoted news items from the NewsBrief analyzer.
+
+```sql
+CREATE TABLE saved_news (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
+
+  headline TEXT NOT NULL,          -- News headline
+  detail TEXT,                     -- Additional detail
+  topics TEXT[],                   -- Related topics
+  news_date TEXT,                  -- When the news happened (may be approximate)
+  source_email_subject TEXT,       -- Original email subject
+  source_email_date TIMESTAMPTZ,  -- Original email date
+
+  is_pinned BOOLEAN DEFAULT FALSE,
+  notes TEXT,                      -- User notes
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
 ### user_event_states
 User decisions about events (separate from AI analysis).
 
@@ -867,7 +914,7 @@ All tables have RLS enabled. Policy pattern:
 
 ---
 
-## Migration Files (001-033)
+## Migration Files (001-034)
 
 | # | File | What it does |
 |---|------|-------------|
@@ -904,6 +951,7 @@ All tables have RLS enabled. Policy pattern:
 | 031 | profile_suggestions.sql | Add profile_suggestions JSONB + timestamp to user_context |
 | 032 | signal_strength_reply_worthiness.sql | Add signal_strength + reply_worthiness columns to emails, with indexes for Hub queries |
 | 033 | idea_sparks_column.sql | Add idea_sparks JSONB column to email_analyses |
+| 034 | saved_insights_and_news.sql | Add saved_insights + saved_news tables for user-promoted insights and news items |
 
 ---
 

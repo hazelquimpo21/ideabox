@@ -202,6 +202,10 @@ export interface ContactSummary {
  * 5. Medium frequency (10+)    → "Regular contact (N emails)"
  * 6. Low frequency (<10)       → "N emails"
  */
+/**
+ * Builds a human-readable suggestion reason from the top scoring signals.
+ * Takes the scored reasons (sorted by weight) and returns a concise string.
+ */
 function buildSuggestionReason(isStarred: boolean, emailCount: number): string {
   if (isStarred && emailCount >= 20) {
     return `Starred + Frequent (${emailCount} emails)`;
@@ -219,6 +223,192 @@ function buildSuggestionReason(isStarred: boolean, emailCount: number): string {
     return `Regular contact (${emailCount} emails)`;
   }
   return `${emailCount} emails`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VIP SUGGESTION SCORING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Google label groups that indicate relationship intent */
+const FAMILY_LABELS = ['family', 'vip', 'important', 'close friends', 'inner circle'];
+const WORK_LABELS = ['work', 'clients', 'business', 'colleagues', 'coworkers'];
+const FRIEND_LABELS = ['friends', 'personal'];
+
+/** A scored contact row with ranking metadata */
+interface ScoredContact {
+  row: Record<string, unknown>;
+  score: number;
+  reasons: string[];
+}
+
+/**
+ * Scores a contact for VIP suggestion relevance using multiple signals:
+ *
+ * - Google starred / labels (explicit user intent)
+ * - Same last name as user (family signal)
+ * - Same email domain as user (coworker signal)
+ * - Sent count (user initiates = they care)
+ * - Bidirectional communication
+ * - Email frequency
+ * - Recency (last_seen_at)
+ * - Longevity (first_seen_at — long-standing relationships)
+ * - Relationship type (from AI enrichment)
+ * - Sender type (penalizes newsletters/broadcasts)
+ * - Avatar presence (real person signal)
+ */
+function scoreContact(
+  row: Record<string, unknown>,
+  userLastName: string | null,
+  userEmailDomain: string | null,
+): ScoredContact {
+  let score = 0;
+  const reasons: string[] = [];
+
+  const isStarred = row.is_google_starred as boolean;
+  const labels = ((row.google_labels as string[]) || []).map((l: string) => l.toLowerCase());
+  const emailCount = (row.email_count as number) || 0;
+  const sentCount = (row.sent_count as number) || 0;
+  const receivedCount = (row.received_count as number) || 0;
+  const contactName = row.name as string | null;
+  const contactEmail = row.email as string;
+  const lastSeenAt = row.last_seen_at as string | null;
+  const firstSeenAt = row.first_seen_at as string | null;
+  const relationshipType = row.relationship_type as string | null;
+  const senderType = row.sender_type as string | null;
+  const avatarUrl = row.avatar_url as string | null;
+
+  // ── 1. Google starred (strongest explicit signal) ──────────────────────
+  if (isStarred) {
+    score += 50;
+    reasons.push('Starred');
+  }
+
+  // ── 2. Google labels (intent signals) ──────────────────────────────────
+  const matchedFamilyLabel = labels.find((l) => FAMILY_LABELS.includes(l));
+  const matchedWorkLabel = labels.find((l) => WORK_LABELS.includes(l));
+  const matchedFriendLabel = labels.find((l) => FRIEND_LABELS.includes(l));
+
+  if (matchedFamilyLabel) {
+    score += 40;
+    const display = matchedFamilyLabel.charAt(0).toUpperCase() + matchedFamilyLabel.slice(1);
+    reasons.push(`Google ${display}`);
+  }
+  if (matchedWorkLabel) {
+    score += 30;
+    const display = matchedWorkLabel.charAt(0).toUpperCase() + matchedWorkLabel.slice(1);
+    reasons.push(`Google ${display}`);
+  }
+  if (matchedFriendLabel) {
+    score += 20;
+    reasons.push('Google Friends');
+  }
+
+  // ── 3. Same last name (family signal) ──────────────────────────────────
+  if (userLastName && contactName) {
+    const nameParts = contactName.trim().split(/\s+/);
+    if (nameParts.length >= 2) {
+      const contactLastName = nameParts[nameParts.length - 1].toLowerCase();
+      if (contactLastName === userLastName.toLowerCase()) {
+        score += 35;
+        reasons.push('Possible family');
+      }
+    }
+  }
+
+  // ── 4. Same email domain (coworker signal) ────────────────────────────
+  if (userEmailDomain && contactEmail) {
+    const contactDomain = contactEmail.split('@')[1]?.toLowerCase();
+    // Skip generic domains — only match on org-specific ones
+    const genericDomains = new Set([
+      'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
+      'aol.com', 'protonmail.com', 'mail.com', 'live.com', 'me.com',
+    ]);
+    if (contactDomain && contactDomain === userEmailDomain && !genericDomains.has(contactDomain)) {
+      score += 25;
+      reasons.push('Same organization');
+    }
+  }
+
+  // ── 5. User sends to this contact (strongest behavioral signal) ───────
+  if (sentCount >= 10) {
+    score += 25;
+    reasons.push('You email often');
+  } else if (sentCount >= 3) {
+    score += 15;
+    reasons.push("You've emailed");
+  }
+
+  // ── 6. Bidirectional communication ─────────────────────────────────────
+  if (sentCount > 0 && receivedCount > 0) {
+    score += 10;
+    // No separate reason — implied by other signals
+  }
+
+  // ── 7. Email frequency ─────────────────────────────────────────────────
+  if (emailCount >= 20) {
+    score += 20;
+    if (!reasons.some((r) => r.includes('email'))) {
+      reasons.push(`Frequent (${emailCount} emails)`);
+    }
+  } else if (emailCount >= 5) {
+    score += 10;
+    if (!reasons.some((r) => r.includes('email'))) {
+      reasons.push(`${emailCount} emails`);
+    }
+  }
+
+  // ── 8. Recency bonus ──────────────────────────────────────────────────
+  if (lastSeenAt) {
+    const daysSince = (Date.now() - new Date(lastSeenAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince < 7) {
+      score += 15;
+      reasons.push('Active this week');
+    } else if (daysSince < 30) {
+      score += 10;
+      reasons.push('Active this month');
+    } else if (daysSince < 90) {
+      score += 5;
+    }
+  }
+
+  // ── 9. Longevity (long-standing relationships) ────────────────────────
+  if (firstSeenAt) {
+    const daysKnown = (Date.now() - new Date(firstSeenAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysKnown > 365) {
+      score += 10;
+      reasons.push('Known 1+ year');
+    } else if (daysKnown > 90) {
+      score += 5;
+      reasons.push('Known 3+ months');
+    }
+  }
+
+  // ── 10. Relationship type (from AI enrichment) ────────────────────────
+  if (relationshipType === 'family') {
+    score += 25;
+    if (!reasons.includes('Possible family')) reasons.push('Family');
+  } else if (relationshipType === 'client') {
+    score += 20;
+    reasons.push('Client');
+  } else if (relationshipType === 'friend') {
+    score += 15;
+  } else if (relationshipType === 'colleague') {
+    score += 10;
+  }
+
+  // ── 11. Sender type penalty (filter out newsletters) ──────────────────
+  if (senderType === 'broadcast') {
+    score -= 30;
+  } else if (senderType === 'cold_outreach') {
+    score -= 20;
+  }
+
+  // ── 12. Avatar presence (real person signal) ──────────────────────────
+  if (avatarUrl) {
+    score += 3;
+  }
+
+  return { row, score, reasons };
 }
 
 /** Batch size for chunked contact upserts during Google import. */
@@ -767,94 +957,147 @@ export class ContactService {
           throw new Error(error?.message || 'RPC returned no data');
         }
       } catch (rpcError) {
-        // RPC function doesn't exist - use fallback query
-        logger.debug('get_vip_suggestions RPC not available, using fallback', {
+        // RPC function doesn't exist or failed — use scored fallback
+        logger.debug('get_vip_suggestions RPC not available, using scored fallback', {
           error: rpcError instanceof Error ? rpcError.message : 'Unknown',
         });
         usedFallback = true;
 
-        // Fallback: Query contacts that are either starred OR have enough email history.
-        // Previously this only filtered by email_count >= 3, which excluded freshly imported
-        // Google contacts (they have email_count = 0). The OR condition ensures starred
-        // contacts always appear even with zero email history.
-        const { data: fallbackData, error: fallbackError } = await supabase
+        // ─────────────────────────────────────────────────────────────────────
+        // Scored VIP Suggestions
+        //
+        // Fetches ALL eligible contacts (named, not archived, not already VIP)
+        // and scores each one using multiple signals:
+        //   - Google starred & label groups (explicit user intent)
+        //   - Same last name as user (family signal)
+        //   - Same email domain as user (coworker signal)
+        //   - Sent count (user initiates contact = they care)
+        //   - Bidirectional communication
+        //   - Email frequency, recency, and longevity
+        //   - AI-enriched relationship type
+        //   - Sender type penalty (broadcasts/cold outreach)
+        //   - Avatar presence
+        //
+        // This handles both established accounts (rich email history) and
+        // fresh Google imports (only name + Google metadata available).
+        // ─────────────────────────────────────────────────────────────────────
+
+        // Fetch user profile for last-name and domain matching
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('full_name, email')
+          .eq('id', userId)
+          .single();
+
+        const userFullName = profile?.full_name || null;
+        const userLastName = userFullName
+          ? userFullName.trim().split(/\s+/).pop() || null
+          : null;
+        const userEmailDomain = profile?.email
+          ? profile.email.split('@')[1]?.toLowerCase() || null
+          : null;
+
+        // Broad query: all named, non-archived, non-VIP contacts (cap at 200
+        // to keep scoring fast — more than enough for onboarding).
+        const { data: allContacts, error: allError } = await supabase
           .from('contacts')
-          .select('id, email, name, email_count, last_seen_at, relationship_type, is_vip, avatar_url, is_google_starred, google_labels')
+          .select('id, email, name, email_count, sent_count, received_count, first_seen_at, last_seen_at, relationship_type, sender_type, is_vip, avatar_url, is_google_starred, google_labels')
           .eq('user_id', userId)
           .eq('is_archived', false)
           .eq('is_vip', false)
-          .or('email_count.gte.3,is_google_starred.eq.true')
-          .order('is_google_starred', { ascending: false })
-          .order('email_count', { ascending: false })
-          .limit(limit);
+          .not('name', 'is', null)
+          .limit(200);
 
-        if (fallbackError) {
-          logger.error('Fallback VIP suggestions query failed', {
-            error: fallbackError.message,
+        if (allError) {
+          logger.error('Scored VIP suggestions query failed', {
+            error: allError.message,
             userId: userId.substring(0, 8),
           });
           return [];
         }
 
-        logger.debug('Fallback query returned contacts', {
-          count: fallbackData?.length ?? 0,
-          starredCount: fallbackData?.filter((r) => r.is_google_starred).length ?? 0,
+        // Score, sort, and take top N
+        const scored = (allContacts || [])
+          .map((row) => scoreContact(row as Record<string, unknown>, userLastName, userEmailDomain))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, limit);
+
+        logger.debug('Scored VIP suggestions', {
+          totalCandidates: allContacts?.length ?? 0,
+          topScore: scored[0]?.score ?? 0,
+          bottomScore: scored[scored.length - 1]?.score ?? 0,
         });
 
-        // Map rows to VipSuggestion, using actual DB values instead of hardcoded defaults.
-        // Suggestion reasons are tiered by starred status + email frequency.
-        suggestions = (fallbackData || []).map((row) => ({
-          id: row.id,
-          email: row.email,
-          name: row.name,
-          avatarUrl: row.avatar_url ?? null,
-          emailCount: row.email_count,
-          lastSeenAt: row.last_seen_at,
-          isGoogleStarred: row.is_google_starred ?? false,
-          googleLabels: row.google_labels ?? [],
-          relationshipType: row.relationship_type,
-          suggestionReason: buildSuggestionReason(row.is_google_starred, row.email_count),
+        suggestions = scored.map(({ row, reasons }) => ({
+          id: row.id as string,
+          email: row.email as string,
+          name: row.name as string | null,
+          avatarUrl: (row.avatar_url as string) ?? null,
+          emailCount: (row.email_count as number) || 0,
+          lastSeenAt: row.last_seen_at as string | null,
+          isGoogleStarred: (row.is_google_starred as boolean) ?? false,
+          googleLabels: (row.google_labels as string[]) ?? [],
+          relationshipType: row.relationship_type as string | null,
+          suggestionReason: reasons.slice(0, 2).join(' + ') || 'Contact',
         }));
       }
 
       // ─────────────────────────────────────────────────────────────────────
-      // Last-resort fallback: If no suggestions found (common after fresh
-      // Google import where all contacts have email_count=0 and none are
-      // starred), show recently imported contacts so the user can still
-      // pick VIPs during onboarding.
+      // Post-RPC scored fallback: If the RPC succeeded but returned 0
+      // results (common after fresh Google import where contacts have no
+      // email history), fall through to scored ranking.
       // ─────────────────────────────────────────────────────────────────────
-      if (suggestions.length === 0) {
-        logger.info('No VIP suggestions from primary query, trying recently imported contacts', {
+      if (suggestions.length === 0 && !usedFallback) {
+        logger.info('RPC returned 0 suggestions, falling back to scored ranking', {
           userId: userId.substring(0, 8),
         });
 
-        const { data: recentContacts, error: recentError } = await supabase
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('full_name, email')
+          .eq('id', userId)
+          .single();
+
+        const userFullName = profile?.full_name || null;
+        const userLastName = userFullName
+          ? userFullName.trim().split(/\s+/).pop() || null
+          : null;
+        const userEmailDomain = profile?.email
+          ? profile.email.split('@')[1]?.toLowerCase() || null
+          : null;
+
+        const { data: allContacts } = await supabase
           .from('contacts')
-          .select('id, email, name, email_count, last_seen_at, relationship_type, is_vip, avatar_url, is_google_starred, google_labels')
+          .select('id, email, name, email_count, sent_count, received_count, first_seen_at, last_seen_at, relationship_type, sender_type, is_vip, avatar_url, is_google_starred, google_labels')
           .eq('user_id', userId)
           .eq('is_archived', false)
           .eq('is_vip', false)
           .not('name', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(limit);
+          .limit(200);
 
-        if (!recentError && recentContacts && recentContacts.length > 0) {
-          suggestions = recentContacts.map((row) => ({
-            id: row.id,
-            email: row.email,
-            name: row.name,
-            avatarUrl: row.avatar_url ?? null,
-            emailCount: row.email_count,
-            lastSeenAt: row.last_seen_at,
-            isGoogleStarred: row.is_google_starred ?? false,
-            googleLabels: row.google_labels ?? [],
-            relationshipType: row.relationship_type,
-            suggestionReason: 'Recently imported',
+        if (allContacts && allContacts.length > 0) {
+          const scored = allContacts
+            .map((row) => scoreContact(row as Record<string, unknown>, userLastName, userEmailDomain))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit);
+
+          suggestions = scored.map(({ row, reasons }) => ({
+            id: row.id as string,
+            email: row.email as string,
+            name: row.name as string | null,
+            avatarUrl: (row.avatar_url as string) ?? null,
+            emailCount: (row.email_count as number) || 0,
+            lastSeenAt: row.last_seen_at as string | null,
+            isGoogleStarred: (row.is_google_starred as boolean) ?? false,
+            googleLabels: (row.google_labels as string[]) ?? [],
+            relationshipType: row.relationship_type as string | null,
+            suggestionReason: reasons.slice(0, 2).join(' + ') || 'Contact',
           }));
 
-          logger.info('Showing recently imported contacts as VIP suggestions', {
+          logger.info('Scored fallback produced suggestions', {
             userId: userId.substring(0, 8),
             count: suggestions.length,
+            topScore: scored[0]?.score ?? 0,
           });
         }
       }

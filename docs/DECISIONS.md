@@ -31,6 +31,8 @@
 | Noise Detection | Labels + signal_strength | Flexible labeling (5 noise types) + hard scoring (0.05x multiplier) |
 | Multi-Action | Array in JSONB | One email can produce multiple to-do items |
 | Archive Delete | Hard delete (Supabase) | Archived emails can be permanently deleted; soft-delete was a no-op |
+| VIP Scoring | 12-signal weighted ranking | Works for fresh imports + established accounts |
+| Contact Import | Batched upserts + parallel loading | Prevents timeout and UI flash during onboarding |
 | Back Navigation | `?from=` query param | Preserves originating tab on email detail back button |
 | View All | Direct navigation | "View All" on category card goes to full page, not modal |
 | Historical Sync | Metadata-only | Enrich contacts without full email download |
@@ -462,6 +464,59 @@ CREATE TABLE api_usage_logs (
 
 ---
 
+### 18. Smart VIP Suggestion Ranking: 12-Signal Weighted Scoring (Feb 2026)
+
+**Decision:** Replace the simple database RPC (`get_vip_suggestions`) with a 12-signal weighted scoring system in the contact service for ranking VIP candidates during onboarding.
+
+**Alternatives Considered:**
+- Simple email count ranking (misses relationship quality)
+- Google starred contacts only (not everyone stars contacts)
+- AI-based ranking (expensive, unnecessary)
+
+**Rationale:**
+- Fresh Google imports have zero email_count and zero starred status, causing the simple RPC to return 0 results
+- Weighted scoring uses multiple signals that are available even for freshly imported contacts (Google labels, last name match, same email domain)
+- 12 independent signals combine to rank contacts more accurately than any single heuristic
+- The scoring algorithm runs entirely in-memory on a capped set (200 contacts), so it's fast with no additional API calls
+
+**Signals & Weights:**
+| Signal | Points | Why |
+|--------|--------|-----|
+| Google starred | 50 | Strongest explicit user signal |
+| Google labels: family/VIP | 40 | User categorized them |
+| Same last name | 35 | Family members |
+| Same email domain | 25 | Coworkers (skips generic domains) |
+| High sent count (10+) | 25 | User initiates contact = important |
+| High email frequency (20+) | 20 | Regular communication |
+| Recency (<7 days) | 15 | Active relationship |
+| AI relationship: family | 25 | Known family |
+| Sender type: broadcast | -30 | Not a real person |
+| Sender type: cold_outreach | -20 | Not a real person |
+| Avatar present | 3 | Real person signal |
+
+**Impact:**
+- `GET /api/contacts/vip-suggestions` now uses scored fallback when RPC returns 0 results
+- Returns suggestion reasons (top 2 signals) for display as badges
+- Works correctly for both fresh imports and established accounts
+
+---
+
+### 19. Contact Import Batching & Parallel Loading (Feb 2026)
+
+**Decision:** Batch Google contact imports into groups of 50 upserts, and load Mad Libs profile data in parallel with VIP data.
+
+**Alternatives Considered:**
+- Individual upserts (too many database round-trips)
+- Single large upsert (risks timeout on 100+ contacts)
+- Sequential data loading (causes UI flash when VIP data arrives late)
+
+**Rationale:**
+- Batching: 100 contacts = 2 batches instead of 100 individual calls; prevents timeout while keeping each batch manageable
+- Parallel loading: `MadLibsProfileStep` fires `POST /api/onboarding/profile-suggestions` and `GET /api/user/context` simultaneously via `Promise.all()`, preventing VIP chips from flashing in after the card renders
+- Both patterns improve perceived performance during onboarding without adding complexity
+
+---
+
 ## Decision Template (For Future Decisions)
 
 When making new architectural decisions, document them here using this template:
@@ -494,3 +549,4 @@ When making new architectural decisions, document them here using this template:
 | Feb 2026 | Updated references, added missing decisions | Claude (audit) |
 | Feb 2026 | Navigation redesign (11→5 items), clients merged into contacts | Claude (nav redesign) |
 | Feb 2026 | Signal strength, reply worthiness, noise detection in categorizer | Claude (taxonomy refinement) |
+| Feb 2026 | VIP suggestion scoring (12-signal), contact import batching, parallel onboarding loading | Claude (contact onboarding) |
