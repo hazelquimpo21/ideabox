@@ -263,13 +263,14 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
       );
 
       // Get latest sync log for status info
+      // Use .maybeSingle() to avoid 406 when no sync logs exist (e.g., new user)
       const { data: latestSyncData } = await supabase
         .from('sync_logs')
         .select('status, completed_at, emails_fetched, emails_analyzed, error_message, duration_ms')
         .eq('user_id', user.id)
         .order('completed_at', { ascending: false, nullsFirst: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       // Sort and transform accounts (primary first = first created)
       const sortedAccounts = accountsWithCounts.sort(

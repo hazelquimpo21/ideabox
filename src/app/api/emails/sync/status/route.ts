@@ -81,13 +81,14 @@ export async function GET() {
     }
 
     // Get latest sync log
+    // Use .maybeSingle() to avoid 406 when no sync logs exist (e.g., new user)
     const { data: lastSyncLog } = await supabase
       .from('sync_logs')
       .select('status, emails_fetched, emails_analyzed, errors_count, duration_ms, error_message, completed_at, started_at')
       .eq('user_id', user.id)
       .order('started_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     // Get total email count
     const { count: totalEmails } = await supabase
