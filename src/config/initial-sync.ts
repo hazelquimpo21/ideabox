@@ -23,8 +23,13 @@ export const INITIAL_SYNC_CONFIG: InitialSyncConfig = {
   // Email Fetching
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Maximum emails to fetch from Gmail */
-  maxEmails: parseInt(process.env.INITIAL_SYNC_MAX_EMAILS || '50', 10),
+  /**
+   * Maximum emails to fetch from Gmail.
+   * INCREASED (Feb 2026): Was 50, now 100 to reduce missed emails during onboarding.
+   * Users with active inboxes often have 50+ emails in the last few days alone.
+   * The pre-filter system skips ~20-30% without AI, so 100 fetched ≈ 70-80 analyzed.
+   */
+  maxEmails: parseInt(process.env.INITIAL_SYNC_MAX_EMAILS || '100', 10),
 
   /** Include already-read emails (true gives better demo experience) */
   includeRead: true,
@@ -49,8 +54,8 @@ export const INITIAL_SYNC_CONFIG: InitialSyncConfig = {
   /** Max retries per email within same sync */
   maxRetries: 2,
 
-  /** Timeout for entire sync operation (2 minutes) */
-  timeoutMs: 120000,
+  /** Timeout for entire sync operation (4 minutes — increased for 100 email default) */
+  timeoutMs: 240000,
 
   // ─────────────────────────────────────────────────────────────────────────
   // Progress Updates
@@ -78,22 +83,24 @@ export const INITIAL_SYNC_CONFIG: InitialSyncConfig = {
  * Email address patterns that should skip AI analysis.
  * These are typically automated senders with predictable content.
  */
+/**
+ * Email address patterns that should skip AI analysis during initial sync pre-filter.
+ *
+ * REFINED (Feb 2026): Removed noreply@, notifications@, and alerts@ from skip list.
+ * These senders often send important emails (shipping confirmations, payment receipts,
+ * appointment reminders) that the AI should still categorize. The AI will classify
+ * them as notifications/shopping/finance appropriately.
+ *
+ * Only truly worthless system emails are skipped:
+ */
 export const SKIP_SENDER_PATTERNS: RegExp[] = [
-  // No-reply addresses
-  /^no-?reply@/i,
-  /^noreply@/i,
-  /^do-?not-?reply@/i,
-
-  // System addresses
+  // System addresses that never contain useful content
   /^mailer-daemon@/i,
   /^postmaster@/i,
   /^bounce@/i,
-  /^notifications?@/i,
-
-  // Common automated senders
-  /^alerts?@/i,
   /^auto@/i,
   /^automated@/i,
+  /^do-?not-?reply@.*\.noreply\./i, // Double noreply patterns (truly automated)
 ];
 
 /**

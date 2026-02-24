@@ -211,6 +211,11 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   const categoryLabel = category ? CATEGORY_SHORT_LABELS[category] || null : null;
   const senderName = email.sender_name || email.sender_email.split('@')[0];
 
+  // Additional categories — show secondary category dots for multi-category emails
+  const additionalCategories = (email.additional_categories as string[] | null)?.filter(
+    (c): c is EmailCategory => !!c && c !== category
+  ) ?? [];
+
   // Prefer AI gist over raw summary/snippet for the preview line
   const gist = email.gist || email.summary || email.snippet;
 
@@ -291,12 +296,23 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
             </span>
           )}
 
-          {/* Category dot + label */}
+          {/* Category dot + label + additional category dots */}
           {showCategory && categoryLabel && (
             <span className="flex items-center gap-1 shrink-0">
               <span className={cn('w-1.5 h-1.5 rounded-full', dotColor)} aria-hidden="true" />
+              {additionalCategories.map((addCat) => (
+                <span
+                  key={addCat}
+                  className={cn('w-1 h-1 rounded-full opacity-60', CATEGORY_ACCENT_COLORS[addCat] || 'bg-gray-400')}
+                  aria-hidden="true"
+                  title={CATEGORY_SHORT_LABELS[addCat] || addCat}
+                />
+              ))}
               <span className="text-[10px] text-muted-foreground/70 hidden sm:inline">
                 {categoryLabel}
+                {additionalCategories.length > 0 && (
+                  <span className="text-muted-foreground/50"> +{additionalCategories.length}</span>
+                )}
               </span>
             </span>
           )}

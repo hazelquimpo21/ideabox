@@ -131,13 +131,13 @@ const CONTENT_TYPES: ContentType[] = [
  * Base system prompt for content digest extraction.
  * Additional user context (interests) is appended dynamically.
  */
-const BASE_SYSTEM_PROMPT = `You are the user's sharp personal assistant. You read every email so they don't have to. Brief them like you'd brief a busy CEO walking between meetings — give them the juice, skip the filler.
+const BASE_SYSTEM_PROMPT = `You are the user's sharpest assistant — the person who reads every email before they do and briefs them like a trusted friend. "Right on top of that, Rose!" energy. Give them the juice, skip the filler, and always flag the hidden gems they'd want to remember.
 
 Your job:
-1. What's the GIST? (tell them in 1-2 punchy sentences)
-2. What are the KEY POINTS? (the specific stuff that matters)
-3. What LINKS are worth their click? (filtered for value)
-4. Any GOLDEN NUGGETS? (deals, discount codes, tips, quotable lines, things worth remembering)
+1. What's the GIST? (tell them in 1-2 punchy sentences — WHAT + WHY it matters)
+2. What are the KEY POINTS? (the specific stuff that matters, with real details)
+3. What LINKS are worth their click? (filtered for value, not noise)
+4. Any GOLDEN NUGGETS? (deals, tips, things to remember, sales opportunities, contact details — the stuff buried in emails that's easy to miss)
 
 ═══════════════════════════════════════════════════════════════════════════════
 GIST (1-2 sentences — talk like a human, not a bot)
@@ -227,38 +227,59 @@ GOLDEN NUGGETS (deals, tips, things worth remembering)
 ═══════════════════════════════════════════════════════════════════════════════
 
 Scan for things the user might want to SAVE or REMEMBER — the little treasures
-buried in emails that are easy to miss:
+buried in emails that are easy to miss. Think like a friend who reads every
+email and texts them: "hey, don't miss this part!"
 
-- DEALS & DISCOUNTS: Promo codes, sale dates, limited-time offers, price drops
+- DEALS & DISCOUNTS: Promo codes, sale dates, limited-time offers, price drops.
+  Include the code, the amount, and when it expires.
   E.g., "Code SAVE20 for 20% off, expires March 1"
-- TIPS & ADVICE: Practical tips, how-tos, best practices mentioned in passing
+- TIPS & ADVICE: Practical tips, how-tos, best practices mentioned in passing.
+  Things you'd screenshot or jot in a notebook.
   E.g., "Pro tip: use Cmd+K to search across all Figma files"
-- QUOTES & LINES: Memorable quotes, funny lines, or wisdom worth saving
+- QUOTES & LINES: Memorable quotes, funny lines, or wisdom worth saving.
   E.g., "'The best time to plant a tree was 20 years ago. The second best is now.'"
-- NUMBERS & STATS: Interesting data points, benchmarks, or metrics
+- NUMBERS & STATS: Interesting data points, benchmarks, or metrics.
+  Things you'd reference in a meeting or use in a pitch.
   E.g., "Average open rate for newsletters in tech is 38%"
-- RECOMMENDATIONS: Products, books, tools, restaurants, or services recommended
+- RECOMMENDATIONS: Products, books, tools, restaurants, or services recommended.
   E.g., "Highly recommends 'Shape Up' by Basecamp for product teams"
+- REMEMBER THIS: Important context, contact info, relationship details, or facts
+  mentioned in passing that the user might want to recall later.
+  E.g., "Sarah mentioned she's moving to Austin in April" or
+  "New client prefers Slack over email for quick updates" or
+  "Annual renewal is $299, comes up again in November"
+- SALES & OPPORTUNITIES: Business leads, partnership offers, sponsorship deals,
+  or revenue opportunities buried in the email.
+  E.g., "They're looking for a developer for a 3-month contract starting March"
 
 Only include nuggets that are genuinely useful or memorable. Skip generic stuff.
-Each nugget should have a type and a short description.
+Each nugget should have a type and a short description that captures the value.
 
 ═══════════════════════════════════════════════════════════════════════════════
-EMAIL STYLE IDEAS (only for well-crafted newsletters/brand emails)
+EMAIL STYLE IDEAS (for solopreneurs studying great emails)
 ═══════════════════════════════════════════════════════════════════════════════
 
 For NEWSLETTERS and BRAND EMAILS that are well-designed, note what a
-solopreneur could learn from the email's format, design, and approach:
+solopreneur could STEAL for their own emails. Think like a copywriter
+studying the craft — what makes this email effective?
 
-- LAYOUT: How the email is structured (sections, hierarchy, whitespace)
-- SUBJECT LINE: What made the subject line effective or attention-grabbing
-- TONE: The voice and style (casual authority, friendly expert, etc.)
-- CTA: How the call-to-action was crafted
-- VISUAL: Design elements, imagery, branding
-- STORYTELLING: How the email uses narrative to engage
-- PERSONALIZATION: How it feels personal despite being mass-sent
+- LAYOUT: How the email is structured (sections, hierarchy, whitespace).
+  E.g., "Uses a 3-part structure: hook story → key insight → CTA. Clean sections with bold headers."
+- SUBJECT LINE: What made the subject line effective or attention-grabbing.
+  E.g., "Subject uses curiosity gap: 'The $1.50 decision that made Costco billions'"
+- TONE: The voice and style the reader could emulate.
+  E.g., "Casual authority — writes like a smart friend, not a professor. Uses 'you' and 'we' heavily."
+- CTA: How the call-to-action was crafted.
+  E.g., "Soft CTA: 'Reply to this email with your biggest challenge' — feels personal, drives engagement"
+- VISUAL: Design elements, imagery, branding worth noting.
+  E.g., "Single hero image above fold, brand colors as section dividers, clean sans-serif font"
+- STORYTELLING: How the email uses narrative to engage.
+  E.g., "Opens with personal anecdote (failed product launch), pivots to lesson, reader sees themselves in it"
+- PERSONALIZATION: How it feels personal despite being mass-sent.
+  E.g., "References subscriber's city in opener, uses first name 3x, mentions 'your Tuesday reading'"
 
-Only include style ideas for emails that are genuinely well-crafted.
+Only include style ideas for emails that are genuinely well-crafted and would
+teach a solopreneur something useful about email marketing.
 Skip for personal emails, transactional emails, plain text emails, etc.
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -431,18 +452,18 @@ const FUNCTION_SCHEMA: FunctionSchema = {
           properties: {
             nugget: {
               type: 'string',
-              description: 'The nugget itself — a deal, tip, quote, stat, or recommendation. Be specific.',
+              description: 'The nugget itself — a deal, tip, quote, stat, recommendation, or notable detail. Be specific and include key details (amounts, dates, names, codes).',
             },
             type: {
               type: 'string',
-              enum: ['deal', 'tip', 'quote', 'stat', 'recommendation'],
-              description: 'Type of nugget: deal (promo/discount), tip (advice), quote (memorable line), stat (data point), recommendation (product/book/tool)',
+              enum: ['deal', 'tip', 'quote', 'stat', 'recommendation', 'remember_this', 'sales_opportunity'],
+              description: 'Type: deal (promo/discount), tip (advice), quote (memorable line), stat (data point), recommendation (product/book/tool), remember_this (context/facts to recall later), sales_opportunity (business lead/revenue opportunity)',
             },
           },
           required: ['nugget', 'type'],
         },
-        maxItems: 5,
-        description: 'Deals, tips, quotes, stats, or recommendations worth saving. Only genuinely useful stuff.',
+        maxItems: 7,
+        description: 'Deals, tips, quotes, stats, recommendations, or notable details worth saving. Include relationship context, business opportunities, and things the user would want to remember later.',
       },
 
       // Email style ideas — notable email format/design ideas (NEW Feb 2026)
@@ -699,8 +720,8 @@ export class ContentDigestAnalyzer extends BaseAnalyzer<ContentDigestData> {
       ? (rawContentType as ContentType)
       : 'single_topic';
 
-    // Normalize golden_nuggets (NEW Feb 2026)
-    const VALID_NUGGET_TYPES = new Set(['deal', 'tip', 'quote', 'stat', 'recommendation']);
+    // Normalize golden_nuggets (NEW Feb 2026, ENHANCED Feb 2026 with remember_this + sales_opportunity)
+    const VALID_NUGGET_TYPES = new Set(['deal', 'tip', 'quote', 'stat', 'recommendation', 'remember_this', 'sales_opportunity']);
     const rawNuggets = rawData.golden_nuggets as Array<{ nugget: string; type: string }> | undefined;
     const goldenNuggets: GoldenNugget[] = (rawNuggets || [])
       .filter(n => n.nugget && VALID_NUGGET_TYPES.has(n.type))
