@@ -37,9 +37,9 @@
 'use client';
 
 import * as React from 'react';
-import { RefreshCw, Inbox, Sparkles, Search, X, List, LayoutGrid } from 'lucide-react';
-import { Button, Skeleton, Input } from '@/components/ui';
-import { useEmails, useGmailAccounts, useEmailThumbnails } from '@/hooks';
+import { RefreshCw, Inbox, Sparkles, Search, X, List, LayoutGrid, Loader2 } from 'lucide-react';
+import { Button, Skeleton, Input, Badge } from '@/components/ui';
+import { useEmails, useGmailAccounts, useEmailThumbnails, useInitialSyncProgress } from '@/hooks';
 import { CategoryFilterBar } from './CategoryFilterBar';
 import { CategorySummaryPanel } from './CategorySummaryPanel';
 import { InboxEmailRow } from './InboxEmailRow';
@@ -127,6 +127,28 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
     category: activeCategory || 'all',
     limit: 50,
   });
+
+  // ─── Initial Sync Progress (post-onboarding) ───────────────────────────────
+  // Tracks whether the initial email sync is still running so we can show a
+  // sync-aware empty state instead of the misleading "Your inbox is empty".
+  const {
+    status: syncStatus,
+    progress: syncProgress,
+    currentStep: syncStep,
+    discoveries: syncDiscoveries,
+  } = useInitialSyncProgress({ autoStart: true, pollInterval: 2000 });
+
+  const isSyncActive = syncStatus === 'in_progress' || syncStatus === 'pending';
+
+  // Auto-refetch emails when sync completes so newly synced emails appear
+  const prevSyncStatus = React.useRef(syncStatus);
+  React.useEffect(() => {
+    if (prevSyncStatus.current !== 'completed' && syncStatus === 'completed') {
+      logger.info('Initial sync completed — refetching emails');
+      refetch();
+    }
+    prevSyncStatus.current = syncStatus;
+  }, [syncStatus, refetch]);
 
   // ─── Thumbnail Extraction (card mode only) ──────────────────────────────────
   // Extracts the first meaningful image from email HTML bodies for card thumbnails.
@@ -299,15 +321,88 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
   // ═══════════════════════════════════════════════════════════════════════════════
 
   if (emails.length === 0 && !activeCategory) {
+    // ── Sync In Progress: show progress + skeleton preview ─────────────────────
+    if (isSyncActive) {
+      const hasDiscoveries =
+        syncDiscoveries.actionItems > 0 ||
+        syncDiscoveries.events > 0 ||
+        syncDiscoveries.clientsDetected.length > 0;
+
+      return (
+        <div>
+          {/* Compact sync status card */}
+          <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-5 mb-5">
+            <div className="flex items-center gap-3 mb-3">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-medium">Analyzing your emails</h3>
+                <p className="text-xs text-muted-foreground truncate">{syncStep}</p>
+              </div>
+              {syncProgress > 0 && (
+                <span className="text-sm font-medium tabular-nums text-blue-600 dark:text-blue-400 shrink-0">
+                  {Math.round(syncProgress)}%
+                </span>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            <div className="h-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-full overflow-hidden mb-3">
+              <div
+                className="h-full bg-blue-500 dark:bg-blue-400 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${Math.min(100, Math.max(0, syncProgress))}%` }}
+              />
+            </div>
+
+            {/* Discovery badges */}
+            {hasDiscoveries && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">Found so far:</span>
+                {syncDiscoveries.actionItems > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {syncDiscoveries.actionItems} action item{syncDiscoveries.actionItems !== 1 ? 's' : ''}
+                  </Badge>
+                )}
+                {syncDiscoveries.events > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {syncDiscoveries.events} event{syncDiscoveries.events !== 1 ? 's' : ''}
+                  </Badge>
+                )}
+                {syncDiscoveries.clientsDetected.map((client) => (
+                  <Badge key={client} variant="outline" className="text-xs">
+                    {client}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Skeleton email rows — hints at what's coming */}
+          <div className="rounded-lg border border-border/40 bg-card overflow-hidden opacity-50">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="flex items-start gap-3 px-4 py-3 border-b border-border/40 last:border-b-0">
+                <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3.5 w-36" />
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+                <Skeleton className="h-3 w-10" />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── True empty state: sync is done, inbox is legitimately empty ─────────────
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
           <Inbox className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-medium mb-2">Your inbox is empty</h3>
+        <h3 className="text-lg font-medium mb-2">No emails yet</h3>
         <p className="text-muted-foreground max-w-sm">
-          Emails will appear here once they have been synced and analyzed.
-          Run an analysis from Settings to get started.
+          Connect a Gmail account and sync your emails to get started.
         </p>
       </div>
     );
