@@ -59,7 +59,7 @@ async function getAllContacts(
 ) {
   const { data, error } = await supabase
     .from('contacts')
-    .select('id, email, name, email_count, last_seen_at, relationship_type, is_vip')
+    .select('id, email, name, email_count, last_seen_at, relationship_type, is_vip, avatar_url, is_google_starred, google_labels, import_source, company, job_title')
     .eq('user_id', userId)
     .eq('is_archived', false)
     .eq('is_vip', false)
@@ -80,19 +80,28 @@ async function getAllContacts(
     last_seen_at: string | null;
     relationship_type: string | null;
     is_vip: boolean;
+    avatar_url: string | null;
+    is_google_starred: boolean;
+    google_labels: string[];
+    import_source: string | null;
+    company: string | null;
+    job_title: string | null;
   }
 
   return (data || []).map((row: ContactRow) => ({
     id: row.id,
     email: row.email,
     name: row.name,
-    avatarUrl: null,
+    avatarUrl: row.avatar_url,
     emailCount: row.email_count || 0,
     lastSeenAt: row.last_seen_at,
-    isGoogleStarred: false,
-    googleLabels: [],
+    isGoogleStarred: row.is_google_starred || false,
+    googleLabels: row.google_labels || [],
     relationshipType: row.relationship_type,
-    suggestionReason: '', // No suggestion reason for all contacts view
+    suggestionReason: '',
+    source: (row.import_source === 'google' ? 'google' : 'email') as 'google' | 'email' | 'manual',
+    company: row.company,
+    jobTitle: row.job_title,
   }));
 }
 

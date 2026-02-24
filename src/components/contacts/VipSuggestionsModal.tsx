@@ -92,6 +92,9 @@ interface VipSuggestion {
   googleLabels: string[];
   relationshipType: string | null;
   suggestionReason: string;
+  source?: 'google' | 'email' | 'manual';
+  company?: string | null;
+  jobTitle?: string | null;
 }
 
 /** Tab types for the modal view */
@@ -103,6 +106,7 @@ type ViewTab = 'suggested' | 'all';
 
 /**
  * Avatar component with initials fallback.
+ * Falls back to initials if the image fails to load (e.g. expired Google URLs).
  */
 function ContactAvatar({
   name,
@@ -111,6 +115,8 @@ function ContactAvatar({
   name: string | null;
   avatarUrl: string | null;
 }) {
+  const [imgError, setImgError] = React.useState(false);
+
   const initials = name
     ? name
         .split(' ')
@@ -120,12 +126,14 @@ function ContactAvatar({
         .slice(0, 2)
     : '?';
 
-  if (avatarUrl) {
+  if (avatarUrl && !imgError) {
     return (
       <img
         src={avatarUrl}
         alt={name || 'Contact'}
         className="w-9 h-9 rounded-full object-cover"
+        referrerPolicy="no-referrer"
+        onError={() => setImgError(true)}
       />
     );
   }

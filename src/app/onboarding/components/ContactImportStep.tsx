@@ -99,6 +99,48 @@ interface VipSuggestion {
   googleLabels: string[];
   relationshipType: string | null;
   suggestionReason: string;
+  /** Where this contact was imported from */
+  source: 'google' | 'email' | 'manual';
+  /** Company name if known */
+  company: string | null;
+  /** Job title if known */
+  jobTitle: string | null;
+}
+
+/** Maps relationship types to human-readable labels with context */
+const RELATIONSHIP_LABELS = {
+  family: { label: 'Family', variant: 'default' as const },
+  friend: { label: 'Friend', variant: 'secondary' as const },
+  colleague: { label: 'Colleague', variant: 'secondary' as const },
+  client: { label: 'Client', variant: 'default' as const },
+  vendor: { label: 'Vendor', variant: 'outline' as const },
+  recruiter: { label: 'Recruiter', variant: 'outline' as const },
+  service: { label: 'Service', variant: 'outline' as const },
+  networking: { label: 'Networking', variant: 'outline' as const },
+} as const satisfies Record<string, { label: string; variant: string }>;
+
+/**
+ * Builds a compact subtitle line showing where a contact comes from
+ * and any organizational context.
+ */
+function buildContactSubtitle(suggestion: VipSuggestion): string {
+  const parts: string[] = [];
+
+  // Email address (always shown when name is present)
+  if (suggestion.name) {
+    parts.push(suggestion.email);
+  }
+
+  // Company + title context
+  if (suggestion.company && suggestion.jobTitle) {
+    parts.push(`${suggestion.jobTitle} at ${suggestion.company}`);
+  } else if (suggestion.company) {
+    parts.push(suggestion.company);
+  } else if (suggestion.jobTitle) {
+    parts.push(suggestion.jobTitle);
+  }
+
+  return parts.join(' · ');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -107,6 +149,7 @@ interface VipSuggestion {
 
 /**
  * Avatar component that shows initials or image.
+ * Falls back to initials if the image fails to load (e.g. expired Google URLs).
  */
 function ContactAvatar({
   name,
@@ -115,6 +158,8 @@ function ContactAvatar({
   name: string | null;
   avatarUrl: string | null;
 }) {
+  const [imgError, setImgError] = React.useState(false);
+
   const initials = name
     ? name
         .split(' ')
@@ -124,12 +169,14 @@ function ContactAvatar({
         .slice(0, 2)
     : '?';
 
-  if (avatarUrl) {
+  if (avatarUrl && !imgError) {
     return (
       <img
         src={avatarUrl}
         alt={name || 'Contact'}
         className="w-10 h-10 rounded-full object-cover"
+        referrerPolicy="no-referrer"
+        onError={() => setImgError(true)}
       />
     );
   }
@@ -155,6 +202,16 @@ const SuggestionCard = React.memo(function SuggestionCard({
   isSelected: boolean;
   onToggle: () => void;
 }) {
+  const subtitle = buildContactSubtitle(suggestion);
+  const relationshipInfo = suggestion.relationshipType && suggestion.relationshipType in RELATIONSHIP_LABELS
+    ? RELATIONSHIP_LABELS[suggestion.relationshipType as keyof typeof RELATIONSHIP_LABELS]
+    : null;
+
+  // Pick the most informative Google label to show (skip generic ones)
+  const displayLabel = suggestion.googleLabels.find(
+    (l) => !['myContacts', 'all'].includes(l.toLowerCase())
+  );
+
   return (
     <div
       className={`
@@ -175,26 +232,48 @@ const SuggestionCard = React.memo(function SuggestionCard({
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span className="font-medium truncate">
             {suggestion.name || suggestion.email}
           </span>
           {suggestion.isGoogleStarred && (
-            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
+            <Star className="h-3.5 w-3.5 flex-shrink-0 text-yellow-500 fill-yellow-500" />
+          )}
+          {relationshipInfo && (
+            <Badge variant={relationshipInfo.variant} className="text-[10px] px-1.5 py-0 h-4 flex-shrink-0">
+              {relationshipInfo.label}
+            </Badge>
+          )}
+          {!relationshipInfo && displayLabel && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 flex-shrink-0">
+              {displayLabel}
+            </Badge>
           )}
         </div>
-        {suggestion.name && (
+        {subtitle && (
           <p className="text-xs text-muted-foreground truncate">
-            {suggestion.email}
+            {subtitle}
           </p>
         )}
       </div>
 
-      {/* Reason Badge */}
-      <div className="flex-shrink-0">
+      {/* Source + Reason */}
+      <div className="flex-shrink-0 flex flex-col items-end gap-1">
         <Badge variant="secondary" className="text-xs whitespace-nowrap">
           {suggestion.suggestionReason}
         </Badge>
+        {suggestion.source === 'google' && (
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <Users className="h-2.5 w-2.5" />
+            Google Contacts
+          </span>
+        )}
+        {suggestion.source === 'email' && suggestion.emailCount > 0 && (
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <Mail className="h-2.5 w-2.5" />
+            From emails
+          </span>
+        )}
       </div>
     </div>
   );

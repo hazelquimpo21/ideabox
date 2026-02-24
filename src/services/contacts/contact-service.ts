@@ -156,6 +156,12 @@ export interface VipSuggestion {
   googleLabels: string[];
   relationshipType: string | null;
   suggestionReason: string;
+  /** Where this contact was imported from: 'google', 'email', or 'manual' */
+  source: 'google' | 'email' | 'manual';
+  /** Company name if known (from Google or email enrichment) */
+  company: string | null;
+  /** Job title if known */
+  jobTitle: string | null;
 }
 
 /**
@@ -952,6 +958,9 @@ export class ContactService {
             googleLabels: (row.google_labels as string[]) || [],
             relationshipType: row.relationship_type as string | null,
             suggestionReason: row.suggestion_reason as string,
+            source: ((row.import_source as string) === 'google' ? 'google' : 'email') as 'google' | 'email' | 'manual',
+            company: (row.company as string) ?? null,
+            jobTitle: (row.job_title as string) ?? null,
           }));
         } else {
           throw new Error(error?.message || 'RPC returned no data');
@@ -1001,7 +1010,7 @@ export class ContactService {
         // to keep scoring fast — more than enough for onboarding).
         const { data: allContacts, error: allError } = await supabase
           .from('contacts')
-          .select('id, email, name, email_count, sent_count, received_count, first_seen_at, last_seen_at, relationship_type, sender_type, is_vip, avatar_url, is_google_starred, google_labels')
+          .select('id, email, name, email_count, sent_count, received_count, first_seen_at, last_seen_at, relationship_type, sender_type, is_vip, avatar_url, is_google_starred, google_labels, import_source, company, job_title')
           .eq('user_id', userId)
           .eq('is_archived', false)
           .eq('is_vip', false)
@@ -1039,6 +1048,9 @@ export class ContactService {
           googleLabels: (row.google_labels as string[]) ?? [],
           relationshipType: row.relationship_type as string | null,
           suggestionReason: reasons.slice(0, 2).join(' + ') || 'Contact',
+          source: ((row.import_source as string) === 'google' ? 'google' : 'email') as 'google' | 'email' | 'manual',
+          company: (row.company as string) ?? null,
+          jobTitle: (row.job_title as string) ?? null,
         }));
       }
 
@@ -1068,7 +1080,7 @@ export class ContactService {
 
         const { data: allContacts } = await supabase
           .from('contacts')
-          .select('id, email, name, email_count, sent_count, received_count, first_seen_at, last_seen_at, relationship_type, sender_type, is_vip, avatar_url, is_google_starred, google_labels')
+          .select('id, email, name, email_count, sent_count, received_count, first_seen_at, last_seen_at, relationship_type, sender_type, is_vip, avatar_url, is_google_starred, google_labels, import_source, company, job_title')
           .eq('user_id', userId)
           .eq('is_archived', false)
           .eq('is_vip', false)
@@ -1092,6 +1104,9 @@ export class ContactService {
             googleLabels: (row.google_labels as string[]) ?? [],
             relationshipType: row.relationship_type as string | null,
             suggestionReason: reasons.slice(0, 2).join(' + ') || 'Contact',
+            source: ((row.import_source as string) === 'google' ? 'google' : 'email') as 'google' | 'email' | 'manual',
+            company: (row.company as string) ?? null,
+            jobTitle: (row.job_title as string) ?? null,
           }));
 
           logger.info('Scored fallback produced suggestions', {
