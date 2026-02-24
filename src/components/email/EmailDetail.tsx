@@ -12,8 +12,10 @@
 
 import * as React from 'react';
 import { Button, Badge, Card, CardContent, CardHeader, Skeleton } from '@/components/ui';
-import { useEmailAnalysis } from '@/hooks';
+import { useEmailAnalysis, useExtractedDates } from '@/hooks';
 import { EventDetailsCard } from './EventDetailsCard';
+import { ContentDigestSection } from './ContentDigestSection';
+import { DateExtractionSection } from './DateExtractionSection';
 import { createLogger } from '@/lib/utils/logger';
 import {
   X,
@@ -44,6 +46,9 @@ import {
   Bookmark,
   Sparkles,
   Rss,
+  Signal,
+  Reply,
+  ListChecks,
 } from 'lucide-react';
 import type { Email, EmailCategory } from '@/types/database';
 
@@ -168,6 +173,26 @@ function getRelationshipIcon(signal: string) {
   }
 }
 
+function getSignalBadge(signal: string): { label: string; className: string } {
+  switch (signal) {
+    case 'high': return { label: 'High Signal', className: 'bg-green-100 text-green-700 border-green-200' };
+    case 'medium': return { label: 'Medium Signal', className: 'bg-blue-100 text-blue-700 border-blue-200' };
+    case 'low': return { label: 'Low Signal', className: 'bg-gray-100 text-gray-600 border-gray-200' };
+    case 'noise': return { label: 'Noise', className: 'bg-gray-50 text-gray-400 border-gray-100' };
+    default: return { label: signal, className: 'bg-gray-100 text-gray-600 border-gray-200' };
+  }
+}
+
+function getReplyBadge(reply: string): { label: string; className: string } {
+  switch (reply) {
+    case 'must_reply': return { label: 'Must Reply', className: 'bg-red-100 text-red-700 border-red-200' };
+    case 'should_reply': return { label: 'Should Reply', className: 'bg-orange-100 text-orange-700 border-orange-200' };
+    case 'optional_reply': return { label: 'Optional Reply', className: 'bg-yellow-100 text-yellow-600 border-yellow-200' };
+    case 'no_reply': return { label: 'No Reply Needed', className: 'bg-gray-50 text-gray-400 border-gray-100' };
+    default: return { label: reply.replace(/_/g, ' '), className: 'bg-gray-100 text-gray-600 border-gray-200' };
+  }
+}
+
 function sanitizeHtml(html: string): string {
   let clean = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   clean = clean.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
@@ -267,6 +292,7 @@ function AnalysisSummary({
   isAnalyzing?: boolean;
 }) {
   const { analysis, isLoading: isLoadingAnalysis, refetch } = useEmailAnalysis(email.id);
+  const { dates: extractedDates } = useExtractedDates({ emailId: email.id });
 
   // Handle analyze button click - await analysis then refetch
   const handleAnalyze = React.useCallback(async () => {
@@ -380,20 +406,53 @@ function AnalysisSummary({
         </div>
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
-        {/* Category & Reasoning */}
+        {/* Category, Signal, Reply Worthiness & Summary */}
         {analysis?.categorization && (
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-sm font-medium">Category:</span>
               <Badge variant={getCategoryBadge(email.category).variant} className="gap-1">
                 {getCategoryBadge(email.category).icon}
                 {email.category?.replace('_', ' ')}
               </Badge>
+              {analysis.categorization.signalStrength && (
+                <Badge variant="outline" className={`text-[10px] gap-1 ${getSignalBadge(analysis.categorization.signalStrength).className}`}>
+                  <Signal className="h-3 w-3" />
+                  {getSignalBadge(analysis.categorization.signalStrength).label}
+                </Badge>
+              )}
+              {analysis.categorization.replyWorthiness && analysis.categorization.replyWorthiness !== 'no_reply' && (
+                <Badge variant="outline" className={`text-[10px] gap-1 ${getReplyBadge(analysis.categorization.replyWorthiness).className}`}>
+                  <Reply className="h-3 w-3" />
+                  {getReplyBadge(analysis.categorization.replyWorthiness).label}
+                </Badge>
+              )}
+              {analysis.categorization.quickAction && analysis.categorization.quickAction !== 'none' && (
+                <Badge variant="outline" className="text-[10px] bg-violet-50 text-violet-600 border-violet-200">
+                  {analysis.categorization.quickAction.replace(/_/g, ' ')}
+                </Badge>
+              )}
             </div>
+            {/* AI Summary (conversational one-liner) */}
+            {analysis.categorization.summary && (
+              <p className="text-sm font-medium mt-2 mb-1 border-l-2 border-blue-300 pl-3">
+                {analysis.categorization.summary}
+              </p>
+            )}
             {analysis.categorization.reasoning && (
               <p className="text-sm text-muted-foreground mt-1 border-l-2 border-muted pl-3">
                 {analysis.categorization.reasoning}
               </p>
+            )}
+            {/* Labels */}
+            {analysis.categorization.labels && analysis.categorization.labels.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {analysis.categorization.labels.map((label, i) => (
+                  <Badge key={i} variant="outline" className="text-[10px] text-muted-foreground">
+                    {label.replace(/_/g, ' ')}
+                  </Badge>
+                ))}
+              </div>
             )}
             {analysis.categorization.topics && analysis.categorization.topics.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
@@ -405,50 +464,105 @@ function AnalysisSummary({
           </div>
         )}
 
-        {/* Action Extraction */}
+        {/* Content Digest — gist, key points, links */}
+        {analysis?.contentDigest && analysis.contentDigest.gist && (
+          <ContentDigestSection digest={analysis.contentDigest} />
+        )}
+
+        {/* Action Extraction (supports multi-action array) */}
         {analysis?.actionExtraction && (
           <div className="pt-3 border-t">
             <div className="flex items-center gap-2 mb-2">
               <Zap className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">Action</span>
+              <span className="text-sm font-medium">
+                {analysis.actionExtraction.actions && analysis.actionExtraction.actions.length > 1
+                  ? `Actions (${analysis.actionExtraction.actions.length})`
+                  : 'Action'}
+              </span>
+              {analysis.actionExtraction.urgencyScore && (
+                <span className={`text-xs font-medium ${getUrgencyColor(analysis.actionExtraction.urgencyScore)}`}>
+                  Urgency: {analysis.actionExtraction.urgencyScore}/10
+                </span>
+              )}
             </div>
             {analysis.actionExtraction.hasAction ? (
               <div className="space-y-2 pl-6">
-                <div className="flex items-start gap-2">
-                  {getActionTypeIcon(analysis.actionExtraction.actionType)}
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">
-                      {analysis.actionExtraction.actionTitle || `${analysis.actionExtraction.actionType} required`}
-                    </p>
-                    {analysis.actionExtraction.actionDescription && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {analysis.actionExtraction.actionDescription}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-4 text-xs">
-                  {analysis.actionExtraction.urgencyScore && (
-                    <div className="flex items-center gap-1">
-                      <span className="text-muted-foreground">Urgency:</span>
-                      <span className={`font-medium ${getUrgencyColor(analysis.actionExtraction.urgencyScore)}`}>
-                        {analysis.actionExtraction.urgencyScore}/10
-                      </span>
+                {/* Multi-action list (when available) */}
+                {analysis.actionExtraction.actions && analysis.actionExtraction.actions.length > 0 ? (
+                  analysis.actionExtraction.actions.map((action, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-start gap-2 p-2 rounded-md ${
+                        index === (analysis.actionExtraction?.primaryActionIndex ?? 0) ? 'bg-primary/5 border border-primary/10' : 'hover:bg-muted/50'
+                      } transition-colors`}
+                    >
+                      {getActionTypeIcon(action.type)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm">{action.title}</p>
+                          {index === (analysis.actionExtraction?.primaryActionIndex ?? 0) && (
+                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                              Primary
+                            </Badge>
+                          )}
+                        </div>
+                        {action.description && (
+                          <p className="text-sm text-muted-foreground mt-0.5">{action.description}</p>
+                        )}
+                        <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
+                          {action.deadline && (
+                            <span className="flex items-center gap-0.5">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(action.deadline).toLocaleDateString()}
+                            </span>
+                          )}
+                          {action.estimatedMinutes && (
+                            <span className="flex items-center gap-0.5">
+                              <Clock className="h-3 w-3" />
+                              ~{action.estimatedMinutes} min
+                            </span>
+                          )}
+                          {action.sourceLine && (
+                            <span className="truncate max-w-[200px]" title={action.sourceLine}>
+                              &ldquo;{action.sourceLine}&rdquo;
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  {analysis.actionExtraction.deadline && (
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3 text-muted-foreground" />
-                      <span>{new Date(analysis.actionExtraction.deadline).toLocaleDateString()}</span>
+                  ))
+                ) : (
+                  /* Fallback: legacy single-action display */
+                  <>
+                    <div className="flex items-start gap-2">
+                      {getActionTypeIcon(analysis.actionExtraction.actionType)}
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">
+                          {analysis.actionExtraction.actionTitle || `${analysis.actionExtraction.actionType} required`}
+                        </p>
+                        {analysis.actionExtraction.actionDescription && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {analysis.actionExtraction.actionDescription}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  {analysis.actionExtraction.estimatedMinutes && (
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3 text-muted-foreground" />
-                      <span>~{analysis.actionExtraction.estimatedMinutes} min</span>
+                    <div className="flex flex-wrap gap-4 text-xs">
+                      {analysis.actionExtraction.deadline && (
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          <span>{new Date(analysis.actionExtraction.deadline).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      {analysis.actionExtraction.estimatedMinutes && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-muted-foreground" />
+                          <span>~{analysis.actionExtraction.estimatedMinutes} min</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground pl-6">No action required</p>
@@ -677,6 +791,68 @@ function AnalysisSummary({
                   >
                     <Bookmark className="h-3 w-3" />
                   </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Date Extraction — deadlines, dates, time-sensitive items */}
+        {(extractedDates.length > 0 || analysis?.dateExtraction) && (
+          <DateExtractionSection
+            extraction={analysis?.dateExtraction}
+            dates={extractedDates.length > 0 ? extractedDates.map(d => ({
+              dateType: d.date_type || 'other',
+              date: d.date,
+              time: d.event_time || undefined,
+              endDate: d.end_date || undefined,
+              endTime: d.end_time || undefined,
+              title: d.title,
+              description: d.description || undefined,
+              relatedEntity: d.related_entity || undefined,
+              isRecurring: d.is_recurring || false,
+              recurrencePattern: d.recurrence_pattern || undefined,
+              confidence: d.confidence || 0.5,
+            })) : undefined}
+          />
+        )}
+
+        {/* Multi-Event Detection — multiple events from a single email */}
+        {analysis?.multiEventDetection?.hasMultipleEvents && analysis.multiEventDetection.events.length > 0 && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <ListChecks className="h-4 w-4 text-purple-500" />
+              <span className="text-sm font-medium">Multiple Events</span>
+              <span className="text-xs text-muted-foreground">
+                ({analysis.multiEventDetection.eventCount} events)
+              </span>
+            </div>
+            {analysis.multiEventDetection.sourceDescription && (
+              <p className="text-xs text-muted-foreground pl-6 mb-2">
+                {analysis.multiEventDetection.sourceDescription}
+              </p>
+            )}
+            <div className="space-y-2 pl-6">
+              {analysis.multiEventDetection.events.map((evt, index) => (
+                <div key={index} className="p-2 rounded-md hover:bg-muted/50 transition-colors">
+                  <p className="text-sm font-medium">{evt.eventTitle}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-0.5">
+                      <Calendar className="h-3 w-3" />
+                      {evt.eventDate}
+                    </span>
+                    {evt.eventTime && (
+                      <span className="flex items-center gap-0.5">
+                        <Clock className="h-3 w-3" />
+                        {evt.eventTime}
+                      </span>
+                    )}
+                    {evt.location && <span>{evt.location}</span>}
+                    {evt.cost && <span>{evt.cost}</span>}
+                    {evt.rsvpRequired && (
+                      <Badge variant="outline" className="text-[10px]">RSVP</Badge>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

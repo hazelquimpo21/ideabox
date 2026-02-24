@@ -417,6 +417,8 @@ export interface Database {
           insight_extraction: Record<string, unknown> | null;
           // News brief (NEW Feb 2026 — migration 034)
           news_brief: Record<string, unknown> | null;
+          // Multi-event detection (NEW Feb 2026 — migration 035)
+          multi_event_detection: Record<string, unknown> | null;
           analyzer_version: string;
           tokens_used: number | null;
           processing_time_ms: number | null;
@@ -439,6 +441,8 @@ export interface Database {
           insight_extraction?: Record<string, unknown> | null;
           // News brief (NEW Feb 2026 — migration 034)
           news_brief?: Record<string, unknown> | null;
+          // Multi-event detection (NEW Feb 2026 — migration 035)
+          multi_event_detection?: Record<string, unknown> | null;
           analyzer_version?: string;
           tokens_used?: number | null;
           processing_time_ms?: number | null;
@@ -461,6 +465,8 @@ export interface Database {
           insight_extraction?: Record<string, unknown> | null;
           // News brief (NEW Feb 2026 — migration 034)
           news_brief?: Record<string, unknown> | null;
+          // Multi-event detection (NEW Feb 2026 — migration 035)
+          multi_event_detection?: Record<string, unknown> | null;
           analyzer_version?: string;
           tokens_used?: number | null;
           processing_time_ms?: number | null;
@@ -1678,6 +1684,7 @@ export interface TypedEmailAnalysis {
   idea_sparks: IdeaSparksJsonb | null; // NEW Feb 2026
   insight_extraction: InsightExtractionJsonb | null; // NEW Feb 2026
   news_brief: NewsBriefJsonb | null; // NEW Feb 2026
+  multi_event_detection: Record<string, unknown> | null; // NEW Feb 2026 — migration 035
   analyzer_version: string;
   tokens_used: number | null;
   processing_time_ms: number | null;

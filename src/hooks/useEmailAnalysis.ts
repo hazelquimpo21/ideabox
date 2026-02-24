@@ -28,16 +28,37 @@ const logger = createLogger('useEmailAnalysis');
 
 /**
  * Categorization result from AI analyzer.
+ * ENHANCED (Feb 2026): Added summary, quickAction, signalStrength, replyWorthiness, labels.
  */
 export interface CategorizationResult {
   category: string;
   confidence: number;
   reasoning: string;
   topics?: string[];
+  summary?: string;
+  quickAction?: string;
+  signalStrength?: 'high' | 'medium' | 'low' | 'noise';
+  replyWorthiness?: 'must_reply' | 'should_reply' | 'optional_reply' | 'no_reply';
+  labels?: string[];
+}
+
+/**
+ * A single action item from multi-action extraction (NEW Feb 2026).
+ */
+export interface ActionItem {
+  type: string;
+  title: string;
+  description?: string;
+  deadline?: string;
+  priority: number;
+  estimatedMinutes?: number;
+  sourceLine?: string;
+  confidence: number;
 }
 
 /**
  * Action extraction result from AI analyzer.
+ * ENHANCED (Feb 2026): Supports multi-action `actions[]` array alongside legacy single-action fields.
  */
 export interface ActionExtractionResult {
   hasAction: boolean;
@@ -48,6 +69,8 @@ export interface ActionExtractionResult {
   deadline?: string;
   estimatedMinutes?: number;
   confidence: number;
+  actions?: ActionItem[];
+  primaryActionIndex?: number;
 }
 
 /**
@@ -146,16 +169,72 @@ export interface NewsBriefResult {
 }
 
 /**
+ * Content digest result from the ContentDigest analyzer.
+ * Provides gist, key points, and extracted links for quick scanning.
+ */
+export interface ContentDigestResult {
+  gist: string;
+  keyPoints: { point: string; relevance?: string }[];
+  links: {
+    url: string;
+    type: string;
+    title: string;
+    description: string;
+    isMainContent: boolean;
+  }[];
+  contentType: string;
+  topicsHighlighted?: string[];
+  confidence: number;
+}
+
+/**
+ * Date extraction result from the DateExtractor analyzer.
+ * Identifies dates, deadlines, and time-sensitive items embedded in emails.
+ */
+export interface DateExtractionResult {
+  hasDates: boolean;
+  dates: {
+    dateType: string;
+    date: string;
+    time?: string;
+    endDate?: string;
+    endTime?: string;
+    title: string;
+    description?: string;
+    relatedEntity?: string;
+    isRecurring: boolean;
+    recurrencePattern?: string;
+    confidence: number;
+  }[];
+  confidence: number;
+}
+
+/**
+ * Multi-event detection result from the MultiEventDetector analyzer.
+ * Handles emails containing multiple events (e.g., event roundup newsletters).
+ */
+export interface MultiEventDetectionResult {
+  hasMultipleEvents: boolean;
+  eventCount: number;
+  events: EventDetectionResult[];
+  sourceDescription?: string;
+  confidence: number;
+}
+
+/**
  * Normalized analysis data structure.
  */
 export interface NormalizedAnalysis {
   categorization?: CategorizationResult;
+  contentDigest?: ContentDigestResult;
   actionExtraction?: ActionExtractionResult;
   clientTagging?: ClientTaggingResult;
   eventDetection?: EventDetectionResult;
-  ideaSparks?: IdeaSparkResult; // NEW Feb 2026
-  insightExtraction?: InsightExtractionResult; // NEW Feb 2026
-  newsBrief?: NewsBriefResult; // NEW Feb 2026
+  multiEventDetection?: MultiEventDetectionResult;
+  dateExtraction?: DateExtractionResult;
+  ideaSparks?: IdeaSparkResult;
+  insightExtraction?: InsightExtractionResult;
+  newsBrief?: NewsBriefResult;
   tokensUsed?: number;
   processingTimeMs?: number;
   analyzerVersion?: string;
@@ -195,12 +274,18 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       confidence: (cat.confidence as number) || 0,
       reasoning: (cat.reasoning as string) || '',
       topics: cat.topics as string[] | undefined,
+      summary: (cat.summary as string) || undefined,
+      quickAction: (cat.quick_action as string) || (cat.quickAction as string) || undefined,
+      signalStrength: ((cat.signal_strength as string) || (cat.signalStrength as string) || undefined) as CategorizationResult['signalStrength'],
+      replyWorthiness: ((cat.reply_worthiness as string) || (cat.replyWorthiness as string) || undefined) as CategorizationResult['replyWorthiness'],
+      labels: (cat.labels as string[]) || undefined,
     };
   }
 
-  // Normalize action extraction
+  // Normalize action extraction (enhanced multi-action support)
   if (raw.action_extraction) {
     const action = raw.action_extraction as Record<string, unknown>;
+    const rawActions = (action.actions as Array<Record<string, unknown>>) || [];
     normalized.actionExtraction = {
       hasAction: (action.has_action as boolean) || (action.hasAction as boolean) || false,
       actionType: (action.action_type as string) || (action.actionType as string) || 'none',
@@ -210,6 +295,17 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       deadline: (action.deadline as string),
       estimatedMinutes: (action.estimated_minutes as number) || (action.estimatedMinutes as number),
       confidence: (action.confidence as number) || 0,
+      primaryActionIndex: (action.primary_action_index as number) ?? (action.primaryActionIndex as number) ?? undefined,
+      actions: rawActions.length > 0 ? rawActions.map(a => ({
+        type: (a.type as string) || 'none',
+        title: (a.title as string) || '',
+        description: (a.description as string) || undefined,
+        deadline: (a.deadline as string) || undefined,
+        priority: (a.priority as number) || 1,
+        estimatedMinutes: (a.estimated_minutes as number) || (a.estimatedMinutes as number) || undefined,
+        sourceLine: (a.source_line as string) || (a.sourceLine as string) || undefined,
+        confidence: (a.confidence as number) || 0.5,
+      })) : undefined,
     };
   }
 
@@ -256,6 +352,79 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       hasEventSummary: !!normalized.eventDetection.eventSummary,
       keyPointsCount: normalized.eventDetection.keyPoints?.length || 0,
     });
+  }
+
+  // Normalize content digest
+  if (raw.contentDigest || (raw as Record<string, unknown>).content_digest) {
+    const digest = (raw.contentDigest || (raw as Record<string, unknown>).content_digest) as Record<string, unknown>;
+    const rawKeyPoints = (digest.key_points as Array<Record<string, unknown>>) || (digest.keyPoints as Array<Record<string, unknown>>) || [];
+    const rawLinks = (digest.links as Array<Record<string, unknown>>) || [];
+    normalized.contentDigest = {
+      gist: (digest.gist as string) || '',
+      keyPoints: rawKeyPoints.map(kp => ({
+        point: (kp.point as string) || '',
+        relevance: (kp.relevance as string) || undefined,
+      })),
+      links: rawLinks.map(link => ({
+        url: (link.url as string) || '',
+        type: (link.type as string) || 'other',
+        title: (link.title as string) || '',
+        description: (link.description as string) || '',
+        isMainContent: (link.is_main_content as boolean) || (link.isMainContent as boolean) || false,
+      })),
+      contentType: (digest.content_type as string) || (digest.contentType as string) || 'single_topic',
+      topicsHighlighted: (digest.topics_highlighted as string[]) || (digest.topicsHighlighted as string[]) || undefined,
+      confidence: (digest.confidence as number) || 0,
+    };
+  }
+
+  // Normalize date extraction
+  if (raw.date_extraction || (raw as Record<string, unknown>).dateExtraction) {
+    const extraction = (raw.date_extraction || (raw as Record<string, unknown>).dateExtraction) as Record<string, unknown>;
+    const rawDates = (extraction.dates as Array<Record<string, unknown>>) || [];
+    normalized.dateExtraction = {
+      hasDates: (extraction.has_dates as boolean) || (extraction.hasDates as boolean) || false,
+      dates: rawDates.map(d => ({
+        dateType: (d.date_type as string) || (d.dateType as string) || 'other',
+        date: (d.date as string) || '',
+        time: (d.time as string) || undefined,
+        endDate: (d.end_date as string) || (d.endDate as string) || undefined,
+        endTime: (d.end_time as string) || (d.endTime as string) || undefined,
+        title: (d.title as string) || '',
+        description: (d.description as string) || undefined,
+        relatedEntity: (d.related_entity as string) || (d.relatedEntity as string) || undefined,
+        isRecurring: (d.is_recurring as boolean) || (d.isRecurring as boolean) || false,
+        recurrencePattern: (d.recurrence_pattern as string) || (d.recurrencePattern as string) || undefined,
+        confidence: (d.confidence as number) || 0.5,
+      })),
+      confidence: (extraction.confidence as number) || 0,
+    };
+  }
+
+  // Normalize multi-event detection
+  if (raw.multi_event_detection || (raw as Record<string, unknown>).multiEventDetection) {
+    const multi = (raw.multi_event_detection || (raw as Record<string, unknown>).multiEventDetection) as Record<string, unknown>;
+    const rawEvents = (multi.events as Array<Record<string, unknown>>) || [];
+    normalized.multiEventDetection = {
+      hasMultipleEvents: (multi.has_multiple_events as boolean) || (multi.hasMultipleEvents as boolean) || false,
+      eventCount: (multi.event_count as number) || (multi.eventCount as number) || rawEvents.length,
+      events: rawEvents.map(event => ({
+        hasEvent: true,
+        eventTitle: (event.event_title as string) || (event.eventTitle as string) || 'Untitled Event',
+        eventDate: (event.event_date as string) || (event.eventDate as string) || '',
+        eventTime: (event.event_time as string) || (event.eventTime as string),
+        eventEndTime: (event.event_end_time as string) || (event.eventEndTime as string),
+        locationType: ((event.location_type as string) || (event.locationType as string) || 'unknown') as EventDetectionResult['locationType'],
+        location: (event.location as string),
+        rsvpRequired: (event.rsvp_required as boolean) || (event.rsvpRequired as boolean) || false,
+        rsvpUrl: (event.rsvp_url as string) || (event.rsvpUrl as string),
+        organizer: (event.organizer as string),
+        cost: (event.cost as string),
+        confidence: (event.confidence as number) || 0.5,
+      })),
+      sourceDescription: (multi.source_description as string) || (multi.sourceDescription as string) || undefined,
+      confidence: (multi.confidence as number) || 0,
+    };
   }
 
   // Normalize idea sparks (NEW Feb 2026)
