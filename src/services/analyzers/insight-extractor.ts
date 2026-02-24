@@ -406,9 +406,15 @@ RULES
    */
   private validateInsightType(type: string): typeof INSIGHT_TYPES[number] {
     const validTypes = ['tip', 'framework', 'observation', 'counterintuitive', 'trend'];
-    return validTypes.includes(type)
-      ? (type as typeof INSIGHT_TYPES[number])
-      : 'observation';
+    if (validTypes.includes(type)) {
+      return type as typeof INSIGHT_TYPES[number];
+    }
+
+    logger.warn('AI returned invalid insight type — defaulting to observation', {
+      received: type,
+      validTypes: validTypes.join(', '),
+    });
+    return 'observation';
   }
 
   /**

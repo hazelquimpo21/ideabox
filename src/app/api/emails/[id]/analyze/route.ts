@@ -82,6 +82,29 @@ export async function POST(
       });
     }
 
+    // FIXED (Feb 2026): Clear error state before re-analysis so the email
+    // processor doesn't skip it due to existing analysis_error or analyzed_at.
+    if (forceReanalyze && (email.analyzed_at || email.analysis_error)) {
+      logger.info('Clearing previous analysis state for re-analysis', {
+        emailId,
+        hadAnalysis: !!email.analyzed_at,
+        hadError: !!email.analysis_error,
+      });
+
+      const { error: resetError } = await supabase
+        .from('emails')
+        .update({
+          analyzed_at: null,
+          analysis_error: null,
+        })
+        .eq('id', emailId);
+
+      if (resetError) {
+        logger.error('Failed to clear analysis state', { emailId, error: resetError.message });
+        return apiError('Failed to reset email for re-analysis', 500);
+      }
+    }
+
     // Get user's clients for context
     const { data: clients } = await supabase
       .from('clients')
@@ -101,8 +124,12 @@ export async function POST(
       userId: user.id,
     });
 
-    // Run analysis
-    const result = await emailProcessor.process(email as Email, context);
+    // Run analysis (skip check disabled when force-reanalyzing)
+    const result = await emailProcessor.process(email as Email, context, {
+      skipAnalyzed: false,
+      saveToDatabase: true,
+      createActions: true,
+    });
 
     if (!result.success) {
       logger.error('Analysis failed', { emailId, error: result.error });

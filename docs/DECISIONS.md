@@ -16,7 +16,7 @@
 | Categories | Life-bucket focused (12 types) | Refactored Jan 2026 from action to life-bucket |
 | Background Jobs | Supabase pg_cron + Edge Functions | Already using Supabase; Vercel Cron too limited |
 | Gmail Labels | Sync to Gmail | Users see categories in Gmail UI |
-| Failed Analysis | Mark unanalyzable (no retry) | Clear audit trail, prevents wasted costs |
+| Failed Analysis | Mark unanalyzable; manual retry clears error | Auto-syncs skip failures; manual retry resets state |
 | Body Truncation | 16K characters | Balances comprehensiveness with cost |
 | Timezone | Auto-detect from browser | Better UX than manual selection |
 | Log Retention | 30-day cleanup | Prevents unbounded storage growth |
@@ -33,6 +33,8 @@
 | Archive Delete | Hard delete (Supabase) | Archived emails can be permanently deleted; soft-delete was a no-op |
 | VIP Scoring | 12-signal weighted ranking | Works for fresh imports + established accounts |
 | Contact Import | Batched upserts + parallel loading | Prevents timeout and UI flash during onboarding |
+| Initial Sync | 100 emails, relaxed filters, batch checkpoints | More coverage, fewer missed emails, recoverable |
+| Prompt Voice | Unified "Rose" persona across analyzers | Consistent feel, [Who]+[What]+[WHY] summaries |
 | Back Navigation | `?from=` query param | Preserves originating tab on email detail back button |
 | View All | Direct navigation | "View All" on category card goes to full page, not modal |
 | Historical Sync | Metadata-only | Enrich contacts without full email download |
@@ -522,6 +524,72 @@ CREATE TABLE api_usage_logs (
 
 ---
 
+### 20. Initial Sync Refinement: More Emails, Relaxed Filters, Batch Checkpoints (Feb 2026)
+
+**Decision:** Increase initial sync from 50 to 100 emails, relax aggressive sender pre-filters, increase timeout to 240s, and save checkpoints between batches.
+
+**Alternatives Considered:**
+- Keep 50 emails (misses too many important emails for active inboxes)
+- Remove all pre-filtering (wastes AI tokens on obviously automated emails)
+- Save checkpoint after every email (too many DB writes; per-batch is sufficient)
+
+**Rationale:**
+- **100 emails**: Users with active inboxes often have 50+ emails in the last few days. The pre-filter system skips ~20-30% without AI, so 100 fetched = ~70-80 analyzed.
+- **Relaxed SKIP_SENDER_PATTERNS**: Removed `noreply@`, `notifications@`, `alerts@` from skip list — these senders often send important emails (shipping confirmations, payment receipts, appointment reminders) that should be AI-categorized. Only truly worthless system senders remain (`mailer-daemon@`, `postmaster@`, `bounce@`, `auto@`, `automated@`).
+- **240s timeout**: With 100 emails and batch processing, the previous 120s was too tight.
+- **Batch checkpoints**: After each batch of 10 completes, checkpoint data (processed count, tokens used, discovery counts) is saved to `user_profiles.sync_progress.checkpoint`. On resume, already-analyzed emails are skipped per-email.
+
+**Impact:**
+- `INITIAL_SYNC_CONFIG.maxEmails`: 50 → 100 (override via `INITIAL_SYNC_MAX_EMAILS` env var)
+- `INITIAL_SYNC_CONFIG.timeoutMs`: 120000 → 240000
+- `SKIP_SENDER_PATTERNS`: 11 patterns → 6 patterns
+- `StoredSyncProgress`: Added optional `checkpoint` field
+- `InitialSyncOrchestrator.analyzeEmails()`: Now calls `saveAnalysisCheckpoint()` after each batch
+
+---
+
+### 21. Allow Re-Analysis of Previously Failed Emails (Feb 2026)
+
+**Decision:** Clear `analysis_error` and `analyzed_at` before retrying failed emails, enabling manual re-analysis at any time.
+
+**Alternatives Considered:**
+- Automatic retry on next sync (original approach — "mark as unanalyzable, do NOT retry")
+- New `retry_count` column with cap (adds schema complexity)
+- Manual-only retry with error state clearing (chosen — simple, user-controlled)
+
+**Rationale:**
+- The original "permanently skip" approach was too aggressive — AI failures can be transient (rate limits, timeouts, model glitches), and users had no way to recover.
+- Clearing `analysis_error` and `analyzed_at` before re-processing ensures the email processor pipeline treats them as fresh unanalyzed emails.
+- Both batch retry (`POST /api/emails/retry-analysis`) and single email retry (`POST /api/emails/[id]/analyze` with `x-force-reanalyze: true`) now properly reset error state.
+- The existing "mark unanalyzable" behavior is preserved for *automatic* syncs — only *manual* retries clear the error.
+
+**Impact:**
+- `POST /api/emails/retry-analysis`: Now resets `analyzed_at` and `analysis_error` to null before processing, passes `skipAnalyzed: false`
+- `POST /api/emails/[id]/analyze`: Now resets error state when `x-force-reanalyze: true` header is set
+- No schema changes — uses existing columns
+
+---
+
+### 22. Unified "Right on Top of That, Rose!" Prompt Voice (Feb 2026)
+
+**Decision:** Unify all analyzer prompt voices around a consistent "sharp personal assistant friend" persona across categorizer, content digest, idea spark, and insight extractor.
+
+**Alternatives Considered:**
+- Different personas per analyzer (confusing, inconsistent feel)
+- Formal/professional tone (too corporate, doesn't match product personality)
+- Minimal/terse tone (misses the "why" — user doesn't understand prioritization)
+
+**Rationale:**
+- Users should feel like they have ONE assistant who's already read everything and is briefing them. Not 11 different bots with different voices.
+- The [Who] + [What] + [WHY] summary formula ensures every summary tells the user not just what the email says, but why they should care.
+- Each analyzer has its own personality shade while staying in the same "voice family":
+  - **Categorizer**: Sharp triage assistant — blunt about noise, punchy about importance
+  - **ContentDigest**: Thorough briefer — extracts the juice, skips the filler
+  - **IdeaSpark**: Creative friend — lateral thinker, "oh wait, this gave me an idea for you"
+  - **InsightExtractor**: Learning partner — texts you the good parts from newsletters
+
+---
+
 ## Decision Template (For Future Decisions)
 
 When making new architectural decisions, document them here using this template:
@@ -555,3 +623,4 @@ When making new architectural decisions, document them here using this template:
 | Feb 2026 | Navigation redesign (11→5 items), clients merged into contacts | Claude (nav redesign) |
 | Feb 2026 | Signal strength, reply worthiness, noise detection in categorizer | Claude (taxonomy refinement) |
 | Feb 2026 | VIP suggestion scoring (12-signal), contact import batching, parallel onboarding loading | Claude (contact onboarding) |
+| Feb 2026 | Initial sync refinement (100 emails, relaxed filters, batch checkpoints), re-analysis of failed emails, unified prompt voice | Claude (analyzer refinement) |

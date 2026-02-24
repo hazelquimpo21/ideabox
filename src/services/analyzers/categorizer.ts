@@ -780,15 +780,34 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
 
       logger.info('Email categorized', {
         emailId: email.id,
+        sender: email.senderEmail,
         category: result.data.category,
         additionalCategories: result.data.additionalCategories ?? [],
         signalStrength: result.data.signalStrength,
         replyWorthiness: result.data.replyWorthiness,
         quickAction: result.data.quickAction,
-        labelsCount: result.data.labels?.length ?? 0,
-        topicsCount: result.data.topics?.length ?? 0,
+        labels: result.data.labels ?? [],
+        topics: result.data.topics ?? [],
         confidence: result.data.confidence,
-        summaryLength: result.data.summary?.length ?? 0,
+        summaryPreview: result.data.summary?.substring(0, 80),
+      });
+
+      // Log low-confidence categorizations for monitoring prompt quality
+      if (result.data.confidence < 0.5) {
+        logger.warn('Low-confidence categorization', {
+          emailId: email.id,
+          category: result.data.category,
+          confidence: result.data.confidence,
+          reasoning: result.data.reasoning,
+          subject: email.subject?.substring(0, 60),
+        });
+      }
+    } else {
+      logger.error('Categorization failed', {
+        emailId: email.id,
+        subject: email.subject?.substring(0, 60),
+        sender: email.senderEmail,
+        error: result.error,
       });
     }
 
@@ -816,12 +835,25 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       ? (rawQuickAction as QuickAction)
       : 'review'; // Default to 'review' if invalid
 
+    if (!validQuickActions.has(rawQuickAction)) {
+      logger.warn('AI returned invalid quick_action — defaulting to review', {
+        received: rawQuickAction,
+        validValues: [...validQuickActions].join(', '),
+      });
+    }
+
     // Validate signal_strength (NEW Feb 2026)
     const validSignalStrengths = new Set<string>(SIGNAL_STRENGTHS);
     const rawSignalStrength = rawData.signal_strength as string;
     const signalStrength: SignalStrength = validSignalStrengths.has(rawSignalStrength)
       ? (rawSignalStrength as SignalStrength)
       : 'medium'; // Default to 'medium' if invalid
+
+    if (!validSignalStrengths.has(rawSignalStrength)) {
+      logger.warn('AI returned invalid signal_strength — defaulting to medium', {
+        received: rawSignalStrength,
+      });
+    }
 
     // Validate reply_worthiness (NEW Feb 2026)
     const validReplyWorthiness = new Set<string>(REPLY_WORTHINESS);
@@ -830,12 +862,25 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       ? (rawReplyWorthiness as ReplyWorthiness)
       : 'no_reply'; // Default to 'no_reply' if invalid
 
+    if (!validReplyWorthiness.has(rawReplyWorthiness)) {
+      logger.warn('AI returned invalid reply_worthiness — defaulting to no_reply', {
+        received: rawReplyWorthiness,
+      });
+    }
+
     // Validate category - AI sometimes returns labels (e.g. "promotional") as categories
     // normalizeCategory() always returns a valid category (never null)
     const rawCategory = rawData.category as string;
     const validatedCategory = EMAIL_CATEGORIES_SET.has(rawCategory)
       ? rawCategory as CategorizationData['category']
       : normalizeCategory(rawCategory) as CategorizationData['category'];
+
+    if (!EMAIL_CATEGORIES_SET.has(rawCategory)) {
+      logger.warn('AI returned invalid category — normalized', {
+        received: rawCategory,
+        normalized: validatedCategory,
+      });
+    }
 
     // Validate additional_categories (NEW Feb 2026)
     const rawAdditional = Array.isArray(rawData.additional_categories)

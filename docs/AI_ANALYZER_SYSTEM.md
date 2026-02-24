@@ -148,8 +148,10 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 - `labels` now include noise-type labels: `sales_pitch`, `webinar_invite`, `fake_recognition`, `mass_outreach`, `promotional`
 - `additional_categories`: Up to 2 secondary life buckets (email appears in multiple inbox views)
 - `notifications` category: Verification codes, OTPs, login alerts, password resets
-- Prompt voice: "sharp, no-nonsense personal assistant" — blunt summaries, protective of user's attention
+- Prompt voice: "right on top of that, Rose!" — sharp, human, punchy summaries using [Who] + [What] + [WHY] formula, protective of user's attention
 - 13 categories total (12 original + notifications)
+- Summary formula: [Who] + [What they need/said] + [Why you should care / deadline]
+- Low-confidence categorizations (< 0.5) now logged as warnings for prompt quality monitoring
 
 **Function Schema:**
 ```typescript
@@ -407,17 +409,17 @@ For urgency scoring:
 **Runs:** Always (PHASE 1, parallel with core analyzers)
 
 **ENHANCED (Feb 2026):**
-- **Golden Nuggets**: Deals, discount codes, tips, stats, quotes, recommendations — things worth remembering buried in emails
+- **Golden Nuggets**: Deals, discount codes, tips, stats, quotes, recommendations, **remember_this** (context/facts to recall later), **sales_opportunity** (business leads/revenue) — things worth remembering buried in emails. Up to **7** nuggets per email (was 5).
 - **Email Style Ideas**: For solopreneurs — capture layout, subject line, tone, CTA, visual, storytelling, and personalization ideas from emails you admire
 - **Notification handling**: Verification codes, OTPs, login alerts get minimal extraction (gist + content_type only)
-- Prompt voice: "sharp, no-nonsense personal assistant" — punchy gists, no filler
+- Prompt voice: "right on top of that, Rose!" — sharp, human, punchy gists with [Who] + [What] + [WHY] formula
 
 **What It Extracts:**
 - **Gist**: 1-2 sentence conversational briefing (like an assistant telling you what the email is about)
 - **Key Points**: 2-5 specific, scannable bullet points with real details (names, dates, numbers)
 - **Links**: Notable URLs with type and context (filtered for value, not tracking pixels)
 - **Content Type**: single_topic, multi_topic_digest, curated_links, personal_update, transactional
-- **Golden Nuggets** (NEW Feb 2026): Up to 5 nuggets — deals, tips, quotes, stats, recommendations
+- **Golden Nuggets** (NEW Feb 2026, ENHANCED Feb 2026): Up to 7 nuggets — deals, tips, quotes, stats, recommendations, remember_this, sales_opportunity
 - **Email Style Ideas** (NEW Feb 2026): Up to 3 ideas — layout, subject_line, tone, cta, visual, storytelling, personalization
 
 **Function Schema:**
@@ -474,13 +476,13 @@ For urgency scoring:
         items: {
           type: 'object',
           properties: {
-            nugget: { type: 'string', description: 'The nugget itself — a deal, tip, quote, stat, or recommendation' },
-            type: { type: 'string', enum: ['deal', 'tip', 'quote', 'stat', 'recommendation'] },
+            nugget: { type: 'string', description: 'The nugget itself — a deal, tip, quote, stat, recommendation, context to remember, or business opportunity' },
+            type: { type: 'string', enum: ['deal', 'tip', 'quote', 'stat', 'recommendation', 'remember_this', 'sales_opportunity'] },
           },
           required: ['nugget', 'type'],
         },
-        maxItems: 5,
-        description: 'Deals, tips, quotes, stats, recommendations worth saving. Only include genuinely useful nuggets.',
+        maxItems: 7,
+        description: 'Deals, tips, quotes, stats, recommendations, context/facts to remember, and business opportunities worth saving.',
       },
       email_style_ideas: {
         type: 'array',
@@ -520,6 +522,9 @@ For urgency scoring:
 | Shopping email | "Code SPRING25 for 25% off through March 1" | deal |
 | Newsletter | "Companies using RAG see 40% fewer hallucinations than fine-tuning" | stat |
 | Industry digest | "Ship the MVP before the pitch deck — investors fund traction, not slides" | tip |
+| Client email | "Sarah mentioned she's moving to Austin in April" | remember_this |
+| Partner email | "They're looking for a developer for a 3-month contract starting March" | sales_opportunity |
+| Personal email | "Annual renewal is $299, comes up again in November" | remember_this |
 
 **Email Style Idea Examples:**
 
@@ -1363,6 +1368,8 @@ const result = senderTypeDetector.detect({
 **Purpose:** Generate creative, actionable ideas from email content
 
 > This is the most "creative" analyzer in the system. While other analyzers classify, extract, or summarize, this one generates NEW ideas that connect the email's content to the user's actual life.
+>
+> **VOICE (Feb 2026):** Speaks like a creative thinking partner — "the friend who reads your email over coffee and goes 'oh wait, this gave me an idea for you.'" Ideas should feel like a genuine "hey, you should do this" from a smart friend, not a brainstorming bot.
 
 **When It Runs:** PHASE 2 (conditional). Skipped when `signal_strength = 'noise'` to save tokens (~30% of emails). Uses higher temperature (0.7) for creative output.
 
@@ -1422,6 +1429,8 @@ const result = senderTypeDetector.detect({
 **Purpose:** Synthesize interesting ideas, tips, frameworks, and observations from email content
 
 > This fills the gap between ContentDigest ("what does the email say") and IdeaSpark ("what should I do about it") with "what's WORTH KNOWING." Think: things you'd highlight in a newsletter or write in a notebook.
+>
+> **VOICE (Feb 2026):** Speaks like a learning partner — "the friend who reads your newsletters and texts you the good parts." Not summaries, but the IDEAS, TIPS, FRAMEWORKS, and OBSERVATIONS that deserve a notebook entry.
 
 **When It Runs:** PHASE 2 (conditional). Runs when content type is `multi_topic_digest`, `single_topic`, or `curated_links` AND `signal_strength != 'noise'`. Estimated skip rate: ~70-80% of emails.
 
@@ -1591,3 +1600,42 @@ The Events page only queries `extracted_dates`, not `email_analyses`.
 - Full events (`isKeyDate=false`) → `date_type='event'` → Events page
 - Open houses (`isKeyDate=true`, `keyDateType='open_house'`) → `date_type='event'` (you attend them)
 - Other key dates (registration deadlines) → `date_type='deadline'` → Hub/Timeline only
+
+### Batch Checkpoint System (NEW Feb 2026)
+
+Initial sync now saves **checkpoints after each batch** during AI analysis:
+
+1. **Problem**: If sync interrupts mid-batch (timeout, server restart, network error), all progress from completed batches was lost. The user had to re-run from scratch.
+
+2. **Solution**: After each batch of 10 emails completes, checkpoint data is saved to `user_profiles.sync_progress.checkpoint`:
+   ```typescript
+   checkpoint: {
+     batchNumber: number;      // Which batch just completed
+     totalBatches: number;     // Total batches planned
+     emailsProcessed: number;  // Cumulative emails processed
+     emailsTotal: number;      // Total emails to process
+     tokensUsed: number;       // Cumulative token usage
+     analyzedCount: number;    // Successfully analyzed count
+     failedCount: number;      // Failed analysis count
+   }
+   ```
+
+3. **Recovery**: On resume, already-analyzed emails are skipped automatically (each email's `analyzed_at` is set during per-email processing in the batch), so only unfinished work gets retried.
+
+4. **Progress visibility**: The checkpoint data includes discovery counts (actions, events, clients found so far) for real-time UI updates even during interruption recovery.
+
+### Re-Analysis of Failed Emails (FIXED Feb 2026)
+
+Previously, emails that failed AI analysis were permanently skipped — the `analysis_error` column was set and all future syncs excluded them via `analysis_error IS NULL` filter.
+
+**Changes:**
+- `POST /api/emails/retry-analysis` now **clears `analyzed_at` and `analysis_error`** before re-processing, so the email processor treats them as fresh unanalyzed emails
+- `POST /api/emails/[id]/analyze` with `x-force-reanalyze: true` header now **clears error state** before re-analysis
+- Both routes pass `skipAnalyzed: false` to ensure the email processor doesn't skip them
+
+**Routes for re-analysis:**
+| Route | Purpose | Usage |
+|-------|---------|-------|
+| `POST /api/emails/retry-analysis` | Batch retry multiple failed emails | `{ emailIds: ["uuid-1", "uuid-2"] }` |
+| `POST /api/emails/[id]/analyze` | Single email re-analysis | Header: `x-force-reanalyze: true` |
+| `POST /api/emails/rescan` | Full rescan of recent emails | `{ maxEmails: 50 }` |

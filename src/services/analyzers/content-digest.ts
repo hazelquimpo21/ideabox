@@ -642,6 +642,12 @@ export class ContentDigestAnalyzer extends BaseAnalyzer<ContentDigestData> {
         emailStyleIdeasCount: result.data.emailStyleIdeas?.length ?? 0,
         emailStyleIdeaTypes: result.data.emailStyleIdeas?.map(s => s.type) ?? [],
       });
+    } else {
+      this.logger.error('Content digest extraction failed', {
+        emailId: email.id,
+        subject: email.subject?.substring(0, 60),
+        error: result.error,
+      });
     }
 
     // Clear context after use
@@ -723,6 +729,7 @@ export class ContentDigestAnalyzer extends BaseAnalyzer<ContentDigestData> {
     // Normalize golden_nuggets (NEW Feb 2026, ENHANCED Feb 2026 with remember_this + sales_opportunity)
     const VALID_NUGGET_TYPES = new Set(['deal', 'tip', 'quote', 'stat', 'recommendation', 'remember_this', 'sales_opportunity']);
     const rawNuggets = rawData.golden_nuggets as Array<{ nugget: string; type: string }> | undefined;
+    const filteredOutNuggets = (rawNuggets || []).filter(n => !n.nugget || !VALID_NUGGET_TYPES.has(n.type));
     const goldenNuggets: GoldenNugget[] = (rawNuggets || [])
       .filter(n => n.nugget && VALID_NUGGET_TYPES.has(n.type))
       .map(n => ({
@@ -730,11 +737,21 @@ export class ContentDigestAnalyzer extends BaseAnalyzer<ContentDigestData> {
         type: n.type as GoldenNuggetType,
       }));
 
+    // Log if any nuggets were filtered out due to invalid type
+    if (filteredOutNuggets.length > 0) {
+      this.logger.warn('Filtered out invalid golden nuggets', {
+        filteredCount: filteredOutNuggets.length,
+        invalidTypes: filteredOutNuggets.map(n => n.type),
+        keptCount: goldenNuggets.length,
+      });
+    }
+
     // Normalize email_style_ideas (NEW Feb 2026)
     const VALID_STYLE_TYPES = new Set(['layout', 'subject_line', 'tone', 'cta', 'visual', 'storytelling', 'personalization']);
     const rawStyleIdeas = rawData.email_style_ideas as Array<{
       idea: string; type: string; why_it_works: string; confidence: number;
     }> | undefined;
+    const filteredOutStyles = (rawStyleIdeas || []).filter(s => !s.idea || !VALID_STYLE_TYPES.has(s.type));
     const emailStyleIdeas: EmailStyleIdea[] = (rawStyleIdeas || [])
       .filter(s => s.idea && VALID_STYLE_TYPES.has(s.type))
       .map(s => ({
@@ -743,6 +760,15 @@ export class ContentDigestAnalyzer extends BaseAnalyzer<ContentDigestData> {
         whyItWorks: s.why_it_works || '',
         confidence: Math.min(1, Math.max(0, s.confidence || 0.5)),
       }));
+
+    // Log if any style ideas were filtered out
+    if (filteredOutStyles.length > 0) {
+      this.logger.warn('Filtered out invalid email style ideas', {
+        filteredCount: filteredOutStyles.length,
+        invalidTypes: filteredOutStyles.map(s => s.type),
+        keptCount: emailStyleIdeas.length,
+      });
+    }
 
     return {
       gist: (rawData.gist as string) || 'Unable to extract gist',
