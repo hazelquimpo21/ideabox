@@ -21,6 +21,37 @@ import type { Email, Client, EmailCategory, ActionType } from '@/types/database'
 import type { AnalyzerConfig as BaseAnalyzerConfig } from '@/config/analyzers';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL TYPE (NEW Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Email type classification — the NATURE of the email, orthogonal to category.
+ *
+ * Category answers "what area of life?" (finance, clients, family).
+ * Email type answers "what kind of communication is this?" (promo, notification, etc.)
+ *
+ * Examples:
+ * - category=finance + email_type=transactional (bank receipt)
+ * - category=clients + email_type=needs_response (client asking a question)
+ * - category=shopping + email_type=promo (sale alert from a store)
+ * - category=newsletters_creator + email_type=newsletter (Substack post)
+ * - category=notifications + email_type=automated (2FA code)
+ */
+export const EMAIL_TYPES = [
+  'personal',        // Direct human-to-human correspondence
+  'transactional',   // Receipts, confirmations, shipping updates, account alerts
+  'newsletter',      // Newsletters, digests, content roundups
+  'notification',    // App notifications, social media alerts, system notices
+  'promo',           // Marketing, sales, deals, upsells
+  'cold_outreach',   // Unsolicited outreach — sales, PR, link exchange, fake awards
+  'needs_response',  // Someone is waiting for a reply from the user
+  'fyi',             // Informational — worth knowing but no action needed
+  'automated',       // Machine-generated — verification codes, cron alerts, CI/CD
+] as const;
+
+export type EmailType = typeof EMAIL_TYPES[number];
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SIGNAL STRENGTH (NEW Feb 2026)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -538,6 +569,40 @@ export interface CategorizationData {
    * The email will show up in inbox views for ALL its categories.
    */
   additionalCategories?: EmailCategory[];
+
+  /**
+   * Email type — the NATURE of the communication, orthogonal to category.
+   * NEW (Feb 2026): Answers "what kind of email is this?" not "what life area?"
+   *
+   * - 'personal': Direct human correspondence
+   * - 'transactional': Receipts, confirmations, shipping updates
+   * - 'newsletter': Newsletters, digests, content roundups
+   * - 'notification': App notifications, social media alerts
+   * - 'promo': Marketing, sales, deals
+   * - 'cold_outreach': Unsolicited sales, PR, fake awards
+   * - 'needs_response': Someone is waiting for a reply
+   * - 'fyi': Informational, no action needed
+   * - 'automated': Machine-generated codes, alerts
+   */
+  emailType: EmailType;
+
+  /**
+   * AI-internal brief — a dense, structured summary for a future AI to read
+   * when batch-summarizing emails. NOT styled for humans.
+   * NEW (Feb 2026)
+   *
+   * Format: "IMPORTANCE | From WHO (relationship) | What it's about | Action needed | Key context"
+   *
+   * Examples:
+   * - "HIGH | From Sarah at Acme (client) | Q1 proposal review request | Action: review doc by Friday | Ongoing project, she's waiting"
+   * - "LOW | From Morning Brew (newsletter) | Daily news digest: Fed rates, Apple AI, Costco | No action | User interested in AI"
+   * - "NOISE | From DataCo (cold outreach) | Sales pitch for analytics platform | No action | Unsolicited, skip"
+   * - "MEDIUM | From Stripe (transactional) | $49/mo Pro plan renewed | No action | Auto-paid, receipt"
+   *
+   * This enables a downstream AI to quickly understand the email's importance,
+   * context, and whether it needs attention — without reading the full email.
+   */
+  aiBrief: string;
 }
 
 /**

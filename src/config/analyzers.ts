@@ -94,6 +94,22 @@ export const EMAIL_LABELS_SUMMARY = {
 } as const;
 
 /**
+ * Email type values — the nature of the communication.
+ * NEW (Feb 2026): Orthogonal to category. Category = life area, type = communication nature.
+ */
+export const EMAIL_TYPES = [
+  'personal',        // Direct human correspondence
+  'transactional',   // Receipts, confirmations, shipping updates
+  'newsletter',      // Newsletters, digests, content roundups
+  'notification',    // App notifications, social media alerts
+  'promo',           // Marketing, sales, deals
+  'cold_outreach',   // Unsolicited sales, PR, fake awards
+  'needs_response',  // Someone is waiting for a reply
+  'fyi',             // Informational, no action needed
+  'automated',       // Machine-generated codes, alerts
+] as const;
+
+/**
  * Signal strength values for email relevance assessment.
  * NEW (Feb 2026): Core "is this worth the user's time?" classification.
  */
@@ -165,7 +181,7 @@ export const analyzerConfig = {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for deterministic classification
-    maxTokens: 600,   // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness
+    maxTokens: 750,   // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness + emailType + aiBrief
   } satisfies AnalyzerConfig,
 
   /**

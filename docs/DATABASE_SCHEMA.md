@@ -377,6 +377,10 @@ CREATE TABLE emails (
   -- Multi-category support (Feb 2026)
   additional_categories TEXT[],  -- Up to 2 secondary life-bucket categories
 
+  -- Email type & AI brief (migration 037)
+  email_type TEXT,       -- personal, transactional, newsletter, notification, promo, cold_outreach, needs_response, fyi, automated
+  ai_brief TEXT,         -- Dense structured summary for downstream AI batch-summarization
+
   -- Relations
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,  -- (migration 029, replaces legacy client_id)
   project_tags TEXT[],
@@ -436,7 +440,7 @@ CREATE TABLE email_analyses (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   -- Analysis results (JSONB)
-  categorization JSONB,       -- {category, labels, signal_strength, reply_worthiness, confidence, reasoning, topics, summary, quick_action, additional_categories}
+  categorization JSONB,       -- {category, labels, signal_strength, reply_worthiness, email_type, ai_brief, confidence, reasoning, topics, summary, quick_action, additional_categories}
   action_extraction JSONB,    -- {has_action, actions[], urgency_score} (supports multi-action)
   client_tagging JSONB,       -- {client_match, client_id, client_name, confidence, relationship_signal}
   event_detection JSONB,      -- {has_event, event_title, event_date, event_locality, ...}
@@ -956,6 +960,9 @@ All tables have RLS enabled. Policy pattern:
 | 032 | signal_strength_reply_worthiness.sql | Add signal_strength + reply_worthiness columns to emails, with indexes for Hub queries |
 | 033 | idea_sparks_column.sql | Add idea_sparks JSONB column to email_analyses |
 | 034 | saved_insights_and_news.sql | Add saved_insights + saved_news tables for user-promoted insights and news items |
+| 035 | multi_event_detection.sql | Multi-event detection support |
+| 036 | additional_categories_and_notifications.sql | additional_categories column + notifications category |
+| 037 | email_type_and_ai_brief.sql | Add email_type + ai_brief columns to emails for communication nature tagging and AI batch-summarization |
 
 ---
 

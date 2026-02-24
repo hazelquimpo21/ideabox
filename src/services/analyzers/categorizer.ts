@@ -60,7 +60,7 @@
  */
 
 import { BaseAnalyzer } from './base-analyzer';
-import { analyzerConfig, EMAIL_CATEGORIES, SIGNAL_STRENGTHS, REPLY_WORTHINESS } from '@/config/analyzers';
+import { analyzerConfig, EMAIL_CATEGORIES, SIGNAL_STRENGTHS, REPLY_WORTHINESS, EMAIL_TYPES } from '@/config/analyzers';
 import { normalizeCategory, EMAIL_CATEGORIES_SET } from '@/types/discovery';
 import type { FunctionSchema } from '@/lib/ai/openai-client';
 import type {
@@ -70,6 +70,7 @@ import type {
   UserContext,
   QuickAction,
   EmailLabel,
+  EmailType,
   SignalStrength,
   ReplyWorthiness,
 } from './types';
@@ -93,7 +94,7 @@ const FUNCTION_NAME = 'categorize_email';
  * This helps OpenAI understand when/how to use the function.
  */
 const FUNCTION_DESCRIPTION =
-  'Categorizes an email by life bucket (what area of life it touches), signal strength, and reply worthiness';
+  'Categorizes an email by life bucket, email type, signal strength, reply worthiness, and generates AI brief';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
@@ -133,10 +134,12 @@ You're not a classifier. You're a human who happens to have read their email fir
 
 Your job:
 1. Sort each email into a LIFE BUCKET (what part of their life does this touch?)
-2. Rate SIGNAL STRENGTH (is this worth their time?)
-3. Rate REPLY WORTHINESS (should they reply?)
-4. Sniff out NOISE (sales pitches, fake awards, mass outreach — protect their attention)
-5. Write a summary that tells them WHAT + WHY in one punchy sentence
+2. Tag the EMAIL TYPE (what kind of communication is this?)
+3. Rate SIGNAL STRENGTH (is this worth their time?)
+4. Rate REPLY WORTHINESS (should they reply?)
+5. Sniff out NOISE (sales pitches, fake awards, mass outreach — protect their attention)
+6. Write a summary — one line, no fluff, tell them what they need to know
+7. Write an AI brief — dense internal summary for a future AI to read when batch-summarizing
 
 ═══════════════════════════════════════════════════════════════════════════════
 YOUR MINDSET: PROTECTIVE, SHARP, HUMAN
@@ -272,6 +275,57 @@ NO_REPLY - No reply expected or useful:
 - Promotional emails
 - System notifications (password changes, login alerts)
 - Receipt confirmations
+
+═══════════════════════════════════════════════════════════════════════════════
+EMAIL TYPE (what kind of communication is this?)
+═══════════════════════════════════════════════════════════════════════════════
+
+This is ORTHOGONAL to category. Category = what life area. Type = communication nature.
+An email can be category=finance + type=transactional, or category=clients + type=needs_response.
+
+- personal: Direct human-to-human correspondence. Someone wrote this to the user specifically.
+- transactional: Receipts, confirmations, shipping updates, account alerts, order status.
+- newsletter: Newsletters, digests, content roundups, Substacks, curated reading.
+- notification: App notifications (LinkedIn, GitHub, Slack), social media alerts, system notices.
+- promo: Marketing emails, sales, deals, discounts, upsells from known companies.
+- cold_outreach: Unsolicited contact — sales pitches, PR, link exchange, fake awards, "partnership" requests.
+- needs_response: Someone is waiting for a reply. A direct question, a request, a follow-up.
+- fyi: Informational — worth knowing but no reply or action expected. Updates, announcements, FYIs.
+- automated: Machine-generated — verification codes, 2FA, CI/CD alerts, cron reports, password resets.
+
+DISAMBIGUATION:
+- A newsletter with a direct question to the reader → newsletter (not needs_response — it's broadcast)
+- A client saying "just FYI" → needs_response if they might expect acknowledgment, fyi if truly one-way
+- A promo from a company you use → promo (even if useful — it's still marketing)
+- A cold email that asks a question → cold_outreach (the "question" is a sales tactic)
+- Verification code → automated (not notification — it's ephemeral machine output)
+
+═══════════════════════════════════════════════════════════════════════════════
+AI BRIEF (for a future AI to read — NOT for the user)
+═══════════════════════════════════════════════════════════════════════════════
+
+Write a dense, structured, machine-optimized summary for a downstream AI that will
+batch-summarize many emails. Pack maximum information into minimum tokens.
+
+FORMAT: "IMPORTANCE | From WHO (relationship) | What it's about | Action needed | Key context"
+
+IMPORTANCE = HIGH / MEDIUM / LOW / NOISE (mirrors signal_strength)
+
+Examples:
+- "HIGH | From Sarah at Acme (client) | Q1 proposal review request | Action: review doc by Friday | Ongoing project, she's waiting"
+- "LOW | From Morning Brew (newsletter) | Daily digest: Fed rates, Apple AI, Costco hot dogs | No action | User interested in AI"
+- "NOISE | From DataCo (cold outreach) | Sales pitch for analytics platform | No action | Unsolicited, skip"
+- "MEDIUM | From Stripe (transactional) | $49/mo Pro plan renewed | No action | Auto-paid, receipt"
+- "HIGH | From Mom (family) | Dad's surgery scheduled for March 5 | May want to reply | Time-sensitive family"
+- "MEDIUM | From Figma (product update) | Auto-layout 5.0 shipped | No action | User is a developer, relevant tool"
+- "LOW | From Old Navy (promo) | 40% off sale this weekend | No action | Marketing, user shops there occasionally"
+
+Rules:
+- Be factual and dense — no filler, no style
+- Include the sender's relationship to the user when identifiable
+- Note any deadlines or time sensitivity
+- Mention if the email matches user interests or projects
+- This is NOT for the user — it's for an AI. Optimize for information density.
 
 ═══════════════════════════════════════════════════════════════════════════════
 NETWORKING OPPORTUNITY - WHEN TO APPLY THIS LABEL
@@ -458,38 +512,38 @@ NOISE LABELS (apply when detected):
 - promotional: Deals, discounts, upsells
 
 ═══════════════════════════════════════════════════════════════════════════════
-SUMMARY (one punchy sentence — talk like a sharp assistant)
+SUMMARY (one line — what does the user need to know?)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Write like you're verbally briefing the user between meetings — "right on top
-of that, Rose!" energy. Be the assistant who already read it and is telling
-them exactly what they need to know and WHY it matters to them.
+You're a helpful assistant who doesn't waste the user's time. One line. Tell
+them what's in this email that they may care about. No fluff, no preamble,
+no "this email is about..." — just the thing itself.
 
-FORMULA: [Who] + [What they need/said] + [Why you should care / deadline]
+RULES:
+- Maximum one sentence. Be ruthlessly concise.
+- Lead with what matters most to the USER, not what the sender wants.
+- If there's an action needed, say it. If there's a deadline, include it.
+- For noise: be dismissive. "Sales pitch — skip" is fine.
+- For newsletters: the best nugget, not "a newsletter about topics."
+- Never start with "This email..." or "The sender..."
+- Write like you're texting a busy friend — zero wasted words.
 
-For high-signal: lead with the action or the stakes.
-For newsletters: lead with the best nugget — the thing they'd want to know.
-For noise: be blunt and dismissive. One short line. Save their brainpower.
-For transactional: just the facts — amount, status, done.
+GOOD (concise, specific, useful):
+- "Sarah from Acme needs your review on the Q1 proposal by Friday"
+- "AWS bill: $142.67, up 12% — auto-paid"
+- "Kumon homework due Monday — print before weekend"
+- "Sales pitch from DataCo — skip"
+- "Fake award, pay-to-play — trash"
+- "Morning Brew: Fed held rates, Apple shipping AI in 18.4"
+- "Mom sent trip photos — might want to reply"
+- "Stripe: $49/mo Pro plan renewed"
+- "Local pottery class March 1, $25 — could be fun"
 
-GOOD (punchy, specific, human — notice the "why"):
-- "Sarah from Acme needs your eyes on the Q1 proposal by Friday — she's waiting on you to move forward"
-- "AWS bill: $142.67, up 12% from last month — auto-paid, but worth a look"
-- "Kumon homework packets due Monday — print before the weekend"
-- "DataCo sales pitch — skip"
-- "Fake award from 'Business Leaders Awards' — pay-to-play, trash it"
-- "SEO agency cold email — mass blast, archive"
-- "Great Substack from [author] on AI in healthcare — has a framework you'd actually use"
-- "Mom sent weekend trip photos — she's excited, might want to reply"
-- "Stripe receipt: $49/mo for Pro plan renewed — no action needed"
-- "Morning Brew: Fed held rates, Apple AI in 18.4 — the Apple bit ties to your current project"
-- "Local pottery class starting March 1 — $25, right near you, could be a fun date night"
-
-BAD (vague, robotic, wordy):
+BAD (wordy, vague, robotic):
 - "This is an email from Sarah regarding project work"
 - "The sender has sent a newsletter about various topics"
 - "A financial transaction notification has been received"
-- "Newsletter about AI" (too vague — WHAT about AI?)
+- "Newsletter about AI" (WHAT about AI? Be specific.)
 
 ═══════════════════════════════════════════════════════════════════════════════
 QUICK ACTION (for inbox triage)
@@ -662,8 +716,21 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         maxItems: 2,
         description: 'Up to 2 additional categories if the email genuinely belongs in multiple life buckets. E.g., a client dinner invite = primary clients, additional [local]. Only include if truly relevant.',
       },
+
+      // Email type (NEW Feb 2026) — nature of the communication
+      email_type: {
+        type: 'string',
+        enum: EMAIL_TYPES as unknown as string[],
+        description: 'Nature of the communication: personal, transactional, newsletter, notification, promo, cold_outreach, needs_response, fyi, automated',
+      },
+
+      // AI brief (NEW Feb 2026) — dense internal summary for downstream AI
+      ai_brief: {
+        type: 'string',
+        description: 'Dense, structured summary for a future AI to read when batch-summarizing. Format: "IMPORTANCE | From WHO (relationship) | What about | Action needed | Key context"',
+      },
     },
-    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action'],
+    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action', 'email_type', 'ai_brief'],
   },
 };
 
@@ -782,6 +849,7 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
         emailId: email.id,
         sender: email.senderEmail,
         category: result.data.category,
+        emailType: result.data.emailType,
         additionalCategories: result.data.additionalCategories ?? [],
         signalStrength: result.data.signalStrength,
         replyWorthiness: result.data.replyWorthiness,
@@ -790,6 +858,7 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
         topics: result.data.topics ?? [],
         confidence: result.data.confidence,
         summaryPreview: result.data.summary?.substring(0, 80),
+        aiBriefPreview: result.data.aiBrief?.substring(0, 80),
       });
 
       // Log low-confidence categorizations for monitoring prompt quality
@@ -889,6 +958,19 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
         .slice(0, 2) as CategorizationData['category'][]
       : undefined;
 
+    // Validate email_type (NEW Feb 2026)
+    const validEmailTypes = new Set<string>(EMAIL_TYPES);
+    const rawEmailType = rawData.email_type as string;
+    const emailType: EmailType = validEmailTypes.has(rawEmailType)
+      ? (rawEmailType as EmailType)
+      : 'fyi'; // Default to 'fyi' if invalid
+
+    if (!validEmailTypes.has(rawEmailType)) {
+      logger.warn('AI returned invalid email_type — defaulting to fyi', {
+        received: rawEmailType,
+      });
+    }
+
     return {
       // Core categorization fields
       category: validatedCategory,
@@ -910,6 +992,12 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
 
       // Reply worthiness (NEW Feb 2026)
       replyWorthiness,
+
+      // Email type (NEW Feb 2026)
+      emailType,
+
+      // AI brief (NEW Feb 2026)
+      aiBrief: (rawData.ai_brief as string) || '',
 
       // Additional categories (NEW Feb 2026)
       ...(rawAdditional && rawAdditional.length > 0 ? { additionalCategories: rawAdditional } : {}),
