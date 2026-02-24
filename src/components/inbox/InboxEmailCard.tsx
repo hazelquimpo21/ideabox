@@ -55,6 +55,8 @@ import {
   TrendingUp,
   Mail,
   Image as ImageIcon,
+  Gem,
+  Palette,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -245,10 +247,19 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
     ? CATEGORY_BADGE_COLORS[category] || 'bg-gray-50 text-gray-600'
     : null;
 
+  // Additional categories for multi-category display
+  const additionalCategories = (email.additional_categories as string[] | null)?.filter(
+    (c): c is EmailCategory => !!c && c !== category
+  ) ?? [];
+
   // Event detection — check labels array for 'has_event' or quick_action 'calendar'
   const labels = email.labels as string[] | null;
   const isEvent = (labels && Array.isArray(labels) && labels.includes('has_event')) ||
     quickAction === 'calendar';
+
+  // Golden nugget indicator — check key_points for deal/tip indicators
+  // The actual nuggets live in the analysis JSONB, but key_points are denormalized
+  const hasKeyPoints = email.key_points && Array.isArray(email.key_points) && email.key_points.length > 0;
 
   /** Isolate star click from card click */
   const handleStarClick = (e: React.MouseEvent) => {
@@ -389,13 +400,26 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
             </span>
           )}
 
-          {/* Category badge */}
+          {/* Category badge(s) — primary + additional */}
           {showCategory && categoryLabel && categoryBadgeColor && (
-            <Badge
-              className={cn('text-[10px] shrink-0 border-0 font-medium px-1.5 py-0', categoryBadgeColor)}
-            >
-              {categoryLabel}
-            </Badge>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <Badge
+                className={cn('text-[10px] border-0 font-medium px-1.5 py-0', categoryBadgeColor)}
+              >
+                {categoryLabel}
+              </Badge>
+              {additionalCategories.slice(0, 1).map((addCat) => (
+                <Badge
+                  key={addCat}
+                  className={cn(
+                    'text-[9px] border-0 font-medium px-1 py-0 opacity-70',
+                    CATEGORY_BADGE_COLORS[addCat] || 'bg-gray-50 text-gray-600',
+                  )}
+                >
+                  {CATEGORY_SHORT_LABELS[addCat] || addCat}
+                </Badge>
+              ))}
+            </div>
           )}
         </div>
 

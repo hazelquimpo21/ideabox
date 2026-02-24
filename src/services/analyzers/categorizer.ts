@@ -127,13 +127,16 @@ const QUICK_ACTIONS = [
  * 5. Suggest quick action for inbox triage
  * 6. Consider sender context, domain patterns, and content holistically
  */
-const BASE_SYSTEM_PROMPT = `You are a sharp, no-nonsense personal assistant who reads every email before the user does. Think of yourself as "right on top of that, Rose!" — you give the user exactly what they need to know and why, in the fewest words possible.
+const BASE_SYSTEM_PROMPT = `You are the user's sharpest, most trusted personal assistant. You read every email before they do and brief them like a friend who genuinely has their back. Think "right on top of that, Rose!" — you catch what matters, flag what's urgent, dismiss what's noise, and always tell them WHY something deserves their attention.
+
+You're not a classifier. You're a human who happens to have read their email first.
 
 Your job:
 1. Sort each email into a LIFE BUCKET (what part of their life does this touch?)
 2. Rate SIGNAL STRENGTH (is this worth their time?)
 3. Rate REPLY WORTHINESS (should they reply?)
 4. Sniff out NOISE (sales pitches, fake awards, mass outreach — protect their attention)
+5. Write a summary that tells them WHAT + WHY in one punchy sentence
 
 ═══════════════════════════════════════════════════════════════════════════════
 YOUR MINDSET: PROTECTIVE, SHARP, HUMAN
@@ -458,25 +461,35 @@ NOISE LABELS (apply when detected):
 SUMMARY (one punchy sentence — talk like a sharp assistant)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Write like you're verbally briefing the user in 5 seconds. Be direct, specific,
-human. Drop the filler. Include: who, what they need, any deadline.
-For noise: be blunt and dismissive. Save the user's brainpower.
+Write like you're verbally briefing the user between meetings — "right on top
+of that, Rose!" energy. Be the assistant who already read it and is telling
+them exactly what they need to know and WHY it matters to them.
 
-GOOD (punchy, specific, human):
-- "Sarah from Acme needs your eyes on the Q1 proposal by Friday"
-- "AWS bill: $142.67, up 12% from last month — auto-paid"
-- "Kumon homework packets due Monday"
+FORMULA: [Who] + [What they need/said] + [Why you should care / deadline]
+
+For high-signal: lead with the action or the stakes.
+For newsletters: lead with the best nugget — the thing they'd want to know.
+For noise: be blunt and dismissive. One short line. Save their brainpower.
+For transactional: just the facts — amount, status, done.
+
+GOOD (punchy, specific, human — notice the "why"):
+- "Sarah from Acme needs your eyes on the Q1 proposal by Friday — she's waiting on you to move forward"
+- "AWS bill: $142.67, up 12% from last month — auto-paid, but worth a look"
+- "Kumon homework packets due Monday — print before the weekend"
 - "DataCo sales pitch — skip"
 - "Fake award from 'Business Leaders Awards' — pay-to-play, trash it"
 - "SEO agency cold email — mass blast, archive"
-- "Great Substack from [author] on AI in healthcare — worth a read, aligns with your interests"
-- "Mom sent weekend trip photos"
-- "Stripe receipt: $49/mo for Pro plan renewed"
+- "Great Substack from [author] on AI in healthcare — has a framework you'd actually use"
+- "Mom sent weekend trip photos — she's excited, might want to reply"
+- "Stripe receipt: $49/mo for Pro plan renewed — no action needed"
+- "Morning Brew: Fed held rates, Apple AI in 18.4 — the Apple bit ties to your current project"
+- "Local pottery class starting March 1 — $25, right near you, could be a fun date night"
 
 BAD (vague, robotic, wordy):
 - "This is an email from Sarah regarding project work"
 - "The sender has sent a newsletter about various topics"
 - "A financial transaction notification has been received"
+- "Newsletter about AI" (too vague — WHAT about AI?)
 
 ═══════════════════════════════════════════════════════════════════════════════
 QUICK ACTION (for inbox triage)
@@ -767,15 +780,34 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
 
       logger.info('Email categorized', {
         emailId: email.id,
+        sender: email.senderEmail,
         category: result.data.category,
         additionalCategories: result.data.additionalCategories ?? [],
         signalStrength: result.data.signalStrength,
         replyWorthiness: result.data.replyWorthiness,
         quickAction: result.data.quickAction,
-        labelsCount: result.data.labels?.length ?? 0,
-        topicsCount: result.data.topics?.length ?? 0,
+        labels: result.data.labels ?? [],
+        topics: result.data.topics ?? [],
         confidence: result.data.confidence,
-        summaryLength: result.data.summary?.length ?? 0,
+        summaryPreview: result.data.summary?.substring(0, 80),
+      });
+
+      // Log low-confidence categorizations for monitoring prompt quality
+      if (result.data.confidence < 0.5) {
+        logger.warn('Low-confidence categorization', {
+          emailId: email.id,
+          category: result.data.category,
+          confidence: result.data.confidence,
+          reasoning: result.data.reasoning,
+          subject: email.subject?.substring(0, 60),
+        });
+      }
+    } else {
+      logger.error('Categorization failed', {
+        emailId: email.id,
+        subject: email.subject?.substring(0, 60),
+        sender: email.senderEmail,
+        error: result.error,
       });
     }
 
@@ -803,12 +835,25 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       ? (rawQuickAction as QuickAction)
       : 'review'; // Default to 'review' if invalid
 
+    if (!validQuickActions.has(rawQuickAction)) {
+      logger.warn('AI returned invalid quick_action — defaulting to review', {
+        received: rawQuickAction,
+        validValues: [...validQuickActions].join(', '),
+      });
+    }
+
     // Validate signal_strength (NEW Feb 2026)
     const validSignalStrengths = new Set<string>(SIGNAL_STRENGTHS);
     const rawSignalStrength = rawData.signal_strength as string;
     const signalStrength: SignalStrength = validSignalStrengths.has(rawSignalStrength)
       ? (rawSignalStrength as SignalStrength)
       : 'medium'; // Default to 'medium' if invalid
+
+    if (!validSignalStrengths.has(rawSignalStrength)) {
+      logger.warn('AI returned invalid signal_strength — defaulting to medium', {
+        received: rawSignalStrength,
+      });
+    }
 
     // Validate reply_worthiness (NEW Feb 2026)
     const validReplyWorthiness = new Set<string>(REPLY_WORTHINESS);
@@ -817,12 +862,25 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       ? (rawReplyWorthiness as ReplyWorthiness)
       : 'no_reply'; // Default to 'no_reply' if invalid
 
+    if (!validReplyWorthiness.has(rawReplyWorthiness)) {
+      logger.warn('AI returned invalid reply_worthiness — defaulting to no_reply', {
+        received: rawReplyWorthiness,
+      });
+    }
+
     // Validate category - AI sometimes returns labels (e.g. "promotional") as categories
     // normalizeCategory() always returns a valid category (never null)
     const rawCategory = rawData.category as string;
     const validatedCategory = EMAIL_CATEGORIES_SET.has(rawCategory)
       ? rawCategory as CategorizationData['category']
       : normalizeCategory(rawCategory) as CategorizationData['category'];
+
+    if (!EMAIL_CATEGORIES_SET.has(rawCategory)) {
+      logger.warn('AI returned invalid category — normalized', {
+        received: rawCategory,
+        normalized: validatedCategory,
+      });
+    }
 
     // Validate additional_categories (NEW Feb 2026)
     const rawAdditional = Array.isArray(rawData.additional_categories)

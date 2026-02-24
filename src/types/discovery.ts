@@ -834,4 +834,18 @@ export interface StoredSyncProgress {
   updatedAt: string;
   result?: InitialSyncResponse;
   error?: string;
+  /**
+   * Checkpoint data saved after each analysis batch completes.
+   * NEW (Feb 2026): Enables recovery from interrupted syncs.
+   * Already-analyzed emails are skipped on resume (analyzed_at is set per-email).
+   */
+  checkpoint?: {
+    batchNumber: number;
+    totalBatches: number;
+    emailsProcessed: number;
+    emailsTotal: number;
+    tokensUsed: number;
+    analyzedCount: number;
+    failedCount: number;
+  };
 }

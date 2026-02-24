@@ -435,6 +435,10 @@ export class InitialSyncOrchestrator {
 
   /**
    * Run AI analysis on emails in batches.
+   *
+   * ENHANCED (Feb 2026): Saves checkpoint after each batch so partial
+   * progress is preserved if the sync is interrupted mid-batch.
+   * Previously, an interruption would lose all batch progress.
    */
   private async analyzeEmails(
     emails: EmailForAnalysis[],
@@ -448,10 +452,13 @@ export class InitialSyncOrchestrator {
     logger.info('Starting AI analysis', {
       emailCount: totalToAnalyze,
       batchSize,
+      totalBatches: Math.ceil(totalToAnalyze / batchSize),
     });
 
-    // Process in batches
+    // Process in batches with checkpoint saving
     for (let i = 0; i < emails.length; i += batchSize) {
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(totalToAnalyze / batchSize);
       const batch = emails.slice(i, i + batchSize);
 
       // Update progress
@@ -466,16 +473,28 @@ export class InitialSyncOrchestrator {
         onProgress
       );
 
+      logger.debug('Processing batch', {
+        batchNumber,
+        totalBatches,
+        batchSize: batch.length,
+        processedSoFar: processed,
+        tokensUsedSoFar: this.stats.totalTokensUsed,
+      });
+
       // Process batch
       await this.processBatch(batch, clients);
 
       processed += batch.length;
+
+      // Save checkpoint after each batch so partial progress survives interruptions
+      await this.saveAnalysisCheckpoint(processed, totalToAnalyze, batchNumber, totalBatches);
     }
 
     logger.info('AI analysis complete', {
       analyzed: this.stats.analyzed,
       failed: this.failures.length,
       tokensUsed: this.stats.totalTokensUsed,
+      totalBatches: Math.ceil(totalToAnalyze / batchSize),
     });
   }
 
@@ -704,6 +723,58 @@ export class InitialSyncOrchestrator {
     if (error) {
       logger.warn('Failed to save sync progress', { error: error.message });
     }
+  }
+
+  /**
+   * Save a checkpoint after each analysis batch completes.
+   *
+   * NEW (Feb 2026): Ensures partial progress is preserved if the sync is
+   * interrupted mid-way through (e.g., timeout, server restart, network error).
+   * The checkpoint includes:
+   * - How many emails were processed vs total
+   * - Current batch number and token usage
+   * - Discovery counts (actions, events, clients found so far)
+   *
+   * On resume, already-analyzed emails will be skipped (analyzed_at is set
+   * per-email during processing), so only unfinished work gets retried.
+   */
+  private async saveAnalysisCheckpoint(
+    processed: number,
+    total: number,
+    batchNumber: number,
+    totalBatches: number
+  ): Promise<void> {
+    const baseProgress = 20;
+    const analysisProgress = 70;
+    const progress = baseProgress + Math.round((processed / total) * analysisProgress);
+
+    await this.saveSyncProgress({
+      status: 'in_progress',
+      progress,
+      currentStep: SYNC_STEP_MESSAGES.analyzing(processed, total),
+      discoveries: this.discoveries,
+      startedAt: new Date(Date.now() - this.stats.processingTimeMs).toISOString(),
+      updatedAt: new Date().toISOString(),
+      checkpoint: {
+        batchNumber,
+        totalBatches,
+        emailsProcessed: processed,
+        emailsTotal: total,
+        tokensUsed: this.stats.totalTokensUsed,
+        analyzedCount: this.analyzedEmails.length,
+        failedCount: this.failures.length,
+      },
+    });
+
+    logger.debug('Checkpoint saved', {
+      batchNumber,
+      totalBatches,
+      processed,
+      total,
+      tokensUsed: this.stats.totalTokensUsed,
+      analyzedCount: this.analyzedEmails.length,
+      failedCount: this.failures.length,
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────────────

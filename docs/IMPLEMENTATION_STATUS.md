@@ -17,7 +17,7 @@
 ### AI Analysis Pipeline
 - **12 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
   - Categorizer (12 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
-  - Content Digest (gist, key points, links)
+  - Content Digest (gist, key points, links, golden nuggets [7 types incl. remember_this + sales_opportunity], email style ideas)
   - Action Extractor (multi-action support, urgency scoring, tightened for real tasks with new types: pay, submit, register, book)
   - Client Tagger (fuzzy matching, relationship signals)
   - Date Extractor (deadlines, payments, birthdays, expirations)
@@ -28,7 +28,7 @@
   - **Idea Spark** (NEW Feb 2026): Generates 3 creative ideas per email by cross-referencing content with user context (role, interests, projects, family, location, season)
   - **Insight Extractor** (NEW Feb 2026): Synthesizes interesting ideas, tips, frameworks from newsletter/substantive content — "what's worth knowing"
   - **News Brief** (NEW Feb 2026): Extracts factual news items (launches, announcements, changes) from news/digest emails — "what happened"
-- Pre-filter system saves 20-30% AI tokens (skip no-reply, auto-categorize by domain)
+- Pre-filter system saves 20-30% AI tokens (relaxed SKIP_SENDER_PATTERNS, auto-categorize by domain)
 - Sender pattern learning for future auto-categorization
 - Two-phase execution (core in parallel, then conditional analyzers)
 - Signal strength + reply worthiness scoring for Hub priority (noise emails suppressed at 0.05x)
@@ -44,7 +44,7 @@
 - Sync locking to prevent concurrent syncs
 - History ID validation and stale detection
 - Historical metadata-only sync for contact enrichment
-- Initial sync orchestrator for onboarding
+- Initial sync orchestrator for onboarding (100 emails, 240s timeout, batch checkpoints for interruption recovery)
 
 ### Navigation & Pages
 
@@ -160,3 +160,4 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Insights & News | Feb 2026 | Two new Phase 2 analyzers: InsightExtractor (synthesizes ideas/tips/frameworks from newsletters, temp 0.4, gated on substantive content types) and NewsBrief (extracts factual news items, temp 0.2, gated on industry_news label or digest content). API routes (GET/POST/PATCH /api/insights, /api/news). useInsights + useNews hooks. InsightsCard + NewsBriefCard home widgets. InsightsFeed + NewsFeed full-page components. saved_insights + saved_news tables. Migration 034. |
 | Contact Onboarding Fix | Feb 2026 | Fixed 5 issues in contact onboarding flow: (1) VIP save failure now shows toast instead of failing silently, (2) MadLibsProfileStep reads VIPs directly from user_context.vip_emails instead of unnecessarily calling vip-suggestions endpoint, (3) email validation added to MadLibsField chip input, (4) context-aware empty state messaging in ContactImportStep, (5) OAuth return URL fixed to use explicit /onboarding path. |
 | Contact Onboarding UX | Feb 2026 | Fixed 3 bugs: (1) VIP suggestions returned 0 after fresh Google import (filter required email_count>=3 or starred, fresh imports have neither), (2) MadLibsProfileStep loading race (card rendered before VIPs loaded causing flash), (3) MadLibsField animate-pulse removed (replaced with static italic). Then replaced simple suggestion filter with 12-signal weighted scoring: Google starred/labels, same last name (family), same email domain (coworker), sent count, bidirectional communication, email frequency, recency, longevity, relationship type, sender type penalty, avatar presence. Badge shows top 2 reasons (e.g. "Starred + Possible family"). Works for both fresh imports and established accounts. |
+| Analyzer Refinement | Feb 2026 | Unified "right on top of that, Rose!" prompt voice across all analyzers. Added 2 new golden nugget types (remember_this, sales_opportunity) with max increased from 5→7. Multi-category display in inbox UI (secondary dots + badges). Initial sync increased 50→100 emails, relaxed SKIP_SENDER_PATTERNS (removed noreply/notifications/alerts), timeout 120s→240s. Batch checkpoints in initial sync orchestrator (checkpoint saved after each batch for interruption recovery). Fixed retry-analysis route to clear analysis_error before re-processing. Fixed single email analyze route to reset error state on force-reanalyze. Enhanced logging across categorizer, content-digest, insight-extractor (invalid value warnings, low-confidence alerts, failure details). Color-coded nugget badges in EmailDetail. Updated DECISIONS.md (#20-22), AI_ANALYZER_SYSTEM.md (nugget types, voice, checkpoints, re-analysis). |

@@ -124,6 +124,34 @@ export async function POST(request: NextRequest) {
     };
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // Clear previous error state so emails can be re-processed
+    // ─────────────────────────────────────────────────────────────────────────────
+    // FIXED (Feb 2026): Previously, emails with analysis_error set were permanently
+    // skipped by the email processor (skipAnalyzed default=true, and analysis_error
+    // being non-null was treated as "don't retry"). Now we clear both fields before
+    // re-processing so the pipeline treats them as fresh unanalyzed emails.
+    const emailIdsToReset = emails.map(e => e.id);
+    const { error: resetError } = await supabase
+      .from('emails')
+      .update({
+        analyzed_at: null,
+        analysis_error: null,
+      })
+      .in('id', emailIdsToReset);
+
+    if (resetError) {
+      logger.error('Failed to reset error state for retry', {
+        emailIds: emailIdsToReset,
+        error: resetError.message,
+      });
+      return apiError('Failed to reset emails for retry', 500);
+    }
+
+    logger.info('Cleared error state for retry', {
+      emailCount: emailIdsToReset.length,
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Process each email
     // ─────────────────────────────────────────────────────────────────────────────
     const results: RetryResult[] = [];
@@ -146,10 +174,16 @@ export async function POST(request: NextRequest) {
         logger.debug('Retrying analysis for email', {
           emailId: email.id,
           subject: email.subject?.substring(0, 50),
+          previousError: email.analysis_error,
+          hadAnalysis: !!email.analyzed_at,
         });
 
-        // Run analysis
-        const result = await emailProcessor.process(email as Email, context);
+        // Run analysis with skipAnalyzed=false since we want to re-process
+        const result = await emailProcessor.process(email as Email, context, {
+          skipAnalyzed: false,
+          saveToDatabase: true,
+          createActions: true,
+        });
 
         if (result.success) {
           succeeded++;
@@ -161,9 +195,10 @@ export async function POST(request: NextRequest) {
             tokensUsed: result.tokensUsed,
           });
 
-          logger.debug('Retry succeeded', {
+          logger.info('Retry succeeded', {
             emailId: email.id,
             category: result.analysis?.categorization?.category,
+            tokensUsed: result.tokensUsed,
           });
         } else {
           failed++;

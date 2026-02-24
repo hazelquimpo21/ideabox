@@ -1207,12 +1207,20 @@ export interface KeyPoint {
 /**
  * Type of golden nugget extracted from email content.
  * NEW (Feb 2026): Deals, tips, quotes, stats, and recommendations worth saving.
+ * ENHANCED (Feb 2026): Added remember_this and sales_opportunity types.
  */
-export type GoldenNuggetType = 'deal' | 'tip' | 'quote' | 'stat' | 'recommendation';
+export type GoldenNuggetType = 'deal' | 'tip' | 'quote' | 'stat' | 'recommendation' | 'remember_this' | 'sales_opportunity';
 
 /**
- * A golden nugget — a deal, tip, quote, stat, or recommendation found in an email.
- * These are the little treasures buried in emails that are easy to miss.
+ * All valid golden nugget types as a const array for function schema enums.
+ */
+export const GOLDEN_NUGGET_TYPES: GoldenNuggetType[] = [
+  'deal', 'tip', 'quote', 'stat', 'recommendation', 'remember_this', 'sales_opportunity',
+];
+
+/**
+ * A golden nugget — a deal, tip, quote, stat, recommendation, or notable detail
+ * found in an email. These are the little treasures buried in emails that are easy to miss.
  * NEW (Feb 2026)
  */
 export interface GoldenNugget {

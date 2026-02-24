@@ -17,6 +17,7 @@ import { EventDetailsCard } from './EventDetailsCard';
 import { ContentDigestSection } from './ContentDigestSection';
 import { DateExtractionSection } from './DateExtractionSection';
 import { createLogger } from '@/lib/utils/logger';
+import { cn } from '@/lib/utils/cn';
 import {
   X,
   Star,
@@ -194,6 +195,20 @@ function getSignalBadge(signal: string): { label: string; className: string } {
     case 'low': return { label: 'Low Signal', className: 'bg-gray-100 text-gray-600 border-gray-200' };
     case 'noise': return { label: 'Noise', className: 'bg-gray-50 text-gray-400 border-gray-100' };
     default: return { label: signal, className: 'bg-gray-100 text-gray-600 border-gray-200' };
+  }
+}
+
+/** Color coding for different golden nugget types */
+function getNuggetBadgeColor(type: string): string {
+  switch (type) {
+    case 'deal': return 'bg-green-50 text-green-700 border-green-200';
+    case 'tip': return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'quote': return 'bg-purple-50 text-purple-700 border-purple-200';
+    case 'stat': return 'bg-cyan-50 text-cyan-700 border-cyan-200';
+    case 'recommendation': return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'remember_this': return 'bg-rose-50 text-rose-700 border-rose-200';
+    case 'sales_opportunity': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    default: return 'bg-gray-50 text-gray-600 border-gray-200';
   }
 }
 
@@ -492,12 +507,15 @@ function AnalysisSummary({
           <ContentDigestSection digest={analysis.contentDigest} />
         )}
 
-        {/* Golden Nuggets — deals, tips, quotes, stats, recommendations (NEW Feb 2026) */}
+        {/* Golden Nuggets — deals, tips, quotes, stats, recommendations, remember_this, sales_opportunity (ENHANCED Feb 2026) */}
         {analysis?.contentDigest?.goldenNuggets && analysis.contentDigest.goldenNuggets.length > 0 && (
           <div className="pt-3 border-t">
             <div className="flex items-center gap-2 mb-2">
               <Gem className="h-4 w-4 text-yellow-500" />
               <span className="text-sm font-medium">Worth Remembering</span>
+              <span className="text-[10px] text-muted-foreground">
+                {analysis.contentDigest.goldenNuggets.length} nugget{analysis.contentDigest.goldenNuggets.length !== 1 ? 's' : ''}
+              </span>
             </div>
             <div className="space-y-1.5 pl-6">
               {analysis.contentDigest.goldenNuggets.map((nugget, index) => (
@@ -505,8 +523,8 @@ function AnalysisSummary({
                   key={index}
                   className="group flex items-start gap-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors"
                 >
-                  <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
-                    {nugget.type}
+                  <Badge variant="outline" className={cn('text-[10px] shrink-0 mt-0.5', getNuggetBadgeColor(nugget.type))}>
+                    {nugget.type.replace(/_/g, ' ')}
                   </Badge>
                   <p className="text-sm leading-snug flex-1">{nugget.nugget}</p>
                   <Button
@@ -515,13 +533,22 @@ function AnalysisSummary({
                     className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                     title="Save nugget"
                     onClick={() => {
+                      const nuggetTypeToIdeaType: Record<string, string> = {
+                        deal: 'shopping',
+                        tip: 'personal_growth',
+                        quote: 'content_creation',
+                        stat: 'business',
+                        recommendation: 'personal_growth',
+                        remember_this: 'business',
+                        sales_opportunity: 'business',
+                      };
                       fetch('/api/ideas', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           idea: nugget.nugget,
-                          ideaType: nugget.type === 'deal' ? 'shopping' : nugget.type === 'recommendation' ? 'personal_growth' : 'business',
-                          relevance: `Extracted ${nugget.type} from email`,
+                          ideaType: nuggetTypeToIdeaType[nugget.type] || 'business',
+                          relevance: `Extracted ${nugget.type.replace(/_/g, ' ')} from email`,
                           confidence: 0.8,
                           emailId: email.id,
                         }),
