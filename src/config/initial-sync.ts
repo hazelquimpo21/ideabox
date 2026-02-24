@@ -80,10 +80,6 @@ export const INITIAL_SYNC_CONFIG: InitialSyncConfig = {
 // =============================================================================
 
 /**
- * Email address patterns that should skip AI analysis.
- * These are typically automated senders with predictable content.
- */
-/**
  * Email address patterns that should skip AI analysis during initial sync pre-filter.
  *
  * REFINED (Feb 2026): Removed noreply@, notifications@, and alerts@ from skip list.
