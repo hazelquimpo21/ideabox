@@ -14,11 +14,13 @@ IdeaBox transforms email overwhelm into organized intelligence. It's an AI-power
 
 ## Solution
 AI-powered email processing system with specialized analyzers that:
-- **Categorize by life-bucket** (REFACTORED Jan 2026): 12 categories representing what part of life the email touches:
+- **Categorize by life-bucket** (REFACTORED Jan 2026, ENHANCED Feb 2026): 13 categories representing what part of life the email touches:
   - **Work & Business**: `clients` (active client work), `work` (professional/work)
   - **Family & Personal**: `family` (kids, school, health, appointments), `personal_friends_family`
   - **Life Admin**: `finance`, `travel`, `shopping`, `local` (community/events)
   - **Information**: `newsletters_creator`, `newsletters_industry`, `news_politics`, `product_updates`
+  - **Transient**: `notifications` (verification codes, OTPs, login alerts, password resets)
+  - Emails can have a primary category plus up to 2 additional categories, appearing in multiple inbox views
 - **Track client relationships**: Clients unified into contacts (`is_client` flag, `client_status`, `client_priority`)
 - **Extract actions**: Build dedicated to-do list from email content
 - **Save content**: URLs, tweet ideas, networking opportunities (future)

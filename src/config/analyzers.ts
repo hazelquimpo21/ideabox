@@ -68,6 +68,7 @@ export const EMAIL_CATEGORIES = [
   'clients',                       // Direct client correspondence, project work
   'work',                          // Team/internal, industry stuff, professional
   'personal_friends_family',       // Social, relationships, personal correspondence
+  'notifications',                 // Verification codes, OTPs, login alerts, password resets, system alerts
 ] as const;
 
 export type EmailCategory = typeof EMAIL_CATEGORIES[number];

@@ -38,7 +38,8 @@ export type EmailCategory =
   | 'newsletters_creator'           // Substacks, personal blogs, creator content
   | 'newsletters_industry'          // Tech/biz digests, industry roundups, curated content
   | 'news_politics'                 // News outlets, political updates
-  | 'product_updates';              // Tech products, SaaS tools, subscriptions you use
+  | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
+  | 'notifications';                // Verification codes, OTPs, login alerts, password resets, system alerts
 
 /**
  * Array of all valid email categories.
@@ -60,6 +61,7 @@ export const EMAIL_CATEGORIES: EmailCategory[] = [
   'newsletters_industry',
   'news_politics',
   'product_updates',
+  'notifications',
 ] as const;
 
 /**
@@ -289,6 +291,13 @@ export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
     bgColor: 'bg-indigo-50',
     description: 'Tech products and services you subscribe to',
   },
+  notifications: {
+    label: 'Notifications',
+    icon: '🔔',
+    color: 'text-gray-500',
+    bgColor: 'bg-gray-50',
+    description: 'Verification codes, login alerts, password resets, system notifications',
+  },
 };
 
 // =============================================================================
@@ -321,6 +330,7 @@ export const CATEGORY_SHORT_LABELS: Record<EmailCategory, string> = {
   newsletters_industry: 'Industry',
   news_politics: 'News',
   product_updates: 'Updates',
+  notifications: 'Alerts',
 };
 
 /**
@@ -340,6 +350,7 @@ export const CATEGORY_SHORT_LABELS_PLURAL: Record<EmailCategory, string> = {
   newsletters_industry: 'Industry',
   news_politics: 'News',
   product_updates: 'Updates',
+  notifications: 'Alerts',
 };
 
 /**
@@ -359,6 +370,7 @@ export const CATEGORY_ACCENT_COLORS: Record<EmailCategory, string> = {
   newsletters_industry: 'bg-cyan-500',
   news_politics: 'bg-slate-500',
   product_updates: 'bg-indigo-500',
+  notifications: 'bg-gray-400',
 };
 
 /**
@@ -379,6 +391,7 @@ export const CATEGORY_BADGE_COLORS: Record<EmailCategory, string> = {
   newsletters_industry: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300',
   news_politics: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300',
   product_updates: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300',
+  notifications: 'bg-gray-50 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400',
 };
 
 /**
@@ -398,6 +411,7 @@ export const CATEGORIES_DISPLAY_ORDER: EmailCategory[] = [
   'newsletters_industry',
   'news_politics',
   'product_updates',
+  'notifications',
 ];
 
 // =============================================================================

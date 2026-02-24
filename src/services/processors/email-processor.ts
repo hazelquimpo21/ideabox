@@ -2469,6 +2469,10 @@ export class EmailProcessor {
       // NEW Feb 2026: Signal strength and reply worthiness for fast filtering
       signal_strength: categorization.signalStrength || null,
       reply_worthiness: categorization.replyWorthiness || null,
+      // NEW Feb 2026: Additional categories for multi-bucket filtering
+      additional_categories: categorization.additionalCategories && categorization.additionalCategories.length > 0
+        ? categorization.additionalCategories
+        : null,
     };
 
     // Add content digest fields if available (NEW Jan 2026)

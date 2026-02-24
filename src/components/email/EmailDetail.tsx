@@ -49,6 +49,9 @@ import {
   Signal,
   Reply,
   ListChecks,
+  Gem,
+  Palette,
+  Bell,
 } from 'lucide-react';
 import type { Email, EmailCategory } from '@/types/database';
 
@@ -142,8 +145,15 @@ function getCategoryBadge(category: EmailCategory | null): {
     case 'travel':
       return { variant: 'outline', label: 'Travel', icon: <Calendar className="h-3 w-3" /> };
 
-    default:
-      return { variant: 'outline', label: category.replace(/_/g, ' '), icon: <Mail className="h-3 w-3" /> };
+    // Notifications & Alerts
+    case 'notifications':
+      return { variant: 'outline', label: 'Alert', icon: <Bell className="h-3 w-3" /> };
+
+    default: {
+      // Defensive fallback for any future categories not yet handled
+      const fallbackCategory = category as string;
+      return { variant: 'outline', label: fallbackCategory.replace(/_/g, ' '), icon: <Mail className="h-3 w-3" /> };
+    }
   }
 }
 
@@ -154,6 +164,10 @@ function getActionTypeIcon(actionType: string) {
     case 'create': return <FileEdit className="h-4 w-4" />;
     case 'schedule': return <CalendarClock className="h-4 w-4" />;
     case 'decide': return <HelpCircle className="h-4 w-4" />;
+    case 'pay': return <Mail className="h-4 w-4" />;
+    case 'submit': return <ExternalLink className="h-4 w-4" />;
+    case 'register': return <CheckCircle2 className="h-4 w-4" />;
+    case 'book': return <Calendar className="h-4 w-4" />;
     default: return <Target className="h-4 w-4" />;
   }
 }
@@ -415,6 +429,15 @@ function AnalysisSummary({
                 {getCategoryBadge(email.category).icon}
                 {email.category?.replace('_', ' ')}
               </Badge>
+              {/* Additional categories (NEW Feb 2026) */}
+              {analysis.categorization.additionalCategories && analysis.categorization.additionalCategories.length > 0 && (
+                analysis.categorization.additionalCategories.map((addCat, i) => (
+                  <Badge key={i} variant="outline" className="gap-1 text-[10px] border-dashed">
+                    {getCategoryBadge(addCat as EmailCategory).icon}
+                    {addCat.replace(/_/g, ' ')}
+                  </Badge>
+                ))
+              )}
               {analysis.categorization.signalStrength && (
                 <Badge variant="outline" className={`text-[10px] gap-1 ${getSignalBadge(analysis.categorization.signalStrength).className}`}>
                   <Signal className="h-3 w-3" />
@@ -467,6 +490,105 @@ function AnalysisSummary({
         {/* Content Digest — gist, key points, links */}
         {analysis?.contentDigest && analysis.contentDigest.gist && (
           <ContentDigestSection digest={analysis.contentDigest} />
+        )}
+
+        {/* Golden Nuggets — deals, tips, quotes, stats, recommendations (NEW Feb 2026) */}
+        {analysis?.contentDigest?.goldenNuggets && analysis.contentDigest.goldenNuggets.length > 0 && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <Gem className="h-4 w-4 text-yellow-500" />
+              <span className="text-sm font-medium">Worth Remembering</span>
+            </div>
+            <div className="space-y-1.5 pl-6">
+              {analysis.contentDigest.goldenNuggets.map((nugget, index) => (
+                <div
+                  key={index}
+                  className="group flex items-start gap-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
+                    {nugget.type}
+                  </Badge>
+                  <p className="text-sm leading-snug flex-1">{nugget.nugget}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    title="Save nugget"
+                    onClick={() => {
+                      fetch('/api/ideas', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          idea: nugget.nugget,
+                          ideaType: nugget.type === 'deal' ? 'shopping' : nugget.type === 'recommendation' ? 'personal_growth' : 'business',
+                          relevance: `Extracted ${nugget.type} from email`,
+                          confidence: 0.8,
+                          emailId: email.id,
+                        }),
+                      }).then(() => {
+                        logger.info('Golden nugget saved', { emailId: email.id.substring(0, 8), type: nugget.type });
+                      }).catch(err => {
+                        logger.error('Failed to save nugget', { error: err instanceof Error ? err.message : 'Unknown error' });
+                      });
+                    }}
+                  >
+                    <Bookmark className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Email Style Ideas — format/design ideas for solopreneurs (NEW Feb 2026) */}
+        {analysis?.contentDigest?.emailStyleIdeas && analysis.contentDigest.emailStyleIdeas.length > 0 && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <Palette className="h-4 w-4 text-pink-500" />
+              <span className="text-sm font-medium">Email Style Ideas</span>
+            </div>
+            <div className="space-y-2 pl-6">
+              {analysis.contentDigest.emailStyleIdeas.map((style, index) => (
+                <div
+                  key={index}
+                  className="group flex items-start gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5 bg-pink-50 text-pink-600 border-pink-200">
+                    {style.type.replace(/_/g, ' ')}
+                  </Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm leading-snug">{style.idea}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{style.whyItWorks}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    title="Save email style idea"
+                    onClick={() => {
+                      fetch('/api/ideas', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          idea: `${style.idea} — ${style.whyItWorks}`,
+                          ideaType: 'content_creation',
+                          relevance: `Email style idea (${style.type.replace(/_/g, ' ')}) from ${email.sender_name || email.sender_email}`,
+                          confidence: style.confidence,
+                          emailId: email.id,
+                        }),
+                      }).then(() => {
+                        logger.info('Email style idea saved', { emailId: email.id.substring(0, 8), type: style.type });
+                      }).catch(err => {
+                        logger.error('Failed to save style idea', { error: err instanceof Error ? err.message : 'Unknown error' });
+                      });
+                    }}
+                  >
+                    <Bookmark className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Action Extraction (supports multi-action array) */}

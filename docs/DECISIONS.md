@@ -73,9 +73,9 @@ Monthly: ~$9.00
 
 ### 2. Categories: Life-Bucket Design (REFACTORED Jan 2026)
 
-**Decision:** Single primary category per email, focused on "what part of life this email touches."
+**Decision:** Primary category per email, focused on "what part of life this email touches." Emails can also have up to 2 additional categories (Feb 2026).
 
-**Current Categories (12 life-buckets):**
+**Current Categories (13 life-buckets):**
 | Category | Description |
 |----------|-------------|
 | `clients` | Direct client correspondence, project work |
@@ -90,6 +90,7 @@ Monthly: ~$9.00
 | `newsletters_industry` | Industry newsletters, professional digests |
 | `news_politics` | News outlets, political updates |
 | `product_updates` | Tech products, SaaS tools you use |
+| `notifications` | Verification codes, OTPs, login alerts, password resets |
 
 **Legacy Categories (DEPRECATED):**
 | Old Category | Mapped To | Notes |
@@ -121,9 +122,10 @@ Monthly: ~$9.00
 **Schema Impact:**
 ```sql
 -- emails table
-category TEXT,           -- One of the 12 life-bucket categories
-client_id UUID,          -- relationship to clients table (NOT a category)
-topics TEXT[],           -- extracted topics for additional context
+category TEXT,                    -- One of the 13 life-bucket categories (primary)
+additional_categories TEXT[],     -- Up to 2 secondary categories (Feb 2026)
+client_id UUID,                   -- relationship to clients table (NOT a category)
+topics TEXT[],                    -- extracted topics for additional context
 
 -- CHECK constraint enforces valid category values (updated Feb 2026)
 CONSTRAINT emails_category_check CHECK (
@@ -131,7 +133,7 @@ CONSTRAINT emails_category_check CHECK (
     'clients', 'work', 'personal_friends_family', 'family',
     'finance', 'travel', 'shopping', 'local',
     'newsletters_creator', 'newsletters_industry',
-    'news_politics', 'product_updates')
+    'news_politics', 'product_updates', 'notifications')
 )
 ```
 
@@ -368,13 +370,16 @@ CREATE TABLE api_usage_logs (
 
 ### 13. Content Digest Analyzer (Jan 2026)
 
-**Decision:** Add a separate content digest analyzer that extracts gist, key points, and links.
+**Decision:** Add a separate content digest analyzer that extracts gist, key points, links, golden nuggets, and email style ideas.
 
 **Rationale:**
 - Different from `summary` (which is action-focused); `gist` is content-focused
 - Key points let users scan without reading
 - Link extraction with context (article, registration, document)
+- Golden nuggets capture deals, tips, quotes, stats worth remembering (Feb 2026)
+- Email style ideas capture design/format ideas for solopreneurs (Feb 2026)
 - Denormalized `gist` and `key_points` to emails table for fast list views
+- Golden nuggets and email style ideas stay in `email_analyses.content_digest` JSONB (only loaded in detail view)
 
 ---
 
