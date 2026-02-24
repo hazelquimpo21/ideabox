@@ -584,8 +584,10 @@ export class GooglePeopleService {
       return null;
     }
 
-    // Extract photo URL
-    const photoUrl = person.photos?.[0]?.url || null;
+    // Extract photo URL — skip default/placeholder silhouette photos.
+    // Google People API sets `default: true` on the generic silhouette avatar.
+    const firstPhoto = person.photos?.[0];
+    const photoUrl = firstPhoto && !firstPhoto.default ? firstPhoto.url || null : null;
 
     // Extract organization info
     const org = person.organizations?.[0];
