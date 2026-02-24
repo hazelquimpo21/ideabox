@@ -74,6 +74,9 @@ import type {
   ReplyWorthiness,
 } from './types';
 import { EMAIL_LABELS } from './types';
+import { createLogger } from '@/lib/utils/logger';
+
+const logger = createLogger('Categorizer');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -90,7 +93,7 @@ const FUNCTION_NAME = 'categorize_email';
  * This helps OpenAI understand when/how to use the function.
  */
 const FUNCTION_DESCRIPTION =
-  'Categorizes an email by what action (if any) is needed from the user';
+  'Categorizes an email by life bucket (what area of life it touches), signal strength, and reply worthiness';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
@@ -124,35 +127,37 @@ const QUICK_ACTIONS = [
  * 5. Suggest quick action for inbox triage
  * 6. Consider sender context, domain patterns, and content holistically
  */
-const BASE_SYSTEM_PROMPT = `You are an intelligent email organizer and relevance filter. Your job is to:
-1. Categorize emails into LIFE BUCKETS
-2. Assess SIGNAL STRENGTH (is this worth the user's time?)
-3. Assess REPLY WORTHINESS (should the user reply?)
-4. Detect NOISE patterns (sales pitches, fake awards, mass outreach)
+const BASE_SYSTEM_PROMPT = `You are a sharp, no-nonsense personal assistant who reads every email before the user does. Think of yourself as "right on top of that, Rose!" — you give the user exactly what they need to know and why, in the fewest words possible.
+
+Your job:
+1. Sort each email into a LIFE BUCKET (what part of their life does this touch?)
+2. Rate SIGNAL STRENGTH (is this worth their time?)
+3. Rate REPLY WORTHINESS (should they reply?)
+4. Sniff out NOISE (sales pitches, fake awards, mass outreach — protect their attention)
 
 ═══════════════════════════════════════════════════════════════════════════════
-THINK LIKE A PROTECTIVE ASSISTANT
+YOUR MINDSET: PROTECTIVE, SHARP, HUMAN
 ═══════════════════════════════════════════════════════════════════════════════
 
-You are a thoughtful assistant who PROTECTS the user's attention. Don't just
-categorize - evaluate whether this email deserves the user's time at all.
+You're not a robot classifier. You're the user's trusted assistant who knows
+their life, their priorities, and what actually matters. Before you categorize,
+think like a human:
 
-For EVERY email, ask yourself:
-- WHO sent this? (sender email, domain, name)
-- WHY would they be emailing? (genuine need vs. wanting something from user)
-- Is this a REAL PERSON writing specifically to the user, or a broadcast/template?
-- Does the user NEED to see this, or is it just inbox pollution?
-- If a reply is expected, is it worth the user's time to reply?
+- WHO is this from? (read the sender name, email, domain — infer the relationship)
+- WHAT do they want? (genuine need vs. someone wanting something from the user)
+- Is this a REAL PERSON or a machine? (broadcast, template, mass email?)
+- Would a smart assistant interrupt the user for this, or handle it quietly?
+- If a reply is expected, is it worth the user's valuable time?
 
-Use INFERENCE and CONTEXT CLUES:
+Use INFERENCE and CONTEXT CLUES — connect the dots:
 - noreply@kumon.com → Family (even without "your child")
-- Email from *.edu domain → likely school-related
-- "Congratulations! You've been selected..." from unknown sender → fake recognition noise
-- "Quick question" from unknown sender → likely cold sales outreach
+- *.edu domain → likely school-related
+- "Congratulations! You've been selected..." from stranger → fake recognition noise
+- "Quick question" from stranger → almost always cold sales
 - "I'd love to feature you..." from unknown PR person → mass outreach
 - Figma updates when user is a developer → Product Updates (tool they use)
 - LinkedIn message from potential client → Clients
-- Newsletter author whose content aligns with user's business → networking opportunity
+- Newsletter author in user's industry → networking opportunity
 
 ═══════════════════════════════════════════════════════════════════════════════
 SIGNAL STRENGTH (how important is this email?)
@@ -338,10 +343,39 @@ CATEGORIES (choose ONE primary life bucket)
   Examples: Friends reaching out, family messages, social invitations, personal news
   KEY: Personal relationships (not business, not logistics)
 
-IMPORTANT: Every email MUST be assigned to one of the 12 categories above. There is
+- notifications: Verification codes, OTPs, login alerts, password resets, 2FA,
+  system alerts, security notifications, ephemeral emails
+  Examples: "Your verification code is 482910", "New login from Chrome on Mac",
+  "Password reset requested", "Your 2FA code is 739201"
+  KEY: Glance-and-delete emails — no lasting value, just codes or alerts
+
+IMPORTANT: Every email MUST be assigned to one of the 13 categories above. There is
 NO "other" or "uncategorized" option. Pick the BEST FIT even if the match isn't
 perfect. Use your best judgment — lean toward personal_friends_family for personal
-content or product_updates for automated/system content.
+content, product_updates for automated/system content, or notifications for
+verification codes and ephemeral alerts.
+
+═══════════════════════════════════════════════════════════════════════════════
+ADDITIONAL CATEGORIES (0-2 secondary categories)
+═══════════════════════════════════════════════════════════════════════════════
+
+Emails often touch multiple areas of life. After choosing the PRIMARY category
+(the best single bucket), optionally pick up to 2 ADDITIONAL categories if
+the email genuinely belongs in multiple buckets. The email will appear under
+all its categories in the inbox.
+
+Examples:
+- Client invites you to a local dinner → primary: clients, additional: [local]
+- Family member's school newsletter about a community event → primary: family, additional: [local]
+- Finance newsletter with shopping deals → primary: newsletters_industry, additional: [finance, shopping]
+- Work colleague sharing a travel deal → primary: work, additional: [travel]
+- Newsletter about a product you use → primary: newsletters_creator, additional: [product_updates]
+
+Rules:
+- Only add additional categories when there's a GENUINE secondary bucket
+- Don't stretch it — "a newsletter mentioned money" is NOT finance
+- The primary category should be the DOMINANT theme
+- Additional categories should be clearly relevant, not tangential
 
 ═══════════════════════════════════════════════════════════════════════════════
 DISAMBIGUATION GUIDE
@@ -421,21 +455,28 @@ NOISE LABELS (apply when detected):
 - promotional: Deals, discounts, upsells
 
 ═══════════════════════════════════════════════════════════════════════════════
-SUMMARY (one sentence, assistant-style)
+SUMMARY (one punchy sentence — talk like a sharp assistant)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Write as if you're briefing the user. Be concise but informative.
-Include: who it's from, what they want/are saying, any deadline if mentioned.
-For noise emails, be blunt: "Sales pitch from [company] for their [product] - skip"
+Write like you're verbally briefing the user in 5 seconds. Be direct, specific,
+human. Drop the filler. Include: who, what they need, any deadline.
+For noise: be blunt and dismissive. Save the user's brainpower.
 
-GOOD EXAMPLES:
-- "Sarah from Acme Corp wants you to review the Q1 proposal by Friday"
-- "Your AWS bill for January is $142.67 - payment processed"
-- "Kumon reminder: homework packets due Monday"
-- "Sales pitch from DataCo trying to sell their analytics platform - skip"
-- "Fake award nomination from 'Business Leaders Awards' - wants $500 to attend gala"
-- "Cold outreach from SEO agency wanting to 'optimize your site' - mass email"
-- "Interesting Substack post from [author] on AI in healthcare - matches your interests"
+GOOD (punchy, specific, human):
+- "Sarah from Acme needs your eyes on the Q1 proposal by Friday"
+- "AWS bill: $142.67, up 12% from last month — auto-paid"
+- "Kumon homework packets due Monday"
+- "DataCo sales pitch — skip"
+- "Fake award from 'Business Leaders Awards' — pay-to-play, trash it"
+- "SEO agency cold email — mass blast, archive"
+- "Great Substack from [author] on AI in healthcare — worth a read, aligns with your interests"
+- "Mom sent weekend trip photos"
+- "Stripe receipt: $49/mo for Pro plan renewed"
+
+BAD (vague, robotic, wordy):
+- "This is an email from Sarah regarding project work"
+- "The sender has sent a newsletter about various topics"
+- "A financial transaction notification has been received"
 
 ═══════════════════════════════════════════════════════════════════════════════
 QUICK ACTION (for inbox triage)
@@ -597,6 +638,17 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         enum: QUICK_ACTIONS as unknown as string[],
         description: 'Suggested quick action: respond, review, archive, save, calendar, unsubscribe, follow_up, none',
       },
+
+      // Additional categories (NEW Feb 2026) — email shows in multiple inbox views
+      additional_categories: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: EMAIL_CATEGORIES as unknown as string[],
+        },
+        maxItems: 2,
+        description: 'Up to 2 additional categories if the email genuinely belongs in multiple life buckets. E.g., a client dinner invite = primary clients, additional [local]. Only include if truly relevant.',
+      },
     },
     required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action'],
   },
@@ -609,14 +661,14 @@ const FUNCTION_SCHEMA: FunctionSchema = {
 /**
  * Categorizer Analyzer
  *
- * Classifies emails into one of seven action-focused categories.
- * This analyzer runs first in the pipeline and helps determine
- * which other analyzers should process the email.
+ * Classifies emails into one of 12 life-bucket categories.
+ * This analyzer runs first in the pipeline and determines category,
+ * signal strength, reply worthiness, and which Phase 2 analyzers run.
  *
  * Key design decisions:
- * - Action-focused categories (not sender-based)
- * - "client" is NOT a category (tracked separately)
- * - Conservative: when unsure, prefers action_required
+ * - Life-bucket categories (what area of life, not what action)
+ * - 12 categories: clients, work, personal, family, finance, etc.
+ * - Signal strength gates Phase 2 analyzers (noise = skip)
  * - Extracts topics for filtering and search
  *
  * @example
@@ -652,7 +704,7 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
    * - enabled: Whether this analyzer runs
    * - model: AI model to use (gpt-4.1-mini)
    * - temperature: Response randomness (0.2 for consistency)
-   * - maxTokens: Maximum response tokens (300)
+   * - maxTokens: Maximum response tokens (600)
    */
   constructor() {
     super('Categorizer', analyzerConfig.categorizer);
@@ -691,7 +743,7 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
    *   bodyText: 'Receipt for your payment of $99.00...',
    * });
    *
-   * // result.data.category === 'admin'
+   * // result.data.category === 'finance'
    * // result.data.topics === ['billing', 'payment', 'receipt']
    * // result.data.summary === 'Stripe payment receipt for $99.00 - no action needed'
    * // result.data.quickAction === 'archive'
@@ -701,9 +753,6 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
     email: EmailInput,
     context?: UserContext
   ): Promise<CategorizationResult> {
-    // Note: context is not used by categorizer (unlike client tagger)
-    void context;
-
     // Use the base class executeAnalysis which handles all common logic:
     // - Logging
     // - API calls with retry
@@ -715,6 +764,19 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
     // (OpenAI returns snake_case, we use camelCase)
     if (result.success) {
       result.data = this.normalizeResponse(result.data as unknown as Record<string, unknown>);
+
+      logger.info('Email categorized', {
+        emailId: email.id,
+        category: result.data.category,
+        additionalCategories: result.data.additionalCategories ?? [],
+        signalStrength: result.data.signalStrength,
+        replyWorthiness: result.data.replyWorthiness,
+        quickAction: result.data.quickAction,
+        labelsCount: result.data.labels?.length ?? 0,
+        topicsCount: result.data.topics?.length ?? 0,
+        confidence: result.data.confidence,
+        summaryLength: result.data.summary?.length ?? 0,
+      });
     }
 
     return result;
@@ -762,6 +824,13 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
       ? rawCategory as CategorizationData['category']
       : normalizeCategory(rawCategory) as CategorizationData['category'];
 
+    // Validate additional_categories (NEW Feb 2026)
+    const rawAdditional = Array.isArray(rawData.additional_categories)
+      ? (rawData.additional_categories as string[])
+        .filter(c => EMAIL_CATEGORIES_SET.has(c) && c !== rawCategory)
+        .slice(0, 2) as CategorizationData['category'][]
+      : undefined;
+
     return {
       // Core categorization fields
       category: validatedCategory,
@@ -783,6 +852,9 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
 
       // Reply worthiness (NEW Feb 2026)
       replyWorthiness,
+
+      // Additional categories (NEW Feb 2026)
+      ...(rawAdditional && rawAdditional.length > 0 ? { additionalCategories: rawAdditional } : {}),
     };
   }
 
@@ -805,10 +877,10 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
    * Returns the system prompt for categorization.
    *
    * The prompt instructs the AI to:
-   * - Categorize by ACTION needed, not sender
-   * - Avoid using "client" as a category
+   * - Categorize by LIFE BUCKET (what area of the user's life)
+   * - Assess signal strength and reply worthiness
    * - Apply secondary labels for multi-dimensional filtering
-   * - Be conservative (prefer action_required when unsure)
+   * - Detect noise patterns (sales pitches, fake awards)
    * - Extract relevant topic keywords
    * - Be honest about confidence
    *

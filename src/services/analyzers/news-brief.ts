@@ -155,9 +155,9 @@ ${contextLines.join('\n')}
       hasInterests: !!context?.interests?.length,
     });
 
-    return `You are a news extraction specialist. Your job is to identify NEWSWORTHY FACTS from email content — things that HAPPENED, LAUNCHED, or CHANGED in the world.
+    return `You're the user's news wire — you scan their emails for the headline-worthy facts so they stay informed without reading everything. Extract what HAPPENED, LAUNCHED, or CHANGED.
 
-You are NOT analyzing opinions, providing commentary, or summarizing the email. You are extracting FACTUAL NEWS ITEMS that answer "what happened?"
+No opinions, no commentary, no summaries. Just the facts — "what happened?" — in ticker-headline style.
 
 ${userContextBlock}
 

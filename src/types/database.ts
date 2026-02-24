@@ -44,7 +44,8 @@ export type EmailCategory =
   | 'newsletters_creator'           // Substacks, personal blogs, creator content
   | 'newsletters_industry'          // Tech/biz digests, industry roundups
   | 'news_politics'                 // News outlets, political updates
-  | 'product_updates';              // Tech products, SaaS tools, subscriptions you use
+  | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
+  | 'notifications';                // Verification codes, OTPs, login alerts, password resets, system alerts
 
 /**
  * Action types that can be extracted from emails.
@@ -297,6 +298,8 @@ export interface Database {
           // Signal strength and reply worthiness (NEW Feb 2026)
           signal_strength: SignalStrengthDb | null;
           reply_worthiness: ReplyWorthinessDb | null;
+          // Additional categories for multi-bucket filtering (NEW Feb 2026)
+          additional_categories: string[] | null;
           // NOTE: urgency_score and relationship_signal are used in UI but have
           // no DB migration. They exist only in email_analyses JSONB. Reads from
           // the emails table will return null. A future migration should add these
@@ -344,6 +347,7 @@ export interface Database {
           key_points?: string[] | null;
           signal_strength?: SignalStrengthDb | null;
           reply_worthiness?: ReplyWorthinessDb | null;
+          additional_categories?: string[] | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           sync_type?: string;
@@ -384,6 +388,7 @@ export interface Database {
           key_points?: string[] | null;
           signal_strength?: SignalStrengthDb | null;
           reply_worthiness?: ReplyWorthinessDb | null;
+          additional_categories?: string[] | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           sync_type?: string;
@@ -1540,6 +1545,8 @@ export interface CategorizationJsonb {
   signal_strength?: SignalStrengthDb;
   /** Reply worthiness - should the user reply? (NEW Feb 2026) */
   reply_worthiness?: ReplyWorthinessDb;
+  /** Additional categories for multi-bucket filtering (NEW Feb 2026) */
+  additional_categories?: string[];
 }
 
 /**

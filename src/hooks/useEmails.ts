@@ -344,10 +344,11 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
 
       // Category filtering
       // "clients" is a special filter that checks for non-null contact_id
+      // NEW Feb 2026: Also matches emails with this category in additional_categories
       if (category === 'clients') {
         query = query.not('contact_id', 'is', null);
       } else if (category !== 'all') {
-        query = query.eq('category', category);
+        query = query.or(`category.eq.${category},additional_categories.cs.{${category}}`);
       }
 
       // Quick action filtering (NEW Jan 2026)
@@ -554,7 +555,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       if (category === 'clients') {
         query = query.not('contact_id', 'is', null);
       } else if (category !== 'all') {
-        query = query.eq('category', category);
+        query = query.or(`category.eq.${category},additional_categories.cs.{${category}}`);
       }
 
       // Quick action filtering (NEW Jan 2026)

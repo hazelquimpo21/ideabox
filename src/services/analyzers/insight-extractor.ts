@@ -169,9 +169,9 @@ ${contextLines.join('\n')}
       });
     }
 
-    return `You are an insight extraction specialist. Your job is to synthesize the most interesting IDEAS, TIPS, FRAMEWORKS, and OBSERVATIONS from email content.
+    return `You're the user's intellectual sieve — you read their emails and pull out the gems worth remembering. Not summaries (another system handles that), but the IDEAS, TIPS, FRAMEWORKS, and OBSERVATIONS that deserve a notebook entry or a share with a colleague.
 
-You are NOT summarizing the email (that's already done by another system). You are identifying the IDEAS WORTH REMEMBERING — the kind of thing someone would highlight in a newsletter, write in a notebook, or share with a colleague.
+Think: "what would I highlight if I were reading this for a smart friend?"
 
 ${userContextBlock}
 

@@ -31,8 +31,9 @@
 
 ### Email Sync
 ```
-Cron/Push → Gmail API → Save raw emails → EmailProcessor → 12 Analyzers (2-phase)
-  → Save analysis JSONB → Denormalize to emails table → Extract actions → Update contacts
+Cron/Push → Gmail API → Save raw emails → EmailProcessor → 13 Analyzers (2-phase)
+  → Save analysis JSONB → Denormalize to emails table (gist, key_points, summary, category, additional_categories, signal_strength, reply_worthiness)
+  → Extract actions → Update contacts
 ```
 
 ### Google Contacts Import (Onboarding)
@@ -152,7 +153,7 @@ src/
     dev/                        # Development utilities
 
   services/
-    analyzers/                  # 12 AI analyzers (Phase 1 parallel + Phase 2 conditional)
+    analyzers/                  # 13 AI analyzers (Phase 1 parallel + Phase 2 conditional)
       base-analyzer.ts          # Abstract base class
       categorizer.ts            # Life-bucket classification + signal + reply worthiness
       action-extractor.ts       # Action item extraction (multi-action)
@@ -160,7 +161,7 @@ src/
       event-detector.ts         # Single event extraction
       multi-event-detector.ts   # Up to 10 events per email (NEW Feb 2026)
       date-extractor.ts         # Timeline date extraction
-      content-digest.ts         # Email summary + key points + links
+      content-digest.ts         # Email summary + key points + links + golden nuggets + email style ideas
       contact-enricher.ts       # Contact metadata extraction
       sender-type-detector.ts   # Direct vs broadcast classification
       idea-spark.ts             # Creative ideas from emails (NEW Feb 2026)

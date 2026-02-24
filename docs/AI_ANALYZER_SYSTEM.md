@@ -136,19 +136,20 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 
 ### 1. Categorizer Analyzer (ENHANCED Jan 2026, Feb 2026)
 
-**Purpose:** Classify email + assess signal quality + determine reply worthiness + detect noise + generate summary + suggest quick action
+**Purpose:** Classify email into life buckets + assess signal quality + determine reply worthiness + detect noise + generate punchy summary + suggest quick action + assign additional categories
 
-> **IMPORTANT:** "client" is NOT a category. Client relationship is tracked via `contact_id` in the database.
-> This design allows a client email to be categorized into a life-bucket category (e.g., `clients`) rather than hidden in a generic "client" bucket.
+> **TONE (Feb 2026):** The categorizer now speaks like a sharp personal assistant — "right on top of that, Rose!" Summaries are punchy and human, not robotic.
 
 **ENHANCED (Jan 2026):** Added `summary` and `quick_action` fields.
 
-**ENHANCED (Feb 2026):** Added signal strength, reply worthiness, and noise detection:
+**ENHANCED (Feb 2026):**
 - `signal_strength`: How important is this email? (high/medium/low/noise)
 - `reply_worthiness`: Should the user reply? (must_reply/should_reply/optional_reply/no_reply)
 - `labels` now include noise-type labels: `sales_pitch`, `webinar_invite`, `fake_recognition`, `mass_outreach`, `promotional`
-- Prompt overhauled with "think like a protective assistant" framing
-- Blunt summaries for noise emails (e.g., "Sales pitch from DataCo - skip")
+- `additional_categories`: Up to 2 secondary life buckets (email appears in multiple inbox views)
+- `notifications` category: Verification codes, OTPs, login alerts, password resets
+- Prompt voice: "sharp, no-nonsense personal assistant" — blunt summaries, protective of user's attention
+- 13 categories total (12 original + notifications)
 
 **Function Schema:**
 ```typescript
@@ -161,11 +162,12 @@ async analyze(email: Email): Promise<AnalyzerResult> {
       category: {
         type: 'string',
         enum: [
-          // LIFE-BUCKET CATEGORIES (12 values)
+          // LIFE-BUCKET CATEGORIES (13 values, including notifications)
           'clients', 'work',
           'family', 'personal_friends_family',
           'finance', 'travel', 'shopping', 'local',
           'newsletters_creator', 'newsletters_industry', 'news_politics', 'product_updates',
+          'notifications',
         ],
         description: 'Primary life-bucket category',
       },
@@ -229,6 +231,12 @@ async analyze(email: Email): Promise<AnalyzerResult> {
         type: 'string',
         enum: ['respond', 'review', 'archive', 'save', 'calendar', 'unsubscribe', 'follow_up', 'none'],
         description: 'Suggested quick action for inbox triage',
+      },
+      additional_categories: {
+        type: 'array',
+        items: { type: 'string', enum: ['clients', 'work', 'family', 'personal_friends_family', 'finance', 'travel', 'shopping', 'local', 'newsletters_creator', 'newsletters_industry', 'news_politics', 'product_updates', 'notifications'] },
+        maxItems: 2,
+        description: 'Up to 2 secondary life-bucket categories. Email appears under these categories in addition to the primary. Only include when genuinely relevant.',
       },
     },
     required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action'],
@@ -390,19 +398,27 @@ For urgency scoring:
 
 ---
 
-### 2b. Content Digest Analyzer (NEW Jan 2026)
+### 2b. Content Digest Analyzer (NEW Jan 2026, ENHANCED Feb 2026)
 
-**Purpose:** Extract the SUBSTANCE of an email - what it's actually about, key points, and notable links
+**Purpose:** Extract the SUBSTANCE of an email - what it's actually about, key points, notable links, golden nuggets, and email style ideas
 
-> Think of this as having an eager assistant read every email and brief you on what you need to know - without reading it yourself.
+> Think of this as having a sharp assistant read every email and brief you on what you need to know — plus flagging deals, tips, and design ideas worth saving.
 
 **Runs:** Always (PHASE 1, parallel with core analyzers)
+
+**ENHANCED (Feb 2026):**
+- **Golden Nuggets**: Deals, discount codes, tips, stats, quotes, recommendations — things worth remembering buried in emails
+- **Email Style Ideas**: For solopreneurs — capture layout, subject line, tone, CTA, visual, storytelling, and personalization ideas from emails you admire
+- **Notification handling**: Verification codes, OTPs, login alerts get minimal extraction (gist + content_type only)
+- Prompt voice: "sharp, no-nonsense personal assistant" — punchy gists, no filler
 
 **What It Extracts:**
 - **Gist**: 1-2 sentence conversational briefing (like an assistant telling you what the email is about)
 - **Key Points**: 2-5 specific, scannable bullet points with real details (names, dates, numbers)
 - **Links**: Notable URLs with type and context (filtered for value, not tracking pixels)
 - **Content Type**: single_topic, multi_topic_digest, curated_links, personal_update, transactional
+- **Golden Nuggets** (NEW Feb 2026): Up to 5 nuggets — deals, tips, quotes, stats, recommendations
+- **Email Style Ideas** (NEW Feb 2026): Up to 3 ideas — layout, subject_line, tone, cta, visual, storytelling, personalization
 
 **Function Schema:**
 ```typescript
@@ -453,6 +469,34 @@ For urgency scoring:
         items: { type: 'string' },
         description: 'For newsletters: which topics match user interests',
       },
+      golden_nuggets: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            nugget: { type: 'string', description: 'The nugget itself — a deal, tip, quote, stat, or recommendation' },
+            type: { type: 'string', enum: ['deal', 'tip', 'quote', 'stat', 'recommendation'] },
+          },
+          required: ['nugget', 'type'],
+        },
+        maxItems: 5,
+        description: 'Deals, tips, quotes, stats, recommendations worth saving. Only include genuinely useful nuggets.',
+      },
+      email_style_ideas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            idea: { type: 'string', description: 'Specific design/style idea from this email' },
+            type: { type: 'string', enum: ['layout', 'subject_line', 'tone', 'cta', 'visual', 'storytelling', 'personalization'] },
+            why_it_works: { type: 'string', description: 'Why this technique is effective' },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
+          },
+          required: ['idea', 'type', 'why_it_works', 'confidence'],
+        },
+        maxItems: 3,
+        description: 'Email format/style ideas for solopreneurs. Only flag genuinely creative or effective techniques.',
+      },
       confidence: { type: 'number', minimum: 0, maximum: 1 },
     },
     required: ['gist', 'key_points', 'links', 'content_type', 'confidence'],
@@ -467,6 +511,22 @@ For urgency scoring:
 | Product Update | "Figma shipped auto-layout 5.0 - text wrapping finally works, plus min/max widths. Rolling out this week." | ["Text wrapping in auto-layout frames", "New min/max width properties", "Rolling out Monday Jan 27"] |
 | Newsletter | "Today's Morning Brew covers the Fed rate decision, Apple's AI features, and Costco's hot dog strategy." | [{"point": "Fed held rates at 5.25%"}, {"point": "Apple Intelligence in iOS 18.4", "relevance": "Matches your AI interest"}] |
 | Client Email | "Sarah from Acme is checking in about Q1 proposal - needs review by Friday and wants to schedule a call." | ["Review proposal by Friday", "Schedule call next week"] |
+| Notification | "Your verification code for Slack is 847291." | (minimal — gist only, no key_points or nuggets for ephemeral emails) |
+
+**Golden Nugget Examples:**
+
+| Email Type | Nugget | Type |
+|------------|--------|------|
+| Shopping email | "Code SPRING25 for 25% off through March 1" | deal |
+| Newsletter | "Companies using RAG see 40% fewer hallucinations than fine-tuning" | stat |
+| Industry digest | "Ship the MVP before the pitch deck — investors fund traction, not slides" | tip |
+
+**Email Style Idea Examples:**
+
+| Email Type | Idea | Type | Why It Works |
+|------------|------|------|--------------|
+| Brand newsletter | "Opens with a single provocative question as the entire first section" | storytelling | "Creates immediate curiosity and makes reader feel personally addressed" |
+| Influencer email | "Uses a PS line with a casual, personal ask unrelated to the main CTA" | personalization | "Breaks the marketing pattern and feels like a real human wrote it" |
 
 **Relationship with EventDetector:**
 For event emails, BOTH run:
@@ -1485,12 +1545,15 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │  │  │ email_analyses (JSONB)  │              │    extracted_dates      │            │  │
 │  │  │                         │              │                         │            │  │
 │  │  │ - categorization        │              │ DateExtractor results:  │            │  │
-│  │  │ - content_digest (NEW)  │              │ - deadlines, payments   │            │  │
-│  │  │ - action_extraction     │              │                         │            │  │
-│  │  │   (now multi-action!)   │              │ EventDetector results:  │            │  │
-│  │  │ - client_tagging        │              │ - date_type: 'event'    │            │  │
-│  │  │ - event_detection       │              │ - event_metadata        │            │  │
-│  │  │ - idea_sparks (NEW)     │              │                         │            │  │
+│  │  │   + additional_categories│              │ - deadlines, payments   │            │  │
+│  │  │ - content_digest        │              │                         │            │  │
+│  │  │   + golden_nuggets (NEW)│              │ EventDetector results:  │            │  │
+│  │  │   + email_style_ideas   │              │ - date_type: 'event'    │            │  │
+│  │  │ - action_extraction     │              │ - event_metadata        │            │  │
+│  │  │   (now multi-action!)   │              │                         │            │  │
+│  │  │ - client_tagging        │              │                         │            │  │
+│  │  │ - event_detection       │              │                         │            │  │
+│  │  │ - idea_sparks           │              │                         │            │  │
 │  │  └─────────────────────────┘              └─────────────────────────┘            │  │
 │  │                                                                                   │  │
 │  │  ┌─────────────────────────┐                                                     │  │
@@ -1500,8 +1563,9 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │  │  │ + key_points            │                                                     │  │
 │  │  │ + summary               │                                                     │  │
 │  │  │ + category, labels      │                                                     │  │
-│  │  │ + signal_strength (NEW) │   ← Hub priority scoring + noise filtering          │  │
-│  │  │ + reply_worthiness (NEW)│                                                     │  │
+│  │  │ + additional_categories │   ← Multi-category inbox filtering (NEW Feb 2026)   │  │
+│  │  │ + signal_strength       │   ← Hub priority scoring + noise filtering          │  │
+│  │  │ + reply_worthiness      │                                                     │  │
 │  │  └─────────────────────────┘                                                     │  │
 │  └───────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                          │

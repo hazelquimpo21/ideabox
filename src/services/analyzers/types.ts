@@ -524,6 +524,20 @@ export interface CategorizationData {
    * - 'no_reply': No reply expected or useful
    */
   replyWorthiness: ReplyWorthiness;
+
+  /**
+   * Additional categories this email could also belong to.
+   * NEW (Feb 2026): Emails often touch multiple life areas.
+   *
+   * Examples:
+   * - A client email about a dinner → primary: 'clients', additional: ['local']
+   * - A family member's school newsletter → primary: 'family', additional: ['local']
+   * - A finance newsletter with shopping deals → primary: 'newsletters_industry', additional: ['finance', 'shopping']
+   *
+   * Maximum 2 additional categories. Only include if genuinely relevant.
+   * The email will show up in inbox views for ALL its categories.
+   */
+  additionalCategories?: EmailCategory[];
 }
 
 /**
@@ -1191,19 +1205,62 @@ export interface KeyPoint {
 }
 
 /**
+ * Type of golden nugget extracted from email content.
+ * NEW (Feb 2026): Deals, tips, quotes, stats, and recommendations worth saving.
+ */
+export type GoldenNuggetType = 'deal' | 'tip' | 'quote' | 'stat' | 'recommendation';
+
+/**
+ * A golden nugget — a deal, tip, quote, stat, or recommendation found in an email.
+ * These are the little treasures buried in emails that are easy to miss.
+ * NEW (Feb 2026)
+ */
+export interface GoldenNugget {
+  /** The nugget text — a deal code, tip, memorable quote, stat, or recommendation */
+  nugget: string;
+  /** Type of nugget */
+  type: GoldenNuggetType;
+}
+
+/**
+ * Type of email style idea captured from an email's format/design.
+ * NEW (Feb 2026): For solopreneurs who want to save ideas about
+ * email formatting, layout, tone, or design from influencers and brands.
+ */
+export type EmailStyleIdeaType = 'layout' | 'subject_line' | 'tone' | 'cta' | 'visual' | 'storytelling' | 'personalization';
+
+/**
+ * An email style idea — something about HOW the email was written/designed
+ * that the user might want to emulate in their own emails.
+ * NEW (Feb 2026)
+ */
+export interface EmailStyleIdea {
+  /** What's notable about this email's style */
+  idea: string;
+  /** What aspect of the email design this covers */
+  type: EmailStyleIdeaType;
+  /** Why this is effective or worth noting */
+  whyItWorks: string;
+  /** Confidence this is genuinely worth noting (0-1) */
+  confidence: number;
+}
+
+/**
  * Result data from the content digest analyzer.
  *
  * This analyzer extracts the SUBSTANCE of an email:
  * - What is this email actually about? (gist)
  * - What are the key takeaways? (keyPoints)
  * - What links are worth knowing about? (links)
+ * - What golden nuggets are buried in here? (deals, tips, quotes, stats)
  *
- * Think of this as having an eager assistant read the email and brief you.
+ * Think of this as having a sharp personal assistant read the email and brief you.
  *
  * DESIGN PHILOSOPHY:
- * - Gist is conversational: "Figma shipped auto-layout 5.0..."
+ * - Gist is punchy and human: "Figma shipped auto-layout 5.0..."
  * - Key points are specific: include names, dates, numbers, not vague summaries
  * - Links are filtered: only include ones worth clicking, not tracking pixels
+ * - Golden nuggets: deals, tips, quotes, stats, recommendations worth saving
  * - For newsletters: highlight items matching user interests
  */
 export interface ContentDigestData {
@@ -1268,6 +1325,28 @@ export interface ContentDigestData {
    * Example: ["AI", "TypeScript"] when user has those interests.
    */
   topicsHighlighted?: string[];
+
+  /**
+   * Golden nuggets — deals, tips, quotes, stats, recommendations worth saving.
+   * NEW (Feb 2026): The little treasures buried in emails.
+   *
+   * Examples:
+   * - { nugget: "Code SAVE20 for 20% off, expires March 1", type: "deal" }
+   * - { nugget: "Use Cmd+K to search across all Figma files", type: "tip" }
+   * - { nugget: "Average open rate for tech newsletters is 38%", type: "stat" }
+   */
+  goldenNuggets?: GoldenNugget[];
+
+  /**
+   * Email style ideas — notable aspects of HOW this email was written/designed.
+   * NEW (Feb 2026): For solopreneurs who admire certain email formats.
+   *
+   * Only populated for newsletters and branded emails worth learning from.
+   * Examples:
+   * - { idea: "Uses a single compelling question as subject line", type: "subject_line" }
+   * - { idea: "Opens with a personal story before the pitch", type: "storytelling" }
+   */
+  emailStyleIdeas?: EmailStyleIdea[];
 
   /**
    * Confidence in the content extraction (0-1).

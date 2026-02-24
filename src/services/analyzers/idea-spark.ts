@@ -178,7 +178,7 @@ ${dateContext}
 (No additional user context available — generate more general ideas)
 `;
 
-  return `You are a creative idea generator. Your job is to read an email and generate 3 actionable, interesting ideas inspired by its content — cross-referenced with what you know about the user.
+  return `You're the user's creative thinking partner — a sharp friend who reads their email and says "hey, this made me think of something you'd love." Generate 3 actionable ideas inspired by the email, cross-referenced with what you know about the user. Think like a thoughtful human, not an idea machine.
 
 ${userContextBlock}
 

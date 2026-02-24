@@ -40,6 +40,8 @@ export interface CategorizationResult {
   signalStrength?: 'high' | 'medium' | 'low' | 'noise';
   replyWorthiness?: 'must_reply' | 'should_reply' | 'optional_reply' | 'no_reply';
   labels?: string[];
+  /** Additional categories for multi-bucket filtering (NEW Feb 2026) */
+  additionalCategories?: string[];
 }
 
 /**
@@ -184,6 +186,10 @@ export interface ContentDigestResult {
   }[];
   contentType: string;
   topicsHighlighted?: string[];
+  /** Golden nuggets — deals, tips, quotes, stats, recommendations (NEW Feb 2026) */
+  goldenNuggets?: { nugget: string; type: string }[];
+  /** Email style ideas — format/design observations for solopreneurs (NEW Feb 2026) */
+  emailStyleIdeas?: { idea: string; type: string; whyItWorks: string; confidence: number }[];
   confidence: number;
 }
 
@@ -279,6 +285,7 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       signalStrength: ((cat.signal_strength as string) || (cat.signalStrength as string) || undefined) as CategorizationResult['signalStrength'],
       replyWorthiness: ((cat.reply_worthiness as string) || (cat.replyWorthiness as string) || undefined) as CategorizationResult['replyWorthiness'],
       labels: (cat.labels as string[]) || undefined,
+      additionalCategories: (cat.additional_categories as string[]) || (cat.additionalCategories as string[]) || undefined,
     };
   }
 
@@ -359,6 +366,26 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
     const digest = (raw.contentDigest || (raw as Record<string, unknown>).content_digest) as Record<string, unknown>;
     const rawKeyPoints = (digest.key_points as Array<Record<string, unknown>>) || (digest.keyPoints as Array<Record<string, unknown>>) || [];
     const rawLinks = (digest.links as Array<Record<string, unknown>>) || [];
+    // Normalize golden nuggets (NEW Feb 2026)
+    const rawNuggets = (digest.golden_nuggets as Array<Record<string, unknown>>) || (digest.goldenNuggets as Array<Record<string, unknown>>) || [];
+    const goldenNuggets = rawNuggets.length > 0
+      ? rawNuggets.map(n => ({
+          nugget: (n.nugget as string) || '',
+          type: (n.type as string) || 'tip',
+        }))
+      : undefined;
+
+    // Normalize email style ideas (NEW Feb 2026)
+    const rawStyleIdeas = (digest.email_style_ideas as Array<Record<string, unknown>>) || (digest.emailStyleIdeas as Array<Record<string, unknown>>) || [];
+    const emailStyleIdeas = rawStyleIdeas.length > 0
+      ? rawStyleIdeas.map(s => ({
+          idea: (s.idea as string) || '',
+          type: (s.type as string) || 'tone',
+          whyItWorks: (s.why_it_works as string) || (s.whyItWorks as string) || '',
+          confidence: (s.confidence as number) || 0.5,
+        }))
+      : undefined;
+
     normalized.contentDigest = {
       gist: (digest.gist as string) || '',
       keyPoints: rawKeyPoints.map(kp => ({
@@ -374,6 +401,8 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       })),
       contentType: (digest.content_type as string) || (digest.contentType as string) || 'single_topic',
       topicsHighlighted: (digest.topics_highlighted as string[]) || (digest.topicsHighlighted as string[]) || undefined,
+      goldenNuggets,
+      emailStyleIdeas,
       confidence: (digest.confidence as number) || 0,
     };
   }

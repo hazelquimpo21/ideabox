@@ -74,6 +74,10 @@ import type {
   ContentType,
   KeyPoint,
   ExtractedLink,
+  GoldenNugget,
+  GoldenNuggetType,
+  EmailStyleIdea,
+  EmailStyleIdeaType,
 } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -127,24 +131,27 @@ const CONTENT_TYPES: ContentType[] = [
  * Base system prompt for content digest extraction.
  * Additional user context (interests) is appended dynamically.
  */
-const BASE_SYSTEM_PROMPT = `You are a helpful assistant briefing a busy professional on their emails. Your job is to read the email and tell them:
-1. What is this email actually ABOUT? (the gist)
-2. What are the KEY POINTS they need to know? (specific details)
-3. What LINKS are worth knowing about? (filtered for value)
+const BASE_SYSTEM_PROMPT = `You are the user's sharp personal assistant. You read every email so they don't have to. Brief them like you'd brief a busy CEO walking between meetings — give them the juice, skip the filler.
+
+Your job:
+1. What's the GIST? (tell them in 1-2 punchy sentences)
+2. What are the KEY POINTS? (the specific stuff that matters)
+3. What LINKS are worth their click? (filtered for value)
+4. Any GOLDEN NUGGETS? (deals, discount codes, tips, quotable lines, things worth remembering)
 
 ═══════════════════════════════════════════════════════════════════════════════
-GIST (1-2 sentences, conversational)
+GIST (1-2 sentences — talk like a human, not a bot)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Write as if you're verbally briefing someone. Be specific and natural.
+Write like you're telling a friend. Be specific, punchy, natural. Drop corporate filler.
 
 GOOD EXAMPLES:
-- "Figma shipped auto-layout 5.0 - the big thing is text wrapping finally works properly, plus you can set min/max widths on frames. Rolling out to everyone this week."
-- "Today's Morning Brew covers the Fed rate decision (holding steady), Apple's new AI features coming in iOS 18.4, and a deep dive on why Costco's $1.50 hot dog is actually genius."
-- "Sarah from Acme is checking in about the Q1 proposal - she needs it reviewed by Friday and wants to know your availability for a call next week."
-- "Your AWS bill for January: $142.67, up 12% from last month. Payment processed automatically."
+- "Figma shipped auto-layout 5.0 — text wrapping finally works, plus min/max widths on frames. Rolling out this week."
+- "Morning Brew today: Fed held rates, Apple's AI features in iOS 18.4, and a great deep dive on why Costco's $1.50 hot dog is genius."
+- "Sarah from Acme needs the Q1 proposal reviewed by Friday and wants to schedule a call next week."
+- "AWS bill: $142.67, up 12% from last month. Auto-paid."
 
-BAD EXAMPLES (too vague):
+BAD EXAMPLES (too vague, robotic):
 - "Product update from Figma"
 - "Newsletter with multiple stories"
 - "Email about project work"
@@ -214,6 +221,60 @@ Classify the email structure:
 - curated_links: Link roundup, reading list, resource collection
 - personal_update: Personal correspondence, life update from friend/family
 - transactional: Receipt, confirmation, notification, automated
+
+═══════════════════════════════════════════════════════════════════════════════
+GOLDEN NUGGETS (deals, tips, things worth remembering)
+═══════════════════════════════════════════════════════════════════════════════
+
+Scan for things the user might want to SAVE or REMEMBER — the little treasures
+buried in emails that are easy to miss:
+
+- DEALS & DISCOUNTS: Promo codes, sale dates, limited-time offers, price drops
+  E.g., "Code SAVE20 for 20% off, expires March 1"
+- TIPS & ADVICE: Practical tips, how-tos, best practices mentioned in passing
+  E.g., "Pro tip: use Cmd+K to search across all Figma files"
+- QUOTES & LINES: Memorable quotes, funny lines, or wisdom worth saving
+  E.g., "'The best time to plant a tree was 20 years ago. The second best is now.'"
+- NUMBERS & STATS: Interesting data points, benchmarks, or metrics
+  E.g., "Average open rate for newsletters in tech is 38%"
+- RECOMMENDATIONS: Products, books, tools, restaurants, or services recommended
+  E.g., "Highly recommends 'Shape Up' by Basecamp for product teams"
+
+Only include nuggets that are genuinely useful or memorable. Skip generic stuff.
+Each nugget should have a type and a short description.
+
+═══════════════════════════════════════════════════════════════════════════════
+EMAIL STYLE IDEAS (only for well-crafted newsletters/brand emails)
+═══════════════════════════════════════════════════════════════════════════════
+
+For NEWSLETTERS and BRAND EMAILS that are well-designed, note what a
+solopreneur could learn from the email's format, design, and approach:
+
+- LAYOUT: How the email is structured (sections, hierarchy, whitespace)
+- SUBJECT LINE: What made the subject line effective or attention-grabbing
+- TONE: The voice and style (casual authority, friendly expert, etc.)
+- CTA: How the call-to-action was crafted
+- VISUAL: Design elements, imagery, branding
+- STORYTELLING: How the email uses narrative to engage
+- PERSONALIZATION: How it feels personal despite being mass-sent
+
+Only include style ideas for emails that are genuinely well-crafted.
+Skip for personal emails, transactional emails, plain text emails, etc.
+
+═══════════════════════════════════════════════════════════════════════════════
+NOTIFICATION / VERIFICATION / EPHEMERAL EMAILS
+═══════════════════════════════════════════════════════════════════════════════
+
+For emails that are just notifications, verification codes, OTPs, password
+resets, login alerts, or other ephemeral/disposable emails:
+- Keep the gist ultra-short: "Verification code: 482910" or "Login alert from GitHub"
+- key_points: empty or just the code/alert itself
+- links: only include if there's an action link (like "Verify email")
+- content_type: "transactional"
+- golden_nuggets: empty (nothing to save)
+- email_style_ideas: empty (nothing to learn from)
+
+These emails are "glance and delete" — treat them that way.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CONFIDENCE
@@ -362,6 +423,60 @@ const FUNCTION_SCHEMA: FunctionSchema = {
           'For multi_topic_digest: which topics match user interests. E.g., ["AI", "TypeScript"]',
       },
 
+      // Golden nuggets — deals, tips, things worth remembering (NEW Feb 2026)
+      golden_nuggets: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            nugget: {
+              type: 'string',
+              description: 'The nugget itself — a deal, tip, quote, stat, or recommendation. Be specific.',
+            },
+            type: {
+              type: 'string',
+              enum: ['deal', 'tip', 'quote', 'stat', 'recommendation'],
+              description: 'Type of nugget: deal (promo/discount), tip (advice), quote (memorable line), stat (data point), recommendation (product/book/tool)',
+            },
+          },
+          required: ['nugget', 'type'],
+        },
+        maxItems: 5,
+        description: 'Deals, tips, quotes, stats, or recommendations worth saving. Only genuinely useful stuff.',
+      },
+
+      // Email style ideas — notable email format/design ideas (NEW Feb 2026)
+      email_style_ideas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            idea: {
+              type: 'string',
+              description: 'What is notable about this email\'s format, design, tone, or structure that a solopreneur could learn from.',
+            },
+            type: {
+              type: 'string',
+              enum: ['layout', 'subject_line', 'tone', 'cta', 'visual', 'storytelling', 'personalization'],
+              description: 'Aspect: layout (structure), subject_line (headline), tone (voice/style), cta (call-to-action), visual (design), storytelling (narrative), personalization (custom feel)',
+            },
+            why_it_works: {
+              type: 'string',
+              description: 'Brief explanation of why this approach is effective',
+            },
+            confidence: {
+              type: 'number',
+              minimum: 0,
+              maximum: 1,
+              description: 'How notable/worth-saving this is (0.5+ means genuinely interesting)',
+            },
+          },
+          required: ['idea', 'type', 'why_it_works', 'confidence'],
+        },
+        maxItems: 3,
+        description: 'Email format/design ideas worth saving. Only for newsletters and well-crafted emails from brands or influencers the user might want to learn from. Skip for personal emails and plain transactional emails.',
+      },
+
       // Confidence
       confidence: {
         type: 'number',
@@ -501,6 +616,10 @@ export class ContentDigestAnalyzer extends BaseAnalyzer<ContentDigestData> {
         contentType: result.data.contentType,
         confidence: result.data.confidence,
         topicsHighlighted: result.data.topicsHighlighted,
+        goldenNuggetsCount: result.data.goldenNuggets?.length ?? 0,
+        goldenNuggetTypes: result.data.goldenNuggets?.map(n => n.type) ?? [],
+        emailStyleIdeasCount: result.data.emailStyleIdeas?.length ?? 0,
+        emailStyleIdeaTypes: result.data.emailStyleIdeas?.map(s => s.type) ?? [],
       });
     }
 
@@ -580,12 +699,38 @@ export class ContentDigestAnalyzer extends BaseAnalyzer<ContentDigestData> {
       ? (rawContentType as ContentType)
       : 'single_topic';
 
+    // Normalize golden_nuggets (NEW Feb 2026)
+    const VALID_NUGGET_TYPES = new Set(['deal', 'tip', 'quote', 'stat', 'recommendation']);
+    const rawNuggets = rawData.golden_nuggets as Array<{ nugget: string; type: string }> | undefined;
+    const goldenNuggets: GoldenNugget[] = (rawNuggets || [])
+      .filter(n => n.nugget && VALID_NUGGET_TYPES.has(n.type))
+      .map(n => ({
+        nugget: n.nugget,
+        type: n.type as GoldenNuggetType,
+      }));
+
+    // Normalize email_style_ideas (NEW Feb 2026)
+    const VALID_STYLE_TYPES = new Set(['layout', 'subject_line', 'tone', 'cta', 'visual', 'storytelling', 'personalization']);
+    const rawStyleIdeas = rawData.email_style_ideas as Array<{
+      idea: string; type: string; why_it_works: string; confidence: number;
+    }> | undefined;
+    const emailStyleIdeas: EmailStyleIdea[] = (rawStyleIdeas || [])
+      .filter(s => s.idea && VALID_STYLE_TYPES.has(s.type))
+      .map(s => ({
+        idea: s.idea,
+        type: s.type as EmailStyleIdeaType,
+        whyItWorks: s.why_it_works || '',
+        confidence: Math.min(1, Math.max(0, s.confidence || 0.5)),
+      }));
+
     return {
       gist: (rawData.gist as string) || 'Unable to extract gist',
       keyPoints,
       links,
       contentType,
       topicsHighlighted: rawData.topics_highlighted as string[] | undefined,
+      ...(goldenNuggets.length > 0 ? { goldenNuggets } : {}),
+      ...(emailStyleIdeas.length > 0 ? { emailStyleIdeas } : {}),
       confidence: (rawData.confidence as number) || 0.5,
     };
   }

@@ -177,13 +177,17 @@ export type {
   CategorizationData,
   CategorizationResult,
 
-  // Content digest types (NEW Jan 2026)
+  // Content digest types (NEW Jan 2026, ENHANCED Feb 2026 with golden nuggets + email style ideas)
   ContentDigestData,
   ContentDigestResult,
   KeyPoint,
   ExtractedLink,
   LinkType,
   ContentType,
+  GoldenNugget,
+  GoldenNuggetType,
+  EmailStyleIdea,
+  EmailStyleIdeaType,
 
   // Action extractor types (ENHANCED: multi-action support)
   ActionExtractionData,

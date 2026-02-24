@@ -374,6 +374,9 @@ CREATE TABLE emails (
   signal_strength TEXT,   -- high, medium, low, noise (AI-assessed relevance)
   reply_worthiness TEXT,  -- must_reply, should_reply, optional_reply, no_reply
 
+  -- Multi-category support (Feb 2026)
+  additional_categories TEXT[],  -- Up to 2 secondary life-bucket categories
+
   -- Relations
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,  -- (migration 029, replaces legacy client_id)
   project_tags TEXT[],
@@ -401,12 +404,12 @@ ALTER TABLE emails ADD CONSTRAINT emails_category_check CHECK (
     'clients', 'work', 'personal_friends_family', 'family',
     'finance', 'travel', 'shopping', 'local',
     'newsletters_creator', 'newsletters_industry',
-    'news_politics', 'product_updates'
+    'news_politics', 'product_updates', 'notifications'
   )
 );
 ```
 
-#### Life-Bucket Categories (12 values)
+#### Life-Bucket Categories (13 values)
 | Group | Category | Description |
 |-------|----------|-------------|
 | Work & Business | `clients` | Direct client correspondence, project work |
@@ -421,6 +424,7 @@ ALTER TABLE emails ADD CONSTRAINT emails_category_check CHECK (
 | Information | `newsletters_industry` | Industry digests, company newsletters |
 | Information | `news_politics` | News outlets, political |
 | Information | `product_updates` | SaaS tools, tech products |
+| Transient | `notifications` | Verification codes, OTPs, login alerts, password resets |
 
 ### email_analyses
 AI analyzer outputs stored as JSONB for flexibility.
@@ -432,13 +436,13 @@ CREATE TABLE email_analyses (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   -- Analysis results (JSONB)
-  categorization JSONB,       -- {category, labels, signal_strength, reply_worthiness, confidence, reasoning, topics, summary, quick_action}
+  categorization JSONB,       -- {category, labels, signal_strength, reply_worthiness, confidence, reasoning, topics, summary, quick_action, additional_categories}
   action_extraction JSONB,    -- {has_action, actions[], urgency_score} (supports multi-action)
   client_tagging JSONB,       -- {client_match, client_id, client_name, confidence, relationship_signal}
   event_detection JSONB,      -- {has_event, event_title, event_date, event_locality, ...}
   url_extraction JSONB,       -- Future
   content_opportunity JSONB,  -- Future
-  content_digest JSONB,       -- {gist, key_points, links, content_type} (migration 025)
+  content_digest JSONB,       -- {gist, key_points, links, content_type, golden_nuggets, email_style_ideas} (migration 025, enhanced Feb 2026)
 
   -- Idea sparks (migration 033)
   idea_sparks JSONB,          -- Array of idea spark objects from IdeaSparkAnalyzer
