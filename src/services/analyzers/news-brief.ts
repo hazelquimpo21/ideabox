@@ -37,6 +37,7 @@
  */
 
 import { BaseAnalyzer } from './base-analyzer';
+import { analyzerConfig } from '@/config/analyzers';
 import type {
   NewsBriefData,
   NewsBriefResult,
@@ -103,8 +104,11 @@ export const NEWS_ELIGIBLE_LABELS = [
  * ```
  */
 export class NewsBriefAnalyzer extends BaseAnalyzer<NewsBriefData> {
-  readonly name = 'NewsBrief';
   readonly description = 'Extracts newsworthy facts — what happened, what launched, what changed';
+
+  constructor() {
+    super('NewsBrief', analyzerConfig.newsBrief);
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // SYSTEM PROMPT
