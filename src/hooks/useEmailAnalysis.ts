@@ -115,6 +115,37 @@ export interface IdeaSparkResult {
 }
 
 /**
+ * Insight extraction result from the InsightExtractor analyzer (NEW Feb 2026).
+ * Synthesizes interesting ideas, tips, frameworks from newsletter/substantive content.
+ */
+export interface InsightExtractionResult {
+  hasInsights: boolean;
+  insights: {
+    insight: string;
+    type: string;
+    topics: string[];
+    confidence: number;
+  }[];
+  confidence: number;
+}
+
+/**
+ * News brief result from the NewsBrief analyzer (NEW Feb 2026).
+ * Extracts factual news items — what happened, what launched, what changed.
+ */
+export interface NewsBriefResult {
+  hasNews: boolean;
+  newsItems: {
+    headline: string;
+    detail: string;
+    topics: string[];
+    dateMentioned?: string;
+    confidence: number;
+  }[];
+  confidence: number;
+}
+
+/**
  * Normalized analysis data structure.
  */
 export interface NormalizedAnalysis {
@@ -123,6 +154,8 @@ export interface NormalizedAnalysis {
   clientTagging?: ClientTaggingResult;
   eventDetection?: EventDetectionResult;
   ideaSparks?: IdeaSparkResult; // NEW Feb 2026
+  insightExtraction?: InsightExtractionResult; // NEW Feb 2026
+  newsBrief?: NewsBriefResult; // NEW Feb 2026
   tokensUsed?: number;
   processingTimeMs?: number;
   analyzerVersion?: string;
@@ -243,6 +276,49 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       hasIdeas: normalized.ideaSparks.hasIdeas,
       ideaCount: normalized.ideaSparks.ideas.length,
       confidence: normalized.ideaSparks.confidence,
+    });
+  }
+
+  // Normalize insight extraction (NEW Feb 2026)
+  if (raw.insight_extraction) {
+    const extraction = raw.insight_extraction as Record<string, unknown>;
+    const rawInsights = (extraction.insights as Array<Record<string, unknown>>) || [];
+    normalized.insightExtraction = {
+      hasInsights: (extraction.has_insights as boolean) || (extraction.hasInsights as boolean) || false,
+      insights: rawInsights.map(item => ({
+        insight: (item.insight as string) || '',
+        type: (item.type as string) || 'observation',
+        topics: (item.topics as string[]) || [],
+        confidence: (item.confidence as number) || 0.5,
+      })),
+      confidence: (extraction.confidence as number) || 0,
+    };
+    logger.debug('Normalized insight extraction data', {
+      hasInsights: normalized.insightExtraction.hasInsights,
+      insightCount: normalized.insightExtraction.insights.length,
+      confidence: normalized.insightExtraction.confidence,
+    });
+  }
+
+  // Normalize news brief (NEW Feb 2026)
+  if (raw.news_brief) {
+    const brief = raw.news_brief as Record<string, unknown>;
+    const rawItems = (brief.news_items as Array<Record<string, unknown>>) || (brief.newsItems as Array<Record<string, unknown>>) || [];
+    normalized.newsBrief = {
+      hasNews: (brief.has_news as boolean) || (brief.hasNews as boolean) || false,
+      newsItems: rawItems.map(item => ({
+        headline: (item.headline as string) || '',
+        detail: (item.detail as string) || '',
+        topics: (item.topics as string[]) || [],
+        dateMentioned: (item.date_mentioned as string) || (item.dateMentioned as string),
+        confidence: (item.confidence as number) || 0.5,
+      })),
+      confidence: (brief.confidence as number) || 0,
+    };
+    logger.debug('Normalized news brief data', {
+      hasNews: normalized.newsBrief.hasNews,
+      newsItemCount: normalized.newsBrief.newsItems.length,
+      confidence: normalized.newsBrief.confidence,
     });
   }
 

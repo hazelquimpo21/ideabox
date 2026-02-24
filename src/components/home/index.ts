@@ -8,9 +8,11 @@
 export { DailyBriefingHeader } from './DailyBriefingHeader';
 export { TodaySchedule } from './TodaySchedule';
 export { PendingTasksList } from './PendingTasksList';
-// NEW (Feb 2026): Two-tier system + idea generation
+// NEW (Feb 2026): Two-tier system + idea generation + insights + news
 export { IdeaSparksCard } from './IdeaSparksCard';
 export { DailyReviewCard } from './DailyReviewCard';
+export { InsightsCard } from './InsightsCard';
+export { NewsBriefCard } from './NewsBriefCard';
 
 export type { DailyBriefingHeaderProps } from './DailyBriefingHeader';
 export type { TodayScheduleProps, ScheduleItem } from './TodaySchedule';
