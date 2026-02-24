@@ -42,6 +42,8 @@ import {
   Minus,
   Lightbulb,
   Bookmark,
+  Sparkles,
+  Rss,
 } from 'lucide-react';
 import type { Email, EmailCategory } from '@/types/database';
 
@@ -533,6 +535,141 @@ function AnalysisSummary({
                         });
                       }).catch(err => {
                         logger.error('Failed to save idea from detail', {
+                          error: err instanceof Error ? err.message : 'Unknown error',
+                        });
+                      });
+                    }}
+                  >
+                    <Bookmark className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Insights — Synthesized tips, frameworks, observations (NEW Feb 2026) */}
+        {analysis?.insightExtraction?.hasInsights && analysis.insightExtraction.insights.length > 0 && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-4 w-4 text-purple-500" />
+              <span className="text-sm font-medium">Insights</span>
+              <span className="text-xs text-muted-foreground">
+                ({analysis.insightExtraction.insights.length})
+              </span>
+            </div>
+            <div className="space-y-2 pl-6">
+              {analysis.insightExtraction.insights.map((item, index) => (
+                <div
+                  key={index}
+                  className="group flex items-start gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
+                    {item.type}
+                  </Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm leading-snug">{item.insight}</p>
+                    {item.topics.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {item.topics.map((topic, i) => (
+                          <span key={i} className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            {topic}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    title="Save insight"
+                    onClick={() => {
+                      fetch('/api/insights', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          insight: item.insight,
+                          insightType: item.type,
+                          topics: item.topics,
+                          confidence: item.confidence,
+                          emailId: email.id,
+                        }),
+                      }).then(() => {
+                        logger.info('Insight saved from email detail', {
+                          emailId: email.id.substring(0, 8),
+                          insightType: item.type,
+                        });
+                      }).catch(err => {
+                        logger.error('Failed to save insight from detail', {
+                          error: err instanceof Error ? err.message : 'Unknown error',
+                        });
+                      });
+                    }}
+                  >
+                    <Bookmark className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* News Brief — Factual news items extracted from email (NEW Feb 2026) */}
+        {analysis?.newsBrief?.hasNews && analysis.newsBrief.newsItems.length > 0 && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <Rss className="h-4 w-4 text-emerald-500" />
+              <span className="text-sm font-medium">News Brief</span>
+              <span className="text-xs text-muted-foreground">
+                ({analysis.newsBrief.newsItems.length} items)
+              </span>
+            </div>
+            <div className="space-y-2 pl-6">
+              {analysis.newsBrief.newsItems.map((item, index) => (
+                <div
+                  key={index}
+                  className="group flex items-start gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium leading-snug">{item.headline}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{item.detail}</p>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {item.topics.map((topic, i) => (
+                        <span key={i} className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {topic}
+                        </span>
+                      ))}
+                      {item.dateMentioned && (
+                        <span className="text-xs text-muted-foreground">
+                          {item.dateMentioned}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    title="Save news item"
+                    onClick={() => {
+                      fetch('/api/news', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          headline: item.headline,
+                          detail: item.detail,
+                          topics: item.topics,
+                          dateMentioned: item.dateMentioned,
+                          confidence: item.confidence,
+                          emailId: email.id,
+                        }),
+                      }).then(() => {
+                        logger.info('News item saved from email detail', {
+                          emailId: email.id.substring(0, 8),
+                        });
+                      }).catch(err => {
+                        logger.error('Failed to save news item from detail', {
                           error: err instanceof Error ? err.message : 'Unknown error',
                         });
                       });

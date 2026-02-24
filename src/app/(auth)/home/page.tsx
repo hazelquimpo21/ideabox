@@ -15,6 +15,8 @@
  *   E. Profile Completion Nudge — shown when profile < 50% complete
  *   F. Idea Sparks — AI-generated ideas from email content (NEW Feb 2026)
  *   G. Daily Review — review queue for scan-worthy emails (NEW Feb 2026)
+ *   H. Insights — synthesized tips/frameworks from newsletters (NEW Feb 2026)
+ *   I. News Brief — factual news items from email content (NEW Feb 2026)
  *
  * Route: /home
  * Redirect: /hub → /home (configured in next.config.mjs)
@@ -36,6 +38,8 @@ import {
   PendingTasksList,
   IdeaSparksCard,
   DailyReviewCard,
+  InsightsCard,
+  NewsBriefCard,
 } from '@/components/home';
 import type { ScheduleItem } from '@/components/home';
 import { PriorityCard, PriorityCardSkeleton } from '@/components/shared';
@@ -385,6 +389,15 @@ export default function HomePage() {
           onMarkReviewed={markReviewed}
           totalInQueue={reviewStats?.totalInQueue}
         />
+      </div>
+
+      {/* ─── Sections H & I: Insights + News Brief (NEW Feb 2026) ────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Section H: Insights — synthesized tips from newsletters */}
+        <InsightsCard limit={5} />
+
+        {/* Section I: News Brief — factual news from email content */}
+        <NewsBriefCard limit={5} />
       </div>
 
       {/* ─── Explore More Navigation ──────────────────────────────────────── */}
