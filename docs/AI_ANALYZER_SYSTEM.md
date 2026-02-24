@@ -561,6 +561,72 @@ For relationship signals:
 
 ---
 
+### 3b. Date Extractor Analyzer
+
+**Purpose:** Extract timeline dates, deadlines, and key dates from email content
+
+**When It Runs:** PHASE 1 (parallel with all core analyzers, every email)
+
+**Date Types Extracted:**
+| Type | Description | Examples |
+|------|-------------|---------|
+| `deadline` | Tasks with due dates | "Submit by Friday", "Application closes Jan 31" |
+| `payment_due` | Financial obligations | "Invoice due 2/15", "Rent is due on the 1st" |
+| `birthday` | Personal dates | "Happy birthday on March 3!" |
+| `anniversary` | Recurring milestones | "Your 5-year work anniversary" |
+| `expiration` | Things that expire | "Your subscription renews Jan 30" |
+| `appointment` | Scheduled meetings | "Your dentist appointment is Tuesday at 3pm" |
+| `event` | Events (delegated to EventDetector for rich extraction) | "Conference on April 5" |
+
+**Function Schema:**
+```typescript
+{
+  name: 'extract_dates',
+  description: 'Extracts all date-related information from an email',
+  parameters: {
+    type: 'object',
+    properties: {
+      has_dates: {
+        type: 'boolean',
+        description: 'Whether any meaningful dates were found',
+      },
+      dates: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            date_type: { type: 'string', enum: ['deadline', 'payment_due', 'birthday', 'anniversary', 'expiration', 'appointment', 'event'] },
+            date: { type: 'string', description: 'ISO date (YYYY-MM-DD)' },
+            time: { type: 'string', description: 'HH:MM if known' },
+            end_date: { type: 'string', description: 'End date if range' },
+            title: { type: 'string', description: 'Brief description' },
+            description: { type: 'string' },
+            source_snippet: { type: 'string', description: 'Text that contains the date' },
+            related_entity: { type: 'string', description: 'Person/company/project involved' },
+            is_recurring: { type: 'boolean' },
+            recurrence_pattern: { type: 'string', description: 'weekly, monthly, yearly, etc.' },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
+          },
+          required: ['date_type', 'date', 'title', 'confidence'],
+        },
+        maxItems: 5,
+      },
+      confidence: { type: 'number', minimum: 0, maximum: 1 },
+    },
+    required: ['has_dates', 'dates', 'confidence'],
+  },
+}
+```
+
+**Database Storage:**
+- Each extracted date saved as a row in `extracted_dates` table
+- Deduplication via composite unique index (email_id + date_type + date + title)
+- Powers the Hub view (upcoming deadlines) and Calendar page (all date types)
+
+**Cost:** ~$0.00015 per email (GPT-4.1-mini)
+
+---
+
 ## Analyzer Orchestration
 
 ### EmailProcessor Service
@@ -702,20 +768,11 @@ if (email.analyzed_at) {
 
 ### 2. Tiered Processing
 ```typescript
-// Use cheaper models for obvious cases
-const getModel = (email: Email) => {
-  // Obvious spam/promo → fastest/cheapest model
-  if (email.gmail_labels.includes('SPAM') || email.gmail_labels.includes('PROMOTIONS')) {
-    return 'gpt-4o-mini';
-  }
-  
-  // Client emails → might need more sophisticated analysis
-  if (knownClientDomains.includes(extractDomain(email.sender_email))) {
-    return 'gpt-4o'; // More expensive but more accurate
-  }
-  
-  return 'gpt-4o-mini'; // Default
-};
+// Currently: single model for all analysis
+const MODEL = 'gpt-4.1-mini';
+
+// Future: could use tiered models for different email types
+// For now, gpt-4.1-mini handles everything well at ~$3-5/month
 ```
 
 ### 3. Caching Common Patterns

@@ -145,7 +145,7 @@ AI-powered email processing system with specialized analyzers that:
 - Not a full CRM (though has CRM-like features for clients)
 
 > **Note:** Email sending was added (Jan 2026) via Gmail API - send, schedule, templates,
-> campaigns, open tracking, follow-up automation. See `docs/GMAIL_SENDING_IMPLEMENTATION.md`.
+> campaigns, open tracking, follow-up automation. See `docs/DATABASE_SCHEMA.md` (Email Sending Tables) and `docs/API_INTEGRATIONS.md` (Gmail API).
 
 ## Design Principles
 1. **Modular First**: Every component standalone and replaceable

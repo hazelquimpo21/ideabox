@@ -11,7 +11,7 @@ IdeaBox integrates with these external services:
 > **Model Decision:** We use GPT-4.1-mini exclusively. No Anthropic fallback.
 > See PROJECT_OVERVIEW.md for cost analysis and rationale.
 
-> **Contact Import:** See CONTACTS_FLOW.md for detailed contact management documentation.
+> **Contact Import:** See ARCHITECTURE.md for the VIP Suggestion Scoring data flow and DATABASE_SCHEMA.md for the contacts table definition.
 
 ---
 
@@ -489,7 +489,7 @@ User selects VIPs → saved to contacts.is_vip and user_context.vip_emails
 ```typescript
 import { contactService } from '@/services/contacts';
 
-// During onboarding, import from Google
+// During onboarding, import from Google (batched upserts, 50 contacts per batch)
 const result = await contactService.importFromGoogle({
   userId: user.id,
   accessToken: accessToken,
@@ -497,7 +497,10 @@ const result = await contactService.importFromGoogle({
   maxContacts: 100,
 });
 
-// Get VIP suggestions
+// Get VIP suggestions (uses 12-signal weighted scoring)
+// Returns contacts ranked by: Google starred/labels, family name match,
+// same email domain, sent count, bidirectional communication, frequency,
+// recency, longevity, relationship type, sender type, avatar presence
 const suggestions = await contactService.getVipSuggestions(userId, 15);
 ```
 
@@ -542,7 +545,7 @@ export class OpenAIClient {
       maxTokens?: number;
     } = {}
   ): Promise<{ data: T; tokensUsed: number }> {
-    const model = options.model || 'gpt-4o-mini';
+    const model = options.model || 'gpt-4.1-mini';
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens || 1000;
     
@@ -596,11 +599,9 @@ export class OpenAIClient {
    */
   private calculateCost(tokens: number, model: string): number {
     const pricing: Record<string, number> = {
-      'gpt-4o-mini': 0.15 / 1_000_000,      // $0.15 per 1M tokens
-      'gpt-4o': 2.50 / 1_000_000,           // $2.50 per 1M tokens
-      'gpt-4-turbo': 10.00 / 1_000_000,     // $10 per 1M tokens
+      'gpt-4.1-mini': 0.15 / 1_000_000,     // $0.15 per 1M input tokens
     };
-    
+
     return tokens * (pricing[model] || 0);
   }
   
@@ -863,7 +864,7 @@ function isRetryableError(error: any): boolean {
 // lib/monitoring/api-usage.ts
 export class APIUsageTracker {
   async trackCall(
-    service: 'gmail' | 'openai' | 'anthropic',
+    service: 'gmail' | 'openai',
     endpoint: string,
     tokens?: number,
     cost?: number

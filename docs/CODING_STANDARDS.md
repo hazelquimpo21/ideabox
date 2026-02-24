@@ -123,13 +123,13 @@ Use config files for values that might change.
 export const ANALYZER_CONFIG = {
   categorizer: {
     enabled: true,
-    model: 'gpt-4o-mini',
+    model: 'gpt-4.1-mini',
     temperature: 0.3,
     maxTokens: 500,
   },
   actionExtractor: {
     enabled: true,
-    model: 'gpt-4o-mini',
+    model: 'gpt-4.1-mini',
     temperature: 0.2,
     maxTokens: 800,
   },
@@ -358,9 +358,9 @@ Log API costs for budgeting:
 
 ```typescript
 logger.info('OpenAI API call complete', {
-  model: 'gpt-4o-mini',
+  model: 'gpt-4.1-mini',
   tokensUsed: response.usage.total_tokens,
-  estimatedCost: calculateCost(response.usage.total_tokens, 'gpt-4o-mini'),
+  estimatedCost: calculateCost(response.usage.total_tokens, 'gpt-4.1-mini'),
 });
 ```
 
@@ -692,7 +692,7 @@ const result = data.split(',')[0]?.trim() || '';
  * 
  * @example
  * const result = await analyzer.analyze(email, { 
- *   model: 'gpt-4o-mini' 
+ *   model: 'gpt-4.1-mini' 
  * });
  */
 export async function analyze(
