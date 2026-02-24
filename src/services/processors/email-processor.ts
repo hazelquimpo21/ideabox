@@ -1611,36 +1611,8 @@ export class EmailProcessor {
           }
         : null,
 
-      // Multi-event detection (NEW Feb 2026: multiple events from single email)
-      multi_event_detection: analysis.multiEventDetection
-        ? {
-            has_multiple_events: analysis.multiEventDetection.hasMultipleEvents,
-            event_count: analysis.multiEventDetection.eventCount,
-            source_description: analysis.multiEventDetection.sourceDescription,
-            events: analysis.multiEventDetection.events.map(event => ({
-              event_title: event.eventTitle,
-              event_date: event.eventDate,
-              event_time: event.eventTime,
-              event_end_date: event.eventEndDate,
-              event_end_time: event.eventEndTime,
-              location_type: event.locationType,
-              event_locality: event.eventLocality,
-              location: event.location,
-              rsvp_required: event.rsvpRequired,
-              rsvp_url: event.rsvpUrl,
-              registration_deadline: event.registrationDeadline,
-              organizer: event.organizer,
-              cost: event.cost,
-              additional_details: event.additionalDetails,
-              event_summary: event.eventSummary,
-              key_points: event.keyPoints,
-              is_key_date: event.isKeyDate,
-              key_date_type: event.keyDateType,
-              confidence: event.confidence,
-            })),
-            confidence: analysis.multiEventDetection.confidence,
-          }
-        : null,
+      // NOTE: multi_event_detection removed — column does not exist in DB yet.
+      // Re-add once the migration adding the column has been applied.
 
       // Idea sparks (NEW Feb 2026: creative ideas from email content + user context)
       idea_sparks: analysis.ideaSparks

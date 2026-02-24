@@ -96,6 +96,10 @@ function getCategoryBadge(category: EmailCategory | null): {
   label: string;
   icon: React.ReactNode;
 } {
+  if (!category) {
+    return { variant: 'outline', label: 'Uncategorized', icon: <Mail className="h-3 w-3" /> };
+  }
+
   switch (category) {
     // Work & Business
     case 'clients':
@@ -577,8 +581,22 @@ function AnalysisSummary({
 }
 
 function EmailBody({ email }: { email: Email }) {
+  const htmlRef = React.useRef<HTMLDivElement>(null);
   const hasHtml = email.body_html && email.body_html.trim().length > 0;
   const hasText = email.body_text && email.body_text.trim().length > 0;
+
+  // Hide broken images (e.g. favicon 404s embedded in email HTML) to suppress console noise
+  React.useEffect(() => {
+    if (!htmlRef.current) return;
+    const imgs = htmlRef.current.querySelectorAll('img');
+    const handler = (e: Event) => {
+      (e.target as HTMLImageElement).style.display = 'none';
+    };
+    imgs.forEach(img => img.addEventListener('error', handler));
+    return () => {
+      imgs.forEach(img => img.removeEventListener('error', handler));
+    };
+  }, [email.id]);
 
   if (!hasHtml && !hasText) {
     return (
@@ -592,6 +610,7 @@ function EmailBody({ email }: { email: Email }) {
     return (
       <div className="px-6 py-4">
         <div
+          ref={htmlRef}
           className="prose prose-sm max-w-none dark:prose-invert"
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(email.body_html || '') }}
         />

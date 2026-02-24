@@ -291,16 +291,16 @@ export function useEmailAnalysis(emailId: string | null): UseEmailAnalysisReturn
         .from('email_analyses')
         .select('*')
         .eq('email_id', emailId)
-        .single();
+        .maybeSingle();
 
       if (queryError) {
-        // PGRST116 means no rows found - not an error, just no analysis yet
-        if (queryError.code === 'PGRST116') {
-          logger.debug('No analysis found for email', { emailId });
-          setAnalysis(null);
-          return;
-        }
         throw new Error(queryError.message);
+      }
+
+      if (!data) {
+        logger.debug('No analysis found for email', { emailId });
+        setAnalysis(null);
+        return;
       }
 
       const normalized = normalizeAnalysis(data as EmailAnalysis);
