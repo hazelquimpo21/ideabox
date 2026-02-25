@@ -768,6 +768,7 @@ export class EmailProcessor {
       emailId: emailInput.id,
       success,
       category: aggregatedAnalysis.categorization?.category,
+      emailType: aggregatedAnalysis.categorization?.emailType,
       summary: aggregatedAnalysis.categorization?.summary?.substring(0, 50),
       quickAction: aggregatedAnalysis.categorization?.quickAction,
       labels: aggregatedAnalysis.categorization?.labels?.slice(0, 3),
@@ -2473,6 +2474,9 @@ export class EmailProcessor {
       additional_categories: categorization.additionalCategories && categorization.additionalCategories.length > 0
         ? categorization.additionalCategories
         : null,
+      // NEW Feb 2026: Email type (nature of communication) and AI brief
+      email_type: categorization.emailType || null,
+      ai_brief: categorization.aiBrief || null,
     };
 
     // Add content digest fields if available (NEW Jan 2026)

@@ -300,6 +300,9 @@ export interface Database {
           reply_worthiness: ReplyWorthinessDb | null;
           // Additional categories for multi-bucket filtering (NEW Feb 2026)
           additional_categories: string[] | null;
+          // Email type and AI brief (NEW Feb 2026)
+          email_type: EmailTypeDb | null;
+          ai_brief: string | null;
           // NOTE: urgency_score and relationship_signal are used in UI but have
           // no DB migration. They exist only in email_analyses JSONB. Reads from
           // the emails table will return null. A future migration should add these
@@ -348,6 +351,8 @@ export interface Database {
           signal_strength?: SignalStrengthDb | null;
           reply_worthiness?: ReplyWorthinessDb | null;
           additional_categories?: string[] | null;
+          email_type?: EmailTypeDb | null;
+          ai_brief?: string | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           sync_type?: string;
@@ -389,6 +394,8 @@ export interface Database {
           signal_strength?: SignalStrengthDb | null;
           reply_worthiness?: ReplyWorthinessDb | null;
           additional_categories?: string[] | null;
+          email_type?: EmailTypeDb | null;
+          ai_brief?: string | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           sync_type?: string;
@@ -1306,6 +1313,60 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['saved_news']['Insert']>;
       };
+      // Email summaries (NEW Feb 2026 — migration 038)
+      email_summaries: {
+        Row: {
+          id: string;
+          user_id: string;
+          headline: string;
+          sections: Record<string, unknown>[];
+          stats: Record<string, unknown>;
+          period_start: string;
+          period_end: string;
+          emails_included: number;
+          threads_included: number;
+          tokens_used: number | null;
+          estimated_cost: number | null;
+          processing_time_ms: number | null;
+          model: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          headline: string;
+          sections?: Record<string, unknown>[];
+          stats?: Record<string, unknown>;
+          period_start: string;
+          period_end: string;
+          emails_included?: number;
+          threads_included?: number;
+          tokens_used?: number | null;
+          estimated_cost?: number | null;
+          processing_time_ms?: number | null;
+          model?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['email_summaries']['Insert']>;
+      };
+      // Summary staleness tracking (NEW Feb 2026 — migration 038)
+      user_summary_state: {
+        Row: {
+          user_id: string;
+          last_summary_at: string | null;
+          is_stale: boolean;
+          emails_since_last: number;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          last_summary_at?: string | null;
+          is_stale?: boolean;
+          emails_since_last?: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['user_summary_state']['Insert']>;
+      };
       gmail_push_logs: {
         Row: {
           id: string;
@@ -1455,6 +1516,8 @@ export type GmailPushLog = TableRow<'gmail_push_logs'>;
 export type EmailIdea = TableRow<'email_ideas'>;
 export type SavedInsight = TableRow<'saved_insights'>;
 export type SavedNews = TableRow<'saved_news'>;
+export type EmailSummaryRow = TableRow<'email_summaries'>;
+export type UserSummaryStateRow = TableRow<'user_summary_state'>;
 
 /**
  * Cost usage summary from database function.
@@ -1508,6 +1571,13 @@ export type SignalStrengthDb = 'high' | 'medium' | 'low' | 'noise';
 export type ReplyWorthinessDb = 'must_reply' | 'should_reply' | 'optional_reply' | 'no_reply';
 
 /**
+ * Email type — the nature of the communication, orthogonal to category.
+ * Stored in categorization JSONB as email_type and denormalized to emails table.
+ * NEW (Feb 2026).
+ */
+export type EmailTypeDb = 'personal' | 'transactional' | 'newsletter' | 'notification' | 'promo' | 'cold_outreach' | 'needs_response' | 'fyi' | 'automated';
+
+/**
  * Event format type - describes how attendees participate.
  * Stored in event_detection JSONB as location_type.
  */
@@ -1547,6 +1617,10 @@ export interface CategorizationJsonb {
   reply_worthiness?: ReplyWorthinessDb;
   /** Additional categories for multi-bucket filtering (NEW Feb 2026) */
   additional_categories?: string[];
+  /** Email type — nature of the communication (NEW Feb 2026) */
+  email_type?: EmailTypeDb;
+  /** AI-internal brief for downstream AI batch-summarization (NEW Feb 2026) */
+  ai_brief?: string;
 }
 
 /**

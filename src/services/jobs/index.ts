@@ -13,6 +13,11 @@
  *    - Boosts items from VIP clients
  *    - Surfaces stale items that need attention
  *
+ * 2. Summary Generation - Eagerly generates summaries for stale users
+ *    - Queries user_summary_state for stale + >1hr since last
+ *    - Processes sequentially with rate limiting
+ *    - Also callable per-user after sync completes
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
  * SCHEDULING RECOMMENDATIONS
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -41,6 +46,8 @@
  * import {
  *   reassessPrioritiesForUser,
  *   reassessPrioritiesForAllUsers,
+ *   generateSummaryForUser,
+ *   generateSummariesForStaleUsers,
  * } from '@/services/jobs';
  *
  * // Run for single user (e.g., after they log in)
@@ -48,6 +55,12 @@
  *
  * // Run for all users (cron job)
  * await reassessPrioritiesForAllUsers();
+ *
+ * // Generate summary for a specific user (e.g., after sync)
+ * await generateSummaryForUser(userId);
+ *
+ * // Generate summaries for all stale users (cron job)
+ * await generateSummariesForStaleUsers();
  * ```
  *
  * @module services/jobs
@@ -66,3 +79,15 @@ export {
   PRIORITY_CONFIG,
   type ReassessmentResult,
 } from './priority-reassessment';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SUMMARY GENERATION (NEW - Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export {
+  generateSummaryForUser,
+  generateSummariesForStaleUsers,
+  SUMMARY_JOB_CONFIG,
+  type UserSummaryJobResult,
+  type BatchSummaryJobResult,
+} from './summary-generation';

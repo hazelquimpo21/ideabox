@@ -136,21 +136,22 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 
 ### 1. Categorizer Analyzer (ENHANCED Jan 2026, Feb 2026)
 
-**Purpose:** Classify email into life buckets + assess signal quality + determine reply worthiness + detect noise + generate punchy summary + suggest quick action + assign additional categories
+**Purpose:** Classify email into life buckets + tag email type + assess signal quality + determine reply worthiness + detect noise + generate summary + generate AI brief + suggest quick action + assign additional categories
 
-> **TONE (Feb 2026):** The categorizer now speaks like a sharp personal assistant — "right on top of that, Rose!" Summaries are punchy and human, not robotic.
+> **TONE (Feb 2026):** Summaries are written like a helpful assistant who doesn't waste the user's time — one line, no fluff.
 
 **ENHANCED (Jan 2026):** Added `summary` and `quick_action` fields.
 
 **ENHANCED (Feb 2026):**
 - `signal_strength`: How important is this email? (high/medium/low/noise)
 - `reply_worthiness`: Should the user reply? (must_reply/should_reply/optional_reply/no_reply)
+- `email_type`: What kind of communication is this? (personal/transactional/newsletter/notification/promo/cold_outreach/needs_response/fyi/automated) — orthogonal to category
+- `ai_brief`: Dense, structured summary for downstream AI batch-summarization (not for humans). Format: "IMPORTANCE | From WHO (relationship) | What about | Action needed | Key context"
 - `labels` now include noise-type labels: `sales_pitch`, `webinar_invite`, `fake_recognition`, `mass_outreach`, `promotional`
 - `additional_categories`: Up to 2 secondary life buckets (email appears in multiple inbox views)
 - `notifications` category: Verification codes, OTPs, login alerts, password resets
-- Prompt voice: "right on top of that, Rose!" — sharp, human, punchy summaries using [Who] + [What] + [WHY] formula, protective of user's attention
+- Summary tone refined: concise, direct, no fluff — "Sarah from Acme needs your review on Q1 proposal by Friday"
 - 13 categories total (12 original + notifications)
-- Summary formula: [Who] + [What they need/said] + [Why you should care / deadline]
 - Low-confidence categorizations (< 0.5) now logged as warnings for prompt quality monitoring
 
 **Function Schema:**
@@ -240,8 +241,18 @@ async analyze(email: Email): Promise<AnalyzerResult> {
         maxItems: 2,
         description: 'Up to 2 secondary life-bucket categories. Email appears under these categories in addition to the primary. Only include when genuinely relevant.',
       },
+      // NEW FIELDS (Feb 2026)
+      email_type: {
+        type: 'string',
+        enum: ['personal', 'transactional', 'newsletter', 'notification', 'promo', 'cold_outreach', 'needs_response', 'fyi', 'automated'],
+        description: 'Nature of the communication — orthogonal to category',
+      },
+      ai_brief: {
+        type: 'string',
+        description: 'Dense, structured summary for downstream AI. Format: "IMPORTANCE | From WHO (relationship) | What about | Action needed | Key context"',
+      },
     },
-    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action'],
+    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action', 'email_type', 'ai_brief'],
   },
 }
 ```
@@ -1639,3 +1650,30 @@ Previously, emails that failed AI analysis were permanently skipped — the `ana
 | `POST /api/emails/retry-analysis` | Batch retry multiple failed emails | `{ emailIds: ["uuid-1", "uuid-2"] }` |
 | `POST /api/emails/[id]/analyze` | Single email re-analysis | Header: `x-force-reanalyze: true` |
 | `POST /api/emails/rescan` | Full rescan of recent emails | `{ maxEmails: 50 }` |
+
+### Email Summary Generator (NEW Feb 2026)
+
+**Purpose:** Synthesize a conversational narrative digest from recent emails, actions, dates, ideas, and news.
+
+> This is NOT an individual email analyzer. It's a system-level service that aggregates outputs from all analyzers into a single summary for the user. Runs separately from the per-email pipeline.
+
+**Location:** `src/services/summary/`
+
+**Flow:**
+1. Check staleness via `user_summary_state` table (is_stale + > 1 hour since last)
+2. Gather inputs: recent threads (clustered by `thread_id`), pending actions, upcoming dates, new ideas, news
+3. Build user content from `ai_brief` fields (dense structured summaries from categorizer)
+4. Call GPT-4.1-mini with function calling → structured output: headline + themed sections + stats
+5. Persist to `email_summaries` table
+6. Reset staleness state
+
+**Triggers:**
+- Lazy: User visits `/home` → `useSummary` hook → `POST /api/summaries/generate`
+- Eager: Batch job `generateSummariesForStaleUsers()` (cron-callable)
+- Staleness marked after sync: `markSummaryStale()` in sync route + webhook
+
+**Config:** `analyzerConfig.summaryGenerator` — model: gpt-4.1-mini, temp: 0.3, maxTokens: 800
+
+**Cost:** ~$0.13/month (6 summaries/day)
+
+**Database:** `email_summaries` + `user_summary_state` (migration 038)

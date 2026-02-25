@@ -13,9 +13,12 @@ export { IdeaSparksCard } from './IdeaSparksCard';
 export { DailyReviewCard } from './DailyReviewCard';
 export { InsightsCard } from './InsightsCard';
 export { NewsBriefCard } from './NewsBriefCard';
+// NEW (Feb 2026): AI-synthesized email summary digest
+export { EmailSummaryCard } from './EmailSummaryCard';
 
 export type { DailyBriefingHeaderProps } from './DailyBriefingHeader';
 export type { TodayScheduleProps, ScheduleItem } from './TodaySchedule';
 export type { PendingTasksListProps } from './PendingTasksList';
 export type { IdeaSparksCardProps } from './IdeaSparksCard';
 export type { DailyReviewCardProps } from './DailyReviewCard';
+export type { EmailSummaryCardProps } from './EmailSummaryCard';

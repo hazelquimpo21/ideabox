@@ -36,6 +36,7 @@ import { createLogger } from '@/lib/utils/logger';
 import { createServerClient } from '@/lib/supabase/server';
 import { GmailService, TokenManager, EmailParser } from '@/lib/gmail';
 import { runAIAnalysis } from '@/lib/services/email-analysis';
+import { markSummaryStale } from '@/services/summary';
 import type { GmailAccount } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -500,6 +501,18 @@ async function processNotificationAsync(
       synced: messagesSynced,
       total: messagesToFetch.length,
     });
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Mark email summary as stale for regeneration
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (messagesSynced > 0) {
+      markSummaryStale(account.user_id, messagesSynced).catch((err) => {
+        logger.warn('Failed to mark summary stale', {
+          accountId: account.id,
+          error: err instanceof Error ? err.message : 'Unknown',
+        });
+      });
+    }
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Run AI analysis on new emails

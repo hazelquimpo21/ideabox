@@ -1,7 +1,7 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
 > **Last Updated:** February 2026
-> **Source of Truth:** `supabase/migrations/001-034`
+> **Source of Truth:** `supabase/migrations/001-038`
 > **TypeScript Types:** `src/types/database.ts`
 
 ## Schema Overview
@@ -22,6 +22,8 @@ auth.users (Supabase Auth)
   ├── actions                # To-do items extracted from emails
   ├── saved_insights         # User-promoted insights from InsightExtractor (NEW Feb 2026)
   ├── saved_news             # User-promoted news items from NewsBrief (NEW Feb 2026)
+  ├── email_summaries        # AI-synthesized narrative digests (NEW Feb 2026)
+  ├── user_summary_state     # Summary staleness tracking (NEW Feb 2026)
   ├── user_event_states      # User decisions on events (dismiss/maybe/calendar)
   ├── outbound_emails        # Sent/scheduled/draft outgoing emails
   │   └── email_open_events  # Tracking pixel hits
@@ -377,6 +379,10 @@ CREATE TABLE emails (
   -- Multi-category support (Feb 2026)
   additional_categories TEXT[],  -- Up to 2 secondary life-bucket categories
 
+  -- Email type & AI brief (migration 037)
+  email_type TEXT,       -- personal, transactional, newsletter, notification, promo, cold_outreach, needs_response, fyi, automated
+  ai_brief TEXT,         -- Dense structured summary for downstream AI batch-summarization
+
   -- Relations
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,  -- (migration 029, replaces legacy client_id)
   project_tags TEXT[],
@@ -436,7 +442,7 @@ CREATE TABLE email_analyses (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   -- Analysis results (JSONB)
-  categorization JSONB,       -- {category, labels, signal_strength, reply_worthiness, confidence, reasoning, topics, summary, quick_action, additional_categories}
+  categorization JSONB,       -- {category, labels, signal_strength, reply_worthiness, email_type, ai_brief, confidence, reasoning, topics, summary, quick_action, additional_categories}
   action_extraction JSONB,    -- {has_action, actions[], urgency_score} (supports multi-action)
   client_tagging JSONB,       -- {client_match, client_id, client_name, confidence, relationship_signal}
   event_detection JSONB,      -- {has_event, event_title, event_date, event_locality, ...}
@@ -576,6 +582,48 @@ CREATE TABLE saved_news (
 
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### email_summaries (migration 038)
+AI-synthesized narrative digests with themed sections and stats.
+
+```sql
+CREATE TABLE email_summaries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- Summary content
+  headline TEXT NOT NULL,                    -- Conversational 1-2 sentence overview
+  sections JSONB NOT NULL DEFAULT '[]',      -- Themed sections [{theme, icon, items[{text, email_ids, action_needed, urgency}]}]
+  stats JSONB NOT NULL DEFAULT '{}',         -- {new_emails, threads_active, actions_pending, deadlines_upcoming}
+
+  -- Coverage window
+  period_start TIMESTAMPTZ NOT NULL,
+  period_end TIMESTAMPTZ NOT NULL,
+  emails_included INTEGER NOT NULL DEFAULT 0,
+  threads_included INTEGER NOT NULL DEFAULT 0,
+
+  -- AI metadata
+  tokens_used INTEGER,
+  estimated_cost NUMERIC(10,6),
+  processing_time_ms INTEGER,
+  model TEXT DEFAULT 'gpt-4.1-mini',
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### user_summary_state (migration 038)
+Lightweight staleness tracking for summary generation.
+
+```sql
+CREATE TABLE user_summary_state (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  last_summary_at TIMESTAMPTZ,
+  is_stale BOOLEAN NOT NULL DEFAULT true,
+  emails_since_last INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
@@ -918,7 +966,7 @@ All tables have RLS enabled. Policy pattern:
 
 ---
 
-## Migration Files (001-034)
+## Migration Files (001-038)
 
 | # | File | What it does |
 |---|------|-------------|
@@ -956,6 +1004,10 @@ All tables have RLS enabled. Policy pattern:
 | 032 | signal_strength_reply_worthiness.sql | Add signal_strength + reply_worthiness columns to emails, with indexes for Hub queries |
 | 033 | idea_sparks_column.sql | Add idea_sparks JSONB column to email_analyses |
 | 034 | saved_insights_and_news.sql | Add saved_insights + saved_news tables for user-promoted insights and news items |
+| 035 | multi_event_detection.sql | Multi-event detection support |
+| 036 | additional_categories_and_notifications.sql | additional_categories column + notifications category |
+| 037 | email_type_and_ai_brief.sql | Add email_type + ai_brief columns to emails for communication nature tagging and AI batch-summarization |
+| 038 | email_summaries.sql | email_summaries table (AI narrative digests) + user_summary_state table (staleness tracking) + RLS policies + indexes |
 
 ---
 

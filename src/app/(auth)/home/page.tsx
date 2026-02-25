@@ -40,6 +40,7 @@ import {
   DailyReviewCard,
   InsightsCard,
   NewsBriefCard,
+  EmailSummaryCard,
 } from '@/components/home';
 import type { ScheduleItem } from '@/components/home';
 import { PriorityCard, PriorityCardSkeleton } from '@/components/shared';
@@ -60,6 +61,7 @@ import {
   useEvents,
   useIdeas,
   useReviewQueue,
+  useSummary,
 } from '@/hooks';
 import { useAuth } from '@/lib/auth';
 import {
@@ -173,6 +175,16 @@ export default function HomePage() {
     isLoading: isReviewLoading,
     markReviewed,
   } = useReviewQueue({ limit: 8 });
+
+  // ─── Email Summary (NEW Feb 2026) ─────────────────────────────────────
+  const {
+    summary,
+    isLoading: isSummaryLoading,
+    isGenerating: isSummaryGenerating,
+    isStale: isSummaryStale,
+    error: summaryError,
+    regenerate: regenerateSummary,
+  } = useSummary({ refreshInterval: 5 * 60 * 1000 });
 
   // ─── Extracted Dates for Today's Schedule (Section C) ──────────────────────
   const today = getTodayString();
@@ -296,6 +308,16 @@ export default function HomePage() {
         eventCount={todayEventCount}
         taskCount={taskStats.pending}
         isLoading={isPrioritiesLoading || isScheduleLoading || isTasksLoading}
+      />
+
+      {/* ─── Email Summary (NEW Feb 2026) ──────────────────────────────── */}
+      <EmailSummaryCard
+        summary={summary}
+        isLoading={isSummaryLoading}
+        isGenerating={isSummaryGenerating}
+        isStale={isSummaryStale}
+        error={summaryError}
+        onRefresh={regenerateSummary}
       />
 
       {/* ─── Section E: Profile Completion Nudge ──────────────────────────── */}

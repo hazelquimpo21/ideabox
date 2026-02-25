@@ -94,6 +94,22 @@ export const EMAIL_LABELS_SUMMARY = {
 } as const;
 
 /**
+ * Email type values — the nature of the communication.
+ * NEW (Feb 2026): Orthogonal to category. Category = life area, type = communication nature.
+ */
+export const EMAIL_TYPES = [
+  'personal',        // Direct human correspondence
+  'transactional',   // Receipts, confirmations, shipping updates
+  'newsletter',      // Newsletters, digests, content roundups
+  'notification',    // App notifications, social media alerts
+  'promo',           // Marketing, sales, deals
+  'cold_outreach',   // Unsolicited sales, PR, fake awards
+  'needs_response',  // Someone is waiting for a reply
+  'fyi',             // Informational, no action needed
+  'automated',       // Machine-generated codes, alerts
+] as const;
+
+/**
  * Signal strength values for email relevance assessment.
  * NEW (Feb 2026): Core "is this worth the user's time?" classification.
  */
@@ -165,7 +181,7 @@ export const analyzerConfig = {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for deterministic classification
-    maxTokens: 600,   // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness
+    maxTokens: 750,   // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness + emailType + aiBrief
   } satisfies AnalyzerConfig,
 
   /**
@@ -339,6 +355,25 @@ export const analyzerConfig = {
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for accurate extraction
     maxTokens: 400,   // Contact fields are compact
+  } satisfies AnalyzerConfig,
+
+  /**
+   * Summary Generator: Synthesizes narrative email digests.
+   * NEW (Feb 2026): Generates on-demand when stale + new data exists.
+   *
+   * Input: Clustered ai_briefs + action summaries + deadlines.
+   * Output: Narrative headline + themed sections + stats.
+   *
+   * NOT a per-email analyzer — runs once per summary generation.
+   * Uses ai_brief from categorizer as input (zero re-analysis cost).
+   *
+   * COST: ~$0.0007/summary × ~6/day = ~$0.13/month worst case
+   */
+  summaryGenerator: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.3, // Factual but readable narrative
+    maxTokens: 800,   // Headline + themed sections + stats
   } satisfies AnalyzerConfig,
 } as const;
 
