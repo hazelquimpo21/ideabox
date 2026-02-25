@@ -65,6 +65,29 @@ export interface SummaryResult {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL INDEX (for linking summary items back to source emails)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Lightweight metadata for a source email referenced in a summary.
+ * Stored as part of the summary so the UI can render links without extra queries.
+ */
+export interface SummaryEmailRef {
+  /** Email subject line */
+  subject: string | null;
+  /** Sender display name */
+  sender: string | null;
+  /** Life-bucket category (for building /inbox/[category]/[emailId] links) */
+  category: string | null;
+}
+
+/**
+ * Map of email_id → metadata for all emails referenced in this summary.
+ * Enables the UI to render clickable links to source emails.
+ */
+export type SummaryEmailIndex = Record<string, SummaryEmailRef>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DATABASE TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -77,6 +100,8 @@ export interface EmailSummary {
   headline: string;
   sections: SummarySection[];
   stats: SummaryStats;
+  /** Map of email_id → {subject, sender, category} for link rendering */
+  email_index: SummaryEmailIndex;
   period_start: string;
   period_end: string;
   emails_included: number;

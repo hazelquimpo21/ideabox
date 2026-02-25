@@ -20,6 +20,8 @@ export type {
   SummarySection,
   SummaryItem,
   SummaryStats,
+  SummaryEmailRef,
+  SummaryEmailIndex,
   SummaryLatestResponse,
   SummaryGenerateResponse,
   GenerateSummaryResult,

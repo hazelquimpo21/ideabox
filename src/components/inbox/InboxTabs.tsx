@@ -56,6 +56,7 @@ import { PriorityEmailList } from '@/components/inbox/PriorityEmailList';
 import { CategoryOverview } from '@/components/inbox/CategoryOverview';
 import { EmailDetailModal } from '@/components/email/EmailDetailModal';
 import { IdeasFeed } from '@/components/inbox/IdeasFeed';
+import { InboxSummaryBanner } from '@/components/inbox/InboxSummaryBanner';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -204,6 +205,7 @@ export function InboxTabs() {
 
         {/* ── Tab Content ────────────────────────────────────────────────── */}
         <TabsContent value="inbox">
+          <InboxSummaryBanner />
           <InboxFeed onEmailSelect={handleEmailSelect} initialCategory={initialCategory} />
         </TabsContent>
 
