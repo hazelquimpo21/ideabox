@@ -56,6 +56,7 @@ import {
   GmailSyncError,
 } from '@/lib/gmail';
 import { runAIAnalysis } from '@/lib/services/email-analysis';
+import { markSummaryStale } from '@/services/summary';
 import type { SyncResult } from '@/lib/gmail';
 import type { GmailAccount } from '@/types/database';
 
@@ -620,6 +621,16 @@ async function syncAccount(
           });
         }
       }
+    }
+
+    // Step 6b: Mark email summary as stale if new emails were synced
+    if (messagesCreated > 0) {
+      markSummaryStale(userId, messagesCreated).catch((err) => {
+        logger.warn('Failed to mark summary stale', {
+          userId,
+          error: err instanceof Error ? err.message : 'Unknown',
+        });
+      });
     }
 
     // Step 7: Update account sync metadata

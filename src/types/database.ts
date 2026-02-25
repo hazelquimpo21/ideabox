@@ -1313,6 +1313,60 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['saved_news']['Insert']>;
       };
+      // Email summaries (NEW Feb 2026 — migration 038)
+      email_summaries: {
+        Row: {
+          id: string;
+          user_id: string;
+          headline: string;
+          sections: Record<string, unknown>[];
+          stats: Record<string, unknown>;
+          period_start: string;
+          period_end: string;
+          emails_included: number;
+          threads_included: number;
+          tokens_used: number | null;
+          estimated_cost: number | null;
+          processing_time_ms: number | null;
+          model: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          headline: string;
+          sections?: Record<string, unknown>[];
+          stats?: Record<string, unknown>;
+          period_start: string;
+          period_end: string;
+          emails_included?: number;
+          threads_included?: number;
+          tokens_used?: number | null;
+          estimated_cost?: number | null;
+          processing_time_ms?: number | null;
+          model?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['email_summaries']['Insert']>;
+      };
+      // Summary staleness tracking (NEW Feb 2026 — migration 038)
+      user_summary_state: {
+        Row: {
+          user_id: string;
+          last_summary_at: string | null;
+          is_stale: boolean;
+          emails_since_last: number;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          last_summary_at?: string | null;
+          is_stale?: boolean;
+          emails_since_last?: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['user_summary_state']['Insert']>;
+      };
       gmail_push_logs: {
         Row: {
           id: string;
@@ -1462,6 +1516,8 @@ export type GmailPushLog = TableRow<'gmail_push_logs'>;
 export type EmailIdea = TableRow<'email_ideas'>;
 export type SavedInsight = TableRow<'saved_insights'>;
 export type SavedNews = TableRow<'saved_news'>;
+export type EmailSummaryRow = TableRow<'email_summaries'>;
+export type UserSummaryStateRow = TableRow<'user_summary_state'>;
 
 /**
  * Cost usage summary from database function.

@@ -243,3 +243,14 @@ export type {
   ReviewQueueItem,
   ReviewQueueStats,
 } from './useReviewQueue';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL SUMMARIES HOOK (NEW - Feb 2026)
+// AI-synthesized narrative digest, generated on-demand when stale
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useSummary, default as useSummaryDefault } from './useSummary';
+export type {
+  UseSummaryOptions,
+  UseSummaryReturn,
+} from './useSummary';

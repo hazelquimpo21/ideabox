@@ -88,3 +88,11 @@ export * from './user-context';
 // Re-export contact management service
 // Handles contact creation from emails, Google import, VIP suggestions, and aliases
 export * from './contacts';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SUMMARY SERVICES (NEW - Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Re-export email summary generation service
+// AI-synthesized narrative digests, generated on-demand when stale
+export * from './summary';
