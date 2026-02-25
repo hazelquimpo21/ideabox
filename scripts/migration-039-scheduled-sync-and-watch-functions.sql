@@ -34,7 +34,9 @@ COMMENT ON COLUMN gmail_accounts.backfill_completed_at IS
 --    Returns accounts with sync_enabled=true sorted by staleness.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE OR REPLACE VIEW accounts_needing_sync AS
+DROP VIEW IF EXISTS accounts_needing_sync;
+
+CREATE VIEW accounts_needing_sync AS
 SELECT
   ga.id AS account_id,
   ga.user_id,
