@@ -14,6 +14,7 @@
 'use client';
 
 import React, { memo, useState } from 'react';
+import Link from 'next/link';
 import {
   Card,
   CardContent,
@@ -37,8 +38,9 @@ import {
   Plane,
   DollarSign,
   Briefcase,
+  ExternalLink,
 } from 'lucide-react';
-import type { EmailSummary, SummarySection, SummaryItem } from '@/services/summary';
+import type { EmailSummary, SummarySection, SummaryItem, SummaryEmailIndex } from '@/services/summary';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ICON MAP (shared with EmailSummaryCard)
@@ -97,7 +99,19 @@ export interface SummaryHistoryListProps {
 /**
  * Single item row within a summary section.
  */
-const HistoryItemRow = memo(function HistoryItemRow({ item }: { item: SummaryItem }) {
+const HistoryItemRow = memo(function HistoryItemRow({
+  item,
+  emailIndex,
+}: {
+  item: SummaryItem;
+  emailIndex?: SummaryEmailIndex;
+}) {
+  const primaryEmailId = item.email_ids?.[0];
+  const emailRef = primaryEmailId && emailIndex ? emailIndex[primaryEmailId] : null;
+  const emailHref = primaryEmailId && emailRef?.category
+    ? `/inbox/${emailRef.category}/${primaryEmailId}`
+    : null;
+
   return (
     <li
       className={`pl-3 py-1.5 text-sm border-l-2 ${
@@ -112,6 +126,16 @@ const HistoryItemRow = memo(function HistoryItemRow({ item }: { item: SummaryIte
           Action
         </span>
       )}
+      {emailHref && (
+        <Link
+          href={emailHref}
+          className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+          title={emailRef?.subject || 'View email'}
+        >
+          <ExternalLink className="h-2.5 w-2.5" />
+          View
+        </Link>
+      )}
     </li>
   );
 });
@@ -122,9 +146,11 @@ const HistoryItemRow = memo(function HistoryItemRow({ item }: { item: SummaryIte
 const HistorySectionBlock = memo(function HistorySectionBlock({
   section,
   defaultOpen,
+  emailIndex,
 }: {
   section: SummarySection;
   defaultOpen: boolean;
+  emailIndex?: SummaryEmailIndex;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const IconComponent = ICON_MAP[section.icon] || Info;
@@ -148,7 +174,7 @@ const HistorySectionBlock = memo(function HistorySectionBlock({
       {isOpen && (
         <ul className="px-3 pb-3 space-y-0.5">
           {section.items.map((item, i) => (
-            <HistoryItemRow key={i} item={item} />
+            <HistoryItemRow key={i} item={item} emailIndex={emailIndex} />
           ))}
         </ul>
       )}
@@ -223,6 +249,7 @@ const SummaryHistoryCard = memo(function SummaryHistoryCard({
                 key={section.theme}
                 section={section}
                 defaultOpen={i < 2}
+                emailIndex={summary.email_index}
               />
             ))}
           </div>

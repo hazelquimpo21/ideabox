@@ -27,6 +27,7 @@ import type {
   UserSummaryState,
   SummaryResult,
   SummaryInputData,
+  SummaryEmailIndex,
   ThreadSummary,
   GenerateSummaryResult,
 } from './types';
@@ -122,12 +123,16 @@ export async function generateSummary(
       durationMs: result.durationMs,
     });
 
-    // ─── Step 4: Compute coverage window ─────────────────────────────────
+    // ─── Step 4: Compute coverage window + email index ─────────────────
     const allDates = inputData.threads.map(t => t.latest_date).sort();
     const periodStart = allDates[0] || new Date().toISOString();
     const periodEnd = allDates[allDates.length - 1] || new Date().toISOString();
     const totalEmails = inputData.threads.reduce((sum, t) => sum + t.email_count, 0);
     const totalThreads = inputData.threads.length;
+
+    // Build email_index: map of email_id → {subject, sender, category}
+    // This lets the UI render clickable links to source emails without extra queries
+    const emailIndex = buildEmailIndex(inputData.threads);
 
     // ─── Step 5: Persist to email_summaries ──────────────────────────────
     const processingTimeMs = Date.now() - startTime;
@@ -139,6 +144,7 @@ export async function generateSummary(
         headline: result.data.headline,
         sections: result.data.sections as unknown as Record<string, unknown>[],
         stats: result.data.stats as unknown as Record<string, unknown>,
+        email_index: emailIndex as unknown as Record<string, unknown>,
         period_start: periodStart,
         period_end: periodEnd,
         emails_included: totalEmails,
@@ -169,6 +175,7 @@ export async function generateSummary(
       headline: result.data.headline,
       sections: result.data.sections,
       stats: result.data.stats,
+      email_index: emailIndex,
       period_start: periodStart,
       period_end: periodEnd,
       emails_included: totalEmails,
@@ -284,6 +291,7 @@ async function getLatestSummary(supabase: any, userId: string): Promise<EmailSum
     ...data,
     sections: data.sections as EmailSummary['sections'],
     stats: data.stats as EmailSummary['stats'],
+    email_index: (data.email_index || {}) as EmailSummary['email_index'],
   };
 }
 
@@ -462,4 +470,27 @@ function clusterByThread(
 function isHigherSignal(a: string | null, b: string | null): boolean {
   const order: Record<string, number> = { high: 3, medium: 2, low: 1, noise: 0 };
   return (order[a || ''] ?? -1) > (order[b || ''] ?? -1);
+}
+
+/**
+ * Builds a lightweight email_id → metadata index from thread data.
+ * Stored in the summary so the UI can render clickable links without extra queries.
+ *
+ * For multi-email threads, each email_id maps to the thread's subject/sender/category
+ * (the most recent info from the thread leader).
+ */
+function buildEmailIndex(threads: ThreadSummary[]): SummaryEmailIndex {
+  const index: SummaryEmailIndex = {};
+
+  for (const thread of threads) {
+    for (const emailId of thread.email_ids) {
+      index[emailId] = {
+        subject: thread.subject,
+        sender: thread.sender_name || thread.sender_email,
+        category: thread.category,
+      };
+    }
+  }
+
+  return index;
 }

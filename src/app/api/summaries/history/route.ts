@@ -37,7 +37,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { createLogger } from '@/lib/utils/logger';
-import type { EmailSummary, SummarySection, SummaryStats } from '@/services/summary';
+import type { EmailSummary, SummarySection, SummaryStats, SummaryEmailIndex } from '@/services/summary';
 
 const logger = createLogger('SummariesHistoryAPI');
 
@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
       ...row,
       sections: row.sections as SummarySection[],
       stats: row.stats as SummaryStats,
+      email_index: (row.email_index || {}) as SummaryEmailIndex,
     }));
 
     const total = count || 0;

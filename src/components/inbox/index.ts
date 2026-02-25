@@ -15,3 +15,4 @@ export { CategoryOverview } from './CategoryOverview';
 export { CategoryIcon } from './CategoryIcon';
 export { SenderLogo } from './SenderLogo';
 export { PriorityEmailList } from './PriorityEmailList';
+export { InboxSummaryBanner } from './InboxSummaryBanner';
