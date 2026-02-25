@@ -189,6 +189,8 @@ export interface Database {
           // Email sending (migration 026)
           has_send_scope: boolean;
           send_scope_granted_at: string | null;
+          // Post-initial-sync backfill (migration 039)
+          backfill_completed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -226,6 +228,7 @@ export interface Database {
           historical_sync_error?: string | null;
           has_send_scope?: boolean;
           send_scope_granted_at?: string | null;
+          backfill_completed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -263,6 +266,7 @@ export interface Database {
           historical_sync_error?: string | null;
           has_send_scope?: boolean;
           send_scope_granted_at?: string | null;
+          backfill_completed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1398,7 +1402,17 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['gmail_push_logs']['Insert']>;
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      accounts_needing_sync: {
+        Row: {
+          account_id: string;
+          user_id: string;
+          email: string;
+          minutes_since_sync: number;
+          needs_backfill: boolean;
+        };
+      };
+    };
     Functions: {
       get_daily_api_cost: {
         Args: { p_user_id: string; p_date?: string };
@@ -1445,6 +1459,82 @@ export interface Database {
         Returns: boolean;
       };
       release_sync_lock: {
+        Args: { p_account_id: string };
+        Returns: void;
+      };
+      // Watch management (migration 039)
+      update_gmail_watch: {
+        Args: {
+          p_account_id: string;
+          p_history_id: string;
+          p_expiration: string;
+          p_resource_id?: string | null;
+        };
+        Returns: void;
+      };
+      clear_gmail_watch: {
+        Args: { p_account_id: string };
+        Returns: void;
+      };
+      get_expiring_watches: {
+        Args: { p_hours_ahead?: number };
+        Returns: Array<{
+          account_id: string;
+          user_id: string;
+          email: string;
+          hours_until_expiry: number;
+        }>;
+      };
+      get_accounts_needing_watch: {
+        Args: Record<string, never>;
+        Returns: Array<{
+          account_id: string;
+          user_id: string;
+          email: string;
+        }>;
+      };
+      record_watch_failure: {
+        Args: { p_account_id: string; p_error_message: string };
+        Returns: void;
+      };
+      reset_watch_failures: {
+        Args: { p_account_id: string };
+        Returns: void;
+      };
+      get_accounts_with_watch_problems: {
+        Args: { p_min_failures?: number };
+        Returns: Array<{
+          account_id: string;
+          user_id: string;
+          email: string;
+          failure_count: number;
+          last_error: string;
+          alert_sent_at: string | null;
+        }>;
+      };
+      mark_watch_alert_sent: {
+        Args: { p_account_id: string };
+        Returns: void;
+      };
+      // History management (migration 039)
+      mark_history_stale: {
+        Args: { p_account_id: string };
+        Returns: void;
+      };
+      validate_history_id: {
+        Args: { p_account_id: string; p_history_id: string };
+        Returns: void;
+      };
+      // Cleanup (migration 039)
+      cleanup_old_sync_runs: {
+        Args: { p_days_to_keep?: number };
+        Returns: number;
+      };
+      cleanup_old_push_logs: {
+        Args: { p_days_to_keep?: number };
+        Returns: number;
+      };
+      mark_backfill_complete: {
         Args: { p_account_id: string };
         Returns: void;
       };
