@@ -115,8 +115,136 @@ The only meaningful cost is OpenAI for AI analysis, which is already being paid.
 
 ## Identified Gaps (Action Items)
 
-1. **No watch renewal automation** — `renewExpiringWatches()` exists in code but nothing calls it. Need a `renew-watches` Edge Function on a 6-hour cron.
-2. **Edge Functions not deployed** — `sync-emails` (and other functions) need manual deployment.
-3. **Cron jobs not scheduled** — `cron.schedule()` SQL must be run in Supabase dashboard.
-4. **GCP Pub/Sub not configured** — Topic, subscription, and IAM permissions needed.
+1. ~~**No watch renewal automation**~~ **DONE** — Created `supabase/functions/renew-watches/index.ts` Edge Function + `src/app/api/gmail/watch/route.ts` API route.
+2. **Edge Functions not deployed** — `sync-emails` and `renew-watches` need manual deployment (see Deployment Guide below).
+3. **Cron jobs not scheduled** — `cron.schedule()` SQL must be run in Supabase dashboard (see Deployment Guide below).
+4. **GCP Pub/Sub not configured** — Topic, subscription, and IAM permissions needed (see Deployment Guide below).
 5. **Environment variables** — `CRON_SECRET`, `INTERNAL_SERVICE_KEY`, `GOOGLE_CLOUD_PROJECT` must be set.
+6. ~~**Missing database functions**~~ **DONE** — Created `scripts/migration-039-scheduled-sync-and-watch-functions.sql` with `accounts_needing_sync` VIEW, watch management RPCs, history RPCs, and cleanup functions.
+7. ~~**No post-initial-sync backfill**~~ **DONE** — `sync-emails` Edge Function now detects accounts that completed initial sync but haven't had a background backfill, and fetches last 20 days or 1,000 emails (whichever is first) with full AI analysis.
+
+---
+
+## Deployment Guide
+
+### Prerequisites
+
+Generate two secure random tokens:
+```bash
+# For cron authentication
+export CRON_SECRET=$(openssl rand -hex 32)
+# For service-to-service auth
+export INTERNAL_SERVICE_KEY=$(openssl rand -hex 32)
+```
+
+### Phase 1: Activate pg_cron Polling
+
+**Step 1 — Run migration 039:**
+```sql
+-- Run in Supabase SQL Editor or via psql
+-- See: scripts/migration-039-scheduled-sync-and-watch-functions.sql
+```
+
+**Step 2 — Set Edge Function secrets:**
+```bash
+supabase secrets set CRON_SECRET="$CRON_SECRET"
+supabase secrets set APP_URL="https://your-app.vercel.app"
+supabase secrets set INTERNAL_SERVICE_KEY="$INTERNAL_SERVICE_KEY"
+```
+
+**Step 3 — Deploy sync-emails Edge Function:**
+```bash
+supabase functions deploy sync-emails --no-verify-jwt
+```
+
+**Step 4 — Schedule cron job (run in SQL Editor):**
+```sql
+-- Email sync every 15 minutes
+SELECT cron.schedule(
+  'sync-emails-cron',
+  '*/15 * * * *',
+  $$SELECT net.http_post(
+    url := '<SUPABASE_URL>/functions/v1/sync-emails',
+    headers := '{"Authorization": "Bearer <CRON_SECRET>", "Content-Type": "application/json"}'::jsonb,
+    body := '{"trigger_source": "cron"}'::jsonb
+  )$$
+);
+
+-- Cleanup old sync runs weekly (keep 30 days)
+SELECT cron.schedule(
+  'cleanup-sync-runs',
+  '0 3 * * 0',
+  $$SELECT cleanup_old_sync_runs(30)$$
+);
+```
+
+**Step 5 — Set `INTERNAL_SERVICE_KEY` in your Next.js app environment** (Vercel dashboard or `.env.local`):
+```
+INTERNAL_SERVICE_KEY=<same value as Edge Function secret>
+```
+
+### Phase 2: Activate Gmail Pub/Sub Push
+
+**Step 1 — GCP Pub/Sub setup:**
+1. Enable Pub/Sub API in Google Cloud Console
+2. Create topic `gmail-notifications` in your project
+3. Grant `gmail-api-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role on the topic
+4. Create a **push subscription** pointing to `https://<APP_URL>/api/webhooks/gmail`
+5. Set the `GOOGLE_CLOUD_PROJECT` environment variable in your Next.js app
+
+**Step 2 — Deploy renew-watches Edge Function:**
+```bash
+supabase functions deploy renew-watches --no-verify-jwt
+```
+
+**Step 3 — Schedule watch renewal cron (run in SQL Editor):**
+```sql
+-- Renew watches every 6 hours
+SELECT cron.schedule(
+  'renew-watches-cron',
+  '0 */6 * * *',
+  $$SELECT net.http_post(
+    url := '<SUPABASE_URL>/functions/v1/renew-watches',
+    headers := '{"Authorization": "Bearer <CRON_SECRET>", "Content-Type": "application/json"}'::jsonb,
+    body := '{"trigger_source": "cron"}'::jsonb
+  )$$
+);
+
+-- Cleanup old push logs weekly (keep 14 days)
+SELECT cron.schedule(
+  'cleanup-push-logs',
+  '0 4 * * 0',
+  $$SELECT cleanup_old_push_logs(14)$$
+);
+```
+
+### Verification
+
+After deploying, verify everything works:
+
+```bash
+# Test sync-emails Edge Function manually
+curl -X POST https://<PROJECT>.supabase.co/functions/v1/sync-emails \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json"
+
+# Test renew-watches Edge Function manually
+curl -X POST https://<PROJECT>.supabase.co/functions/v1/renew-watches \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json"
+
+# Check cron jobs are running
+SELECT * FROM cron.job;
+
+# Check recent sync runs
+SELECT id, status, accounts_processed, emails_created, duration_ms, started_at
+FROM scheduled_sync_runs
+ORDER BY started_at DESC
+LIMIT 10;
+
+# Check recent push logs
+SELECT email_address, status, messages_synced, processing_time_ms, created_at
+FROM gmail_push_logs
+ORDER BY created_at DESC
+LIMIT 10;
+```

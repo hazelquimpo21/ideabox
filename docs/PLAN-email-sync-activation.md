@@ -1,4 +1,4 @@
-# Plan: Activate Automated Email Sync (2 Phases)
+# Plan: Activate Automated Email Sync (2 Phases) — IMPLEMENTED
 
 ## Phase 1: Scheduled Polling via pg_cron (the safety net)
 

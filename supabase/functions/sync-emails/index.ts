@@ -46,6 +46,7 @@ interface AccountToSync {
   user_id: string;
   email: string;
   minutes_since_sync: number;
+  needs_backfill: boolean;
 }
 
 interface SyncResult {
@@ -82,6 +83,10 @@ const corsHeaders = {
 const SYNC_INTERVAL_MINUTES = 15; // Minimum minutes between syncs per account
 const MAX_ACCOUNTS_PER_RUN = 50; // Maximum accounts to sync in one run
 const SYNC_TIMEOUT_MS = 60000; // Timeout per account sync (60 seconds)
+const BACKFILL_TIMEOUT_MS = 180000; // Longer timeout for backfill (3 minutes)
+const BACKFILL_MAX_RESULTS = 500; // Max emails per backfill call (Gmail API limit)
+const BACKFILL_MAX_CALLS = 2; // Up to 2 calls = 1000 emails max
+const BACKFILL_DAYS_BACK = 20; // Backfill last 20 days
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGING HELPERS
@@ -203,7 +208,7 @@ serve(async (req: Request) => {
     // ─────────────────────────────────────────────────────────────────────────────
     let accountsQuery = supabase
       .from('accounts_needing_sync')
-      .select('account_id, user_id, email, minutes_since_sync')
+      .select('account_id, user_id, email, minutes_since_sync, needs_backfill')
       .limit(MAX_ACCOUNTS_PER_RUN);
 
     // Filter by specific account if requested
@@ -268,55 +273,148 @@ serve(async (req: Request) => {
       const accountStartTime = Date.now();
 
       try {
-        log('debug', 'Syncing account', { email: account.email, accountId: account.account_id });
+        const isBackfill = account.needs_backfill;
 
-        // Call the main app's sync endpoint
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
-
-        const syncResponse = await fetch(`${appUrl}/api/emails/sync`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Service-Key': internalServiceKey,
-          },
-          body: JSON.stringify({
-            accountId: account.account_id,
-            maxResults: 50,
-            runAnalysis: true,
-            analysisMaxEmails: 50,
-          }),
-          signal: controller.signal,
+        log('debug', 'Syncing account', {
+          email: account.email,
+          accountId: account.account_id,
+          mode: isBackfill ? 'backfill' : 'incremental',
         });
 
-        clearTimeout(timeoutId);
+        let cumulativeFetched = 0;
+        let cumulativeCreated = 0;
+        let cumulativeAnalyzed = 0;
 
-        if (!syncResponse.ok) {
-          const errorText = await syncResponse.text();
-          throw new Error(`Sync failed with status ${syncResponse.status}: ${errorText}`);
+        if (isBackfill) {
+          // ── BACKFILL MODE ──────────────────────────────────────────────
+          // Fetch last 20 days of emails, up to 1K total (2 calls x 500)
+          const afterDate = new Date();
+          afterDate.setDate(afterDate.getDate() - BACKFILL_DAYS_BACK);
+          const afterQuery = `after:${afterDate.getFullYear()}/${String(afterDate.getMonth() + 1).padStart(2, '0')}/${String(afterDate.getDate()).padStart(2, '0')}`;
+
+          log('info', 'Starting backfill for account', {
+            email: account.email,
+            daysBack: BACKFILL_DAYS_BACK,
+            query: afterQuery,
+          });
+
+          for (let call = 0; call < BACKFILL_MAX_CALLS; call++) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), BACKFILL_TIMEOUT_MS);
+
+            const syncResponse = await fetch(`${appUrl}/api/emails/sync`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Service-Key': internalServiceKey,
+              },
+              body: JSON.stringify({
+                accountId: account.account_id,
+                maxResults: BACKFILL_MAX_RESULTS,
+                query: afterQuery,
+                runAnalysis: true,
+                analysisMaxEmails: 200,
+              }),
+              signal: controller.signal,
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!syncResponse.ok) {
+              const errorText = await syncResponse.text();
+              throw new Error(`Backfill call ${call + 1} failed with status ${syncResponse.status}: ${errorText}`);
+            }
+
+            const syncResult = await syncResponse.json();
+            const fetched = syncResult.totals?.totalFetched || 0;
+            cumulativeFetched += fetched;
+            cumulativeCreated += syncResult.totals?.totalCreated || 0;
+            cumulativeAnalyzed += syncResult.analysis?.successCount || 0;
+
+            log('info', `Backfill call ${call + 1} completed`, {
+              email: account.email,
+              fetched,
+              cumulativeFetched,
+              cumulativeCreated,
+            });
+
+            // Stop if we got fewer than max (no more emails to fetch)
+            if (fetched < BACKFILL_MAX_RESULTS) break;
+          }
+
+          // Mark backfill as complete
+          const { error: markError } = await supabase.rpc('mark_backfill_complete', {
+            p_account_id: account.account_id,
+          });
+
+          if (markError) {
+            log('warn', 'Failed to mark backfill complete', {
+              accountId: account.account_id,
+              error: markError.message,
+            });
+          }
+
+          log('info', 'Backfill completed for account', {
+            email: account.email,
+            totalFetched: cumulativeFetched,
+            totalCreated: cumulativeCreated,
+            totalAnalyzed: cumulativeAnalyzed,
+          });
+
+        } else {
+          // ── REGULAR INCREMENTAL SYNC ───────────────────────────────────
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
+
+          const syncResponse = await fetch(`${appUrl}/api/emails/sync`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Service-Key': internalServiceKey,
+            },
+            body: JSON.stringify({
+              accountId: account.account_id,
+              maxResults: 50,
+              runAnalysis: true,
+              analysisMaxEmails: 50,
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!syncResponse.ok) {
+            const errorText = await syncResponse.text();
+            throw new Error(`Sync failed with status ${syncResponse.status}: ${errorText}`);
+          }
+
+          const syncResult = await syncResponse.json();
+          cumulativeFetched = syncResult.totals?.totalFetched || 0;
+          cumulativeCreated = syncResult.totals?.totalCreated || 0;
+          cumulativeAnalyzed = syncResult.analysis?.successCount || 0;
         }
 
-        const syncResult = await syncResponse.json();
         const accountDuration = Date.now() - accountStartTime;
 
         results.push({
           accountId: account.account_id,
           email: account.email,
           success: true,
-          emailsFetched: syncResult.totals?.totalFetched || 0,
-          emailsCreated: syncResult.totals?.totalCreated || 0,
-          emailsAnalyzed: syncResult.analysis?.successCount || 0,
+          emailsFetched: cumulativeFetched,
+          emailsCreated: cumulativeCreated,
+          emailsAnalyzed: cumulativeAnalyzed,
           durationMs: accountDuration,
         });
 
         accountsSucceeded++;
-        totalEmailsCreated += syncResult.totals?.totalCreated || 0;
-        totalEmailsAnalyzed += syncResult.analysis?.successCount || 0;
+        totalEmailsCreated += cumulativeCreated;
+        totalEmailsAnalyzed += cumulativeAnalyzed;
 
         log('info', 'Account sync completed', {
           email: account.email,
-          emailsCreated: syncResult.totals?.totalCreated || 0,
-          emailsAnalyzed: syncResult.analysis?.successCount || 0,
+          mode: account.needs_backfill ? 'backfill' : 'incremental',
+          emailsCreated: cumulativeCreated,
+          emailsAnalyzed: cumulativeAnalyzed,
           durationMs: accountDuration,
         });
 
@@ -336,6 +434,7 @@ serve(async (req: Request) => {
 
         log('error', 'Account sync failed', {
           email: account.email,
+          mode: account.needs_backfill ? 'backfill' : 'incremental',
           error: errorMessage,
           durationMs: accountDuration,
         });
