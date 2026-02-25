@@ -1650,3 +1650,30 @@ Previously, emails that failed AI analysis were permanently skipped — the `ana
 | `POST /api/emails/retry-analysis` | Batch retry multiple failed emails | `{ emailIds: ["uuid-1", "uuid-2"] }` |
 | `POST /api/emails/[id]/analyze` | Single email re-analysis | Header: `x-force-reanalyze: true` |
 | `POST /api/emails/rescan` | Full rescan of recent emails | `{ maxEmails: 50 }` |
+
+### Email Summary Generator (NEW Feb 2026)
+
+**Purpose:** Synthesize a conversational narrative digest from recent emails, actions, dates, ideas, and news.
+
+> This is NOT an individual email analyzer. It's a system-level service that aggregates outputs from all analyzers into a single summary for the user. Runs separately from the per-email pipeline.
+
+**Location:** `src/services/summary/`
+
+**Flow:**
+1. Check staleness via `user_summary_state` table (is_stale + > 1 hour since last)
+2. Gather inputs: recent threads (clustered by `thread_id`), pending actions, upcoming dates, new ideas, news
+3. Build user content from `ai_brief` fields (dense structured summaries from categorizer)
+4. Call GPT-4.1-mini with function calling → structured output: headline + themed sections + stats
+5. Persist to `email_summaries` table
+6. Reset staleness state
+
+**Triggers:**
+- Lazy: User visits `/home` → `useSummary` hook → `POST /api/summaries/generate`
+- Eager: Batch job `generateSummariesForStaleUsers()` (cron-callable)
+- Staleness marked after sync: `markSummaryStale()` in sync route + webhook
+
+**Config:** `analyzerConfig.summaryGenerator` — model: gpt-4.1-mini, temp: 0.3, maxTokens: 800
+
+**Cost:** ~$0.13/month (6 summaries/day)
+
+**Database:** `email_summaries` + `user_summary_state` (migration 038)

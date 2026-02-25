@@ -1,7 +1,7 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** February 2026
-> **Database Migrations:** 001-034
+> **Database Migrations:** 001-038
 
 ## What's Built
 
@@ -36,6 +36,7 @@
 - Action extractor noise rejection (cold outreach, fake awards never generate actions)
 - **Hard noise gate** (NEW Feb 2026): Emails with signal_strength = 'low' or 'noise' never create action records
 - **Two-tier task system** (NEW Feb 2026): Review Queue for scan-worthy emails + Real Tasks for concrete actions
+- **Email Summaries** (NEW Feb 2026): AI-synthesized narrative digests. Summary generator service gathers threads/actions/dates/ideas/news, clusters by thread, synthesizes with GPT-4.1-mini into conversational headlines + themed sections. Staleness tracking via `user_summary_state` table. Lazy generation (user visit) + eager batch job (`generateSummariesForStaleUsers`). 1-hour minimum interval. Full history browsable at `/summaries`.
 
 ### Email Sync
 - Full sync + incremental sync via Gmail API
@@ -62,6 +63,7 @@ The app uses a 5-item sidebar navigation (redesigned Feb 2026):
 | **Tasks** | `/tasks` | Tabbed task management — To-dos, Campaigns, Templates |
 | | `/tasks/campaigns/new` | Create new campaign |
 | | `/tasks/campaigns/[id]` | Campaign detail |
+| **Summaries** | `/summaries` | Browsable history of AI-synthesized email summaries, grouped by date |
 | **Sent** | `/sent` | Email composition, outbox, sent history |
 | **Settings** | `/settings` | Preferences, cost tracking, account management |
 | **Admin** | `/admin` | Superadmin dashboard — account reset, user management (restricted access) |
@@ -87,7 +89,7 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Inline reply with editable subject
 
 ### Data Layer
-- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress, useIdeas, useInsights, useNews, useReviewQueue, useCategoryStats, useCategoryPreviews, useHubPriorities, useSidebarData, useCampaigns, useTemplates, useGmailAccounts, useUserContext, useEmailThumbnails
+- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress, useIdeas, useInsights, useNews, useReviewQueue, useCategoryStats, useCategoryPreviews, useHubPriorities, useSidebarData, useCampaigns, useTemplates, useGmailAccounts, useUserContext, useEmailThumbnails, useSummary, useSummaryHistory
 - REST API routes for all entities with Zod validation
 - Page-based pagination with URL state
 - Optimistic UI updates with rollback
@@ -160,4 +162,5 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Insights & News | Feb 2026 | Two new Phase 2 analyzers: InsightExtractor (synthesizes ideas/tips/frameworks from newsletters, temp 0.4, gated on substantive content types) and NewsBrief (extracts factual news items, temp 0.2, gated on industry_news label or digest content). API routes (GET/POST/PATCH /api/insights, /api/news). useInsights + useNews hooks. InsightsCard + NewsBriefCard home widgets. InsightsFeed + NewsFeed full-page components. saved_insights + saved_news tables. Migration 034. |
 | Contact Onboarding Fix | Feb 2026 | Fixed 5 issues in contact onboarding flow: (1) VIP save failure now shows toast instead of failing silently, (2) MadLibsProfileStep reads VIPs directly from user_context.vip_emails instead of unnecessarily calling vip-suggestions endpoint, (3) email validation added to MadLibsField chip input, (4) context-aware empty state messaging in ContactImportStep, (5) OAuth return URL fixed to use explicit /onboarding path. |
 | Contact Onboarding UX | Feb 2026 | Fixed 3 bugs: (1) VIP suggestions returned 0 after fresh Google import (filter required email_count>=3 or starred, fresh imports have neither), (2) MadLibsProfileStep loading race (card rendered before VIPs loaded causing flash), (3) MadLibsField animate-pulse removed (replaced with static italic). Then replaced simple suggestion filter with 12-signal weighted scoring: Google starred/labels, same last name (family), same email domain (coworker), sent count, bidirectional communication, email frequency, recency, longevity, relationship type, sender type penalty, avatar presence. Badge shows top 2 reasons (e.g. "Starred + Possible family"). Works for both fresh imports and established accounts. |
+| Email Summaries | Feb 2026 | AI-synthesized email digests. Phase 1: migration 038 (email_summaries + user_summary_state tables), summary generator service (staleness check → gather inputs → cluster threads → AI synthesis → persist), summary prompt engineering, summary/types.ts, GET /api/summaries/latest, POST /api/summaries/generate, config/analyzers.ts update. Phase 2: useSummary hook (auto-generate when stale, polling), EmailSummaryCard component (themed collapsible sections, urgency indicators, loading/empty states), home page integration. Phase 3: Post-sync staleness triggers (sync route + webhook), batch job service (generateSummariesForStaleUsers for cron), GET /api/summaries/history (paginated), useSummaryHistory hook, SummaryHistoryList component (date-grouped, expandable), /summaries history page. "View history" link in EmailSummaryCard footer. |
 | Analyzer Refinement | Feb 2026 | Unified "right on top of that, Rose!" prompt voice across all analyzers. Added 2 new golden nugget types (remember_this, sales_opportunity) with max increased from 5→7. Multi-category display in inbox UI (secondary dots + badges). Initial sync increased 50→100 emails, relaxed SKIP_SENDER_PATTERNS (removed noreply/notifications/alerts), timeout 120s→240s. Batch checkpoints in initial sync orchestrator (checkpoint saved after each batch for interruption recovery). Fixed retry-analysis route to clear analysis_error before re-processing. Fixed single email analyze route to reset error state on force-reanalyze. Enhanced logging across categorizer, content-digest, insight-extractor (invalid value warnings, low-confidence alerts, failure details). Color-coded nugget badges in EmailDetail. Updated DECISIONS.md (#20-22), AI_ANALYZER_SYSTEM.md (nugget types, voice, checkpoints, re-analysis). |

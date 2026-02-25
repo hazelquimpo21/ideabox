@@ -17,6 +17,7 @@
 'use client';
 
 import React, { memo, useState } from 'react';
+import Link from 'next/link';
 import {
   Card,
   CardContent,
@@ -299,15 +300,23 @@ export const EmailSummaryCard = memo(function EmailSummaryCard({
           ))}
         </div>
 
-        {/* Footer with timestamp */}
+        {/* Footer with timestamp + history link */}
         <div className="mt-4 pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">
           <span>
             Updated {timeAgo}
             {isStale && ' · New emails since'}
           </span>
-          <span>
-            {summary.emails_included} emails across {summary.threads_included} threads
-          </span>
+          <div className="flex items-center gap-3">
+            <span>
+              {summary.emails_included} emails across {summary.threads_included} threads
+            </span>
+            <Link
+              href="/summaries"
+              className="text-xs text-blue-600 hover:text-blue-700 hover:underline"
+            >
+              View history
+            </Link>
+          </div>
         </div>
       </CardContent>
     </Card>

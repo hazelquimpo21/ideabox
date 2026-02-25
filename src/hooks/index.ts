@@ -254,3 +254,9 @@ export type {
   UseSummaryOptions,
   UseSummaryReturn,
 } from './useSummary';
+
+export { useSummaryHistory, default as useSummaryHistoryDefault } from './useSummaryHistory';
+export type {
+  UseSummaryHistoryOptions,
+  UseSummaryHistoryReturn,
+} from './useSummaryHistory';
