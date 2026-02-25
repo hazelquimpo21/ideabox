@@ -62,7 +62,22 @@ COMMENT ON VIEW accounts_needing_sync IS
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. Watch management RPC functions
+--    DROP existing functions first to allow return type changes.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+DROP FUNCTION IF EXISTS update_gmail_watch(uuid, text, timestamptz, text);
+DROP FUNCTION IF EXISTS clear_gmail_watch(uuid);
+DROP FUNCTION IF EXISTS get_expiring_watches(integer);
+DROP FUNCTION IF EXISTS get_accounts_needing_watch();
+DROP FUNCTION IF EXISTS record_watch_failure(uuid, text);
+DROP FUNCTION IF EXISTS reset_watch_failures(uuid);
+DROP FUNCTION IF EXISTS get_accounts_with_watch_problems(integer);
+DROP FUNCTION IF EXISTS mark_watch_alert_sent(uuid);
+DROP FUNCTION IF EXISTS mark_history_stale(uuid);
+DROP FUNCTION IF EXISTS validate_history_id(uuid, text);
+DROP FUNCTION IF EXISTS cleanup_old_sync_runs(integer);
+DROP FUNCTION IF EXISTS cleanup_old_push_logs(integer);
+DROP FUNCTION IF EXISTS mark_backfill_complete(uuid);
 
 -- 3a. update_gmail_watch — Called by watch-service.ts after creating a watch
 CREATE OR REPLACE FUNCTION update_gmail_watch(
