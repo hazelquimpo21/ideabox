@@ -85,6 +85,39 @@ export interface UserContext {
   onboarding_step: number;
   /** Whether onboarding is complete */
   onboarding_completed: boolean;
+
+  // Profile expansion (migration 040)
+  /** User's gender */
+  gender: string | null;
+  /** User's birthday (YYYY-MM-DD) */
+  birthday: string | null;
+  /** Street address */
+  address_street: string | null;
+  /** Address city */
+  address_city: string | null;
+  /** Address state */
+  address_state: string | null;
+  /** Address ZIP/postal code */
+  address_zip: string | null;
+  /** Address country */
+  address_country: string;
+  /** Other cities the user cares about */
+  other_cities: Array<{ city: string; tag: string; note?: string }>;
+  /** Employment type: employed, self_employed, both */
+  employment_type: string;
+  /** Additional jobs or side hustles */
+  other_jobs: Array<{ role: string; company: string; is_self_employed: boolean }>;
+  /** Household members */
+  household_members: Array<{
+    name: string;
+    relationship: string;
+    gender?: string | null;
+    birthday?: string | null;
+    school?: string | null;
+  }>;
+  /** Pets */
+  pets: Array<{ name: string; type: string }>;
+
   /** Creation timestamp */
   created_at: string;
   /** Last update timestamp */
@@ -132,15 +165,19 @@ export interface UseUserContextReturn {
  * Total adds up to 100%.
  */
 const SECTION_WEIGHTS = {
-  role: 10,
-  company: 5,
-  priorities: 15,
-  projects: 10,
-  vipEmails: 15,
-  vipDomains: 10,
-  location: 10,
-  interests: 10,
-  workHours: 15,
+  role: 8,
+  company: 4,
+  priorities: 10,
+  projects: 8,
+  vipEmails: 10,
+  vipDomains: 5,
+  location: 8,
+  interests: 7,
+  workHours: 10,
+  identity: 5,       // name already collected via Google; gender + birthday
+  household: 10,     // household members
+  address: 8,        // home address
+  work: 7,           // employment type + other jobs
 } as const;
 
 /**
@@ -226,6 +263,37 @@ function calculateCompletion(context: UserContext | null): {
     totalPercent += SECTION_WEIGHTS.workHours;
   } else {
     incomplete.push('Work Schedule');
+  }
+
+  // Identity (gender or birthday)
+  if (context.gender || context.birthday) {
+    totalPercent += SECTION_WEIGHTS.identity;
+  } else {
+    incomplete.push('Identity');
+  }
+
+  // Household (at least 1 member)
+  if (context.household_members && context.household_members.length > 0) {
+    totalPercent += SECTION_WEIGHTS.household;
+  } else {
+    incomplete.push('Household');
+  }
+
+  // Address (need at least city + state)
+  if (context.address_city && context.address_state) {
+    totalPercent += SECTION_WEIGHTS.address;
+  } else {
+    incomplete.push('Address');
+  }
+
+  // Work details (employment type set explicitly or has other jobs)
+  if (
+    (context.employment_type && context.employment_type !== 'employed') ||
+    (context.other_jobs && context.other_jobs.length > 0)
+  ) {
+    totalPercent += SECTION_WEIGHTS.work;
+  } else {
+    incomplete.push('Work Details');
   }
 
   return { percent: totalPercent, incompleteSections: incomplete };

@@ -413,7 +413,7 @@ export interface UserContext {
   /** User's interests for content relevance */
   interests?: string[];
 
-  /** Family context for personal categorization */
+  /** Family context for personal categorization (legacy) */
   familyContext?: {
     spouseName?: string;
     kidsCount?: number;
@@ -429,6 +429,46 @@ export interface UserContext {
 
   /** Whether onboarding is complete */
   onboardingCompleted?: boolean;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Profile expansion (migration 040)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** User's gender */
+  gender?: string;
+
+  /** User's birthday (YYYY-MM-DD) */
+  birthday?: string;
+
+  /** Home address */
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+  };
+
+  /** Other cities the user cares about */
+  otherCities?: Array<{ city: string; tag: string; note?: string }>;
+
+  /** Employment type: employed, self_employed, or both */
+  employmentType?: string;
+
+  /** Additional jobs or side hustles */
+  otherJobs?: Array<{ role: string; company: string; isSelfEmployed: boolean }>;
+
+  /** Household members (richer than legacy familyContext) */
+  householdMembers?: Array<{
+    name: string;
+    relationship: string;
+    gender?: string | null;
+    birthday?: string | null;
+    school?: string | null;
+  }>;
+
+  /** Pets */
+  pets?: Array<{ name: string; type: string }>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
