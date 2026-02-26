@@ -1022,11 +1022,6 @@ function AnalysisSummary({
 
   // Return analysis card, plus event details card if this is an event email
   if (analysis?.eventDetection?.hasEvent) {
-    logger.debug('Rendering event details for email', {
-      emailId: email.id,
-      eventTitle: analysis.eventDetection.eventTitle,
-    });
-
     return (
       <>
         {analysisCard}

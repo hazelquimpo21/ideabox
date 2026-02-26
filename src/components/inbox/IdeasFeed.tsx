@@ -145,8 +145,6 @@ export function IdeasFeed() {
     dismissIdea,
   } = useIdeas({ limit: 30, type: typeFilter || undefined });
 
-  logger.debug('Rendering IdeasFeed', { itemCount: items.length, typeFilter });
-
   const handleSave = async (idea: IdeaItem) => {
     try {
       await saveIdea(idea);

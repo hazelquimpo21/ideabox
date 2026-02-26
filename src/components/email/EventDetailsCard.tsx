@@ -303,18 +303,8 @@ export function EventDetailsCard({
   description,
   compact = false,
 }: EventDetailsCardProps) {
-  logger.debug('Rendering EventDetailsCard', {
-    eventTitle: event.eventTitle,
-    eventDate: event.eventDate,
-    compact,
-  });
-
   // Don't render if no valid event data
   if (!event.hasEvent || !event.eventDate) {
-    logger.warn('EventDetailsCard rendered with invalid event data', {
-      hasEvent: event.hasEvent,
-      hasDate: !!event.eventDate,
-    });
     return null;
   }
 

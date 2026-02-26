@@ -45,28 +45,40 @@ const SKIP_DOMAINS = new Set([
 /** Subdomains/patterns that are typically transactional/no-favicon — skip to reduce 404 noise */
 function shouldSkipDomain(domain: string): boolean {
   if (SKIP_DOMAINS.has(domain)) return true;
-  // Common transactional email subdomains that rarely have favicons
+
   const parts = domain.split('.');
+  // Common transactional email subdomains that rarely have favicons
   if (parts.length > 2) {
     const sub = parts[0]!;
     if ([
       'mail', 'email', 'e', 'em', 'info', 'news', 'notify', 'noreply', 'service',
       'reminder', 'mail8', 'send', 'hello', 'marketing', 'orders', 'rewards',
       'enotify', 'shared1', 'mail-service', 'bounce', 'return', 'reply',
+      'comms', 'mailer', 'updates', 'alerts', 'messages', 'system',
+      'do-not-reply', 'donotreply', 'no-reply', 'notifications',
     ].includes(sub)) {
       return true;
     }
   }
-  // Skip known bulk email platforms (their subdomains never have favicons)
-  if (
-    domain.endsWith('.ccsend.com') ||
-    domain.endsWith('.mailchimpapp.com') ||
-    domain.endsWith('.constantcontact.com') ||
-    domain.endsWith('.myactivecampaign.com') ||
-    domain.endsWith('.yoursocial.team')
-  ) {
+
+  // Skip known bulk email / marketing platforms (subdomains never have favicons)
+  const bulkSuffixes = [
+    '.ccsend.com', '.mailchimpapp.com', '.constantcontact.com',
+    '.myactivecampaign.com', '.yoursocial.team', '.sendgrid.net',
+    '.mcsv.net', '.list-manage.com', '.mailgun.org', '.mandrillapp.com',
+    '.postmarkapp.com', '.sparkpostmail.com', '.sailthru.com',
+    '.getresponse.com', '.aweber.com', '.drip.com',
+  ];
+  for (const suffix of bulkSuffixes) {
+    if (domain.endsWith(suffix)) return true;
+  }
+
+  // Skip numeric subdomains (e.g. "3328467.myactivecampaign.com" already caught above,
+  // but also catch patterns like "12345.example.com")
+  if (parts.length > 2 && /^\d+$/.test(parts[0]!)) {
     return true;
   }
+
   return false;
 }
 
@@ -120,20 +132,21 @@ export const SenderLogo = React.memo(function SenderLogo({
   React.useEffect(() => {
     if (shouldSkip || failed || alreadyCached) return;
 
+    let cancelled = false;
     const img = new Image();
     img.onload = () => {
+      // Always update module-level cache even if component unmounted (StrictMode)
       if (domain) loadedDomains.add(domain);
-      setLoaded(true);
+      if (!cancelled) setLoaded(true);
     };
     img.onerror = () => {
       if (domain) failedDomains.add(domain);
-      setFailed(true);
+      if (!cancelled) setFailed(true);
     };
     img.src = logoUrl;
 
     return () => {
-      img.onload = null;
-      img.onerror = null;
+      cancelled = true;
     };
   }, [domain, logoUrl, shouldSkip, failed, alreadyCached]);
 
@@ -150,6 +163,12 @@ export const SenderLogo = React.memo(function SenderLogo({
       loading="lazy"
       decoding="async"
       className={cn('rounded-sm object-contain', className)}
+      onError={(e) => {
+        // Safety net: if the rendered img 404s (e.g. redirect chain changed),
+        // hide it and cache the failure to prevent future attempts.
+        (e.target as HTMLImageElement).style.display = 'none';
+        if (domain) failedDomains.add(domain);
+      }}
     />
   );
 });

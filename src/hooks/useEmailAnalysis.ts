@@ -352,13 +352,6 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       keyPoints: (event.key_points as string[]) || (event.keyPoints as string[]),
       confidence: (event.confidence as number) || 0,
     };
-    logger.debug('Normalized event detection data', {
-      eventTitle: normalized.eventDetection.eventTitle,
-      eventDate: normalized.eventDetection.eventDate,
-      locationType: normalized.eventDetection.locationType,
-      hasEventSummary: !!normalized.eventDetection.eventSummary,
-      keyPointsCount: normalized.eventDetection.keyPoints?.length || 0,
-    });
   }
 
   // Normalize content digest
@@ -470,11 +463,6 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       })),
       confidence: (sparks.confidence as number) || 0,
     };
-    logger.debug('Normalized idea sparks data', {
-      hasIdeas: normalized.ideaSparks.hasIdeas,
-      ideaCount: normalized.ideaSparks.ideas.length,
-      confidence: normalized.ideaSparks.confidence,
-    });
   }
 
   // Normalize insight extraction (NEW Feb 2026)
@@ -491,11 +479,6 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       })),
       confidence: (extraction.confidence as number) || 0,
     };
-    logger.debug('Normalized insight extraction data', {
-      hasInsights: normalized.insightExtraction.hasInsights,
-      insightCount: normalized.insightExtraction.insights.length,
-      confidence: normalized.insightExtraction.confidence,
-    });
   }
 
   // Normalize news brief (NEW Feb 2026)
@@ -513,11 +496,6 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       })),
       confidence: (brief.confidence as number) || 0,
     };
-    logger.debug('Normalized news brief data', {
-      hasNews: normalized.newsBrief.hasNews,
-      newsItemCount: normalized.newsBrief.newsItems.length,
-      confidence: normalized.newsBrief.confidence,
-    });
   }
 
   return normalized;
@@ -580,11 +558,7 @@ export function useEmailAnalysis(emailId: string | null): UseEmailAnalysisReturn
       const normalized = normalizeAnalysis(data as EmailAnalysis);
       setAnalysis(normalized);
 
-      logger.success('Analysis fetched', {
-        emailId,
-        hasAction: normalized.actionExtraction?.hasAction,
-        category: normalized.categorization?.category,
-      });
+      logger.debug('Analysis fetched', { emailId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       logger.error('Failed to fetch analysis', { emailId, error: errorMessage });
