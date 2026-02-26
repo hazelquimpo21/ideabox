@@ -139,10 +139,12 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
 
   const isSyncActive = syncStatus === 'in_progress' || syncStatus === 'pending';
 
-  // Auto-refetch emails when sync completes so newly synced emails appear
+  // Auto-refetch emails when sync completes so newly synced emails appear.
+  // Only trigger on actual in_progress → completed transition, not the
+  // initial pending → completed that happens on every page load when sync already finished.
   const prevSyncStatus = React.useRef(syncStatus);
   React.useEffect(() => {
-    if (prevSyncStatus.current !== 'completed' && syncStatus === 'completed') {
+    if (prevSyncStatus.current === 'in_progress' && syncStatus === 'completed') {
       logger.info('Initial sync completed — refetching emails');
       refetch();
     }

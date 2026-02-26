@@ -5,6 +5,10 @@
  * Uses the Google favicon service (no API key needed) with graceful
  * fallback to null (caller decides what to show instead).
  *
+ * Images are preloaded via JS Image() constructor to avoid 404 noise
+ * in the browser console — the <img> element is only rendered after
+ * the favicon loads successfully.
+ *
  * @module components/inbox/SenderLogo
  * @since February 2026 — Inbox UI Redesign v2
  */
@@ -46,7 +50,7 @@ function shouldSkipDomain(domain: string): boolean {
   if (parts.length > 2) {
     const sub = parts[0]!;
     if ([
-      'mail', 'email', 'e', 'info', 'news', 'notify', 'noreply', 'service',
+      'mail', 'email', 'e', 'em', 'info', 'news', 'notify', 'noreply', 'service',
       'reminder', 'mail8', 'send', 'hello', 'marketing', 'orders', 'rewards',
       'enotify', 'shared1', 'mail-service', 'bounce', 'return', 'reply',
     ].includes(sub)) {
@@ -54,7 +58,13 @@ function shouldSkipDomain(domain: string): boolean {
     }
   }
   // Skip known bulk email platforms (their subdomains never have favicons)
-  if (domain.endsWith('.ccsend.com') || domain.endsWith('.mailchimpapp.com') || domain.endsWith('.constantcontact.com')) {
+  if (
+    domain.endsWith('.ccsend.com') ||
+    domain.endsWith('.mailchimpapp.com') ||
+    domain.endsWith('.constantcontact.com') ||
+    domain.endsWith('.myactivecampaign.com') ||
+    domain.endsWith('.yoursocial.team')
+  ) {
     return true;
   }
   return false;
@@ -70,7 +80,6 @@ function getDomain(email: string): string | null {
 /**
  * Get the logo URL for a domain.
  * Uses Google's favicon service which returns 16/32/64px icons.
- * Falls back to a higher-res Clearbit-style logo if available.
  */
 function getLogoUrl(domain: string, size: number): string {
   // Google's S2 favicon service — reliable, free, no API key
@@ -81,8 +90,9 @@ function getLogoUrl(domain: string, size: number): string {
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 }
 
-// Module-level cache for domains that failed to load — prevents repeated attempts
+// Module-level cache for domains — prevents repeated attempts
 const failedDomains = new Set<string>();
+const loadedDomains = new Set<string>();
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
@@ -93,15 +103,43 @@ export const SenderLogo = React.memo(function SenderLogo({
   size = 20,
   className,
 }: SenderLogoProps) {
-  const [hasError, setHasError] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
   const domain = getDomain(senderEmail);
 
   // Skip personal email domains, transactional subdomains, and previously-failed domains
-  if (!domain || shouldSkipDomain(domain) || failedDomains.has(domain) || hasError) {
+  const shouldSkip = !domain || shouldSkipDomain(domain) || failedDomains.has(domain);
+
+  // Check if already loaded from cache
+  const alreadyCached = domain ? loadedDomains.has(domain) : false;
+
+  const logoUrl = domain ? getLogoUrl(domain, size) : '';
+
+  // Preload the favicon via JS Image() to avoid 404 console noise.
+  // Only rendered as <img> after successful load.
+  React.useEffect(() => {
+    if (shouldSkip || failed || alreadyCached) return;
+
+    const img = new Image();
+    img.onload = () => {
+      if (domain) loadedDomains.add(domain);
+      setLoaded(true);
+    };
+    img.onerror = () => {
+      if (domain) failedDomains.add(domain);
+      setFailed(true);
+    };
+    img.src = logoUrl;
+
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [domain, logoUrl, shouldSkip, failed, alreadyCached]);
+
+  if (shouldSkip || failed || (!loaded && !alreadyCached)) {
     return null;
   }
-
-  const logoUrl = getLogoUrl(domain, size);
 
   return (
     <img
@@ -112,10 +150,6 @@ export const SenderLogo = React.memo(function SenderLogo({
       loading="lazy"
       decoding="async"
       className={cn('rounded-sm object-contain', className)}
-      onError={() => {
-        failedDomains.add(domain);
-        setHasError(true);
-      }}
     />
   );
 });
