@@ -110,8 +110,6 @@ export function InboxTabs() {
   const [selectedEmailCategory, setSelectedEmailCategory] = React.useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
 
-  logger.debug('Render', { activeTab, tabParam, isModalOpen });
-
   // ─── Tab Change Handler ────────────────────────────────────────────────────
   const handleTabChange = React.useCallback(
     (value: string) => {

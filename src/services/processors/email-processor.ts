@@ -1742,13 +1742,14 @@ export class EmailProcessor {
       const supabase = await createServerClient();
 
       // Map extracted dates to database format
+      // NOTE: DB column is `event_time` not `time`, and `end_time` is also a TIME column
       const records = dates.map((d) => ({
         user_id: userId,
         email_id: emailId,
         contact_id: contactId,
         date_type: d.dateType,
         date: d.date,
-        time: d.time ?? null,
+        event_time: d.time ?? null,
         end_date: d.endDate ?? null,
         end_time: d.endTime ?? null,
         title: d.title,
@@ -2415,7 +2416,8 @@ export class EmailProcessor {
       title: action.actionTitle ?? 'Action Required',
       description: action.actionDescription ?? null,
       urgency_score: action.urgencyScore,
-      deadline: action.deadline ?? null,
+      // Use || instead of ?? to coerce empty strings to null (Postgres rejects "" for timestamptz)
+      deadline: action.deadline || null,
       estimated_minutes: action.estimatedMinutes ?? null,
       status: 'pending' as const,
     };
@@ -2497,12 +2499,38 @@ export class EmailProcessor {
       .eq('id', emailId);
 
     if (error) {
-      logger.warn('Failed to update email analysis fields', {
-        emailId,
-        category: categorization.category,
-        hasContentDigest: !!contentDigest,
-        error: error.message,
-      });
+      // If a column doesn't exist in the schema cache (migration not yet applied),
+      // retry with only the core columns that are guaranteed to exist
+      if (error.message.includes('schema cache')) {
+        logger.warn('Schema cache miss — retrying with core columns only', {
+          emailId,
+          error: error.message,
+        });
+        const coreUpdates: Record<string, unknown> = {
+          category: updates.category,
+          summary: updates.summary,
+          quick_action: updates.quick_action,
+          labels: updates.labels,
+          topics: updates.topics,
+        };
+        const { error: retryError } = await supabase
+          .from('emails')
+          .update(coreUpdates)
+          .eq('id', emailId);
+        if (retryError) {
+          logger.warn('Failed to update email analysis fields (retry)', {
+            emailId,
+            error: retryError.message,
+          });
+        }
+      } else {
+        logger.warn('Failed to update email analysis fields', {
+          emailId,
+          category: categorization.category,
+          hasContentDigest: !!contentDigest,
+          error: error.message,
+        });
+      }
     }
   }
 

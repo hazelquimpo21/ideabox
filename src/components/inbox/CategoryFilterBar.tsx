@@ -139,12 +139,6 @@ export const CategoryFilterBar = React.memo(function CategoryFilterBar({
     (cat) => (categoryCounts[cat] || 0) > 0
   );
 
-  logger.debug('Rendering filter bar', {
-    activeCategory: activeCategory || 'all',
-    visibleCount: visibleCategories.length,
-    totalCount,
-  });
-
   return (
     <div className="relative" role="toolbar" aria-label="Category filters">
       <div

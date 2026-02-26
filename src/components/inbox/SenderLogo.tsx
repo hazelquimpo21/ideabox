@@ -45,9 +45,17 @@ function shouldSkipDomain(domain: string): boolean {
   const parts = domain.split('.');
   if (parts.length > 2) {
     const sub = parts[0]!;
-    if (['mail', 'email', 'e', 'info', 'news', 'notify', 'noreply', 'service', 'reminder', 'mail8'].includes(sub)) {
+    if ([
+      'mail', 'email', 'e', 'info', 'news', 'notify', 'noreply', 'service',
+      'reminder', 'mail8', 'send', 'hello', 'marketing', 'orders', 'rewards',
+      'enotify', 'shared1', 'mail-service', 'bounce', 'return', 'reply',
+    ].includes(sub)) {
       return true;
     }
+  }
+  // Skip known bulk email platforms (their subdomains never have favicons)
+  if (domain.endsWith('.ccsend.com') || domain.endsWith('.mailchimpapp.com') || domain.endsWith('.constantcontact.com')) {
+    return true;
   }
   return false;
 }

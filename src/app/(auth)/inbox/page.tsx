@@ -34,21 +34,12 @@
 
 import { PageHeader } from '@/components/layout';
 import { InboxTabs } from '@/components/inbox';
-import { createLogger } from '@/lib/utils/logger';
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOGGER
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const logger = createLogger('InboxPage');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function InboxPage() {
-  logger.info('Rendering inbox page');
-
   return (
     <div>
       {/* ── Page Header ──────────────────────────────────────────────────── */}

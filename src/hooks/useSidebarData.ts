@@ -101,8 +101,12 @@ export function useSidebarData(): UseSidebarDataReturn {
 
   const supabase = React.useMemo(() => createClient(), []);
 
+  // Guard against overlapping fetches (e.g., interval fires while previous fetch is still running)
+  const isFetchingRef = React.useRef(false);
+
   const fetchData = React.useCallback(async () => {
-    logger.debug('Fetching sidebar data');
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
 
     try {
       // Get current user
@@ -240,13 +244,14 @@ export function useSidebarData(): UseSidebarDataReturn {
         setUpcomingEvents({ count: 0, previewEvents: [] });
       }
 
-      logger.success('Sidebar data fetched');
+      logger.debug('Sidebar data fetched');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       logger.error('Failed to fetch sidebar data', { error: errorMessage });
       setError(err instanceof Error ? err : new Error(errorMessage));
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
   }, [supabase]);
 
@@ -255,9 +260,9 @@ export function useSidebarData(): UseSidebarDataReturn {
     fetchData();
   }, [fetchData]);
 
-  // Refresh every 30 seconds
+  // Refresh every 2 minutes (category counts change slowly)
   React.useEffect(() => {
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 120000);
     return () => clearInterval(interval);
   }, [fetchData]);
 

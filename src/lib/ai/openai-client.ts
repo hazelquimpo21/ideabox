@@ -417,6 +417,11 @@ function isRetryableError(error: unknown): boolean {
     return true;
   }
 
+  // JSON parse errors from truncated function call responses (often caused by max_tokens cutoff)
+  if (error instanceof SyntaxError || message.includes('unterminated string') || message.includes('unexpected end of json')) {
+    return true;
+  }
+
   return false;
 }
 
