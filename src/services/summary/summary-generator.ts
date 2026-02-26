@@ -98,7 +98,7 @@ export async function generateSummary(
       role: options?.role,
       company: options?.company,
     });
-    const userContent = buildSummaryUserContent(inputData);
+    const { content: userContent, refToEmailIds } = buildSummaryUserContent(inputData);
 
     logAI.callStart({ model: config.model, emailId: `summary-${userId}` });
 
@@ -114,6 +114,9 @@ export async function generateSummary(
         }
       )
     );
+
+    // ─── Resolve short thread refs (T1, T2, ...) back to real email IDs ──
+    resolveThreadRefs(result.data, refToEmailIds);
 
     logAI.callComplete({
       model: config.model,
@@ -470,6 +473,36 @@ function clusterByThread(
 function isHigherSignal(a: string | null, b: string | null): boolean {
   const order: Record<string, number> = { high: 3, medium: 2, low: 1, noise: 0 };
   return (order[a || ''] ?? -1) > (order[b || ''] ?? -1);
+}
+
+/**
+ * Resolves short thread reference keys (T1, T2, ...) in AI output back to
+ * real email UUIDs. Mutates the result in place.
+ *
+ * This is necessary because the AI prompt uses short refs instead of raw UUIDs
+ * to avoid hallucination/truncation of long opaque strings.
+ */
+function resolveThreadRefs(
+  result: SummaryResult,
+  refToEmailIds: Record<string, string[]>
+): void {
+  for (const section of result.sections) {
+    for (const item of section.items) {
+      const resolved: string[] = [];
+      for (const ref of item.email_ids) {
+        const realIds = refToEmailIds[ref];
+        if (realIds) {
+          // Short ref matched — expand to real email IDs
+          resolved.push(...realIds);
+        } else if (ref.includes('-')) {
+          // Looks like it might already be a UUID — keep as-is for backward compat
+          resolved.push(ref);
+        }
+        // Otherwise drop it (AI hallucinated a ref that doesn't exist)
+      }
+      item.email_ids = resolved;
+    }
+  }
 }
 
 /**
