@@ -109,6 +109,26 @@ export interface UserContextRow {
   onboarding_completed_at: string | null;
   onboarding_step: number;
 
+  // Profile expansion (migration 040)
+  gender: string | null;
+  birthday: string | null;
+  address_street: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  address_country: string;
+  other_cities: Array<{ city: string; tag: string; note?: string }> | null;
+  employment_type: string;
+  other_jobs: Array<{ role: string; company: string; is_self_employed: boolean }> | null;
+  household_members: Array<{
+    name: string;
+    relationship: string;
+    gender?: string | null;
+    birthday?: string | null;
+    school?: string | null;
+  }> | null;
+  pets: Array<{ name: string; type: string }> | null;
+
   // Metadata
   created_at: string;
   updated_at: string;
@@ -139,6 +159,25 @@ export interface UserContextUpdate {
   work_days?: number[];
   onboarding_completed?: boolean;
   onboarding_step?: number;
+  // Profile expansion (migration 040)
+  gender?: string | null;
+  birthday?: string | null;
+  address_street?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_zip?: string | null;
+  address_country?: string;
+  other_cities?: Array<{ city: string; tag: string; note?: string }>;
+  employment_type?: string;
+  other_jobs?: Array<{ role: string; company: string; is_self_employed: boolean }>;
+  household_members?: Array<{
+    name: string;
+    relationship: string;
+    gender?: string | null;
+    birthday?: string | null;
+    school?: string | null;
+  }>;
+  pets?: Array<{ name: string; type: string }>;
 }
 
 /**
@@ -797,6 +836,37 @@ function transformRowToContext(userId: string, row: UserContextRow): UserContext
 
     // Onboarding state
     onboardingCompleted: row.onboarding_completed,
+
+    // Profile expansion (migration 040)
+    gender: row.gender ?? undefined,
+    birthday: row.birthday ?? undefined,
+
+    address:
+      row.address_street || row.address_city || row.address_state || row.address_zip
+        ? {
+            street: row.address_street ?? undefined,
+            city: row.address_city ?? undefined,
+            state: row.address_state ?? undefined,
+            zip: row.address_zip ?? undefined,
+            country: row.address_country ?? undefined,
+          }
+        : undefined,
+
+    otherCities: row.other_cities ?? undefined,
+
+    employmentType: row.employment_type ?? undefined,
+
+    otherJobs: row.other_jobs
+      ? row.other_jobs.map((j) => ({
+          role: j.role,
+          company: j.company,
+          isSelfEmployed: j.is_self_employed,
+        }))
+      : undefined,
+
+    householdMembers: row.household_members ?? undefined,
+
+    pets: row.pets ?? undefined,
   };
 }
 

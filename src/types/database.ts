@@ -740,6 +740,19 @@ export interface Database {
           // Profile suggestions (migration 031)
           profile_suggestions: ProfileSuggestions | null;
           profile_suggestions_generated_at: string | null;
+          // Profile expansion (migration 040)
+          gender: string | null;
+          birthday: string | null;
+          address_street: string | null;
+          address_city: string | null;
+          address_state: string | null;
+          address_zip: string | null;
+          address_country: string;
+          other_cities: OtherCity[];
+          employment_type: string;
+          other_jobs: OtherJob[];
+          household_members: HouseholdMember[];
+          pets: Pet[];
           created_at: string;
           updated_at: string;
         };
@@ -766,6 +779,19 @@ export interface Database {
           // Profile suggestions (migration 031)
           profile_suggestions?: ProfileSuggestions | null;
           profile_suggestions_generated_at?: string | null;
+          // Profile expansion (migration 040)
+          gender?: string | null;
+          birthday?: string | null;
+          address_street?: string | null;
+          address_city?: string | null;
+          address_state?: string | null;
+          address_zip?: string | null;
+          address_country?: string;
+          other_cities?: OtherCity[];
+          employment_type?: string;
+          other_jobs?: OtherJob[];
+          household_members?: HouseholdMember[];
+          pets?: Pet[];
           created_at?: string;
           updated_at?: string;
         };
@@ -1882,6 +1908,45 @@ export interface TypedEmailAnalysis {
 export function toTypedAnalysis(analysis: EmailAnalysis): TypedEmailAnalysis {
   return analysis as unknown as TypedEmailAnalysis;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROFILE EXPANSION TYPES (Migration 040)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** A household member (spouse, child, parent, etc.) */
+export interface HouseholdMember {
+  name: string;
+  relationship: 'spouse' | 'partner' | 'child' | 'parent' | 'sibling' | 'roommate' | 'other';
+  gender?: 'male' | 'female' | 'non_binary' | null;
+  birthday?: string | null;   // YYYY-MM-DD
+  school?: string | null;     // For kids
+}
+
+/** A pet in the household */
+export interface Pet {
+  name: string;
+  type: 'dog' | 'cat' | 'bird' | 'fish' | 'rabbit' | 'hamster' | 'reptile' | 'other';
+}
+
+/** A city the user cares about beyond their home address */
+export interface OtherCity {
+  city: string;               // e.g. "Chicago, IL"
+  tag: 'hometown' | 'travel' | 'family' | 'vacation' | 'other';
+  note?: string;              // optional free-text
+}
+
+/** An additional job or side hustle */
+export interface OtherJob {
+  role: string;
+  company: string;
+  is_self_employed: boolean;
+}
+
+/** Gender options for user identity */
+export type GenderOption = 'male' | 'female' | 'non_binary' | 'prefer_not_to_say';
+
+/** Employment type */
+export type EmploymentType = 'employed' | 'self_employed' | 'both';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PROFILE SUGGESTIONS (Phase 2 — Onboarding AI Autofill)

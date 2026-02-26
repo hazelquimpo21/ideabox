@@ -10,7 +10,7 @@
  * STEP FLOW (Updated Feb 2026 — Phase 4 Overhaul)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * 1. Welcome → 2. Accounts → 3. VIP Contacts → 4. About You (Mad Libs) →
+ * 1. Welcome → 2. Accounts → 3. VIP Contacts → 4. Your Profile (tabbed) →
  * 5. Sync Config ("Get Started") → Complete
  *
  * Phase 4 changes (Feb 2026):
@@ -26,13 +26,13 @@
  * - Shows starred contacts and frequent communicators
  * - Lets user select VIPs for email prioritization
  *
- * The "About You" step (Feb 2026 — Phase 3 overhaul) uses a "Mad Libs" profile
- * card that pre-fills AI suggestions from the user's emails. Replaces the old
- * form-based AboutYouStep with an interactive fill-in-the-blank experience:
- * - Role & Company (AI pre-filled from email signatures)
- * - Priorities (AI-suggested from email patterns)
- * - Work Schedule (statistically inferred from send times)
- * - VIP Contacts (carried from the VIP Contacts step)
+ * The "Your Profile" step (Feb 2026 — expanded) is a multi-section tabbed
+ * profile editor collecting comprehensive user context:
+ * - You: Name (from Google), gender, birthday
+ * - Household: Family members + relationships + schools, pets
+ * - Location: Home address, other cities you care about
+ * - Work: Primary job (AI pre-filled), employment type, other hustles
+ * - Schedule: Work hours, priorities (AI-suggested), VIP contacts
  *
  * Users can:
  * - Navigate forward with "Next"/"Continue"
@@ -59,7 +59,7 @@ import type { SyncConfig } from './SyncConfigStep';
 // their bundles reduces the initial JS payload. Each component must have a
 // `default` export for React.lazy to work.
 const ContactImportStep = React.lazy(() => import('./ContactImportStep'));
-const MadLibsProfileStep = React.lazy(() => import('./MadLibsProfileStep'));
+const ProfileStep = React.lazy(() => import('./ProfileStep'));
 const SyncConfigStep = React.lazy(() => import('./SyncConfigStep'));
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -129,8 +129,8 @@ const STEPS: StepConfig[] = [
   },
   {
     id: 'about-you',
-    title: 'About You',
-    description: 'AI-powered profile card',
+    title: 'Your Profile',
+    description: 'Tell us about yourself',
   },
   {
     id: 'sync-config',
@@ -294,7 +294,7 @@ export function OnboardingWizard({ user, onComplete }: OnboardingWizardProps) {
         return <ContactImportStep user={user} {...commonProps} />;
 
       case 'about-you':
-        return <MadLibsProfileStep user={user} {...commonProps} />;
+        return <ProfileStep user={user} {...commonProps} />;
 
       case 'sync-config':
         return (

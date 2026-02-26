@@ -239,13 +239,60 @@ export type ActionUpdateInput = z.infer<typeof actionUpdateSchema>;
 const workDaySchema = z.number().int().min(0).max(6);
 
 /**
- * Family context JSONB structure.
+ * Family context JSONB structure (legacy — kept for backward compatibility).
  */
 export const familyContextSchema = z.object({
   spouse_name: z.string().max(100).optional(),
   kids_count: z.number().int().min(0).max(20).optional(),
   family_names: z.array(z.string().max(100)).max(20).optional(),
 }).optional();
+
+/**
+ * Household member schema (migration 040).
+ */
+export const householdMemberSchema = z.object({
+  name: z.string().min(1).max(100),
+  relationship: z.enum(['spouse', 'partner', 'child', 'parent', 'sibling', 'roommate', 'other']),
+  gender: z.enum(['male', 'female', 'non_binary']).nullable().optional(),
+  birthday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
+  school: z.string().max(200).nullable().optional(),
+});
+
+/**
+ * Pet schema (migration 040).
+ */
+export const petSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(['dog', 'cat', 'bird', 'fish', 'rabbit', 'hamster', 'reptile', 'other']),
+});
+
+/**
+ * Other city schema (migration 040).
+ */
+export const otherCitySchema = z.object({
+  city: z.string().min(1).max(200),
+  tag: z.enum(['hometown', 'travel', 'family', 'vacation', 'other']),
+  note: z.string().max(500).optional(),
+});
+
+/**
+ * Other job / side hustle schema (migration 040).
+ */
+export const otherJobSchema = z.object({
+  role: z.string().min(1).max(200),
+  company: z.string().max(200),
+  is_self_employed: z.boolean(),
+});
+
+/**
+ * Gender options (migration 040).
+ */
+export const genderSchema = z.enum(['male', 'female', 'non_binary', 'prefer_not_to_say']);
+
+/**
+ * Employment type (migration 040).
+ */
+export const employmentTypeSchema = z.enum(['employed', 'self_employed', 'both']);
 
 /**
  * User context update schema.
@@ -278,13 +325,35 @@ export const userContextUpdateSchema = z.object({
   // Interests
   interests: z.array(z.string().max(100)).max(20).optional(),
 
-  // Family context
+  // Family context (legacy)
   family_context: familyContextSchema,
 
   // Work schedule
   work_hours_start: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:MM format').optional(),
   work_hours_end: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:MM format').optional(),
   work_days: z.array(workDaySchema).max(7).optional(),
+
+  // Identity (migration 040)
+  gender: genderSchema.nullable().optional(),
+  birthday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
+
+  // Address (migration 040)
+  address_street: z.string().max(300).nullable().optional(),
+  address_city: z.string().max(200).nullable().optional(),
+  address_state: z.string().max(100).nullable().optional(),
+  address_zip: z.string().max(20).nullable().optional(),
+  address_country: z.string().max(10).optional(),
+
+  // Other cities (migration 040)
+  other_cities: z.array(otherCitySchema).max(20).optional(),
+
+  // Employment (migration 040)
+  employment_type: employmentTypeSchema.optional(),
+  other_jobs: z.array(otherJobSchema).max(10).optional(),
+
+  // Household (migration 040)
+  household_members: z.array(householdMemberSchema).max(20).optional(),
+  pets: z.array(petSchema).max(10).optional(),
 
   // Onboarding
   onboarding_completed: z.boolean().optional(),
