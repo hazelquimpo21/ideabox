@@ -1617,7 +1617,7 @@ export class EmailProcessor {
         ? {
             has_multiple_events: analysis.multiEventDetection.hasMultipleEvents,
             event_count: analysis.multiEventDetection.eventCount,
-            events: analysis.multiEventDetection.events.map(event => ({
+            events: (analysis.multiEventDetection.events ?? []).map(event => ({
               has_event: event.hasEvent,
               event_title: event.eventTitle,
               event_date: event.eventDate,
@@ -1646,7 +1646,7 @@ export class EmailProcessor {
       idea_sparks: analysis.ideaSparks
         ? {
             has_ideas: analysis.ideaSparks.hasIdeas,
-            ideas: analysis.ideaSparks.ideas.map(idea => ({
+            ideas: (analysis.ideaSparks.ideas ?? []).map(idea => ({
               idea: idea.idea,
               type: idea.type,
               relevance: idea.relevance,
@@ -1660,7 +1660,7 @@ export class EmailProcessor {
       insight_extraction: analysis.insightExtraction
         ? {
             has_insights: analysis.insightExtraction.hasInsights,
-            insights: analysis.insightExtraction.insights.map(insight => ({
+            insights: (analysis.insightExtraction.insights ?? []).map(insight => ({
               insight: insight.insight,
               type: insight.type,
               topics: insight.topics,
@@ -1674,7 +1674,7 @@ export class EmailProcessor {
       news_brief: analysis.newsBrief
         ? {
             has_news: analysis.newsBrief.hasNews,
-            news_items: analysis.newsBrief.newsItems.map(item => ({
+            news_items: (analysis.newsBrief.newsItems ?? []).map(item => ({
               headline: item.headline,
               detail: item.detail,
               topics: item.topics,

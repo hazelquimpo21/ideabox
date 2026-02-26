@@ -260,6 +260,24 @@ export async function analyzeWithFunction<T>(
       );
     }
 
+    // Detect truncated responses before attempting JSON parse
+    const finishReason = response.choices[0]?.finish_reason;
+    if (finishReason === 'length') {
+      logger.error('Response truncated due to max_tokens limit', {
+        model,
+        functionName: functionSchema.name,
+        maxTokens,
+        outputTokens: response.usage?.completion_tokens,
+        argumentsLength: functionCall.arguments.length,
+      });
+      const truncationError = new Error(
+        `Response truncated: max_tokens (${maxTokens}) limit reached for ${functionSchema.name}. ` +
+        `Increase maxTokens in analyzer config to fix.`
+      );
+      truncationError.name = 'TokenLimitError';
+      throw truncationError;
+    }
+
     // Parse the function arguments as JSON
     const data = JSON.parse(functionCall.arguments) as T;
 
@@ -393,6 +411,11 @@ export async function withRetry<T>(
  */
 function isRetryableError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
+
+  // Token limit errors are NOT retryable — same limit will produce same truncation
+  if (error.name === 'TokenLimitError') {
+    return false;
+  }
 
   const message = error.message.toLowerCase();
 
