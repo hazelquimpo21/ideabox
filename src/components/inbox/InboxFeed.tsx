@@ -139,15 +139,26 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
 
   const isSyncActive = syncStatus === 'in_progress' || syncStatus === 'pending';
 
-  // Auto-refetch emails when sync completes so newly synced emails appear
-  const prevSyncStatus = React.useRef(syncStatus);
+  // Auto-refetch emails when initial sync completes so newly synced emails appear.
+  // Only fires when:
+  // 1. We witnessed 'in_progress' during this component's mount lifetime
+  // 2. The inbox was empty when we saw 'in_progress' (avoids stale DB state refetch)
+  // 3. Status transitions to 'completed'
+  const syncRefetchGuard = React.useRef({ sawInProgress: false, wasEmpty: false });
   React.useEffect(() => {
-    if (prevSyncStatus.current !== 'completed' && syncStatus === 'completed') {
+    if (syncStatus === 'in_progress' && !syncRefetchGuard.current.sawInProgress) {
+      syncRefetchGuard.current = { sawInProgress: true, wasEmpty: emails.length === 0 };
+    }
+    if (
+      syncRefetchGuard.current.sawInProgress &&
+      syncRefetchGuard.current.wasEmpty &&
+      syncStatus === 'completed'
+    ) {
       logger.info('Initial sync completed — refetching emails');
       refetch();
+      syncRefetchGuard.current = { sawInProgress: false, wasEmpty: false };
     }
-    prevSyncStatus.current = syncStatus;
-  }, [syncStatus, refetch]);
+  }, [syncStatus, emails.length, refetch]);
 
   // ─── Thumbnail Extraction (card mode only) ──────────────────────────────────
   // Extracts the first meaningful image from email HTML bodies for card thumbnails.
@@ -159,7 +170,6 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
   const filteredEmails = React.useMemo(() => {
     if (!searchQuery) return emails;
     const q = searchQuery.toLowerCase();
-    logger.debug('Filtering emails by search query', { query: q, total: emails.length });
     return emails.filter(
       (e) =>
         e.subject?.toLowerCase().includes(q) ||

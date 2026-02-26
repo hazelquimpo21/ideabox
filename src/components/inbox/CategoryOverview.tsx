@@ -78,8 +78,6 @@ function formatSmartDate(dateStr: string): string {
 export function CategoryOverview({ onCategorySelect, onEmailSelect }: CategoryOverviewProps) {
   const { previews, isLoading, error, refetch } = useCategoryPreviews();
 
-  logger.debug('Render', { categories: previews.length, isLoading });
-
   // ─── Loading State ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (

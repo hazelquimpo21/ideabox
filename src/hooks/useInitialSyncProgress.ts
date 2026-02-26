@@ -203,11 +203,15 @@ export function useInitialSyncProgress(
       setCurrentStep(data.currentStep);
       setDiscoveries(data.discoveries);
 
-      // Handle completion
-      if (data.status === 'completed' && data.result) {
-        setResult(data.result);
-        onCompleteRef.current?.(data.result);
-        // Stop polling on completion
+      // Handle completion — stop polling regardless of whether result exists.
+      // The result may be absent if sync_progress was set to 'completed' without
+      // a result payload (e.g. stale DB state from an interrupted sync).
+      if (data.status === 'completed') {
+        if (data.result) {
+          setResult(data.result);
+          onCompleteRef.current?.(data.result);
+        }
+        // Always stop polling on completion
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
