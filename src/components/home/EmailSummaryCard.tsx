@@ -84,6 +84,8 @@ export interface EmailSummaryCardProps {
   isStale: boolean;
   error: Error | null;
   onRefresh: () => Promise<void>;
+  /** Timestamp of the last email sync (from gmail_accounts.last_sync_at) */
+  lastSyncAt?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -182,6 +184,7 @@ export const EmailSummaryCard = memo(function EmailSummaryCard({
   isStale,
   error,
   onRefresh,
+  lastSyncAt,
 }: EmailSummaryCardProps) {
   // ─── Loading state ─────────────────────────────────────────────────────
   if (isLoading) {
@@ -257,6 +260,7 @@ export const EmailSummaryCard = memo(function EmailSummaryCard({
 
   // ─── Summary display ──────────────────────────────────────────────────
   const timeAgo = getTimeAgo(summary.created_at);
+  const syncTimeAgo = lastSyncAt ? getTimeAgo(lastSyncAt) : null;
 
   return (
     <Card className="mb-8">
@@ -329,10 +333,18 @@ export const EmailSummaryCard = memo(function EmailSummaryCard({
 
         {/* Footer with timestamp + history link */}
         <div className="mt-4 pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">
-          <span>
-            Updated {timeAgo}
-            {isStale && ' · New emails since'}
-          </span>
+          <div className="flex items-center gap-3">
+            <span>
+              Updated {timeAgo}
+              {isStale && ' · New emails since'}
+            </span>
+            {syncTimeAgo && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Emails checked {syncTimeAgo}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             <span>
               {summary.emails_included} emails across {summary.threads_included} threads

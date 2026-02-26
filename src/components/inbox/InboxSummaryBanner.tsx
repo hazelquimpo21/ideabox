@@ -39,7 +39,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button, Skeleton } from '@/components/ui';
-import { useSummary } from '@/hooks';
+import { useSummary, useSyncStatus } from '@/hooks';
 import type { SummarySection, SummaryItem, SummaryEmailIndex } from '@/services/summary';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -162,6 +162,8 @@ export const InboxSummaryBanner = memo(function InboxSummaryBanner() {
     regenerate,
   } = useSummary({ autoGenerate: false, refreshInterval: 0 });
 
+  const { lastSyncAt } = useSyncStatus();
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
 
@@ -228,6 +230,12 @@ export const InboxSummaryBanner = memo(function InboxSummaryBanner() {
               )}
               {isStale && (
                 <span className="text-blue-600">New emails since</span>
+              )}
+              {lastSyncAt && (
+                <span className="flex items-center gap-0.5">
+                  <Clock className="h-3 w-3" />
+                  Checked {formatTimeAgo(lastSyncAt)}
+                </span>
               )}
             </div>
           </div>
@@ -296,5 +304,25 @@ export const InboxSummaryBanner = memo(function InboxSummaryBanner() {
     </div>
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function formatTimeAgo(timestamp: string): string {
+  const now = Date.now();
+  const then = new Date(timestamp).getTime();
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
 
 export default InboxSummaryBanner;

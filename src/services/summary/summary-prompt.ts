@@ -48,7 +48,7 @@ RULES:
    - "News & Insights" (news items, newsletter highlights)
    But create ad-hoc themes if the data clusters naturally (e.g., "Travel Planning", "Hiring").
 
-3. ITEMS: Each bullet should be 1 sentence, referencing specific people/subjects. Include the email_ids that sourced it.
+3. ITEMS: Each bullet should be 1 sentence, referencing specific people/subjects. Include the thread reference IDs (T1, T2, etc.) that sourced each item in the email_ids array.
    Mark action_needed=true only for items that genuinely need the user to do something.
 
 4. STATS: Report accurate counts from the data provided.
@@ -63,19 +63,36 @@ RULES:
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Builds the user content string from gathered summary input data.
- * This is what gets sent as the user message to the AI.
+ * Result of building user content — includes the prompt text and a mapping
+ * from short thread reference keys (T1, T2, ...) back to real email IDs.
+ * This lets us use short refs in the AI prompt instead of raw UUIDs,
+ * which the AI can faithfully return without truncation/hallucination.
  */
-export function buildSummaryUserContent(data: SummaryInputData): string {
-  const parts: string[] = [];
+export interface UserContentResult {
+  content: string;
+  /** Map from short ref (e.g. "T1") to real email IDs from that thread */
+  refToEmailIds: Record<string, string[]>;
+}
 
-  // Threads (the main input)
+/**
+ * Builds the user content string from gathered summary input data.
+ * Uses short thread reference keys (T1, T2, ...) instead of raw UUIDs
+ * so the AI can reliably echo them back in its response.
+ */
+export function buildSummaryUserContent(data: SummaryInputData): UserContentResult {
+  const parts: string[] = [];
+  const refToEmailIds: Record<string, string[]> = {};
+
+  // Threads (the main input) — assign short refs T1, T2, ...
   if (data.threads.length > 0) {
     parts.push('=== EMAIL THREADS ===');
-    for (const thread of data.threads) {
+    for (let i = 0; i < data.threads.length; i++) {
+      const thread = data.threads[i]!;
+      const ref = `T${i + 1}`;
+      refToEmailIds[ref] = thread.email_ids;
       const msgs = thread.email_count > 1 ? ` (${thread.email_count} messages)` : '';
       const brief = thread.ai_brief || `Subject: ${thread.subject || '(no subject)'}`;
-      parts.push(`[${thread.email_ids.join(',')}] ${brief}${msgs}`);
+      parts.push(`[${ref}] ${brief}${msgs}`);
     }
   } else {
     parts.push('=== NO NEW EMAILS ===');
@@ -118,7 +135,7 @@ export function buildSummaryUserContent(data: SummaryInputData): string {
     }
   }
 
-  return parts.join('\n');
+  return { content: parts.join('\n'), refToEmailIds };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -165,7 +182,7 @@ export const SUMMARY_FUNCTION_SCHEMA: FunctionSchema = {
                   email_ids: {
                     type: 'array',
                     items: { type: 'string' },
-                    description: 'Source email IDs referenced by this item.',
+                    description: 'Thread reference IDs (e.g. "T1", "T2") from the input that sourced this item. IMPORTANT: use the exact reference keys from the input.',
                   },
                   action_needed: {
                     type: 'boolean',

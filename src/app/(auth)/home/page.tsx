@@ -62,6 +62,7 @@ import {
   useIdeas,
   useReviewQueue,
   useSummary,
+  useSyncStatus,
 } from '@/hooks';
 import { useAuth } from '@/lib/auth';
 import {
@@ -185,6 +186,9 @@ export default function HomePage() {
     error: summaryError,
     regenerate: regenerateSummary,
   } = useSummary({ refreshInterval: 5 * 60 * 1000 });
+
+  // ─── Sync Status (for "emails last checked" timestamp) ──────────────
+  const { lastSyncAt } = useSyncStatus();
 
   // ─── Extracted Dates for Today's Schedule (Section C) ──────────────────────
   const today = getTodayString();
@@ -318,6 +322,7 @@ export default function HomePage() {
         isStale={isSummaryStale}
         error={summaryError}
         onRefresh={regenerateSummary}
+        lastSyncAt={lastSyncAt}
       />
 
       {/* ─── Section E: Profile Completion Nudge ──────────────────────────── */}
