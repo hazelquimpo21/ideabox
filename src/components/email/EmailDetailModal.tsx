@@ -292,6 +292,17 @@ export function EmailDetailModal({
     ? `/inbox/${category}/${emailId}${fromTab ? `?from=${fromTab}` : ''}`
     : null;
 
+  // Guard against the Mac touchpad / slow-click issue: when the user clicks
+  // an email card, the dialog opens and the pointer-down event from the
+  // original click can propagate to the newly-rendered overlay, immediately
+  // closing the dialog. We suppress overlay dismissals for 300ms after open.
+  const openTimestamp = React.useRef(0);
+  React.useEffect(() => {
+    if (isOpen) {
+      openTimestamp.current = Date.now();
+    }
+  }, [isOpen]);
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -300,6 +311,19 @@ export function EmailDetailModal({
         className="max-w-3xl max-h-[90vh] p-0 flex flex-col overflow-hidden sm:max-h-[85vh]"
         aria-describedby={undefined}
         hideClose
+        onPointerDownOutside={(e) => {
+          // Suppress pointer events that arrive within 300ms of the dialog
+          // opening — these are from the original click that triggered the
+          // dialog (common on Mac touchpads with slow taps).
+          if (Date.now() - openTimestamp.current < 300) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          if (Date.now() - openTimestamp.current < 300) {
+            e.preventDefault();
+          }
+        }}
       >
         {/* Accessible title (visually hidden when email subject is shown) */}
         <DialogTitle className="sr-only">
