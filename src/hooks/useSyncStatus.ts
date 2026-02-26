@@ -170,6 +170,9 @@ export function useSyncStatus(): UseSyncStatusReturn {
   // Use a ref to store lastSyncResult to avoid dependency loop in fetchStatus
   const lastSyncResultRef = React.useRef<SyncResult | null>(null);
 
+  // Guard against overlapping fetches
+  const isFetchingRef = React.useRef(false);
+
   const supabase = React.useMemo(() => createClient(), []);
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -177,7 +180,8 @@ export function useSyncStatus(): UseSyncStatusReturn {
   // ───────────────────────────────────────────────────────────────────────────
 
   const fetchStatus = React.useCallback(async () => {
-    logger.debug('Fetching sync status from database');
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
 
     try {
       // Get current user
@@ -193,8 +197,6 @@ export function useSyncStatus(): UseSyncStatusReturn {
         setStatusInfo(prev => ({ ...prev, status: 'error', errorMessage: 'Not authenticated' }));
         return;
       }
-
-      logger.debug('Fetching Gmail account info', { userId: user.id });
 
       // Get Gmail account with latest sync info
       const { data: account, error: accountError } = await supabase
@@ -266,17 +268,15 @@ export function useSyncStatus(): UseSyncStatusReturn {
       setStatusInfo(newStatusInfo);
       setIsReady(true);
 
-      logger.success('Sync status fetched', {
-        status,
-        emailsCount: emailsCount || 0,
-        lastSyncAt: account?.last_sync_at,
-        accountEmail: account?.email,
-      });
+      // Only log on status changes to reduce noise
+      logger.debug('Sync status fetched', { status });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       logger.error('Error fetching sync status', { error: errorMessage });
       setStatusInfo(prev => ({ ...prev, status: 'error', errorMessage }));
       setIsReady(true);
+    } finally {
+      isFetchingRef.current = false;
     }
   }, [supabase]); // Removed statusInfo.lastSyncResult to fix infinite loop
 

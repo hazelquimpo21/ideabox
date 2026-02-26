@@ -118,8 +118,6 @@ export function CategorySummaryPanel({
     ...Object.values(categoryCounts).map((v) => v || 0)
   );
 
-  logger.debug('Rendering sidebar', { totalCount, unreadCount, activeCategory });
-
   return (
     <div className="space-y-4" role="complementary" aria-label="Category summary">
       {/* ── Summary Header ───────────────────────────────────────────── */}

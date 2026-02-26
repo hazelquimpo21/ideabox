@@ -109,7 +109,6 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
     for (const acct of accounts) {
       map[acct.id] = acct.email;
     }
-    logger.debug('Built account map', { accountCount: accounts.length });
     return map;
   }, [accounts]);
 
@@ -194,11 +193,6 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
         rest.push(email);
       }
     }
-
-    logger.debug('Split emails into priority/recent', {
-      priority: priority.length,
-      recent: rest.length,
-    });
 
     return { priorityEmails: priority, recentEmails: rest };
   }, [filteredEmails, activeCategory]);
