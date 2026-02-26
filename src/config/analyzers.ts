@@ -199,7 +199,7 @@ export const analyzerConfig = {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.3, // Slightly higher for natural gist writing
-    maxTokens: 1200,  // Increased from 700 — truncated JSON errors were frequent at 700
+    maxTokens: 2000,  // Increased from 1200 — golden_nuggets + email_style_ideas + links can exceed 1200 for long emails
   } satisfies AnalyzerConfig,
 
   /**
