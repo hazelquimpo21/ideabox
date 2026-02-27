@@ -93,6 +93,7 @@ interface PriorityEmail {
   quick_action: string | null;
   signal_strength: string | null;
   reply_worthiness: string | null;
+  email_type: string | null;
   analyzed_at: string | null;
 }
 
@@ -212,8 +213,8 @@ const PriorityEmailRow = React.memo(function PriorityEmailRow({
               aria-label={email.reply_worthiness === 'must_reply' ? 'Must reply' : 'Should reply'}
             />
           )}
-          {/* Idea spark indicator */}
-          {email.analyzed_at && (
+          {/* Idea spark indicator — only shown for high-signal analyzed emails (noise emails don't generate sparks) */}
+          {email.analyzed_at && email.signal_strength && email.signal_strength !== 'noise' && email.signal_strength !== 'low' && (
             <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" aria-label="Has idea sparks" />
           )}
         </div>
@@ -232,6 +233,13 @@ const PriorityEmailRow = React.memo(function PriorityEmailRow({
       <Badge className={cn('text-[10px] shrink-0 border-0 font-medium', categoryColor)}>
         {categoryLabel}
       </Badge>
+
+      {/* Email type indicator — helps distinguish personal vs newsletter vs notification */}
+      {email.email_type && email.email_type !== 'personal' && email.email_type !== 'needs_response' && (
+        <span className="text-[10px] text-muted-foreground/60 shrink-0">
+          {email.email_type.replace(/_/g, ' ')}
+        </span>
+      )}
 
       {/* Date */}
       <span className="text-xs text-muted-foreground/70 whitespace-nowrap shrink-0 tabular-nums">
@@ -308,7 +316,7 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
     try {
       const { data, error: queryError } = await supabase
         .from('emails')
-        .select('id, sender_name, sender_email, subject, category, priority_score, date, snippet, gist, quick_action, signal_strength, reply_worthiness, analyzed_at')
+        .select('id, sender_name, sender_email, subject, category, priority_score, date, snippet, gist, quick_action, signal_strength, reply_worthiness, email_type, analyzed_at')
         .not('priority_score', 'is', null)
         .order('priority_score', { ascending: false })
         .limit(MAX_EMAILS);

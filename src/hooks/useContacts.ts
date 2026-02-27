@@ -140,6 +140,16 @@ export interface Contact {
   last_seen_at: string;
   /** Additional notes about the contact */
   notes: string | null;
+  /** Birthday date string (YYYY-MM-DD or MM-DD) */
+  birthday: string | null;
+  /** Whether the birth year is known (not just month/day) */
+  birthday_year_known: boolean;
+  /** Number of emails sent TO this contact */
+  sent_count: number;
+  /** Number of emails received FROM this contact */
+  received_count: number;
+  /** Average response time in hours */
+  avg_response_hours: number | null;
   /** Record timestamps */
   created_at: string;
   updated_at: string;

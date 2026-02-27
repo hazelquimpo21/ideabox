@@ -282,6 +282,13 @@ export function SavedLinksCard({
                       <ExternalLink className="h-3 w-3 shrink-0 opacity-50" />
                     </a>
 
+                    {/* Link description — why this link matters */}
+                    {link.description && (
+                      <p className="text-xs text-muted-foreground/80 line-clamp-1 mt-0.5">
+                        {link.description}
+                      </p>
+                    )}
+
                     {/* Topics + source email */}
                     <div className="flex items-center gap-2 mt-0.5">
                       {link.topics.length > 0 && (

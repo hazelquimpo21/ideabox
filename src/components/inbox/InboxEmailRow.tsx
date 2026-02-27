@@ -26,7 +26,7 @@
 'use client';
 
 import * as React from 'react';
-import { Star, Mail, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp, Image as ImageIcon } from 'lucide-react';
+import { Star, Mail, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp, Image as ImageIcon, Reply } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
 import { CATEGORY_SHORT_LABELS, CATEGORY_ACCENT_COLORS } from '@/types/discovery';
@@ -234,6 +234,10 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   const signalStrength = email.signal_strength;
   const signalDot = signalStrength ? SIGNAL_DOT_COLORS[signalStrength] : null;
 
+  // Reply worthiness — highlight emails that need a response
+  const replyWorthiness = email.reply_worthiness;
+  const showReplyBadge = replyWorthiness === 'must_reply' || replyWorthiness === 'should_reply';
+
   // Priority score — only highlight for high-priority emails (≥70)
   const priorityScore = email.priority_score;
   const showPriority = priorityScore !== null && priorityScore !== undefined && priorityScore >= 70;
@@ -382,6 +386,21 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
               <p className="text-xs text-muted-foreground/70 truncate flex-1">
                 {gist}
               </p>
+            )}
+
+            {/* Reply worthiness badge */}
+            {showReplyBadge && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold',
+                  replyWorthiness === 'must_reply'
+                    ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400'
+                    : 'bg-orange-50 text-orange-600 dark:bg-orange-950/30 dark:text-orange-400',
+                )}
+              >
+                <Reply className="h-2.5 w-2.5" />
+                <span className="hidden sm:inline">{replyWorthiness === 'must_reply' ? 'Reply' : 'Reply?'}</span>
+              </span>
             )}
 
             {/* Quick action badge */}
