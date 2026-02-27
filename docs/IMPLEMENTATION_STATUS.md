@@ -1,7 +1,7 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** February 2026
-> **Database Migrations:** 001-041
+> **Database Migrations:** 001-042
 
 ## What's Built
 
@@ -15,7 +15,7 @@
 - Zod validation on all API boundaries
 
 ### AI Analysis Pipeline
-- **12 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
+- **13 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
   - Categorizer (12 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
   - Content Digest (gist, key points, links, golden nuggets [7 types incl. remember_this + sales_opportunity], email style ideas)
   - Action Extractor (multi-action support, urgency scoring, tightened for real tasks with new types: pay, submit, register, book)
@@ -28,6 +28,7 @@
   - **Idea Spark** (NEW Feb 2026): Generates 3 creative ideas per email by cross-referencing content with user context (role, interests, projects, family, location, season)
   - **Insight Extractor** (NEW Feb 2026): Synthesizes interesting ideas, tips, frameworks from newsletter/substantive content — "what's worth knowing"
   - **News Brief** (NEW Feb 2026): Extracts factual news items (launches, announcements, changes) from news/digest emails — "what happened"
+  - **Link Analyzer** (NEW Feb 2026): Deep URL intelligence — enriches links from emails with priority scoring (must_read/worth_reading/reference/skip), topic tagging, save-worthiness, and expiration detection based on user context. Saves to `email_analyses.url_extraction` JSONB; user-promoted links persist to `saved_links` table.
 - Pre-filter system saves 20-30% AI tokens (relaxed SKIP_SENDER_PATTERNS, auto-categorize by domain)
 - Sender pattern learning for future auto-categorization
 - Two-phase execution (core in parallel, then conditional analyzers)
@@ -53,7 +54,7 @@ The app uses a 5-item sidebar navigation (redesigned Feb 2026):
 
 | Nav Item | Route | Description |
 |----------|-------|-------------|
-| **Home** | `/home` | Daily briefing: greeting, top 3 priorities, today's schedule, pending tasks, idea sparks, daily review queue, profile nudge |
+| **Home** | `/home` | Daily briefing: greeting, top 3 priorities, today's schedule, pending tasks, idea sparks, daily review queue, saved links, profile nudge |
 | **Inbox** | `/inbox` | Tabbed email view — Categories (discover dashboard), Priority (AI-ranked), Archive |
 | | `/inbox/[category]` | Category deep-dive (email list for a life-bucket) |
 | | `/inbox/[category]/[emailId]` | Single email detail view |

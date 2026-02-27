@@ -338,6 +338,27 @@ export const analyzerConfig = {
   } satisfies AnalyzerConfig,
 
   /**
+   * Link Analyzer: Enriches extracted links with priority, topics, and save-worthiness.
+   * NEW (Feb 2026): Phase 2 analyzer that takes raw links from ContentDigest
+   * and enriches them with user-context-aware priority scoring, topic tagging,
+   * save-worthiness assessment, and expiration detection.
+   *
+   * PHASE 2 EXECUTION: Runs when categorizer labels include 'has_link'
+   * AND signal_strength !== 'noise'. Skips emails with no links.
+   *
+   * Input: Raw links from ContentDigest + user context (interests, projects, role)
+   * Output: Enriched links with priority, topics, save_worthy, expires
+   *
+   * COST: ~$0.0002/email × ~60 emails/day (has_link filter) = ~$0.36/month
+   */
+  linkAnalyzer: {
+    enabled: true,
+    model: 'gpt-4.1-mini' as AIModel,
+    temperature: 0.2, // Low for consistent, accurate link classification
+    maxTokens: 800,   // Multiple links with priority + topics + save_worthy
+  } satisfies AnalyzerConfig,
+
+  /**
    * Contact Enricher: Extracts contact metadata from email signatures/content.
    * SELECTIVE: Only runs when contact needs enrichment.
    *

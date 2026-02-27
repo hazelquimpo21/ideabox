@@ -1782,6 +1782,132 @@ export interface NewsBriefData {
 export type NewsBriefResult = AnalyzerResult<NewsBriefData>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// LINK ANALYSIS TYPES (NEW - Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Link priority levels — how important is this link to the user?
+ *
+ * The LinkAnalyzer enriches raw links from ContentDigest with priority
+ * assessments based on the user's context (role, interests, projects).
+ *
+ * Examples:
+ * - A must_read article about a technology the user actively works with
+ * - A worth_reading blog post tangentially related to their industry
+ * - A reference link to documentation they might need later
+ * - A skip for tracking pixels, generic footers, or unsubscribe links
+ */
+export const LINK_PRIORITIES = [
+  'must_read',       // Highly relevant — directly matches user's active interests/projects
+  'worth_reading',   // Interesting — tangentially related or generally valuable
+  'reference',       // Useful to have — documentation, tools, resources
+  'skip',            // Low value — unsubscribe, tracking, generic footer links
+] as const;
+
+export type LinkPriority = typeof LINK_PRIORITIES[number];
+
+/**
+ * A single analyzed link with AI-enriched metadata.
+ *
+ * This extends the raw ExtractedLink from ContentDigest with priority,
+ * topics, save-worthiness, and expiration detection.
+ *
+ * GOOD enrichment: An article about "Production ML best practices" tagged
+ *   as must_read with topics ["AI", "ML-ops"] for a user who works in AI
+ * BAD enrichment: Generic "Click here" link with no useful classification
+ */
+export interface AnalyzedLink {
+  /** The URL itself */
+  url: string;
+
+  /** Type of content the link leads to (from ContentDigest taxonomy) */
+  type: LinkType;
+
+  /** Title or label for the link */
+  title: string;
+
+  /** Brief description of why this link matters */
+  description: string;
+
+  /** Whether this is the main content of the email */
+  isMainContent: boolean;
+
+  /**
+   * How important this link is to the user (AI-assessed).
+   * Based on cross-referencing link content with user context.
+   */
+  priority: LinkPriority;
+
+  /**
+   * Topic tags for filtering and grouping (1-3 short tags).
+   * Example: ["AI", "prompt-engineering"] or ["design", "Figma"]
+   */
+  topics: string[];
+
+  /**
+   * Whether this link is worth bookmarking for later.
+   * True for high-quality content the user would want to revisit.
+   */
+  saveWorthy: boolean;
+
+  /**
+   * Expiration date if the link has time-limited content (YYYY-MM-DD).
+   * Examples: registration deadlines, sale end dates, limited-time offers.
+   * Null for evergreen content.
+   */
+  expires?: string;
+
+  /** Confidence in the enrichment quality (0-1) */
+  confidence: number;
+}
+
+/**
+ * Result data from the link analysis analyzer.
+ *
+ * NEW (Feb 2026): Enriches ContentDigest raw links with priority scoring,
+ * topic tagging, save-worthiness, and expiration detection.
+ *
+ * This fills the gap between raw link extraction ("what links exist?")
+ * and actionable link intelligence ("which links should I click?").
+ *
+ * DESIGN PHILOSOPHY:
+ * - Priority is USER-CENTRIC — what matters to THIS user, not generic importance
+ * - Topics enable cross-email link discovery ("show me all AI links this week")
+ * - Save-worthy flags surface links worth bookmarking vs. skipping
+ * - Expiration detection prevents missing time-limited opportunities
+ */
+export interface LinkAnalysisData {
+  /**
+   * Whether meaningful links were found in the email.
+   * False for emails with no links or only unsubscribe/tracking links.
+   */
+  hasLinks: boolean;
+
+  /**
+   * Array of analyzed links with enriched metadata.
+   * Ordered by priority (must_read first, skip last).
+   */
+  links: AnalyzedLink[];
+
+  /**
+   * One-sentence summary of the links landscape.
+   * Example: "3 AI articles, 1 registration link expiring Friday, 2 reference docs"
+   */
+  summary: string;
+
+  /**
+   * Overall confidence in the link analysis (0-1).
+   * Lower for emails with ambiguous or poorly-described links.
+   */
+  confidence: number;
+}
+
+/**
+ * Full result from the link analysis analyzer.
+ */
+export type LinkAnalysisResult = AnalyzerResult<LinkAnalysisData>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ENHANCED ACTION EXTRACTOR TYPES (Multi-Action Support - Jan 2026)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2006,6 +2132,17 @@ export interface AggregatedAnalysis {
   newsBrief?: NewsBriefData;
 
   /**
+   * Link analysis results (NEW Feb 2026).
+   * Phase 2 — runs on emails with `has_link` label from categorizer.
+   * Enriches raw ContentDigest links with priority, topics, save-worthiness,
+   * and expiration detection based on user context.
+   *
+   * Fills the gap between raw link extraction ("what links exist?")
+   * and actionable intelligence ("which links should I click?").
+   */
+  linkAnalysis?: LinkAnalysisData;
+
+  /**
    * Contact enrichment results (NEW Jan 2026).
    * Only present when contact needs enrichment.
    * Contains extracted company, job title, birthday, etc.
@@ -2048,6 +2185,7 @@ export interface EmailProcessingResult {
     ideaSparks?: IdeaSparkResult;
     insightExtraction?: InsightExtractionResult;
     newsBrief?: NewsBriefResult;
+    linkAnalysis?: LinkAnalysisResult;
     eventDetection?: EventDetectionResult;
     multiEventDetection?: MultiEventDetectionResult;
     contactEnrichment?: ContactEnrichmentResult;

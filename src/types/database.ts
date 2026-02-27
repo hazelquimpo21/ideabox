@@ -1506,6 +1506,47 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['saved_news']['Insert']>;
       };
+      /**
+       * Saved links (NEW Feb 2026 — migration 042).
+       * Stores links that users choose to keep from LinkAnalyzer.
+       * Links are analyzed by LinkAnalyzer and stored in email_analyses.url_extraction.
+       * When a user saves a link, a row is created here for persistence.
+       */
+      saved_links: {
+        Row: {
+          id: string;
+          user_id: string;
+          email_id: string | null;
+          url: string;
+          title: string;
+          description: string | null;
+          link_type: string;
+          priority: 'must_read' | 'worth_reading' | 'reference' | 'skip';
+          topics: string[];
+          status: 'new' | 'saved' | 'read' | 'archived' | 'dismissed';
+          expires_at: string | null;
+          confidence: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email_id?: string | null;
+          url: string;
+          title: string;
+          description?: string | null;
+          link_type: string;
+          priority?: 'must_read' | 'worth_reading' | 'reference' | 'skip';
+          topics?: string[];
+          status?: 'new' | 'saved' | 'read' | 'archived' | 'dismissed';
+          expires_at?: string | null;
+          confidence?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['saved_links']['Insert']>;
+      };
       // Email summaries (NEW Feb 2026 — migration 038)
       email_summaries: {
         Row: {

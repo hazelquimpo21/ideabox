@@ -17,6 +17,7 @@
  *   G. Daily Review — review queue for scan-worthy emails (NEW Feb 2026)
  *   H. Insights — synthesized tips/frameworks from newsletters (NEW Feb 2026)
  *   I. News Brief — factual news items from email content (NEW Feb 2026)
+ *   K. Saved Links — AI-analyzed links from email content (NEW Feb 2026)
  *
  * Route: /home
  * Redirect: /hub → /home (configured in next.config.mjs)
@@ -40,6 +41,7 @@ import {
   DailyReviewCard,
   InsightsCard,
   NewsBriefCard,
+  SavedLinksCard,
   EmailSummaryCard,
   ActiveProjectsWidget,
 } from '@/components/home';
@@ -61,6 +63,7 @@ import {
   useExtractedDates,
   useEvents,
   useIdeas,
+  useLinks,
   useReviewQueue,
   useSummary,
   useSyncStatus,
@@ -171,6 +174,14 @@ export default function HomePage() {
     saveIdea,
     dismissIdea,
   } = useIdeas({ limit: 10 });
+
+  // ─── Saved Links (Section K — NEW Feb 2026) ──────────────────────────
+  const {
+    items: linkItems,
+    isLoading: isLinksLoading,
+    saveLink,
+    dismissLink,
+  } = useLinks({ limit: 15 });
 
   // ─── Daily Review Queue (Section G — NEW Feb 2026) ────────────────────
   const {
@@ -448,6 +459,16 @@ export default function HomePage() {
 
         {/* Section I: News Brief — factual news from email content */}
         <NewsBriefCard limit={5} />
+      </div>
+
+      {/* ─── Section K: Saved Links (NEW Feb 2026) ─────────────────────────── */}
+      <div className="mb-8">
+        <SavedLinksCard
+          links={linkItems}
+          isLoading={isLinksLoading}
+          onSave={saveLink}
+          onDismiss={dismissLink}
+        />
       </div>
 
       {/* ─── Explore More Navigation ──────────────────────────────────────── */}

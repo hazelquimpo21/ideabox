@@ -31,7 +31,7 @@
 
 ### Email Sync
 ```
-Cron/Push → Gmail API → Save raw emails → EmailProcessor → 13 Analyzers (2-phase)
+Cron/Push → Gmail API → Save raw emails → EmailProcessor → 14 Analyzers (2-phase)
   → Save analysis JSONB → Denormalize to emails table (gist, key_points, summary, category, additional_categories, signal_strength, reply_worthiness)
   → Extract actions → Update contacts
 ```
@@ -140,6 +140,7 @@ src/
       emails/                   # sync/, send/, analyze/, rescan/, bulk-archive/, review-queue/ (GET, PATCH)
       ideas/                    # Ideas from email analysis (GET, POST, PATCH)
       insights/                 # Newsletter insights (GET, POST, PATCH) (NEW Feb 2026)
+      links/                    # Analyzed links from email content (GET, POST, PATCH) (NEW Feb 2026)
       news/                     # News brief items (GET, POST, PATCH) (NEW Feb 2026)
       contacts/                 # CRUD, import-google/, historical-sync/, vip-suggestions/, promote/, stats/
       hub/                      # Hub prioritization endpoints
@@ -153,7 +154,7 @@ src/
     dev/                        # Development utilities
 
   services/
-    analyzers/                  # 13 AI analyzers (Phase 1 parallel + Phase 2 conditional)
+    analyzers/                  # 14 AI analyzers (Phase 1 parallel + Phase 2 conditional)
       base-analyzer.ts          # Abstract base class
       categorizer.ts            # Life-bucket classification + signal + reply worthiness
       action-extractor.ts       # Action item extraction (multi-action)
@@ -167,6 +168,7 @@ src/
       idea-spark.ts             # Creative ideas from emails (NEW Feb 2026)
       insight-extractor.ts      # Newsletter insights/tips (NEW Feb 2026)
       news-brief.ts             # Factual news extraction (NEW Feb 2026)
+      link-analyzer.ts          # Deep URL intelligence from email content (NEW Feb 2026)
       link-resolver.ts          # URL expansion for context (NEW Feb 2026)
       types.ts                  # Analyzer result types
     processors/
@@ -191,7 +193,7 @@ src/
   components/
     ui/                         # Base UI library (Button, Card, Dialog, etc.)
     email/                      # Email display (list, detail, compose)
-    home/                       # Home page: DailyBriefingHeader, TodaySchedule, PendingTasksList
+    home/                       # Home page: DailyBriefingHeader, TodaySchedule, PendingTasksList, SavedLinksCard
     inbox/                      # Inbox page: InboxTabs, PriorityEmailList (all 12 category colors)
     actions/                    # ActionsContent (extracted from old actions page)
     archive/                    # ArchiveContent — queries is_archived emails, supports restore/hard-delete/click-to-detail
@@ -206,7 +208,7 @@ src/
     layout/                     # Navbar, Sidebar, PageHeader
     onboarding/                 # Onboarding wizard steps (5 steps: Welcome, Accounts, VIP Contacts, Mad Libs Profile, Sync Config; lazy-loaded 3+)
 
-  hooks/                        # 22 custom React hooks
+  hooks/                        # 23 custom React hooks
     useEmails.ts                # Email list, search, filters
     useActions.ts               # Action management
     useContacts.ts              # Contact + client management (unified)
@@ -216,6 +218,7 @@ src/
     useTemplates.ts             # Email template management
     useIdeas.ts                 # Ideas from email analysis (NEW Feb 2026)
     useInsights.ts              # Newsletter insights (NEW Feb 2026)
+    useLinks.ts                 # Analyzed links from email content (NEW Feb 2026)
     useNews.ts                  # News brief data (NEW Feb 2026)
     useReviewQueue.ts           # Review queue for scan-worthy emails (NEW Feb 2026)
     useEmailAnalysis.ts         # Parse analysis JSONB

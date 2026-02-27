@@ -1489,10 +1489,41 @@ const result = senderTypeDetector.detect({
 
 ---
 
+### 10. Link Analyzer (NEW Feb 2026)
+
+**Purpose:** Deep URL intelligence — enrich links extracted from emails with priority scoring, topic tagging, save-worthiness, and expiration detection based on the user's role, interests, and active projects.
+
+> The link complement to ContentDigest's raw URL extraction. ContentDigest finds the links; LinkAnalyzer scores them with context-aware priority, topics, types, and expiration awareness.
+
+**When It Runs:** PHASE 2 (conditional). Runs when categorizer labels include `has_link` AND `signal_strength != 'noise'` AND ContentDigest found at least 1 raw link. Estimated skip rate: ~70-80% of emails.
+
+**Link Priorities:**
+- `must_read` — Directly relevant to user's active interests/projects (highlight styling)
+- `worth_reading` — Tangentially interesting, broadens perspective (standard styling)
+- `reference` — Useful documentation/tools to have on hand (muted styling)
+- `skip` — Tracking pixels, generic footers, unsubscribe links (hidden by default)
+
+**Link Types:** article, registration, document, video, product, tool, social, unsubscribe, other
+
+**What Gets Analyzed:**
+- Priority scoring based on user context (role, interests, projects)
+- Topic tagging (1-3 short tags per link)
+- Save-worthiness assessment
+- Expiration detection (registration deadlines, early bird pricing, etc.)
+- Main content link identification
+- Link type classification
+
+**Database Storage:**
+- `email_analyses.url_extraction` JSONB: `{has_links, links[], summary, confidence}`
+- Promoted links saved to `saved_links` table via POST /api/links
+
+**Cost:** ~$0.00012 per email (~30 qualifying emails/day = ~$0.11/month)
+
+---
+
 ## Future Analyzer Additions
 
 Future analyzers to add (same pattern):
-- **URLExtractorAnalyzer**: Find and categorize URLs in email
 - **UnsubscribeAnalyzer**: Suggest newsletters to unsubscribe from
 - **SentimentAnalyzer**: Detect client relationship health
 
@@ -1551,6 +1582,21 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │         │  │ + details   │                                         │               │              │
 │         │  └──────┬──────┘                                         │               │              │
 │         │         │                                                │               │              │
+│         │    ┌────┴────────────────────────┐                       │               │              │
+│         │    │ has_link + raw links?       │                       │               │              │
+│         │    └────────────┬────────────────┘                       │               │              │
+│         │       ┌────────┴────────┐                                │               │              │
+│         │       │ YES             │ NO                              │               │              │
+│         │       ▼                 ▼                                 │               │              │
+│         │  ┌─────────────┐ ┌─────────┐                             │               │              │
+│         │  │    Link     │ │  Skip   │                             │               │              │
+│         │  │  Analyzer   │ │ (save$) │                             │               │              │
+│         │  │  (NEW Feb)  │ └─────────┘                             │               │              │
+│         │  │ + priority  │                                         │               │              │
+│         │  │ + topics    │                                         │               │              │
+│         │  │ + save?     │                                         │               │              │
+│         │  └──────┬──────┘                                         │               │              │
+│         │         │                                                │               │              │
 │         └─────────┴────────────────────────────────────────────────┴───────────────┘              │
 │                         │                                                                │
 │              ┌──────────┴──────────┐                                                     │
@@ -1574,6 +1620,7 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │  │  │ - client_tagging        │              │                         │            │  │
 │  │  │ - event_detection       │              │                         │            │  │
 │  │  │ - idea_sparks           │              │                         │            │  │
+│  │  │ - url_extraction (NEW)  │              │                         │            │  │
 │  │  └─────────────────────────┘              └─────────────────────────┘            │  │
 │  │                                                                                   │  │
 │  │  ┌─────────────────────────┐                                                     │  │
