@@ -1,7 +1,7 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
 > **Last Updated:** February 2026
-> **Source of Truth:** `supabase/migrations/001-038`
+> **Source of Truth:** `supabase/migrations/001-041`
 > **TypeScript Types:** `src/types/database.ts`
 
 ## Schema Overview
@@ -20,6 +20,8 @@ auth.users (Supabase Auth)
   │   ├── email_analyses     # Full AI analyzer outputs (JSONB)
   │   └── extracted_dates    # Timeline dates/events extracted from emails
   ├── actions                # To-do items extracted from emails
+  ├── projects               # Project containers for organizing work (NEW Feb 2026)
+  │   └── project_items      # Ideas, tasks, and routines within projects (NEW Feb 2026)
   ├── saved_insights         # User-promoted insights from InsightExtractor (NEW Feb 2026)
   ├── saved_news             # User-promoted news items from NewsBrief (NEW Feb 2026)
   ├── email_summaries        # AI-synthesized narrative digests (NEW Feb 2026)
@@ -478,6 +480,81 @@ CREATE TABLE actions (
   estimated_minutes INTEGER,
 
   status TEXT DEFAULT 'pending', -- pending, in_progress, completed, cancelled
+  completed_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### projects (migration 041)
+Project containers for organizing ideas, tasks, and routines.
+
+```sql
+CREATE TABLE projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- Identity
+  name TEXT NOT NULL,
+  description TEXT,
+  icon TEXT,                              -- Emoji icon
+  color TEXT DEFAULT '#3b82f6',           -- Hex color for UI stripe
+
+  -- Status & priority
+  status TEXT NOT NULL DEFAULT 'active',  -- active, on_hold, completed, archived
+  priority TEXT NOT NULL DEFAULT 'medium', -- low, medium, high
+
+  -- Date range
+  start_date DATE,
+  end_date DATE,
+
+  -- Relations
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### project_items (migration 041)
+Ideas, tasks, and routines within projects. Items can exist without a project (`project_id` is nullable).
+
+```sql
+CREATE TABLE project_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+
+  -- Item identity
+  item_type TEXT NOT NULL DEFAULT 'task', -- idea, task, routine
+  title TEXT NOT NULL,
+  description TEXT,
+
+  -- Status & priority
+  status TEXT NOT NULL DEFAULT 'pending', -- backlog, pending, in_progress, completed, cancelled
+  priority TEXT NOT NULL DEFAULT 'medium', -- low, medium, high, urgent
+
+  -- Date range & due date
+  start_date DATE,
+  due_date DATE,
+  end_date DATE,
+
+  -- Recurrence (for routines)
+  recurrence_pattern TEXT,               -- daily, weekly, biweekly, monthly, quarterly, yearly
+  recurrence_config JSONB DEFAULT '{}',  -- {dayOfWeek, dayOfMonth, interval, endDate}
+
+  -- Time tracking
+  estimated_minutes INTEGER,
+
+  -- Source linking
+  source_action_id UUID REFERENCES actions(id) ON DELETE SET NULL,
+  source_email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+
+  -- Organization
+  tags TEXT[],
+  sort_order INTEGER DEFAULT 0,
   completed_at TIMESTAMPTZ,
 
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -966,7 +1043,7 @@ All tables have RLS enabled. Policy pattern:
 
 ---
 
-## Migration Files (001-038)
+## Migration Files (001-041)
 
 | # | File | What it does |
 |---|------|-------------|
@@ -1008,6 +1085,7 @@ All tables have RLS enabled. Policy pattern:
 | 036 | additional_categories_and_notifications.sql | additional_categories column + notifications category |
 | 037 | email_type_and_ai_brief.sql | Add email_type + ai_brief columns to emails for communication nature tagging and AI batch-summarization |
 | 038 | email_summaries.sql | email_summaries table (AI narrative digests) + user_summary_state table (staleness tracking) + RLS policies + indexes |
+| 041 | migration-041-projects.sql | projects + project_items tables, RLS policies, indexes, updated_at triggers. Projects contain ideas/tasks/routines with due dates, date ranges, recurrence, tags, and source linking to actions/emails. |
 
 ---
 

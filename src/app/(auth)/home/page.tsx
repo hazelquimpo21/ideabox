@@ -41,6 +41,7 @@ import {
   InsightsCard,
   NewsBriefCard,
   EmailSummaryCard,
+  ActiveProjectsWidget,
 } from '@/components/home';
 import type { ScheduleItem } from '@/components/home';
 import { PriorityCard, PriorityCardSkeleton } from '@/components/shared';
@@ -63,6 +64,8 @@ import {
   useReviewQueue,
   useSummary,
   useSyncStatus,
+  useProjects,
+  useProjectItems,
 } from '@/hooks';
 import { useAuth } from '@/lib/auth';
 import {
@@ -189,6 +192,17 @@ export default function HomePage() {
 
   // ─── Sync Status (for "emails last checked" timestamp) ──────────────
   const { lastSyncAt } = useSyncStatus();
+
+  // ─── Projects (Section J — NEW Feb 2026) ──────────────────────────
+  const {
+    projects,
+    isLoading: isProjectsLoading,
+  } = useProjects();
+
+  const {
+    items: projectItems,
+    isLoading: isProjectItemsLoading,
+  } = useProjectItems();
 
   // ─── Extracted Dates for Today's Schedule (Section C) ──────────────────────
   const today = getTodayString();
@@ -396,6 +410,15 @@ export default function HomePage() {
           tasks={pendingTasks}
           isLoading={isTasksLoading}
           onToggleComplete={toggleComplete}
+        />
+      </div>
+
+      {/* ─── Section J: Active Projects (NEW Feb 2026) ──────────────────── */}
+      <div className="mb-8">
+        <ActiveProjectsWidget
+          projects={projects}
+          items={projectItems}
+          isLoading={isProjectsLoading || isProjectItemsLoading}
         />
       </div>
 

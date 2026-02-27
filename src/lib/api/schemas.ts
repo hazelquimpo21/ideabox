@@ -547,6 +547,181 @@ export const promoteToClientSchema = z.object({
 export type PromoteToClientInput = z.infer<typeof promoteToClientSchema>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// PROJECT SCHEMAS (NEW - Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Valid project statuses.
+ */
+export const projectStatusSchema = z.enum(['active', 'on_hold', 'completed', 'archived']);
+
+/**
+ * Valid project priority levels.
+ */
+export const projectPrioritySchema = z.enum(['low', 'medium', 'high']);
+
+/**
+ * Valid project item types.
+ */
+export const projectItemTypeSchema = z.enum(['idea', 'task', 'routine']);
+
+/**
+ * Valid project item statuses.
+ */
+export const projectItemStatusSchema = z.enum([
+  'backlog',
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled',
+]);
+
+/**
+ * Valid recurrence patterns for routines.
+ */
+export const recurrencePatternSchema = z.enum(['daily', 'weekly', 'biweekly', 'monthly']);
+
+/**
+ * Recurrence configuration for routine items.
+ */
+export const recurrenceConfigSchema = z.object({
+  day_of_week: z.number().int().min(0).max(6).optional(),
+  interval: z.number().int().min(1).max(365).optional(),
+  ends_at: z.string().date().optional(),
+}).optional();
+
+/**
+ * Project list query parameters.
+ *
+ * @example
+ * GET /api/projects?status=active&priority=high
+ */
+export const projectQuerySchema = paginationSchema.extend({
+  status: projectStatusSchema.optional(),
+  priority: projectPrioritySchema.optional(),
+  contactId: uuidSchema.optional(),
+});
+
+export type ProjectQueryParams = z.infer<typeof projectQuerySchema>;
+
+/**
+ * Project creation schema.
+ *
+ * @example
+ * POST /api/projects
+ * { "name": "Q1 Product Launch", "priority": "high", "color": "#3b82f6" }
+ */
+export const projectCreateSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(200),
+  description: z.string().max(2000).optional(),
+  status: projectStatusSchema.default('active'),
+  priority: projectPrioritySchema.default('medium'),
+  color: z.string().max(20).optional(),
+  icon: z.string().max(10).optional(),
+  contact_id: uuidSchema.nullable().optional(),
+  start_date: z.string().date().nullable().optional(),
+  end_date: z.string().date().nullable().optional(),
+});
+
+export type ProjectCreateInput = z.infer<typeof projectCreateSchema>;
+
+/**
+ * Project update schema (partial updates allowed).
+ *
+ * @example
+ * PATCH /api/projects/[id]
+ * { "status": "completed" }
+ */
+export const projectUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  status: projectStatusSchema.optional(),
+  priority: projectPrioritySchema.optional(),
+  color: z.string().max(20).nullable().optional(),
+  icon: z.string().max(10).nullable().optional(),
+  contact_id: uuidSchema.nullable().optional(),
+  start_date: z.string().date().nullable().optional(),
+  end_date: z.string().date().nullable().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided',
+});
+
+export type ProjectUpdateInput = z.infer<typeof projectUpdateSchema>;
+
+/**
+ * Project item list query parameters.
+ *
+ * @example
+ * GET /api/projects/[id]/items?itemType=task&status=pending
+ * GET /api/project-items?itemType=routine&projectId=uuid
+ */
+export const projectItemQuerySchema = paginationSchema.extend({
+  itemType: projectItemTypeSchema.optional(),
+  status: projectItemStatusSchema.optional(),
+  projectId: uuidSchema.optional(),
+  sortBy: z.enum(['sort_order', 'due_date', 'priority', 'created_at']).optional(),
+});
+
+export type ProjectItemQueryParams = z.infer<typeof projectItemQuerySchema>;
+
+/**
+ * Project item creation schema.
+ *
+ * @example
+ * POST /api/projects/[id]/items
+ * { "title": "Design mockups", "item_type": "task", "due_date": "2026-03-15" }
+ */
+export const projectItemCreateSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200),
+  description: z.string().max(2000).optional(),
+  item_type: projectItemTypeSchema.default('task'),
+  status: projectItemStatusSchema.default('pending'),
+  priority: prioritySchema.default('medium'),
+  start_date: z.string().date().nullable().optional(),
+  due_date: z.string().date().nullable().optional(),
+  end_date: z.string().date().nullable().optional(),
+  recurrence_pattern: recurrencePatternSchema.nullable().optional(),
+  recurrence_config: recurrenceConfigSchema,
+  estimated_minutes: z.number().int().positive().optional(),
+  source_action_id: uuidSchema.optional(),
+  source_email_id: uuidSchema.optional(),
+  contact_id: uuidSchema.nullable().optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  project_id: uuidSchema.nullable().optional(),
+});
+
+export type ProjectItemCreateInput = z.infer<typeof projectItemCreateSchema>;
+
+/**
+ * Project item update schema (partial updates allowed).
+ *
+ * @example
+ * PATCH /api/projects/[id]/items/[itemId]
+ * { "status": "completed" }
+ */
+export const projectItemUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  item_type: projectItemTypeSchema.optional(),
+  status: projectItemStatusSchema.optional(),
+  priority: prioritySchema.optional(),
+  start_date: z.string().date().nullable().optional(),
+  due_date: z.string().date().nullable().optional(),
+  end_date: z.string().date().nullable().optional(),
+  recurrence_pattern: recurrencePatternSchema.nullable().optional(),
+  recurrence_config: recurrenceConfigSchema,
+  estimated_minutes: z.number().int().positive().nullable().optional(),
+  contact_id: uuidSchema.nullable().optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  sort_order: z.number().int().min(0).optional(),
+  project_id: uuidSchema.nullable().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided',
+});
+
+export type ProjectItemUpdateInput = z.infer<typeof projectItemUpdateSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // EXTRACTED DATES SCHEMAS (NEW - Jan 2026)
 // ═══════════════════════════════════════════════════════════════════════════════
 
