@@ -13,6 +13,7 @@
  * - Link back to source email
  * - Deadline highlighting with urgency indicators
  * - Real-time stats
+ * - Promote action to project item (Phase 3 bridge)
  *
  * @module components/actions/ActionsContent
  */
@@ -25,22 +26,18 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Button,
-  Badge,
-  Checkbox,
   Skeleton,
 } from '@/components/ui';
-import { useActions, type Action, type ActionType, type ActionPriority } from '@/hooks';
+import { useActions, type Action } from '@/hooks';
+import { useProjects } from '@/hooks/useProjects';
+import { useProjectItems } from '@/hooks/useProjectItems';
+import { ActionListItem } from './ActionListItem';
+import { PromoteActionDialog } from '@/components/projects/PromoteActionDialog';
 import {
   CheckSquare,
   Circle,
   Clock,
   AlertTriangle,
-  Mail,
-  Calendar,
-  Plus,
-  Filter,
-  Loader2,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
@@ -51,163 +48,9 @@ import { createLogger } from '@/lib/utils/logger';
 const logger = createLogger('ActionsContent');
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HELPER FUNCTIONS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Get priority badge variant and color.
- */
-function getPriorityInfo(priority: ActionPriority | null): {
-  variant: 'default' | 'secondary' | 'destructive' | 'outline';
-  label: string;
-} {
-  switch (priority) {
-    case 'urgent':
-      return { variant: 'destructive', label: 'Urgent' };
-    case 'high':
-      return { variant: 'destructive', label: 'High' };
-    case 'medium':
-      return { variant: 'default', label: 'Medium' };
-    case 'low':
-      return { variant: 'secondary', label: 'Low' };
-    default:
-      return { variant: 'outline', label: 'Normal' };
-  }
-}
-
-/**
- * Get action type icon.
- */
-function getActionTypeIcon(type: ActionType | null): React.ReactNode {
-  switch (type) {
-    case 'respond':
-      return <Mail className="h-4 w-4" />;
-    case 'review':
-      return <CheckSquare className="h-4 w-4" />;
-    case 'create':
-      return <Plus className="h-4 w-4" />;
-    case 'schedule':
-      return <Calendar className="h-4 w-4" />;
-    case 'decide':
-      return <AlertTriangle className="h-4 w-4" />;
-    case 'follow_up':
-      return <Clock className="h-4 w-4" />;
-    default:
-      return <Circle className="h-4 w-4" />;
-  }
-}
-
-/**
- * Format deadline with urgency indicator.
- */
-function formatDeadline(deadlineStr?: string | null): { text: string; isUrgent: boolean } | null {
-  if (!deadlineStr) return null;
-
-  const deadline = new Date(deadlineStr);
-  const now = new Date();
-  const diffMs = deadline.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) {
-    return { text: 'Overdue', isUrgent: true };
-  } else if (diffDays === 0) {
-    return { text: 'Due today', isUrgent: true };
-  } else if (diffDays === 1) {
-    return { text: 'Due tomorrow', isUrgent: true };
-  } else if (diffDays <= 7) {
-    return { text: `Due in ${diffDays} days`, isUrgent: false };
-  } else {
-    return { text: deadline.toLocaleDateString(), isUrgent: false };
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // SUB-COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface ActionListItemProps {
-  action: Action;
-  onToggleComplete: (id: string) => void;
-}
-
-/**
- * Action list item component.
- * Displays a single action with completion toggle and priority badge.
- */
-function ActionListItem({ action, onToggleComplete }: ActionListItemProps) {
-  const priorityInfo = getPriorityInfo(action.priority as ActionPriority | null);
-  const deadlineInfo = formatDeadline(action.deadline);
-
-  return (
-    <div
-      className={`
-        flex items-start gap-4 p-4 border-b border-border/50
-        hover:bg-muted/30 transition-colors
-        ${action.status === 'completed' ? 'opacity-60' : ''}
-      `}
-    >
-      {/* Checkbox */}
-      <Checkbox
-        checked={action.status === 'completed'}
-        onCheckedChange={() => onToggleComplete(action.id)}
-        className="mt-1"
-        aria-label={`Mark "${action.title}" as ${action.status === 'completed' ? 'incomplete' : 'complete'}`}
-      />
-
-      {/* Action content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-muted-foreground">
-            {getActionTypeIcon(action.action_type)}
-          </span>
-          <span className={`font-medium ${action.status === 'completed' ? 'line-through' : ''}`}>
-            {action.title}
-          </span>
-          <Badge variant={priorityInfo.variant} className="text-xs">
-            {priorityInfo.label}
-          </Badge>
-        </div>
-
-        {action.description && (
-          <p className="text-sm text-muted-foreground mb-2">
-            {action.description}
-          </p>
-        )}
-
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          {action.email_id && (
-            <span className="flex items-center gap-1">
-              <Mail className="h-3 w-3" />
-              From email
-            </span>
-          )}
-          {action.contact_id && (
-            <span className="flex items-center gap-1">
-              <Circle className="h-3 w-3" />
-              Contact linked
-            </span>
-          )}
-          {deadlineInfo && (
-            <span className={`flex items-center gap-1 ${deadlineInfo.isUrgent ? 'text-destructive font-medium' : ''}`}>
-              <Clock className="h-3 w-3" />
-              {deadlineInfo.text}
-            </span>
-          )}
-          {action.estimated_minutes && (
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              ~{action.estimated_minutes} min
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Loading skeleton for action list.
- */
 function ActionListSkeleton() {
   return (
     <div className="space-y-0">
@@ -225,9 +68,6 @@ function ActionListSkeleton() {
   );
 }
 
-/**
- * Empty state when no actions.
- */
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -246,15 +86,10 @@ function EmptyState() {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Actions content component.
- *
- * Renders the actions body content (error banner, stats cards, action list)
- * without the PageHeader. Designed to be embedded in tab containers.
- */
 export function ActionsContent() {
   const [filter, setFilter] = React.useState<'all' | 'pending' | 'completed'>('all');
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [promoteAction, setPromoteAction] = React.useState<Action | null>(null);
 
   // Fetch actions using the useActions hook
   const {
@@ -266,12 +101,14 @@ export function ActionsContent() {
     stats,
   } = useActions({ limit: 100 });
 
-  /** Handle refresh */
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refetch();
-    setIsRefreshing(false);
-  };
+  // Projects data for the promote dialog
+  const { projects } = useProjects();
+  const { createItem } = useProjectItems();
+
+  /** Handle promote: mark action completed via toggleComplete */
+  const handleCompleteAction = React.useCallback(async (actionId: string) => {
+    await toggleComplete(actionId);
+  }, [toggleComplete]);
 
   /** Calculate overdue count */
   const overdueCount = actions.filter((a) => {
@@ -293,9 +130,7 @@ export function ActionsContent() {
 
   return (
     <div>
-      {/* ─────────────────────────────────────────────────────────────────────
-          Error Banner
-          ───────────────────────────────────────────────────────────────────── */}
+      {/* Error Banner */}
       {error && (
         <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
           <p className="text-sm text-destructive">
@@ -304,9 +139,7 @@ export function ActionsContent() {
         </div>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────────────
-          Stats Cards
-          ───────────────────────────────────────────────────────────────────── */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card
           className={`cursor-pointer transition-colors ${filter === 'pending' ? 'ring-2 ring-primary' : ''}`}
@@ -352,9 +185,7 @@ export function ActionsContent() {
         </Card>
       </div>
 
-      {/* ─────────────────────────────────────────────────────────────────────
-          Action List
-          ───────────────────────────────────────────────────────────────────── */}
+      {/* Action List */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">
@@ -373,12 +204,23 @@ export function ActionsContent() {
                   key={action.id}
                   action={action}
                   onToggleComplete={toggleComplete}
+                  onPromote={setPromoteAction}
                 />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Promote to project item dialog */}
+      <PromoteActionDialog
+        open={promoteAction !== null}
+        onOpenChange={(open) => { if (!open) setPromoteAction(null); }}
+        action={promoteAction}
+        projects={projects}
+        onCreateItem={createItem}
+        onCompleteAction={handleCompleteAction}
+      />
     </div>
   );
 }

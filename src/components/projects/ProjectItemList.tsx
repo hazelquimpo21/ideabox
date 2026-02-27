@@ -33,9 +33,11 @@ export interface ProjectItemListProps {
   isLoading: boolean;
   onToggleComplete: (id: string) => void;
   onDeleteItem?: (id: string) => void;
+  onUpdateItem?: (id: string, updates: Partial<ProjectItem>) => Promise<void>;
   onAddItem?: (type: ProjectItemType) => void;
   showGroupHeaders?: boolean;
   emptyMessage?: string;
+  projects?: Array<{ id: string; name: string; color?: string | null }>;
 }
 
 interface GroupConfig {
@@ -90,9 +92,11 @@ export function ProjectItemList({
   isLoading,
   onToggleComplete,
   onDeleteItem,
+  onUpdateItem,
   onAddItem,
   showGroupHeaders = true,
   emptyMessage = 'No items yet',
+  projects,
 }: ProjectItemListProps) {
   const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
 
@@ -114,6 +118,8 @@ export function ProjectItemList({
               item={item}
               onToggleComplete={onToggleComplete}
               onDelete={onDeleteItem}
+              onUpdate={onUpdateItem}
+              projects={projects}
             />
           ))}
         </CardContent>
@@ -172,6 +178,8 @@ export function ProjectItemList({
                     item={item}
                     onToggleComplete={onToggleComplete}
                     onDelete={onDeleteItem}
+                    onUpdate={onUpdateItem}
+                    projects={projects}
                   />
                 ))}
               </div>
