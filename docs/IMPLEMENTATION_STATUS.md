@@ -1,13 +1,13 @@
 # IdeaBox - Implementation Status
 
 > **Last Updated:** February 2026
-> **Database Migrations:** 001-038
+> **Database Migrations:** 001-041
 
 ## What's Built
 
 ### Core Infrastructure
 - Next.js 14 (App Router), TypeScript strict, Tailwind CSS, Vitest
-- Supabase (PostgreSQL + RLS + pg_cron) with 20+ tables
+- Supabase (PostgreSQL + RLS + pg_cron) with 25+ tables
 - OpenAI GPT-4.1-mini client with function calling, retry, cost tracking
 - Gmail API integration (read, modify, send, push notifications)
 - Google People API (contact import)
@@ -60,7 +60,7 @@ The app uses a 5-item sidebar navigation (redesigned Feb 2026):
 | **Contacts** | `/contacts` | Tabbed contacts — All, Clients, Personal, Subscriptions |
 | | `/contacts/[id]` | Contact detail (CRM-style with emails, actions, events, notes) |
 | **Calendar** | `/calendar` | Unified calendar: list/grid views, merged events + extracted dates, type filters |
-| **Tasks** | `/tasks` | Tabbed task management — To-dos, Campaigns, Templates |
+| **Tasks** | `/tasks` | Tabbed task management — Projects, All Items, Inbox Tasks, Campaigns, Templates |
 | | `/tasks/campaigns/new` | Create new campaign |
 | | `/tasks/campaigns/[id]` | Campaign detail |
 | **Summaries** | `/summaries` | Browsable history of AI-synthesized email summaries, grouped by date |
@@ -89,7 +89,7 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Inline reply with editable subject
 
 ### Data Layer
-- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress, useIdeas, useInsights, useNews, useReviewQueue, useCategoryStats, useCategoryPreviews, useHubPriorities, useSidebarData, useCampaigns, useTemplates, useGmailAccounts, useUserContext, useEmailThumbnails, useSummary, useSummaryHistory
+- Custom hooks: useEmails, useActions, useContacts (with client fields), useExtractedDates, useEvents, useSettings, useSyncStatus, useEmailAnalysis, useInitialSyncProgress, useIdeas, useInsights, useNews, useReviewQueue, useCategoryStats, useCategoryPreviews, useHubPriorities, useSidebarData, useCampaigns, useTemplates, useGmailAccounts, useUserContext, useEmailThumbnails, useSummary, useSummaryHistory, useProjects, useProjectItems
 - REST API routes for all entities with Zod validation
 - Page-based pagination with URL state
 - Optimistic UI updates with rollback
@@ -98,7 +98,8 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Full component library: Button, Card, Badge, Dialog, Toast, Skeleton, Spinner, Input, Select, Switch, Checkbox, Pagination
 - Layout: Navbar (search, sync indicator), Sidebar (5-item nav, category filters, top contacts, upcoming events), PageHeader (breadcrumbs)
 - Tab containers: InboxTabs, ContactsTabs, TasksTabs (all URL-synced via `?tab=`)
-- Extracted content components: ActionsContent, CampaignsContent, TemplatesContent, DiscoverContent, ArchiveContent
+- Extracted content components: ActionsContent, CampaignsContent, TemplatesContent, DiscoverContent, ArchiveContent, ProjectsContent, AllItemsContent
+- Project components: ProjectCard, ProjectItemRow, ProjectItemList, ProjectDateRange, CreateProjectDialog, CreateItemDialog, ActiveProjectsWidget
 - Shared components: PriorityCard (used by Home page)
 - Category enhancements: urgency dots, AI briefings, key points, relationship health
 - Contact sync progress banner (global)
@@ -127,6 +128,7 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Advanced analytics dashboard
 - Category Intelligence Bar (API ready, UI pending)
 - Focus Mode for category view
+- Projects Phase 3: action→project_item promotion bridge, drag-and-drop reordering, project templates, Gantt-style timeline view
 
 ### Known Issues
 - `urgency_score` and `relationship_signal` exist in TypeScript types for `emails` table but have **no database migration** — reads will return null. Need a migration to add these columns if denormalization is desired.
@@ -163,4 +165,5 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Contact Onboarding Fix | Feb 2026 | Fixed 5 issues in contact onboarding flow: (1) VIP save failure now shows toast instead of failing silently, (2) MadLibsProfileStep reads VIPs directly from user_context.vip_emails instead of unnecessarily calling vip-suggestions endpoint, (3) email validation added to MadLibsField chip input, (4) context-aware empty state messaging in ContactImportStep, (5) OAuth return URL fixed to use explicit /onboarding path. |
 | Contact Onboarding UX | Feb 2026 | Fixed 3 bugs: (1) VIP suggestions returned 0 after fresh Google import (filter required email_count>=3 or starred, fresh imports have neither), (2) MadLibsProfileStep loading race (card rendered before VIPs loaded causing flash), (3) MadLibsField animate-pulse removed (replaced with static italic). Then replaced simple suggestion filter with 12-signal weighted scoring: Google starred/labels, same last name (family), same email domain (coworker), sent count, bidirectional communication, email frequency, recency, longevity, relationship type, sender type penalty, avatar presence. Badge shows top 2 reasons (e.g. "Starred + Possible family"). Works for both fresh imports and established accounts. |
 | Email Summaries | Feb 2026 | AI-synthesized email digests. Phase 1: migration 038 (email_summaries + user_summary_state tables), summary generator service (staleness check → gather inputs → cluster threads → AI synthesis → persist), summary prompt engineering, summary/types.ts, GET /api/summaries/latest, POST /api/summaries/generate, config/analyzers.ts update. Phase 2: useSummary hook (auto-generate when stale, polling), EmailSummaryCard component (themed collapsible sections, urgency indicators, loading/empty states), home page integration. Phase 3: Post-sync staleness triggers (sync route + webhook), batch job service (generateSummariesForStaleUsers for cron), GET /api/summaries/history (paginated), useSummaryHistory hook, SummaryHistoryList component (date-grouped, expandable), /summaries history page. "View history" link in EmailSummaryCard footer. |
+| Projects | Feb 2026 | Project management system (Phase 1+2). Migration 041: `projects` + `project_items` tables with RLS, indexes, triggers. TypeScript types + Zod schemas. 6 API route files (projects CRUD, project items CRUD, cross-project items). `useProjects` + `useProjectItems` hooks with optimistic updates. 8 UI components: ProjectCard, ProjectItemRow, ProjectItemList, ProjectDateRange, CreateProjectDialog, CreateItemDialog, ProjectsContent, AllItemsContent. ActiveProjectsWidget on home page. TasksTabs expanded from 3→5 tabs (Projects, All Items, Inbox Tasks, Campaigns, Templates). Items support due dates, date ranges, recurrence patterns, tags, priority, estimated time. Items can exist without a project. Source linking to actions/emails for "promote to project" workflow. |
 | Analyzer Refinement | Feb 2026 | Unified "right on top of that, Rose!" prompt voice across all analyzers. Added 2 new golden nugget types (remember_this, sales_opportunity) with max increased from 5→7. Multi-category display in inbox UI (secondary dots + badges). Initial sync increased 50→100 emails, relaxed SKIP_SENDER_PATTERNS (removed noreply/notifications/alerts), timeout 120s→240s. Batch checkpoints in initial sync orchestrator (checkpoint saved after each batch for interruption recovery). Fixed retry-analysis route to clear analysis_error before re-processing. Fixed single email analyze route to reset error state on force-reanalyze. Enhanced logging across categorizer, content-digest, insight-extractor (invalid value warnings, low-confidence alerts, failure details). Color-coded nugget badges in EmailDetail. Updated DECISIONS.md (#20-22), AI_ANALYZER_SYSTEM.md (nugget types, voice, checkpoints, re-analysis). |

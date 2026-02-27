@@ -27,6 +27,13 @@ export type {
   ClientPriority,
   UserSettings,
   CostUsageSummary,
+  Project,
+  ProjectItem,
+  ProjectStatus,
+  ProjectPriority,
+  ProjectItemType,
+  ProjectItemStatus,
+  RecurrencePattern,
 } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -260,3 +267,22 @@ export type {
   UseSummaryHistoryOptions,
   UseSummaryHistoryReturn,
 } from './useSummaryHistory';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROJECTS HOOKS (NEW - Feb 2026)
+// Project management with ideas, tasks, and routines
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useProjects, default as useProjectsDefault } from './useProjects';
+export type {
+  UseProjectsOptions,
+  UseProjectsReturn,
+  ProjectStats,
+} from './useProjects';
+
+export { useProjectItems, default as useProjectItemsDefault } from './useProjectItems';
+export type {
+  UseProjectItemsOptions,
+  UseProjectItemsReturn,
+  ProjectItemStats,
+} from './useProjectItems';

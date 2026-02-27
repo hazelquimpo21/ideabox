@@ -78,6 +78,45 @@ export type ActionStatus =
   | 'cancelled';
 
 /**
+ * Project status values.
+ */
+export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived';
+
+/**
+ * Project priority levels.
+ */
+export type ProjectPriority = 'low' | 'medium' | 'high';
+
+/**
+ * Project item types — distinguishes ideas from tasks from routines.
+ */
+export type ProjectItemType = 'idea' | 'task' | 'routine';
+
+/**
+ * Project item status values.
+ */
+export type ProjectItemStatus =
+  | 'backlog'
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
+
+/**
+ * Recurrence patterns for routine items.
+ */
+export type RecurrencePattern = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+
+/**
+ * Recurrence configuration for routine items.
+ */
+export interface RecurrenceConfig {
+  day_of_week?: number;   // 0=Sun, 1=Mon, ..., 6=Sat
+  interval?: number;       // every N occurrences (default 1)
+  ends_at?: string;        // ISO date when recurrence stops
+}
+
+/**
  * Client status.
  */
 export type ClientStatus = 'active' | 'inactive' | 'archived';
@@ -538,6 +577,130 @@ export interface Database {
           deadline?: string | null;
           estimated_minutes?: number | null;
           status?: ActionStatus;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      // ═══════════════════════════════════════════════════════════════════════════
+      // PROJECTS (migration 041)
+      // ═══════════════════════════════════════════════════════════════════════════
+      projects: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          description: string | null;
+          status: ProjectStatus;
+          priority: ProjectPriority;
+          color: string | null;
+          icon: string | null;
+          contact_id: string | null;
+          start_date: string | null;
+          end_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          description?: string | null;
+          status?: ProjectStatus;
+          priority?: ProjectPriority;
+          color?: string | null;
+          icon?: string | null;
+          contact_id?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          description?: string | null;
+          status?: ProjectStatus;
+          priority?: ProjectPriority;
+          color?: string | null;
+          icon?: string | null;
+          contact_id?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      project_items: {
+        Row: {
+          id: string;
+          user_id: string;
+          project_id: string | null;
+          item_type: ProjectItemType;
+          title: string;
+          description: string | null;
+          status: ProjectItemStatus;
+          priority: string;
+          start_date: string | null;
+          due_date: string | null;
+          end_date: string | null;
+          recurrence_pattern: RecurrencePattern | null;
+          recurrence_config: RecurrenceConfig;
+          estimated_minutes: number | null;
+          source_action_id: string | null;
+          source_email_id: string | null;
+          contact_id: string | null;
+          tags: string[];
+          sort_order: number;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          project_id?: string | null;
+          item_type?: ProjectItemType;
+          title: string;
+          description?: string | null;
+          status?: ProjectItemStatus;
+          priority?: string;
+          start_date?: string | null;
+          due_date?: string | null;
+          end_date?: string | null;
+          recurrence_pattern?: RecurrencePattern | null;
+          recurrence_config?: RecurrenceConfig;
+          estimated_minutes?: number | null;
+          source_action_id?: string | null;
+          source_email_id?: string | null;
+          contact_id?: string | null;
+          tags?: string[];
+          sort_order?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          project_id?: string | null;
+          item_type?: ProjectItemType;
+          title?: string;
+          description?: string | null;
+          status?: ProjectItemStatus;
+          priority?: string;
+          start_date?: string | null;
+          due_date?: string | null;
+          end_date?: string | null;
+          recurrence_pattern?: RecurrencePattern | null;
+          recurrence_config?: RecurrenceConfig;
+          estimated_minutes?: number | null;
+          source_action_id?: string | null;
+          source_email_id?: string | null;
+          contact_id?: string | null;
+          tags?: string[];
+          sort_order?: number;
           completed_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1634,6 +1797,8 @@ export type SavedInsight = TableRow<'saved_insights'>;
 export type SavedNews = TableRow<'saved_news'>;
 export type EmailSummaryRow = TableRow<'email_summaries'>;
 export type UserSummaryStateRow = TableRow<'user_summary_state'>;
+export type Project = TableRow<'projects'>;
+export type ProjectItem = TableRow<'project_items'>;
 
 /**
  * Cost usage summary from database function.

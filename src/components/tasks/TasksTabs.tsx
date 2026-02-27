@@ -1,10 +1,12 @@
 /**
  * Tasks Tabs Component
  *
- * Manages the three-tab interface for the Tasks page:
- *   1. To-dos (default) — actions/tasks from ActionsPage
- *   2. Campaigns — campaign management from CampaignsPage
- *   3. Templates — template management from TemplatesPage
+ * Manages the five-tab interface for the Tasks page:
+ *   1. Projects (default) — project management with ideas/tasks/routines
+ *   2. All Items — flat list of all project items across projects
+ *   3. To-dos — actions/tasks from ActionsPage
+ *   4. Campaigns — campaign management from CampaignsPage
+ *   5. Templates — template management from TemplatesPage
  *
  * Tab state is persisted in the URL via the `?tab=` query parameter.
  *
@@ -12,9 +14,11 @@
  * TAB ROUTING
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * - (default)          → To-dos tab → ActionsPage component
- * - ?tab=campaigns     → Campaigns tab → CampaignsPage component
- * - ?tab=templates     → Templates tab → TemplatesPage component
+ * - (default)          → Projects tab → ProjectsContent component
+ * - ?tab=items         → All Items tab → AllItemsContent component
+ * - ?tab=todos         → To-dos tab → ActionsContent component
+ * - ?tab=campaigns     → Campaigns tab → CampaignsContent component
+ * - ?tab=templates     → Templates tab → TemplatesContent component
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE
@@ -34,10 +38,11 @@
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
-import { CheckSquare, Megaphone, FileText } from 'lucide-react';
+import { FolderKanban, ListChecks, CheckSquare, Megaphone, FileText } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
-// ─── Extracted content components (Phase 4) ─────────────────────────────────
+// ─── Extracted content components ────────────────────────────────────────────
+import { ProjectsContent, AllItemsContent } from '@/components/projects';
 import { ActionsContent } from '@/components/actions';
 import { CampaignsContent } from '@/components/campaigns';
 import { TemplatesContent } from '@/components/templates';
@@ -53,18 +58,18 @@ const logger = createLogger('TasksTabs');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** Valid tab values for URL routing. */
-const VALID_TABS = ['todos', 'campaigns', 'templates'] as const;
+const VALID_TABS = ['projects', 'items', 'todos', 'campaigns', 'templates'] as const;
 type TasksTab = (typeof VALID_TABS)[number];
 
 /** Default tab when no query param is present. */
-const DEFAULT_TAB: TasksTab = 'todos';
+const DEFAULT_TAB: TasksTab = 'projects';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * TasksTabs — three-tab interface for the Tasks page.
+ * TasksTabs — five-tab interface for the Tasks page.
  *
  * Reads the `?tab=` query param to determine the active tab.
  * When the user switches tabs, the URL is updated without a full navigation.
@@ -113,11 +118,25 @@ export function TasksTabs() {
       {/* ─── Tab Headers ────────────────────────────────────────────────────── */}
       <TabsList variant="underline" className="mb-6">
         <TabsTrigger
+          value="projects"
+          variant="underline"
+          icon={<FolderKanban className="h-4 w-4" />}
+        >
+          Projects
+        </TabsTrigger>
+        <TabsTrigger
+          value="items"
+          variant="underline"
+          icon={<ListChecks className="h-4 w-4" />}
+        >
+          All Items
+        </TabsTrigger>
+        <TabsTrigger
           value="todos"
           variant="underline"
           icon={<CheckSquare className="h-4 w-4" />}
         >
-          To-dos
+          Inbox Tasks
         </TabsTrigger>
         <TabsTrigger
           value="campaigns"
@@ -135,7 +154,17 @@ export function TasksTabs() {
         </TabsTrigger>
       </TabsList>
 
-      {/* ─── Tab Content: To-dos ──────────────────────────────────────────── */}
+      {/* ─── Tab Content: Projects ─────────────────────────────────────────── */}
+      <TabsContent value="projects">
+        <ProjectsContent />
+      </TabsContent>
+
+      {/* ─── Tab Content: All Items ────────────────────────────────────────── */}
+      <TabsContent value="items">
+        <AllItemsContent />
+      </TabsContent>
+
+      {/* ─── Tab Content: Inbox Tasks ──────────────────────────────────────── */}
       <TabsContent value="todos">
         <ActionsContent />
       </TabsContent>
