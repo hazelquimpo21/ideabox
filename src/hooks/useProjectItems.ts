@@ -69,6 +69,28 @@ function isOverdue(item: ProjectItem): boolean {
   return new Date(item.due_date) < new Date();
 }
 
+/** Calculate the next due date based on a recurrence pattern */
+function getNextDueDate(currentDue: string, pattern: string): string {
+  const date = new Date(currentDue + 'T00:00:00');
+  switch (pattern) {
+    case 'daily':
+      date.setDate(date.getDate() + 1);
+      break;
+    case 'weekly':
+      date.setDate(date.getDate() + 7);
+      break;
+    case 'biweekly':
+      date.setDate(date.getDate() + 14);
+      break;
+    case 'monthly':
+      date.setMonth(date.getMonth() + 1);
+      break;
+    default:
+      date.setDate(date.getDate() + 7);
+  }
+  return date.toISOString().split('T')[0];
+}
+
 function calculateStats(items: ProjectItem[]): ProjectItemStats {
   return {
     total: items.length,
@@ -270,8 +292,32 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
 
       const newStatus: ProjectItemStatus = item.status === 'completed' ? 'pending' : 'completed';
       await updateItem(id, { status: newStatus });
+
+      // Auto-create next occurrence for recurring routines
+      if (
+        newStatus === 'completed' &&
+        item.item_type === 'routine' &&
+        item.recurrence_pattern &&
+        item.due_date
+      ) {
+        const nextDue = getNextDueDate(item.due_date, item.recurrence_pattern);
+        logger.start('Auto-creating next routine occurrence', { title: item.title, nextDue });
+
+        await createItem({
+          title: item.title,
+          description: item.description || undefined,
+          item_type: 'routine',
+          priority: item.priority,
+          due_date: nextDue,
+          recurrence_pattern: item.recurrence_pattern,
+          recurrence_config: item.recurrence_config || undefined,
+          estimated_minutes: item.estimated_minutes || undefined,
+          project_id: item.project_id || undefined,
+          tags: item.tags || undefined,
+        });
+      }
     },
-    [items, updateItem]
+    [items, updateItem, createItem]
   );
 
   // ─── Effects ────────────────────────────────────────────────────────────────

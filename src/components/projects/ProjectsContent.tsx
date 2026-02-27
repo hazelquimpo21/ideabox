@@ -20,7 +20,10 @@ import {
   Skeleton,
 } from '@/components/ui';
 import { ProjectCard } from './ProjectCard';
+import { ProjectDateRange } from './ProjectDateRange';
 import { CreateProjectDialog } from './CreateProjectDialog';
+import { EditProjectDialog } from './EditProjectDialog';
+import { DeleteProjectDialog } from './DeleteProjectDialog';
 import { ProjectItemList } from './ProjectItemList';
 import { CreateItemDialog } from './CreateItemDialog';
 import { useProjects } from '@/hooks/useProjects';
@@ -31,6 +34,8 @@ import {
   Inbox,
   Loader2,
   ArrowLeft,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import type { Project, ProjectItemType } from '@/types/database';
@@ -116,12 +121,16 @@ function StatsCards({ stats, filter, onFilterChange }: StatsCardsProps) {
 interface ProjectDetailProps {
   project: Project;
   onBack: () => void;
+  onUpdate: (id: string, updates: Partial<Project>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }
 
-function ProjectDetail({ project, onBack }: ProjectDetailProps) {
-  const { items, isLoading, toggleComplete, deleteItem, createItem, stats } =
+function ProjectDetail({ project, onBack, onUpdate, onDelete }: ProjectDetailProps) {
+  const { items, isLoading, toggleComplete, deleteItem, createItem, updateItem, stats } =
     useProjectItems({ projectId: project.id });
   const [showCreateItem, setShowCreateItem] = React.useState(false);
+  const [showEditDialog, setShowEditDialog] = React.useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [defaultItemType, setDefaultItemType] = React.useState<ProjectItemType>('task');
 
   const handleAddItem = (type: ProjectItemType) => {
@@ -131,7 +140,7 @@ function ProjectDetail({ project, onBack }: ProjectDetailProps) {
 
   return (
     <div>
-      {/* Back button + project header */}
+      {/* Back button + project header + actions */}
       <div className="flex items-center gap-3 mb-4">
         <Button variant="ghost" size="sm" onClick={onBack} className="h-8 w-8 p-0">
           <ArrowLeft className="h-4 w-4" />
@@ -140,11 +149,24 @@ function ProjectDetail({ project, onBack }: ProjectDetailProps) {
           className="h-4 w-1 rounded-full"
           style={{ backgroundColor: project.color || '#6b7280' }}
         />
-        <h2 className="text-lg font-semibold">{project.name}</h2>
+        <h2 className="text-lg font-semibold flex-1">{project.name}</h2>
+        <Button variant="ghost" size="sm" onClick={() => setShowEditDialog(true)} className="h-8 w-8 p-0">
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setShowDeleteDialog(true)} className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
 
       {project.description && (
-        <p className="text-sm text-muted-foreground mb-4 ml-12">{project.description}</p>
+        <p className="text-sm text-muted-foreground mb-3 ml-12">{project.description}</p>
+      )}
+
+      {/* Date range progress bar */}
+      {(project.start_date || project.end_date) && (
+        <div className="mb-4 ml-12 max-w-xs">
+          <ProjectDateRange startDate={project.start_date} endDate={project.end_date} />
+        </div>
       )}
 
       {/* Item stats summary */}
@@ -172,6 +194,7 @@ function ProjectDetail({ project, onBack }: ProjectDetailProps) {
           isLoading={isLoading}
           onToggleComplete={toggleComplete}
           onDeleteItem={deleteItem}
+          onUpdateItem={updateItem}
           onAddItem={handleAddItem}
           emptyMessage="No items in this project yet"
         />
@@ -184,6 +207,22 @@ function ProjectDetail({ project, onBack }: ProjectDetailProps) {
         defaultType={defaultItemType}
         projectId={project.id}
       />
+
+      <EditProjectDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        project={project}
+        onUpdate={onUpdate}
+      />
+
+      <DeleteProjectDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        projectName={project.name}
+        projectId={project.id}
+        onDelete={onDelete}
+        onDeleted={onBack}
+      />
     </div>
   );
 }
@@ -193,18 +232,25 @@ function ProjectDetail({ project, onBack }: ProjectDetailProps) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function ProjectsContent() {
-  const { projects, isLoading, stats, createProject, refetch } = useProjects();
+  const { projects, isLoading, stats, createProject, updateProject, deleteProject, refetch } = useProjects();
   const { items: allItems } = useProjectItems();
   const [filter, setFilter] = React.useState('all');
   const [showCreateDialog, setShowCreateDialog] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState<Project | null>(null);
 
+  // Keep selected project in sync with latest data from the hook
+  const liveProject = selectedProject
+    ? projects.find((p) => p.id === selectedProject.id) || selectedProject
+    : null;
+
   // If viewing a specific project, show detail view
-  if (selectedProject) {
+  if (liveProject) {
     return (
       <ProjectDetail
-        project={selectedProject}
+        project={liveProject}
         onBack={() => setSelectedProject(null)}
+        onUpdate={updateProject}
+        onDelete={deleteProject}
       />
     );
   }

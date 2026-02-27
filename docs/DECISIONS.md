@@ -40,6 +40,7 @@
 | Historical Sync | Metadata-only | Enrich contacts without full email download |
 | Navigation | 5 items with tabs | 11→5 items, tabbed UIs for merged pages |
 | Client Tracking | Merged into contacts | `is_client` flag + client columns on contacts table |
+| Action Promotion | Dialog-based bridge to projects | User-controlled promote with project/type/date overrides |
 
 ---
 
@@ -588,6 +589,27 @@ CREATE TABLE api_usage_logs (
   - **IdeaSpark**: Creative friend — lateral thinker, "oh wait, this gave me an idea for you"
   - **InsightExtractor**: Learning partner — texts you the good parts from newsletters
 
+### 23. Action → Project Item Promotion Bridge (Feb 2026)
+
+**Decision:** Build a "promote" bridge from AI-extracted actions to the manual project management system via a PromoteActionDialog, rather than auto-promoting or creating a separate import flow.
+
+**Alternatives Considered:**
+- Auto-promote all actions into project items (too noisy — many actions are quick one-off tasks)
+- Batch import screen (too heavy for a one-at-a-time workflow)
+- Inline "convert" button that skips the dialog (doesn't let users choose project/type/adjust fields)
+
+**Rationale:**
+- The action system (AI-extracted to-dos) and project system (user-curated work) serve different purposes. Actions are ephemeral signals; project items are deliberate commitments.
+- A dialog gives users control: pick the target project, override the item type (default "task"), adjust title/priority/due date, and optionally mark the source action as completed.
+- The API already supports `source_action_id` enrichment on POST `/api/projects/[id]/items`, so the promote dialog simply passes the action ID through.
+- The "mark action completed" checkbox cleanly closes the loop — once promoted, the original action can be retired.
+- Promote button only appears on hover for non-completed actions, keeping the UI clean.
+
+**Impact:**
+- New components: PromoteActionDialog, integrated into ActionsContent
+- ActionsContent gains `useProjects` + `useProjectItems` dependencies
+- No database migration needed (source_action_id FK already exists)
+
 ---
 
 ## Decision Template (For Future Decisions)
@@ -624,3 +646,4 @@ When making new architectural decisions, document them here using this template:
 | Feb 2026 | Signal strength, reply worthiness, noise detection in categorizer | Claude (taxonomy refinement) |
 | Feb 2026 | VIP suggestion scoring (12-signal), contact import batching, parallel onboarding loading | Claude (contact onboarding) |
 | Feb 2026 | Initial sync refinement (100 emails, relaxed filters, batch checkpoints), re-analysis of failed emails, unified prompt voice | Claude (analyzer refinement) |
+| Feb 2026 | Action→project item promotion bridge, project edit/delete, inline item editing, sort & filter, recurrence display | Claude (projects phase 3) |

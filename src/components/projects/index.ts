@@ -39,3 +39,12 @@ export type { CreateProjectDialogProps } from './CreateProjectDialog';
 
 export { CreateItemDialog } from './CreateItemDialog';
 export type { CreateItemDialogProps } from './CreateItemDialog';
+
+export { EditProjectDialog } from './EditProjectDialog';
+export type { EditProjectDialogProps } from './EditProjectDialog';
+
+export { DeleteProjectDialog } from './DeleteProjectDialog';
+export type { DeleteProjectDialogProps } from './DeleteProjectDialog';
+
+export { PromoteActionDialog } from './PromoteActionDialog';
+export type { PromoteActionDialogProps } from './PromoteActionDialog';
