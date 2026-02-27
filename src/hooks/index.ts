@@ -234,6 +234,14 @@ export type {
   InsightsStats,
 } from './useInsights';
 
+export { useLinks, default as useLinksDefault } from './useLinks';
+export type {
+  UseLinksOptions,
+  UseLinksReturn,
+  LinkItem,
+  LinksStats,
+} from './useLinks';
+
 export { useNews, default as useNewsDefault } from './useNews';
 export type {
   UseNewsOptions,

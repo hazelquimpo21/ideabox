@@ -448,7 +448,7 @@ CREATE TABLE email_analyses (
   action_extraction JSONB,    -- {has_action, actions[], urgency_score} (supports multi-action)
   client_tagging JSONB,       -- {client_match, client_id, client_name, confidence, relationship_signal}
   event_detection JSONB,      -- {has_event, event_title, event_date, event_locality, ...}
-  url_extraction JSONB,       -- Future
+  url_extraction JSONB,       -- {has_links, links[], summary, confidence} — Deep URL intelligence from LinkAnalyzer (migration 042)
   content_opportunity JSONB,  -- Future
   content_digest JSONB,       -- {gist, key_points, links, content_type, golden_nuggets, email_style_ideas} (migration 025, enhanced Feb 2026)
 
@@ -661,6 +661,40 @@ CREATE TABLE saved_news (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
+### saved_links (migration 042)
+User-promoted links from the LinkAnalyzer. Links are analyzed during email processing
+and stored in `email_analyses.url_extraction` JSONB. When a user saves/bookmarks a link,
+it's promoted to this table for persistent tracking.
+
+```sql
+CREATE TABLE saved_links (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
+
+  url TEXT NOT NULL,                -- The URL
+  title TEXT NOT NULL,              -- Link title
+  description TEXT,                 -- Why this link matters
+  link_type TEXT NOT NULL,          -- article, registration, document, video, product, tool, social, unsubscribe, other
+  priority TEXT NOT NULL DEFAULT 'reference',  -- must_read, worth_reading, reference, skip
+  topics TEXT[] DEFAULT '{}',       -- Topic tags (1-3 short tags)
+  status TEXT NOT NULL DEFAULT 'new',          -- new, saved, read, archived, dismissed
+  expires_at DATE,                  -- Expiration date if time-limited
+  confidence DECIMAL(3,2),          -- AI confidence score 0-1
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**Indexes:**
+- `idx_saved_links_user_status` — user_id + status (main query)
+- `idx_saved_links_email` — email_id (source tracking)
+- `idx_saved_links_user_priority` — user_id + priority (priority filtering)
+- `idx_saved_links_user_expires` — user_id + expires_at (expiration queries)
+
+**RLS:** Users can only CRUD their own links (`auth.uid() = user_id`).
 
 ### email_summaries (migration 038)
 AI-synthesized narrative digests with themed sections and stats.
@@ -1086,12 +1120,12 @@ All tables have RLS enabled. Policy pattern:
 | 037 | email_type_and_ai_brief.sql | Add email_type + ai_brief columns to emails for communication nature tagging and AI batch-summarization |
 | 038 | email_summaries.sql | email_summaries table (AI narrative digests) + user_summary_state table (staleness tracking) + RLS policies + indexes |
 | 041 | migration-041-projects.sql | projects + project_items tables, RLS policies, indexes, updated_at triggers. Projects contain ideas/tasks/routines with due dates, date ranges, recurrence, tags, and source linking to actions/emails. |
+| 042 | migration-042-link-analysis.sql | saved_links table + url_extraction JSONB column activation. Deep URL intelligence from email content with priority scoring, topic tagging, save-worthiness, and expiration detection. |
 
 ---
 
 ## Planned Tables (Not Yet Created)
 
 These appear in earlier documentation but have **no migration files**:
-- `urls` - URL extraction library
 - `events` - Dedicated events table (currently using extracted_dates)
 - `content_opportunities` - Tweet ideas, networking opportunities
