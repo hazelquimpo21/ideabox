@@ -18,7 +18,8 @@
  * 9. IdeaSparkAnalyzer - Generates creative ideas from email content (NEW Feb 2026)
  * 10. InsightExtractorAnalyzer - Synthesizes ideas/tips/frameworks from newsletters (NEW Feb 2026)
  * 11. NewsBriefAnalyzer - Extracts factual news items from news emails (NEW Feb 2026)
- * 12. SenderTypeDetector - Pre-AI pattern-based sender classification (utility)
+ * 12. LinkAnalyzer - Enriches links with priority, topics, save-worthiness (NEW Feb 2026)
+ * 13. SenderTypeDetector - Pre-AI pattern-based sender classification (utility)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * ANALYZER EXECUTION FLOW (ENHANCED Feb 2026)
@@ -35,9 +36,10 @@
  * 6. IdeaSpark → generates 3 creative ideas (NEW Feb 2026, skipped for noise emails)
  * 7. InsightExtractor → ideas/tips from newsletters (NEW Feb 2026, skipped for noise)
  * 8. NewsBrief → factual news items (NEW Feb 2026, skipped for noise)
- * 9. EventDetector → only when `has_event` label present (single event)
- * 10. MultiEventDetector → when `has_event` + `has_multiple_events` (replaces EventDetector)
- * 11. ContactEnricher → only for contacts needing enrichment
+ * 9. LinkAnalyzer → enriches links with priority + topics (NEW Feb 2026, when has_link label)
+ * 10. EventDetector → only when `has_event` label present (single event)
+ * 11. MultiEventDetector → when `has_event` + `has_multiple_events` (replaces EventDetector)
+ * 12. ContactEnricher → only for contacts needing enrichment
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * USAGE EXAMPLES
@@ -148,6 +150,9 @@ export { InsightExtractorAnalyzer } from './insight-extractor';
 // News Brief - extracts factual news items from news emails (NEW Feb 2026)
 export { NewsBriefAnalyzer } from './news-brief';
 
+// Link Analyzer - enriches links with priority, topics, save-worthiness (NEW Feb 2026)
+export { LinkAnalyzer, linkAnalyzer } from './link-analyzer';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -232,6 +237,12 @@ export type {
   NewsBriefData,
   NewsBriefResult,
 
+  // Link analysis types - NEW Feb 2026
+  LinkAnalysisData,
+  LinkAnalysisResult,
+  AnalyzedLink,
+  LinkPriority,
+
   // Aggregated types
   AggregatedAnalysis,
   EmailProcessingResult,
@@ -243,6 +254,7 @@ export {
   DATE_TYPES,
   RELATIONSHIP_TYPES,
   LINK_TYPES,
+  LINK_PRIORITIES,
   CONTENT_TYPES,
   IDEA_TYPES,
 } from './types';

@@ -25,11 +25,12 @@
  *   - IdeaSpark: 3 creative ideas (NEW Feb 2026, skipped for noise emails)
  *   - InsightExtractor: Ideas/tips/frameworks from newsletters (NEW Feb 2026)
  *   - NewsBrief: Factual news items from news emails (NEW Feb 2026)
+ *   - LinkAnalyzer: Enriched links with priority/topics (NEW Feb 2026, when has_link)
  *   - EventDetector: Only when `has_event` label present
  *   - ContactEnricher: Only when contact needs enrichment
  *
  * PHASE 3: Persistence
- *   - Save analysis to email_analyses table (incl. idea_sparks, insight_extraction, news_brief)
+ *   - Save analysis to email_analyses table (incl. idea_sparks, insight_extraction, news_brief, url_extraction)
  *   - Save extracted dates to extracted_dates table
  *   - Create action record if action detected (GATED: skip noise/low-signal)
  *   - Update email category
@@ -87,6 +88,7 @@ import {
 import { IdeaSparkAnalyzer } from '@/services/analyzers/idea-spark';
 import { InsightExtractorAnalyzer } from '@/services/analyzers/insight-extractor';
 import { NewsBriefAnalyzer } from '@/services/analyzers/news-brief';
+import { LinkAnalyzer } from '@/services/analyzers/link-analyzer';
 import { ANALYZER_VERSION } from '@/services/analyzers/base-analyzer';
 import { toEmailInput } from '@/services/analyzers/types';
 import { getUserContext } from '@/services/user-context';
@@ -112,6 +114,7 @@ import type {
   IdeaSparkResult,
   InsightExtractionResult,
   NewsBriefResult,
+  LinkAnalysisResult,
   AggregatedAnalysis,
   EmailProcessingResult,
   ExtractedDate,
@@ -249,6 +252,9 @@ export class EmailProcessor {
   /** News brief analyzer - extracts factual news items from email content (NEW Feb 2026) */
   private newsBrief: NewsBriefAnalyzer;
 
+  /** Link analyzer - enriches links with priority, topics, save-worthiness (NEW Feb 2026) */
+  private linkAnalyzer: LinkAnalyzer;
+
   /** Sender type detector - classifies direct vs broadcast senders (NEW Jan 2026) */
   private senderTypeDetector: SenderTypeDetector;
 
@@ -275,6 +281,7 @@ export class EmailProcessor {
     this.ideaSpark = new IdeaSparkAnalyzer();
     this.insightExtractor = new InsightExtractorAnalyzer();
     this.newsBrief = new NewsBriefAnalyzer();
+    this.linkAnalyzer = new LinkAnalyzer();
     this.senderTypeDetector = new SenderTypeDetector();
 
     logger.debug('EmailProcessor initialized', {
@@ -288,6 +295,7 @@ export class EmailProcessor {
       ideaSparkEnabled: this.ideaSpark.isEnabled(),
       insightExtractorEnabled: this.insightExtractor.isEnabled(),
       newsBriefEnabled: this.newsBrief.isEnabled(),
+      linkAnalyzerEnabled: this.linkAnalyzer.isEnabled(),
       senderTypeDetector: 'enabled',
     });
   }
@@ -397,6 +405,7 @@ export class EmailProcessor {
     let ideaSparkResult: IdeaSparkResult | undefined;
     let insightExtractionResult: InsightExtractionResult | undefined;
     let newsBriefResult: NewsBriefResult | undefined;
+    let linkAnalysisResult: LinkAnalysisResult | undefined;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Determine signal strength from categorizer for Phase 2 gating
@@ -523,6 +532,36 @@ export class EmailProcessor {
       });
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // LinkAnalyzer: Enrich links with priority, topics, save-worthiness
+    // NEW (Feb 2026): Runs on emails with 'has_link' label from categorizer.
+    // Takes raw links from ContentDigest and enriches with user context.
+    // Skipped for noise emails to save tokens.
+    // ─────────────────────────────────────────────────────────────────────────
+    const hasLinkLabel = categorizationResult.success &&
+      categorizationResult.data.labels?.includes('has_link');
+    const rawLinks = contentDigestResult.success
+      ? contentDigestResult.data.links ?? []
+      : [];
+
+    if (!isNoise && hasLinkLabel && rawLinks.length > 0 && this.linkAnalyzer.isEnabled()) {
+      logger.debug('Running LinkAnalyzer (has_link label + links available)', {
+        emailId: emailInput.id,
+        rawLinkCount: rawLinks.length,
+        signalStrength: signalStrength ?? 'unknown',
+        hasUserContext: !!(enrichedContext.role || enrichedContext.interests?.length),
+      });
+      linkAnalysisResult = await this.runLinkAnalyzer(emailInput, enrichedContext, rawLinks);
+    } else if (!isNoise && hasLinkLabel && rawLinks.length === 0) {
+      logger.debug('Skipping LinkAnalyzer — has_link label but no raw links from ContentDigest', {
+        emailId: emailInput.id,
+      });
+    } else if (isNoise) {
+      logger.debug('Skipping LinkAnalyzer — email classified as noise', {
+        emailId: emailInput.id,
+      });
+    }
+
     // ContactEnricher: Only run if contact needs enrichment
     if (
       opts.enableContactEnrichment &&
@@ -555,6 +594,7 @@ export class EmailProcessor {
       ideaSparkResult,
       insightExtractionResult,
       newsBriefResult,
+      linkAnalysisResult,
       multiEventResult
     );
 
@@ -570,6 +610,7 @@ export class EmailProcessor {
       ideaSparkResult,
       insightExtractionResult,
       newsBriefResult,
+      linkAnalysisResult,
       multiEventResult
     );
 
@@ -592,6 +633,7 @@ export class EmailProcessor {
         ideaSparks: ideaSparkResult,
         insightExtraction: insightExtractionResult,
         newsBrief: newsBriefResult,
+        linkAnalysis: linkAnalysisResult,
         eventDetection: eventResult,
         multiEventDetection: multiEventResult,
         contactEnrichment: contactEnrichmentResult,
@@ -795,6 +837,10 @@ export class EmailProcessor {
       // News brief (NEW Feb 2026)
       newsItemsExtracted: aggregatedAnalysis.newsBrief?.newsItems?.length ?? 0,
       newsBriefConfidence: aggregatedAnalysis.newsBrief?.confidence ?? 0,
+      // Link analysis (NEW Feb 2026)
+      linksAnalyzed: aggregatedAnalysis.linkAnalysis?.links?.length ?? 0,
+      linksMustRead: aggregatedAnalysis.linkAnalysis?.links?.filter(l => l.priority === 'must_read').length ?? 0,
+      linksSaveWorthy: aggregatedAnalysis.linkAnalysis?.links?.filter(l => l.saveWorthy).length ?? 0,
       tokensUsed: aggregatedAnalysis.totalTokensUsed,
       totalTimeMs: totalTime,
     });
@@ -1127,6 +1173,59 @@ export class EmailProcessor {
   }
 
   /**
+   * Runs the LinkAnalyzer to enrich links with priority, topics, and metadata.
+   *
+   * NEW (Feb 2026): Takes raw links from ContentDigest and enriches them with
+   * AI-powered priority scoring based on user context. This is a CONDITIONAL
+   * analyzer — only runs when:
+   * 1. Categorizer labels include 'has_link'
+   * 2. ContentDigest extracted at least one link
+   * 3. Signal strength is not noise
+   *
+   * The raw links from ContentDigest are passed to the analyzer so it can
+   * enrich existing data rather than re-extracting from scratch.
+   *
+   * @param email - Email containing the links
+   * @param context - User context (role, interests, projects) for priority personalization
+   * @param rawLinks - Raw links already extracted by ContentDigest
+   * @returns Link analysis result with enriched metadata, or failed result
+   */
+  private async runLinkAnalyzer(
+    email: EmailInput,
+    context: UserContext,
+    rawLinks: Array<{ url: string; type: string; title: string; description: string; isMainContent: boolean }>
+  ): Promise<LinkAnalysisResult> {
+    logger.debug('Running LinkAnalyzer (Phase 2 conditional analyzer)', {
+      emailId: email.id,
+      rawLinkCount: rawLinks.length,
+      hasInterests: !!(context.interests?.length),
+      hasProjects: !!(context.projects?.length),
+    });
+
+    try {
+      // Pass raw links to the analyzer for enrichment context
+      this.linkAnalyzer.setRawLinks(rawLinks);
+      return await this.linkAnalyzer.analyze(email, context);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      logger.error('LinkAnalyzer threw exception — links not enriched for this email', {
+        emailId: email.id,
+        error: errorMessage,
+      });
+
+      return {
+        success: false,
+        data: { hasLinks: false, links: [], summary: '', confidence: 0 },
+        confidence: 0,
+        tokensUsed: 0,
+        processingTimeMs: 0,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
    * Runs the ContactEnricher analyzer.
    *
    * This is a SELECTIVE analyzer - only runs when:
@@ -1203,7 +1302,7 @@ export class EmailProcessor {
 
   /**
    * Aggregates results from all analyzers into a single object.
-   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief, multiEvent.
+   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief, linkAnalysis, multiEvent.
    */
   private aggregateResults(
     categorization: CategorizationResult,
@@ -1216,6 +1315,7 @@ export class EmailProcessor {
     ideaSparks?: IdeaSparkResult,
     insightExtraction?: InsightExtractionResult,
     newsBrief?: NewsBriefResult,
+    linkAnalysis?: LinkAnalysisResult,
     multiEvent?: MultiEventDetectionResult
   ): AggregatedAnalysis {
     // Calculate totals
@@ -1230,6 +1330,7 @@ export class EmailProcessor {
       (ideaSparks?.tokensUsed ?? 0) +
       (insightExtraction?.tokensUsed ?? 0) +
       (newsBrief?.tokensUsed ?? 0) +
+      (linkAnalysis?.tokensUsed ?? 0) +
       (multiEvent?.tokensUsed ?? 0);
 
     const totalProcessingTimeMs =
@@ -1243,6 +1344,7 @@ export class EmailProcessor {
       (ideaSparks?.processingTimeMs ?? 0) +
       (insightExtraction?.processingTimeMs ?? 0) +
       (newsBrief?.processingTimeMs ?? 0) +
+      (linkAnalysis?.processingTimeMs ?? 0) +
       (multiEvent?.processingTimeMs ?? 0);
 
     return {
@@ -1257,6 +1359,7 @@ export class EmailProcessor {
       ideaSparks: ideaSparks?.success ? ideaSparks.data : undefined,
       insightExtraction: insightExtraction?.success ? insightExtraction.data : undefined,
       newsBrief: newsBrief?.success ? newsBrief.data : undefined,
+      linkAnalysis: linkAnalysis?.success ? linkAnalysis.data : undefined,
       eventDetection: event?.success ? event.data : undefined,
       multiEventDetection: multiEvent?.success ? multiEvent.data : undefined,
       contactEnrichment: contactEnrichment?.success
@@ -1272,7 +1375,7 @@ export class EmailProcessor {
 
   /**
    * Collects errors from all analyzers.
-   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief, multiEvent.
+   * ENHANCED (Feb 2026): Now includes ideaSparks, insightExtraction, newsBrief, linkAnalysis, multiEvent.
    */
   private collectErrors(
     categorization: CategorizationResult,
@@ -1285,6 +1388,7 @@ export class EmailProcessor {
     ideaSparks?: IdeaSparkResult,
     insightExtraction?: InsightExtractionResult,
     newsBrief?: NewsBriefResult,
+    linkAnalysis?: LinkAnalysisResult,
     multiEvent?: MultiEventDetectionResult
   ): Array<{ analyzer: string; error: string }> {
     const errors: Array<{ analyzer: string; error: string }> = [];
@@ -1312,6 +1416,9 @@ export class EmailProcessor {
     }
     if (newsBrief && !newsBrief.success && newsBrief.error) {
       errors.push({ analyzer: 'NewsBrief', error: newsBrief.error });
+    }
+    if (linkAnalysis && !linkAnalysis.success && linkAnalysis.error) {
+      errors.push({ analyzer: 'LinkAnalyzer', error: linkAnalysis.error });
     }
     if (event && !event.success && event.error) {
       errors.push({ analyzer: 'EventDetector', error: event.error });
@@ -1682,6 +1789,28 @@ export class EmailProcessor {
               confidence: item.confidence,
             })),
             confidence: analysis.newsBrief.confidence,
+          }
+        : null,
+
+      // Link analysis (NEW Feb 2026: enriched links with priority, topics, save-worthiness)
+      // Stored in the existing url_extraction JSONB column (previously marked "Future")
+      url_extraction: analysis.linkAnalysis
+        ? {
+            has_links: analysis.linkAnalysis.hasLinks,
+            links: (analysis.linkAnalysis.links ?? []).map(link => ({
+              url: link.url,
+              type: link.type,
+              title: link.title,
+              description: link.description,
+              is_main_content: link.isMainContent,
+              priority: link.priority,
+              topics: link.topics,
+              save_worthy: link.saveWorthy,
+              expires: link.expires ?? null,
+              confidence: link.confidence,
+            })),
+            summary: analysis.linkAnalysis.summary,
+            confidence: analysis.linkAnalysis.confidence,
           }
         : null,
 
