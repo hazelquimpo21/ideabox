@@ -26,7 +26,7 @@
 'use client';
 
 import * as React from 'react';
-import { Star, Mail, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp, Image as ImageIcon, Reply } from 'lucide-react';
+import { Star, Mail, MessageSquare, Eye, Calendar, Bookmark, Archive, BellOff, CornerUpRight, TrendingUp, Image as ImageIcon, Reply, Gem } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
 import { CATEGORY_SHORT_LABELS, CATEGORY_ACCENT_COLORS } from '@/types/discovery';
@@ -400,6 +400,14 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
               >
                 <Reply className="h-2.5 w-2.5" />
                 <span className="hidden sm:inline">{replyWorthiness === 'must_reply' ? 'Reply' : 'Reply?'}</span>
+              </span>
+            )}
+
+            {/* Golden nugget count badge */}
+            {email.golden_nugget_count > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-purple-500" aria-label={`${email.golden_nugget_count} golden nuggets`}>
+                <Gem className="h-3 w-3" />
+                <span className="text-[10px] font-medium">{email.golden_nugget_count}</span>
               </span>
             )}
 

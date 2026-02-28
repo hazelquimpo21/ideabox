@@ -217,6 +217,29 @@ function LocalityBadge({ locality }: { locality: EventLocality }) {
 }
 
 /**
+ * Key date type badge component.
+ * Shows a subtle label when the event has a key_date_type (deadline, open house, etc.).
+ * Helps users distinguish regular events from important date-based items.
+ */
+function KeyDateTypeBadge({ metadata }: { metadata: EventMetadata | null }) {
+  if (!metadata?.keyDateType) return null;
+
+  const labelMap: Record<string, string> = {
+    registration_deadline: 'Reg. Deadline',
+    open_house: 'Open House',
+    deadline: 'Deadline',
+    release_date: 'Release Date',
+    other: 'Key Date',
+  };
+
+  return (
+    <Badge variant="outline" className="gap-1 text-xs border-amber-200 text-amber-700 dark:border-amber-800 dark:text-amber-300">
+      {labelMap[metadata.keyDateType] || 'Key Date'}
+    </Badge>
+  );
+}
+
+/**
  * Date/time display component.
  * Shows formatted date with optional time and relative indicator.
  * Times are stored in the event's timezone and displayed as-is.
@@ -455,8 +478,9 @@ function CompactEventCard({
               </p>
             </div>
 
-            {/* Locality badge and chevron */}
+            {/* Locality badge, key date badge, and chevron */}
             <div className="flex items-center gap-1 shrink-0">
+              <KeyDateTypeBadge metadata={getEventMetadata(event)} />
               <LocalityBadge locality={locality} />
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
@@ -749,7 +773,10 @@ export function EventCard({
                 time={event.event_time}
                 showRelative={!isToday}
               />
-              <LocalityBadge locality={getLocality(event)} />
+              <div className="flex items-center gap-1">
+                <KeyDateTypeBadge metadata={getEventMetadata(event)} />
+                <LocalityBadge locality={getLocality(event)} />
+              </div>
             </div>
 
             {/* ─────────────────────────────────────────────────────────────────── */}

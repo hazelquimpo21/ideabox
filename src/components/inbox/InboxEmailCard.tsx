@@ -56,6 +56,7 @@ import {
   Mail,
   Image as ImageIcon,
   Reply,
+  Gem,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -495,6 +496,14 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
 
             {/* Spacer if no topics */}
             {(!email.topics || email.topics.length === 0) && <span className="flex-1" />}
+
+            {/* Golden nugget count badge */}
+            {email.golden_nugget_count > 0 && (
+              <span className="inline-flex items-center gap-0.5 shrink-0 text-purple-500" aria-label={`${email.golden_nugget_count} golden nuggets`}>
+                <Gem className="h-3 w-3" />
+                <span className="text-[10px] font-medium">{email.golden_nugget_count}</span>
+              </span>
+            )}
 
             {/* Quick action badge */}
             {actionConfig && (

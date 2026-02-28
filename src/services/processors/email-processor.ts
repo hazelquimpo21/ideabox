@@ -674,12 +674,15 @@ export class EmailProcessor {
           });
         }
 
-        // Update email with analysis fields (category, summary, quick_action, labels, topics)
+        // Update email with analysis fields (category, summary, quick_action, labels, topics,
+        // urgency_score, relationship_signal, golden_nugget_count)
         if (categorizationResult.success) {
           await this.updateEmailAnalysisFields(
             emailInput.id,
             categorizationResult.data,
-            contentDigestResult.success ? contentDigestResult.data : undefined
+            contentDigestResult.success ? contentDigestResult.data : undefined,
+            actionResult.success ? actionResult.data : undefined,
+            clientResult.success ? clientResult.data : undefined
           );
         }
 
@@ -2582,11 +2585,16 @@ export class EmailProcessor {
    * - topics: AI-extracted topic keywords
    * - gist: Content briefing from ContentDigest (NEW)
    * - key_points: Key bullet points from ContentDigest (NEW)
+   * - urgency_score: From ActionExtractor (NEW Feb 2026 — migration 043)
+   * - relationship_signal: From ClientTagger (NEW Feb 2026 — migration 043)
+   * - golden_nugget_count: From ContentDigest (NEW Feb 2026 — migration 044)
    */
   private async updateEmailAnalysisFields(
     emailId: string,
     categorization: CategorizationResult['data'],
-    contentDigest?: ContentDigestResult['data']
+    contentDigest?: ContentDigestResult['data'],
+    actionExtraction?: ActionExtractionResult['data'],
+    clientTagging?: ClientTaggingResult['data']
   ): Promise<void> {
     const supabase = await createServerClient();
 
@@ -2620,7 +2628,27 @@ export class EmailProcessor {
         gistLength: contentDigest.gist?.length ?? 0,
         keyPointsCount: contentDigest.keyPoints?.length ?? 0,
       });
+
+      // NEW Feb 2026 (migration 044): golden nugget count for list-view gem badge
+      updates.golden_nugget_count = contentDigest.goldenNuggets?.length ?? 0;
     }
+
+    // NEW Feb 2026 (migration 043): Denormalize urgency_score from ActionExtractor
+    if (actionExtraction) {
+      updates.urgency_score = actionExtraction.urgencyScore ?? null;
+    }
+
+    // NEW Feb 2026 (migration 043): Denormalize relationship_signal from ClientTagger
+    if (clientTagging) {
+      updates.relationship_signal = clientTagging.relationshipSignal ?? null;
+    }
+
+    logger.debug('Denormalizing urgency_score, relationship_signal, golden_nugget_count', {
+      emailId,
+      urgencyScore: actionExtraction?.urgencyScore ?? null,
+      relationshipSignal: clientTagging?.relationshipSignal ?? null,
+      goldenNuggetCount: contentDigest?.goldenNuggets?.length ?? 0,
+    });
 
     const { error } = await supabase
       .from('emails')

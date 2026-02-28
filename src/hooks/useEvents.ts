@@ -114,6 +114,14 @@ export interface EventMetadata {
   cost?: string;
   /** Additional details about the event */
   additionalDetails?: string;
+  /** Whether this is a key date (deadline, registration, etc.) */
+  isKeyDate?: boolean;
+  /** Type of key date — helps calendar badge display */
+  keyDateType?: 'registration_deadline' | 'open_house' | 'deadline' | 'release_date' | 'other' | null;
+  /** Assistant-style summary for quick scanning */
+  eventSummary?: string | null;
+  /** Key points about the event */
+  keyPoints?: string[] | null;
 }
 
 /**

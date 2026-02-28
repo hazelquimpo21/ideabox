@@ -39,6 +39,7 @@ import {
   Lightbulb,
   Signal,
   TrendingUp,
+  Gem,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -302,6 +303,14 @@ export const EmailCard = React.memo(function EmailCard({
               <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
               {email.urgency_score}/10
             </Badge>
+          )}
+
+          {/* Golden nugget count badge */}
+          {email.golden_nugget_count > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-purple-500" aria-label={`${email.golden_nugget_count} golden nuggets`}>
+              <Gem className="h-3 w-3" />
+              <span className="text-[10px] font-medium">{email.golden_nugget_count}</span>
+            </span>
           )}
         </div>
 

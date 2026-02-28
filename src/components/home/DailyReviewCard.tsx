@@ -29,6 +29,7 @@
 
 'use client';
 
+import * as React from 'react';
 import Link from 'next/link';
 import {
   Card,
@@ -48,9 +49,26 @@ import {
   Reply,
   Signal,
   Lightbulb,
+  MessageSquare,
+  Eye,
+  Calendar,
+  CornerUpRight,
+  Bookmark,
 } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
+import { CATEGORY_BADGE_COLORS, CATEGORY_SHORT_LABELS } from '@/types/discovery';
 import type { ReviewQueueItem } from '@/hooks/useReviewQueue';
+import type { EmailCategory } from '@/types/database';
+
+/** Quick action icon mapping (same pattern as PriorityEmailList) */
+const ACTION_ICONS: Record<string, React.ElementType> = {
+  respond: MessageSquare,
+  review: Eye,
+  calendar: Calendar,
+  follow_up: CornerUpRight,
+  save: Bookmark,
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -217,6 +235,26 @@ export function DailyReviewCard({
                     <span className="text-xs text-muted-foreground">
                       {formatRelativeDate(email.date)}
                     </span>
+
+                    {/* Category badge */}
+                    {email.category && CATEGORY_SHORT_LABELS[email.category as EmailCategory] && (
+                      <span
+                        className={cn(
+                          'text-[10px] px-1.5 py-0 rounded font-medium',
+                          CATEGORY_BADGE_COLORS[email.category as EmailCategory] || 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {CATEGORY_SHORT_LABELS[email.category as EmailCategory]}
+                      </span>
+                    )}
+
+                    {/* Quick action icon */}
+                    {email.quick_action && ACTION_ICONS[email.quick_action] &&
+                      React.createElement(ACTION_ICONS[email.quick_action], {
+                        className: 'h-3 w-3 text-muted-foreground',
+                        title: email.quick_action.replace(/_/g, ' '),
+                      })
+                    }
 
                     {/* Signal indicators */}
                     {email.signal_strength === 'high' && (
