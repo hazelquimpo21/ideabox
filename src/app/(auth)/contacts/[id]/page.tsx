@@ -64,6 +64,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { PromoteToClientDialog } from '@/components/contacts';
+import { ContactIntelligenceCard } from '@/components/contacts/ContactIntelligenceCard';
 import type { PromoteToClientData } from '@/components/contacts/PromoteToClientDialog';
 import {
   Button,
@@ -1125,6 +1126,12 @@ export default function ContactDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* Intelligence Section (Phase 1 — Feb 2026) */}
+      {/* Aggregated analyzer intelligence: relationship trend, topics, dates */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      <ContactIntelligenceCard contactId={contact.id} />
 
       {/* ─────────────────────────────────────────────────────────────────────── */}
       {/* Email History with Direction Tabs and Pagination */}
