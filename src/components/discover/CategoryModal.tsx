@@ -54,11 +54,13 @@ const MODAL_EMAIL_LIMIT = 15;
 /**
  * Fields needed for the modal list view.
  * Excludes body_html/body_text since modal only shows summaries.
- * Excludes urgency_score/relationship_signal — no DB columns (see database.ts:293).
+ * Expanded (Feb 2026): now includes signal_strength, reply_worthiness, quick_action,
+ * additional_categories, email_type, urgency_score, relationship_signal, golden_nugget_count
+ * so EmailCard can render the same at-a-glance indicators as inbox views.
  *
  * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
  */
-const MODAL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, gist, summary, key_points, topics, labels, analyzed_at' as const;
+const MODAL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, gist, summary, key_points, topics, labels, analyzed_at, signal_strength, reply_worthiness, additional_categories, email_type, urgency_score, relationship_signal, golden_nugget_count' as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
