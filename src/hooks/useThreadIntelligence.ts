@@ -139,7 +139,7 @@ export function useThreadIntelligence(threadId: string | null): ThreadIntelligen
         // Fetch all emails in the thread, ordered by date
         const { data: emails, error } = await supabase
           .from('emails')
-          .select('id, date, signal_strength, labels, urgency_score')
+          .select('id, date, signal_strength, labels')
           .eq('thread_id', threadId!)
           .order('date', { ascending: true });
 

@@ -2629,26 +2629,18 @@ export class EmailProcessor {
         keyPointsCount: contentDigest.keyPoints?.length ?? 0,
       });
 
-      // NEW Feb 2026 (migration 044): golden nugget count for list-view gem badge
-      updates.golden_nugget_count = contentDigest.goldenNuggets?.length ?? 0;
+      // NOTE: golden_nugget_count column does not exist yet (migration 044 not applied)
+      // updates.golden_nugget_count = contentDigest.goldenNuggets?.length ?? 0;
     }
 
-    // NEW Feb 2026 (migration 043): Denormalize urgency_score from ActionExtractor
-    if (actionExtraction) {
-      updates.urgency_score = actionExtraction.urgencyScore ?? null;
-    }
-
-    // NEW Feb 2026 (migration 043): Denormalize relationship_signal from ClientTagger
-    if (clientTagging) {
-      updates.relationship_signal = clientTagging.relationshipSignal ?? null;
-    }
-
-    logger.debug('Denormalizing urgency_score, relationship_signal, golden_nugget_count', {
-      emailId,
-      urgencyScore: actionExtraction?.urgencyScore ?? null,
-      relationshipSignal: clientTagging?.relationshipSignal ?? null,
-      goldenNuggetCount: contentDigest?.goldenNuggets?.length ?? 0,
-    });
+    // NOTE: urgency_score and relationship_signal columns do not exist yet
+    // (migration 043 not applied). Skipping denormalization writes.
+    // if (actionExtraction) {
+    //   updates.urgency_score = actionExtraction.urgencyScore ?? null;
+    // }
+    // if (clientTagging) {
+    //   updates.relationship_signal = clientTagging.relationshipSignal ?? null;
+    // }
 
     const { error } = await supabase
       .from('emails')

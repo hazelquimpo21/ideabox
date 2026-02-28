@@ -55,7 +55,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Fetch recent emails for this contact (up to 20)
     const { data: emails, error: emailsError } = await supabase
       .from('emails')
-      .select('id, date, relationship_signal, topics, category')
+      .select('id, date, topics, category')
       .eq('contact_id', id)
       .eq('user_id', user.id)
       .order('date', { ascending: false })
@@ -80,23 +80,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // ── Compute relationship trend ──────────────────────────────────────────
-    const signalCounts: Record<string, number> = { positive: 0, neutral: 0, negative: 0, unknown: 0 };
-    for (const email of emails || []) {
-      const sig = email.relationship_signal;
-      if (sig && sig in signalCounts) {
-        signalCounts[sig]++;
-      }
-    }
-
-    // Determine dominant signal
-    let dominantSignal: string = 'unknown';
-    let maxCount = 0;
-    for (const [signal, count] of Object.entries(signalCounts)) {
-      if (count > maxCount) {
-        dominantSignal = signal;
-        maxCount = count;
-      }
-    }
+    // NOTE: relationship_signal column doesn't exist yet (migration 043 not applied).
+    // Default to 'unknown' until the migration is run.
+    const dominantSignal: string = 'unknown';
 
     // ── Aggregate topics ────────────────────────────────────────────────────
     const topicCounts: Record<string, number> = {};
