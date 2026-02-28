@@ -40,8 +40,11 @@ import {
   Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+import { Pagination } from '@/components/ui';
 import { useIdeas } from '@/hooks';
 import type { IdeaItem } from '@/hooks/useIdeas';
+import { FeedControls, filterBySearch, sortItems, paginateItems } from './FeedControls';
+import type { SortOption } from './FeedControls';
 import { createLogger } from '@/lib/utils/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -132,8 +135,13 @@ const TYPE_FILTERS = [
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const ITEMS_PER_PAGE = 20;
+
 export function IdeasFeed() {
   const [typeFilter, setTypeFilter] = React.useState('');
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [sortBy, setSortBy] = React.useState<SortOption>('newest');
+  const [currentPage, setCurrentPage] = React.useState(1);
 
   const {
     items,
@@ -144,6 +152,17 @@ export function IdeasFeed() {
     saveIdea,
     dismissIdea,
   } = useIdeas({ limit: 30, type: typeFilter || undefined });
+
+  // Reset page when filters change
+  React.useEffect(() => { setCurrentPage(1); }, [typeFilter, searchQuery, sortBy]);
+
+  // Apply search, sort, and pagination client-side
+  const filteredItems = React.useMemo(() => {
+    const searched = filterBySearch(items, searchQuery, (i) => `${i.idea} ${i.relevance} ${i.emailSubject || ''}`);
+    return sortItems(searched, sortBy, (i) => i.confidence, (i) => i.analyzedAt, (i) => i.type);
+  }, [items, searchQuery, sortBy]);
+
+  const { pageItems, totalPages } = paginateItems(filteredItems, currentPage, ITEMS_PER_PAGE);
 
   const handleSave = async (idea: IdeaItem) => {
     try {
@@ -227,8 +246,17 @@ export function IdeasFeed() {
         ))}
       </div>
 
+      {/* Search + Sort Controls (Phase 2) */}
+      <FeedControls
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        searchPlaceholder="Search ideas..."
+      />
+
       {/* Empty State */}
-      {items.length === 0 ? (
+      {filteredItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Lightbulb className="h-8 w-8 text-muted-foreground" />
@@ -245,7 +273,7 @@ export function IdeasFeed() {
       ) : (
         /* Ideas List */
         <div className="space-y-3">
-          {items.map((idea, index) => {
+          {pageItems.map((idea, index) => {
             const config = getTypeConfig(idea.type);
             const TypeIcon = config.icon;
 
@@ -311,6 +339,19 @@ export function IdeasFeed() {
               </Card>
             );
           })}
+
+          {/* Pagination (Phase 2) */}
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredItems.length}
+              pageSize={ITEMS_PER_PAGE}
+              onPageChange={setCurrentPage}
+              showInfo
+              className="mt-6"
+            />
+          )}
         </div>
       )}
     </div>

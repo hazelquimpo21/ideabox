@@ -14,9 +14,12 @@
 
 'use client';
 
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState, useMemo, useEffect, useCallback } from 'react';
+import { Pagination } from '@/components/ui';
 import { useNews } from '@/hooks/useNews';
 import type { NewsItemDisplay } from '@/hooks/useNews';
+import { FeedControls, filterBySearch, sortItems, paginateItems } from './FeedControls';
+import type { SortOption } from './FeedControls';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NEWS ITEM ROW COMPONENT
@@ -106,12 +109,29 @@ const NewsRow = memo(function NewsRow({
  * <NewsFeed />
  * ```
  */
+const NEWS_PER_PAGE = 20;
+
 export function NewsFeed() {
   const [topicFilter, setTopicFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [currentPage, setCurrentPage] = useState(1);
+
   const { items, stats, isLoading, refetch, saveNews, dismissNews } = useNews({
-    limit: 20,
+    limit: 50,
     topic: topicFilter || undefined,
   });
+
+  // Reset page on filter changes
+  useEffect(() => { setCurrentPage(1); }, [topicFilter, searchQuery, sortBy]);
+
+  // Client-side search, sort, pagination
+  const filteredItems = useMemo(() => {
+    const searched = filterBySearch(items, searchQuery, (i) => `${i.headline} ${i.detail} ${i.topics.join(' ')}`);
+    return sortItems(searched, sortBy, (i) => i.confidence, (i) => i.analyzedAt, (i) => i.topics[0] || '');
+  }, [items, searchQuery, sortBy]);
+
+  const { pageItems, totalPages } = paginateItems(filteredItems, currentPage, NEWS_PER_PAGE);
 
   const handleSave = useCallback(async (item: NewsItemDisplay) => {
     try {
@@ -172,18 +192,27 @@ export function NewsFeed() {
         </div>
       )}
 
+      {/* Search + Sort Controls (Phase 2) */}
+      <FeedControls
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        searchPlaceholder="Search news..."
+      />
+
       {/* News list */}
       {isLoading ? (
         <div className="text-center py-8 text-sm text-gray-400">Loading news...</div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-8 text-sm text-gray-400">
-          {topicFilter
-            ? `No news about "${topicFilter}" found. Try a different topic.`
+          {topicFilter || searchQuery
+            ? 'No matching news found. Try a different filter or search.'
             : 'No news items extracted yet. Check back after processing more emails.'}
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map((item, index) => (
+          {pageItems.map((item, index) => (
             <NewsRow
               key={`${item.emailId}-${index}`}
               item={item}
@@ -191,6 +220,17 @@ export function NewsFeed() {
               onDismiss={() => dismissNews(item)}
             />
           ))}
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredItems.length}
+              pageSize={NEWS_PER_PAGE}
+              onPageChange={setCurrentPage}
+              showInfo
+              className="mt-6"
+            />
+          )}
         </div>
       )}
     </div>

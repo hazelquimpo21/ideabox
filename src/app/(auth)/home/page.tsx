@@ -44,6 +44,7 @@ import {
   SavedLinksCard,
   EmailSummaryCard,
   ActiveProjectsWidget,
+  StyleInspirationCard,
 } from '@/components/home';
 import type { ScheduleItem } from '@/components/home';
 import { PriorityCard, PriorityCardSkeleton } from '@/components/shared';
@@ -461,8 +462,9 @@ export default function HomePage() {
         <NewsBriefCard limit={5} />
       </div>
 
-      {/* ─── Section K: Saved Links (NEW Feb 2026) ─────────────────────────── */}
-      <div className="mb-8">
+      {/* ─── Style Inspiration + Saved Links (Phase 2) ──────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <StyleInspirationCard />
         <SavedLinksCard
           links={linkItems}
           isLoading={isLinksLoading}

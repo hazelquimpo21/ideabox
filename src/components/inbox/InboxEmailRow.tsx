@@ -34,6 +34,9 @@ import type { EmailCategory } from '@/types/discovery';
 import type { Email, QuickActionDb } from '@/types/database';
 import { CategoryIcon } from './CategoryIcon';
 import { SenderLogo } from './SenderLogo';
+import { EmailHoverCard } from '@/components/email/EmailHoverCard';
+import { QuickActionButtons } from '@/components/email/QuickActionButtons';
+import { ThreadIntelligenceBadge } from '@/components/email/ThreadIntelligenceBadge';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -52,6 +55,8 @@ export interface InboxEmailRowProps {
   onClick: (email: Email) => void;
   /** Callback when star is toggled */
   onToggleStar?: (email: Email) => void;
+  /** Callback for optimistic email updates (archive, etc.) */
+  onUpdate?: (emailId: string, updates: Partial<Email>) => void;
   /** Whether to show the category indicator (default: true) */
   showCategory?: boolean;
   /** Compact mode hides gist line and action badges (default: false) */
@@ -201,6 +206,7 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   email,
   onClick,
   onToggleStar,
+  onUpdate,
   showCategory = true,
   compact = false,
   accountMap,
@@ -241,6 +247,9 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   // Priority score — only highlight for high-priority emails (≥70)
   const priorityScore = email.priority_score;
   const showPriority = priorityScore !== null && priorityScore !== undefined && priorityScore >= 70;
+
+  // Urgency score — used to determine if quick action buttons show
+  const urgencyScore = (email.urgency_score as number | null) ?? 0;
 
   // Event detection — check labels array for 'has_event' or quick_action 'calendar'
   const emailLabels = email.labels as string[] | null;
@@ -352,14 +361,16 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
 
         {/* Row 2: Subject + Priority badge */}
         <div className="flex items-center gap-2">
-          <p
-            className={cn(
-              'text-sm truncate',
-              isUnread ? 'font-medium text-foreground' : 'text-foreground/80',
-            )}
-          >
-            {email.subject || '(No subject)'}
-          </p>
+          <EmailHoverCard email={email}>
+            <p
+              className={cn(
+                'text-sm truncate',
+                isUnread ? 'font-medium text-foreground' : 'text-foreground/80',
+              )}
+            >
+              {email.subject || '(No subject)'}
+            </p>
+          </EmailHoverCard>
 
           {/* Priority badge — only for high-priority emails */}
           {showPriority && (
@@ -376,6 +387,8 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
               {priorityScore}
             </span>
           )}
+          {/* Thread intelligence badge */}
+          <ThreadIntelligenceBadge threadId={email.thread_id as string | null} />
         </div>
 
         {/* Row 3: Gist + Action badge */}
@@ -427,8 +440,19 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
         )}
       </div>
 
-      {/* ── Star Button ──────────────────────────────────────────────── */}
-      <div className="shrink-0 flex items-center mt-0.5">
+      {/* ── Quick Actions + Star Button ──────────────────────────────── */}
+      <div className="shrink-0 flex items-center gap-0.5 mt-0.5">
+        {/* Quick action buttons — visible on hover for actionable emails */}
+        {(urgencyScore >= 7 || replyWorthiness === 'must_reply') && (
+          <div className="hidden group-hover:flex items-center">
+            <QuickActionButtons
+              emailId={email.id}
+              senderEmail={email.sender_email}
+              subject={email.subject}
+              onArchive={onUpdate ? () => onUpdate(email.id, { is_archived: true }) : undefined}
+            />
+          </div>
+        )}
         <button
           type="button"
           onClick={handleStarClick}

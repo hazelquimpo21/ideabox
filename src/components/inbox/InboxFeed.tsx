@@ -42,6 +42,8 @@ import { Button, Skeleton, Input, Badge } from '@/components/ui';
 import { useEmails, useGmailAccounts, useEmailThumbnails, useInitialSyncProgress } from '@/hooks';
 import { CategoryFilterBar } from './CategoryFilterBar';
 import { CategorySummaryPanel } from './CategorySummaryPanel';
+import { InboxFilterBar } from './InboxFilterBar';
+import type { InboxFilters } from './InboxFilterBar';
 import { InboxEmailRow } from './InboxEmailRow';
 import { InboxEmailCard } from './InboxEmailCard';
 import { cn } from '@/lib/utils/cn';
@@ -99,6 +101,23 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
   const [searchQuery, setSearchQuery] = React.useState('');
   const [viewMode, setViewMode] = React.useState<ViewMode>('cards');
 
+  // ─── Smart Filter State (Phase 2) ──────────────────────────────────────────
+  const [smartFilters, setSmartFilters] = React.useState<InboxFilters>({
+    mustReply: false,
+    highSignal: false,
+    hasNuggets: false,
+    hasEvents: false,
+  });
+
+  /** Toggle a smart filter chip on/off */
+  const handleSmartFilterToggle = React.useCallback((key: keyof InboxFilters) => {
+    setSmartFilters((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      logger.debug('Smart filter toggled', { filter: key, active: updated[key] });
+      return updated;
+    });
+  }, []);
+
   // ─── Gmail Accounts (for account indicator) ─────────────────────────────────
   // Builds a map of gmail_account_id → account email so we can show which
   // inbox an email belongs to. Only fetched once on mount.
@@ -125,6 +144,10 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
   } = useEmails({
     category: activeCategory || 'all',
     limit: 50,
+    replyWorthiness: smartFilters.mustReply ? 'must_reply' : null,
+    signalStrength: smartFilters.highSignal ? 'high' : null,
+    hasNuggets: smartFilters.hasNuggets,
+    hasEvents: smartFilters.hasEvents,
   });
 
   // ─── Initial Sync Progress (post-onboarding) ───────────────────────────────
@@ -535,8 +558,15 @@ export function InboxFeed({ onEmailSelect, initialCategory = null }: InboxFeedPr
         />
       </div>
 
+      {/* ── Smart Filter Bar (Phase 2) ─────────────────────────────────────── */}
+      <InboxFilterBar
+        stats={stats}
+        activeFilters={smartFilters}
+        onFilterToggle={handleSmartFilterToggle}
+      />
+
       {/* ── Two-Column Layout ──────────────────────────────────────────────── */}
-      <div className="flex gap-6">
+      <div className="flex gap-6 mt-3">
         {/* Left: Email list or card grid */}
         <div className="flex-1 min-w-0">
 
