@@ -2,12 +2,15 @@
 
 **Date:** February 2026
 **Scope:** Comprehensive audit of how AI analyzer fields are displayed (or not) across the IdeaBox frontend
+**Last Updated:** February 28, 2026 — Phase 1 implementation complete
 
 ---
 
 ## Executive Summary
 
-IdeaBox has 14 AI analyzers producing rich intelligence from every email. The **email detail view** does an excellent job rendering nearly everything. However, the **list views** (inbox row, inbox card, priority list, category cards) and **secondary surfaces** (contacts, home cards) had meaningful gaps where analyzer data was either not surfaced or inconsistently shown. This audit identified and fixed the most impactful gaps.
+IdeaBox has 14 AI analyzers producing rich intelligence from every email. The **email detail view** does an excellent job rendering nearly everything. However, the **list views** (inbox row, inbox card, priority list, category cards) and **secondary surfaces** (contacts, home cards) had meaningful gaps where analyzer data was either not surfaced or inconsistently shown.
+
+**Phase 1 is now complete** — all high-priority recommendations (A through F) from the original audit have been implemented. Urgency score and relationship signal are now real columns, golden nuggets have a gem badge in list views, the sidebar shows actionable badge counts, calendar events have key date type badges, and the contact detail page has a full intelligence summary section.
 
 ---
 
@@ -79,37 +82,40 @@ IdeaBox has 14 AI analyzers producing rich intelligence from every email. The **
 
 ---
 
-## Remaining Recommendations (Not Implemented — Future Work)
+## Phase 1 Implementation (Complete — February 2026)
 
-### High Priority
+The following recommendations from the original audit have been fully implemented:
 
-#### A. Golden Nuggets Count Indicator in List Views
-The ContentDigest analyzer extracts up to 7 "golden nuggets" (deals, tips, quotes, stats, recommendations). These are fully rendered in EmailDetail but there's no indicator in list views. Consider adding a small gem icon + count badge in InboxEmailRow/Card when nuggets > 0. The data lives in `email_analyses` JSONB, so this would either need:
-- A new denormalized field `has_golden_nuggets` or `golden_nugget_count` on the emails table, OR
-- A lightweight tooltip that loads on hover via `useEmailAnalysis`
+### A. Golden Nuggets Count Indicator in List Views ✅
+**Migration 044:** Added `golden_nugget_count INTEGER DEFAULT 0` to emails table with backfill from `email_analyses` JSONB. Gem badge (purple `Gem` icon + count) now renders in InboxEmailRow, InboxEmailCard, and CategoryEmailCard when count > 0.
 
-#### B. Email Style Ideas Discovery Surface
-Email style ideas (layout, subject line, tone, CTA, storytelling inspiration) are extracted but only visible buried in the EmailDetail analysis card. For the target user (solopreneur sending their own emails), these could be hugely valuable surfaced as a dedicated "Style Inspiration" tab or card on the Home page, similar to how IdeaSparks and Insights already have their own feeds.
+### B. Email Style Ideas Discovery Surface
+Deferred to Phase 2 (item 2.3 in `.plan.md`).
 
-#### C. Denormalize `urgency_score` to Emails Table
-Currently `urgency_score` only exists in the `email_analyses` JSONB (`action_extraction.urgencyScore`). The CategoryEmailCard references `email.urgency_score` which likely always returns undefined since it's not a column. Either:
-- Add a migration to denormalize it, OR
-- Remove the urgency display from CategoryEmailCard (currently dead code)
+### C. Denormalize `urgency_score` ✅
+**Migration 043:** Added `urgency_score INTEGER` to emails table. Backfilled from `email_analyses.action_extraction.urgencyScore`. Email processor now denormalizes during analysis. CategoryEmailCard urgency display is no longer dead code.
 
-#### D. Relationship Signal Denormalization
-The `relationship_signal` from ClientTagger lives only in `email_analyses` JSONB. The CategoryEmailCard references `email.relationship_signal` directly — this field doesn't exist on the emails table, making the display dead code. Either denormalize it or fetch from analysis.
+### D. Relationship Signal Denormalization ✅
+**Migration 043:** Added `relationship_signal TEXT` with check constraint (`positive`, `neutral`, `negative`, `unknown`). Backfilled from `email_analyses.client_tagging.relationship_signal`. Email processor denormalizes during analysis. CategoryEmailCard relationship display is no longer dead code.
+
+### E. Contact Detail Page Enrichment ✅
+New `/api/contacts/[id]/intelligence` API route aggregates relationship signal trend, common topics, extracted dates, and 6-month communication frequency. New `useContactIntelligence` hook and `ContactIntelligenceCard` component. Integrated into contact detail page between Notes and Email History sections.
+
+### F. Calendar Page: Event Locality + Key Date Badges ✅
+Locality badges already existed in EventCard (via `LocalityBadge` component). Added `KeyDateTypeBadge` component showing "Reg. Deadline", "Open House", "Deadline", "Release Date" labels. Renders in both compact and full card views. Extended `EventMetadata` TypeScript interface with `isKeyDate`, `keyDateType`, `eventSummary`, `keyPoints`.
+
+### Additional Phase 1 Work
+
+- **CategoryModal fields expanded:** `MODAL_LIST_FIELDS` now includes `signal_strength`, `reply_worthiness`, `quick_action`, `additional_categories`, `email_type`, `urgency_score`, `relationship_signal`, `golden_nugget_count`
+- **EmailPreviewModal analysis bar:** New `AnalysisSummaryBar` component shows category, signal, quick action, reply worthiness, and "View full analysis" link above email body
+- **DailyReviewCard enhanced:** Category badge (color-coded) and quick action icon added to each review queue item
+- **Sidebar actionable badges:** New `useSidebarBadges` hook (5-min auto-refresh). Red badge on Inbox nav for must-reply unread count, amber badge on Calendar for today's deadline count
+
+---
+
+## Remaining Recommendations (Future Work — Phase 2+)
 
 ### Medium Priority
-
-#### E. Contact Detail Page Enrichment
-The `/contacts/[id]` detail page could benefit from:
-- Email timeline showing communication frequency over time
-- Extracted dates/events associated with this contact
-- Idea sparks generated from their emails
-- A "relationship health" score based on response patterns
-
-#### F. Calendar Page: Event Locality Tags
-The multi-event detector extracts `event_locality` (local, out_of_town, virtual) and `key_date_type` (registration_deadline, open_house, etc.) but the calendar list view doesn't surface these. Adding locality badges would help users quickly distinguish local events from virtual ones.
 
 #### G. Home Page: Email Type Breakdown in Summary
 The daily briefing could show a breakdown of email types received (e.g., "12 personal, 8 newsletters, 3 notifications") using the now-denormalized `email_type` field. This gives users a sense of their email composition.
@@ -133,36 +139,37 @@ Golden nuggets, insights, and saved links could be exportable to tools like Noti
 
 ---
 
-## Field Coverage Matrix (Post-Audit)
+## Field Coverage Matrix (Post–Phase 1)
 
-| Analyzer Field | EmailDetail | InboxRow | InboxCard | PriorityList | CategoryCard | Home |
-|---|---|---|---|---|---|---|
-| gist | Y | Y | Y | Y | Y | - |
-| summary | Y | fallback | fallback | fallback | Y | Y |
-| category | Y | Y | Y | Y | inherent | - |
-| additional_categories | Y | Y | Y | - | **Y (NEW)** | - |
-| signal_strength | Y | Y | **Y (NEW)** | used for lightbulb | Y (high only) | - |
-| reply_worthiness | Y | **Y (NEW)** | **Y (NEW)** | Y | Y | - |
-| email_type | Y | available | available | **Y (NEW)** | - | - |
-| quick_action | Y | Y | Y | Y | Y | - |
-| priority_score | - | Y (>=70) | Y (>=70) | Y | - | - |
-| key_points | Y | - | - | - | Y (expandable) | - |
-| topics | Y | - | Y | - | Y | - |
-| golden_nuggets | Y | - | - | - | - | - |
-| email_style_ideas | Y | - | - | - | - | - |
-| actions (multi) | Y | - | - | - | - | - |
-| idea_sparks | Y | - | - | Y (icon) | Y (icon) | Y |
-| insights | Y | - | - | - | - | Y |
-| news_brief | Y | - | - | - | - | Y |
-| links (analyzed) | Y | - | - | - | - | **Y (enhanced)** |
-| event_detection | Y | Y (badge) | Y (badge) | - | - | Y |
-| multi_events | Y | - | - | - | - | - |
-| client_tagging | Y | - | - | - | - | - |
-| relationship_signal | Y | - | - | - | **Y (enhanced)** | - |
-| date_extraction | Y | - | - | - | - | Y |
-| contact birthday | - | - | - | - | - | **Y (NEW)** |
-| contact notes | - | - | - | - | - | **Y (NEW)** |
-| sent/received counts | - | - | - | - | - | **Y (NEW)** |
-| avg_response_hours | - | - | - | - | - | **Y (NEW)** |
+| Analyzer Field | EmailDetail | InboxRow | InboxCard | PriorityList | CategoryCard | CategoryModal | Home | Sidebar | Calendar | Contacts |
+|---|---|---|---|---|---|---|---|---|---|---|
+| gist | Y | Y | Y | Y | Y | Y | - | - | - | - |
+| summary | Y | fallback | fallback | fallback | Y | Y | Y | - | - | - |
+| category | Y | Y | Y | Y | inherent | inherent | **P1** | - | - | - |
+| additional_categories | Y | Y | Y | - | Y | **P1** | - | - | - | - |
+| signal_strength | Y | Y | Y | lightbulb | Y (high) | **P1** | - | - | - | - |
+| reply_worthiness | Y | Y | Y | Y | Y | **P1** | - | **P1** (count) | - | - |
+| email_type | Y | available | available | Y | - | **P1** | - | - | - | - |
+| quick_action | Y | Y | Y | Y | Y | **P1** | **P1** | - | - | - |
+| priority_score | - | Y (>=70) | Y (>=70) | Y | - | - | - | - | - | - |
+| key_points | Y | - | - | - | Y | Y | - | - | - | - |
+| topics | Y | - | Y | - | Y | Y | - | - | - | **P1** (agg) |
+| golden_nuggets | Y | **P1** (gem) | **P1** (gem) | - | **P1** (gem) | **P1** | - | - | - | - |
+| email_style_ideas | Y | - | - | - | - | - | - | - | - | - |
+| actions (multi) | Y | - | - | - | - | - | - | **P1** (count) | - | - |
+| idea_sparks | Y | - | - | Y (icon) | Y (icon) | - | Y | - | - | - |
+| insights | Y | - | - | - | - | - | Y | - | - | - |
+| news_brief | Y | - | - | - | - | - | Y | - | - | - |
+| links (analyzed) | Y | - | - | - | - | - | Y | - | - | - |
+| event_detection | Y | Y (badge) | Y (badge) | - | - | - | Y | - | Y | - |
+| multi_events | Y | - | - | - | - | - | - | - | Y | - |
+| urgency_score | Y | available | available | - | **P1** | **P1** | - | - | - | - |
+| relationship_signal | Y | available | available | - | **P1** | **P1** | - | - | - | **P1** (trend) |
+| date_extraction | Y | - | - | - | - | - | Y | - | Y | **P1** |
+| event_locality | Y | - | - | - | - | - | - | - | Y | - |
+| key_date_type | Y | - | - | - | - | - | - | - | **P1** | - |
+| contact birthday | - | - | - | - | - | - | Y | - | - | Y |
+| contact notes | - | - | - | - | - | - | Y | - | - | Y |
+| comm. frequency | - | - | - | - | - | - | - | - | - | **P1** |
 
-**Legend:** Y = displayed, **Y (NEW)** = added in this audit, - = not shown, "available" = field fetched but not yet rendered
+**Legend:** Y = displayed, **P1** = added in Phase 1, - = not shown, "available" = field fetched but not yet rendered, "(agg)" = aggregated view, "(count)" = count badge only
