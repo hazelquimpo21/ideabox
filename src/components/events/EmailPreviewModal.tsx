@@ -73,6 +73,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
+import { AnalysisSummaryBar } from '@/components/email/AnalysisSummaryBar';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -111,6 +112,12 @@ interface EmailData {
   body_html: string | null;
   /** Email category from AI analysis */
   category: string | null;
+  /** Signal strength from Categorizer (denormalized) */
+  signal_strength: string | null;
+  /** Quick action suggestion from Categorizer (denormalized) */
+  quick_action: string | null;
+  /** Reply worthiness from Categorizer (denormalized) */
+  reply_worthiness: string | null;
   /** Whether email has been read */
   is_read: boolean;
   /** Whether email is starred */
@@ -338,6 +345,17 @@ function EmailContent({ email }: { email: EmailData }) {
           </Badge>
         )}
       </div>
+
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* Analysis Summary Bar — shows why IdeaBox flagged this email */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      <AnalysisSummaryBar
+        emailId={email.id}
+        category={email.category}
+        signalStrength={email.signal_strength}
+        quickAction={email.quick_action}
+        replyWorthiness={email.reply_worthiness}
+      />
 
       {/* ─────────────────────────────────────────────────────────────────────── */}
       {/* Email Body */}
