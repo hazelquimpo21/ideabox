@@ -1,7 +1,7 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
-> **Last Updated:** February 2026
-> **Source of Truth:** `supabase/migrations/001-041`
+> **Last Updated:** February 28, 2026
+> **Source of Truth:** `scripts/migration-*.sql` (migrations 001-044)
 > **TypeScript Types:** `src/types/database.ts`
 
 ## Schema Overview
@@ -20,10 +20,12 @@ auth.users (Supabase Auth)
   │   ├── email_analyses     # Full AI analyzer outputs (JSONB)
   │   └── extracted_dates    # Timeline dates/events extracted from emails
   ├── actions                # To-do items extracted from emails
+  ├── email_ideas            # User-saved ideas from IdeaSpark analyzer (NEW Feb 2026)
   ├── projects               # Project containers for organizing work (NEW Feb 2026)
   │   └── project_items      # Ideas, tasks, and routines within projects (NEW Feb 2026)
   ├── saved_insights         # User-promoted insights from InsightExtractor (NEW Feb 2026)
   ├── saved_news             # User-promoted news items from NewsBrief (NEW Feb 2026)
+  ├── saved_links            # User-promoted links from LinkAnalyzer (NEW Feb 2026)
   ├── email_summaries        # AI-synthesized narrative digests (NEW Feb 2026)
   ├── user_summary_state     # Summary staleness tracking (NEW Feb 2026)
   ├── user_event_states      # User decisions on events (dismiss/maybe/calendar)
@@ -151,6 +153,25 @@ CREATE TABLE user_context (
   profile_suggestions JSONB DEFAULT NULL,
   profile_suggestions_generated_at TIMESTAMPTZ DEFAULT NULL,
 
+  -- Profile expansion (migration 040)
+  -- Identity
+  gender TEXT,                                   -- male, female, non-binary, prefer_not_to_say
+  birthday DATE,                                 -- User birthday (date only)
+  -- Address
+  address_street TEXT,
+  address_city TEXT,
+  address_state TEXT,
+  address_zip TEXT,
+  address_country TEXT DEFAULT 'US',
+  -- Other cities
+  other_cities JSONB DEFAULT '[]'::jsonb,        -- [{city, tag, note?}] tags: hometown, travel, family, other
+  -- Employment
+  employment_type TEXT DEFAULT 'employed',        -- employed, self_employed, both
+  other_jobs JSONB DEFAULT '[]'::jsonb,          -- [{role, company, is_self_employed}]
+  -- Household
+  household_members JSONB DEFAULT '[]'::jsonb,   -- [{name, relationship, gender?, birthday?, school?}]
+  pets JSONB DEFAULT '[]'::jsonb,                -- [{name, type}]
+
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -209,6 +230,9 @@ CREATE TABLE gmail_accounts (
   -- Email sending (migration 026)
   has_send_scope BOOLEAN DEFAULT FALSE,
   send_scope_granted_at TIMESTAMPTZ,
+
+  -- Background backfill tracking (migration 039)
+  backfill_completed_at TIMESTAMPTZ,     -- When post-initial-sync background backfill completed
 
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -389,6 +413,17 @@ CREATE TABLE emails (
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,  -- (migration 029, replaces legacy client_id)
   project_tags TEXT[],
 
+  -- Denormalized analysis fields (migration 043)
+  urgency_score INTEGER,                -- Urgency score from action extraction (1-10)
+  relationship_signal TEXT,             -- positive, neutral, negative, unknown
+  -- CHECK (relationship_signal IN ('positive', 'neutral', 'negative', 'unknown'))
+
+  -- Golden nugget count (migration 044)
+  golden_nugget_count INTEGER DEFAULT 0, -- Count of golden nuggets from content digest
+
+  -- Review queue tracking (migration 033)
+  reviewed_at TIMESTAMPTZ,              -- When user last scanned in daily review queue
+
   -- State
   is_read BOOLEAN DEFAULT FALSE,
   is_archived BOOLEAN DEFAULT FALSE,
@@ -452,8 +487,11 @@ CREATE TABLE email_analyses (
   content_opportunity JSONB,  -- Future
   content_digest JSONB,       -- {gist, key_points, links, content_type, golden_nuggets, email_style_ideas} (migration 025, enhanced Feb 2026)
 
-  -- Idea sparks (migration 033)
-  idea_sparks JSONB,          -- Array of idea spark objects from IdeaSparkAnalyzer
+  -- Phase 2 analyzer columns (Feb 2026)
+  idea_sparks JSONB,          -- {has_ideas, ideas[{idea, type, relevance, confidence}], confidence} (migration 033)
+  insight_extraction JSONB,   -- {has_insights, insights[{insight, type, topics[], confidence}], confidence} (migration 034)
+  news_brief JSONB,           -- {has_news, news_items[{headline, detail, topics[], date_mentioned, confidence}], confidence} (migration 034)
+  multi_event_detection JSONB, -- {has_events, events[{event_title, event_date, event_time, location, ...}]} max 10 (migration 035)
 
   analyzer_version TEXT DEFAULT '1.0',
   tokens_used INTEGER,
@@ -486,6 +524,32 @@ CREATE TABLE actions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
+### email_ideas (migration 033)
+User-saved ideas from the IdeaSpark analyzer. Ideas are generated per-email and stored in `email_analyses.idea_sparks`. When a user saves/stars an idea, it is promoted to this table.
+
+```sql
+CREATE TABLE email_ideas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
+
+  idea TEXT NOT NULL,
+  idea_type TEXT NOT NULL,   -- social_post, networking, business, content_creation, hobby, shopping, date_night, family_activity, personal_growth, community
+  relevance TEXT,
+  status TEXT NOT NULL DEFAULT 'new',  -- new, saved, dismissed, done
+  confidence DECIMAL(3,2),
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**Indexes:**
+- `idx_email_ideas_user_status` — user_id + status (excludes dismissed)
+- `idx_email_ideas_email` — email_id (source tracking)
+
+**RLS:** Users can only CRUD their own ideas (`auth.uid() = user_id`).
 
 ### projects (migration 041)
 Project containers for organizing ideas, tasks, and routines.
@@ -616,7 +680,7 @@ CREATE UNIQUE INDEX idx_extracted_dates_dedup
 ```
 
 ### saved_insights (migration 034)
-User-promoted insights from the InsightExtractor analyzer.
+User-promoted insights from the InsightExtractor analyzer. Insights are transient in `email_analyses.insight_extraction`; saved here when user explicitly saves them.
 
 ```sql
 CREATE TABLE saved_insights (
@@ -624,22 +688,25 @@ CREATE TABLE saved_insights (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
 
-  insight_type TEXT NOT NULL,      -- tip, framework, observation, counterintuitive, trend
-  content TEXT NOT NULL,           -- The insight text
-  topics TEXT[],                   -- Related topics
-  source_email_subject TEXT,       -- Original email subject for attribution
-  source_email_date TIMESTAMPTZ,  -- Original email date
+  insight TEXT NOT NULL,                -- The insight text
+  insight_type TEXT NOT NULL,           -- tip, framework, observation, counterintuitive, trend
+  topics TEXT[] DEFAULT '{}',           -- Related topics
+  status TEXT NOT NULL DEFAULT 'new',   -- new, saved, dismissed, archived
+  confidence DECIMAL(3,2),             -- AI confidence score 0-1
 
-  is_pinned BOOLEAN DEFAULT FALSE,
-  notes TEXT,                      -- User notes
-
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
+**Indexes:**
+- `idx_saved_insights_user_status` — user_id + status
+- `idx_saved_insights_email` — email_id (source tracking)
+
+**RLS:** Users can only CRUD their own insights (`auth.uid() = user_id`).
+
 ### saved_news (migration 034)
-User-promoted news items from the NewsBrief analyzer.
+User-promoted news items from the NewsBrief analyzer. News items are transient in `email_analyses.news_brief`; saved here when user explicitly saves them.
 
 ```sql
 CREATE TABLE saved_news (
@@ -647,20 +714,24 @@ CREATE TABLE saved_news (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
 
-  headline TEXT NOT NULL,          -- News headline
-  detail TEXT,                     -- Additional detail
-  topics TEXT[],                   -- Related topics
-  news_date TEXT,                  -- When the news happened (may be approximate)
-  source_email_subject TEXT,       -- Original email subject
-  source_email_date TIMESTAMPTZ,  -- Original email date
+  headline TEXT NOT NULL,               -- News headline
+  detail TEXT,                          -- Additional detail
+  topics TEXT[] DEFAULT '{}',           -- Related topics
+  date_mentioned DATE,                  -- When the news happened
+  status TEXT NOT NULL DEFAULT 'new',   -- new, saved, dismissed, archived
+  confidence DECIMAL(3,2),             -- AI confidence score 0-1
 
-  is_pinned BOOLEAN DEFAULT FALSE,
-  notes TEXT,                      -- User notes
-
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
+
+**Indexes:**
+- `idx_saved_news_user_status` — user_id + status
+- `idx_saved_news_email` — email_id (source tracking)
+- `idx_saved_news_date` — user_id + date_mentioned DESC (timeline view)
+
+**RLS:** Users can only CRUD their own news items (`auth.uid() = user_id`).
 
 ### saved_links (migration 042)
 User-promoted links from the LinkAnalyzer. Links are analyzed during email processing
@@ -714,6 +785,9 @@ CREATE TABLE email_summaries (
   period_end TIMESTAMPTZ NOT NULL,
   emails_included INTEGER NOT NULL DEFAULT 0,
   threads_included INTEGER NOT NULL DEFAULT 0,
+
+  -- Email reference index (migration 039a)
+  email_index JSONB,            -- Maps email_id → {subject, sender, category} for cross-referencing
 
   -- AI metadata
   tokens_used INTEGER,
@@ -1061,10 +1135,31 @@ CREATE TABLE api_usage_logs (
 | `acquire_sync_lock(account_id, seconds)` | BOOLEAN | Prevent concurrent syncs |
 | `release_sync_lock(account_id)` | VOID | Release sync lock |
 | `cleanup_old_logs()` | VOID | Delete logs > 30 days |
-| `cleanup_old_sync_runs(retention_days)` | VOID | Delete old sync runs |
+| `cleanup_old_sync_runs(days_to_keep)` | INTEGER | Delete old scheduled_sync_runs, returns count deleted |
+| `cleanup_old_push_logs(days_to_keep)` | INTEGER | Delete old gmail_push_logs, returns count deleted |
 | `get_active_clients(user_id)` | SETOF contacts | Active client contacts (is_client=true) sorted by client_priority |
 | `create_default_user_settings()` | TRIGGER | Auto-create settings on user signup |
 | `create_default_user_context()` | TRIGGER | Auto-create context on user signup |
+| `mark_backfill_complete(account_id)` | VOID | Mark post-initial-sync backfill as completed |
+
+### Watch Management (migration 039)
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `update_gmail_watch(account_id, history_id, expiration, resource_id)` | VOID | Update watch state after creation |
+| `clear_gmail_watch(account_id)` | VOID | Clear watch on disconnect |
+| `get_expiring_watches(hours_ahead)` | TABLE | Watches expiring within N hours |
+| `get_accounts_needing_watch()` | TABLE | Accounts with push_enabled but no active watch |
+| `record_watch_failure(account_id, error_message)` | VOID | Increment failure count, store error |
+| `reset_watch_failures(account_id)` | VOID | Clear failures after successful renewal |
+| `get_accounts_with_watch_problems(min_failures)` | TABLE | Accounts with repeated watch failures |
+| `mark_watch_alert_sent(account_id)` | VOID | Track when alert was sent |
+| `mark_history_stale(account_id)` | VOID | Flag account for full sync on history ID expiry |
+| `validate_history_id(account_id, history_id)` | VOID | Record successful history ID validation |
+
+### Views
+| View | Description |
+|------|-------------|
+| `accounts_needing_sync` | Accounts eligible for scheduled sync, sorted by staleness. Used by sync-emails Edge Function. |
 
 ---
 
@@ -1077,7 +1172,9 @@ All tables have RLS enabled. Policy pattern:
 
 ---
 
-## Migration Files (001-041)
+## Migration Files (001-044)
+
+All migrations are in `scripts/migration-*.sql` (not `supabase/migrations/`).
 
 | # | File | What it does |
 |---|------|-------------|
@@ -1112,15 +1209,21 @@ All tables have RLS enabled. Policy pattern:
 | 029 | merge_clients_into_contacts.sql | Merge clients table into contacts |
 | 030 | cleanup_client_id_columns.sql | Remove deprecated client_id columns |
 | 031 | profile_suggestions.sql | Add profile_suggestions JSONB + timestamp to user_context |
-| 032 | signal_strength_reply_worthiness.sql | Add signal_strength + reply_worthiness columns to emails, with indexes for Hub queries |
-| 033 | idea_sparks_column.sql | Add idea_sparks JSONB column to email_analyses |
-| 034 | saved_insights_and_news.sql | Add saved_insights + saved_news tables for user-promoted insights and news items |
-| 035 | multi_event_detection.sql | Multi-event detection support |
-| 036 | additional_categories_and_notifications.sql | additional_categories column + notifications category |
-| 037 | email_type_and_ai_brief.sql | Add email_type + ai_brief columns to emails for communication nature tagging and AI batch-summarization |
-| 038 | email_summaries.sql | email_summaries table (AI narrative digests) + user_summary_state table (staleness tracking) + RLS policies + indexes |
-| 041 | migration-041-projects.sql | projects + project_items tables, RLS policies, indexes, updated_at triggers. Projects contain ideas/tasks/routines with due dates, date ranges, recurrence, tags, and source linking to actions/emails. |
-| 042 | migration-042-link-analysis.sql | saved_links table + url_extraction JSONB column activation. Deep URL intelligence from email content with priority scoring, topic tagging, save-worthiness, and expiration detection. |
+| 032 | signal_strength_reply_worthiness.sql | Add signal_strength + reply_worthiness to emails + Hub query indexes |
+| 033 | idea-sparks-and-review-queue.sql | idea_sparks JSONB on email_analyses, email_ideas table, reviewed_at on emails, expanded action_type constraint |
+| 034 | insight-extraction-and-news-brief.sql | insight_extraction + news_brief JSONB on email_analyses, saved_insights + saved_news tables |
+| 035 | multi-event-detection.sql | multi_event_detection JSONB on email_analyses (up to 10 events per email) |
+| 036 | additional-categories-and-notifications.sql | additional_categories TEXT[] on emails + notifications category added to CHECK |
+| 037 | email-type-and-ai-brief.sql | email_type + ai_brief columns on emails |
+| 038 | email-summaries.sql | email_summaries + user_summary_state tables with RLS |
+| 039a | email-summary-index.sql | email_index JSONB on email_summaries |
+| 039b | scheduled-sync-and-watch-functions.sql | backfill_completed_at on gmail_accounts, accounts_needing_sync VIEW, 13 watch management/sync/cleanup functions |
+| 040 | profile-expansion.sql | gender, birthday, address, employment, household_members, pets on user_context |
+| 041 | projects.sql | projects + project_items tables with RLS, indexes, triggers, recurrence support |
+| 042 | link-analysis.sql | saved_links table, enhanced url_extraction JSONB with priority scoring |
+| 043 | denormalize-urgency-relationship.sql | urgency_score INTEGER + relationship_signal TEXT on emails (backfill from email_analyses) |
+| 044 | golden-nugget-count.sql | golden_nugget_count INTEGER on emails (backfill from content_digest nuggets) |
+| — | migrate-categories-feb2026.sql | Data migration: consolidate old categories to 13 life-bucket values |
 
 ---
 

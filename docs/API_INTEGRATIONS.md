@@ -689,8 +689,10 @@ export const CATEGORIZE_FUNCTION: FunctionSchema = {
           'newsletters_industry',
           'news_politics',
           'product_updates',
+          // Transient
+          'notifications',
         ],
-        description: 'Primary life-bucket category for this email',
+        description: 'Primary life-bucket category for this email (13 categories)',
       },
       confidence: {
         type: 'number',
@@ -720,11 +722,11 @@ const MODEL_PRICING = {
 };
 ```
 
-**Estimated Costs for 250 emails/day (9 analyzers each):**
+**Estimated Costs for 250 emails/day (~5-8 analyzers per email, 14 total):**
 ```
-Per email:
-  Input:  ~500 tokens × 9 analyzers = 4,500 tokens
-  Output: ~100 tokens × 9 analyzers = 900 tokens
+Per email (average ~6 analyzers after pre-filtering and conditional gating):
+  Input:  ~500 tokens × 6 analyzers = 3,000 tokens
+  Output: ~100 tokens × 6 analyzers = 600 tokens
 
 Daily (250 emails):
   Input:  1,125,000 tokens × $0.15/1M = $0.169

@@ -2,7 +2,7 @@
 
 > AI-powered email intelligence for busy professionals
 
-IdeaBox automatically categorizes your emails into 12 life-bucket categories, extracts action items, detects events, enriches contacts, and helps you focus on what matters. Built for professionals managing 200-300+ emails/day across multiple Gmail accounts.
+IdeaBox automatically categorizes your emails into 13 life-bucket categories, extracts action items, detects events, enriches contacts, and helps you focus on what matters. Built for professionals managing 200-300+ emails/day across multiple Gmail accounts.
 
 ## Quick Start
 
@@ -33,11 +33,13 @@ Open [http://localhost:3000](http://localhost:3000).
 | [Project Overview](docs/PROJECT_OVERVIEW.md) | Vision, goals, and roadmap |
 | [Architecture](docs/ARCHITECTURE.md) | System design and folder structure |
 | [Database Schema](docs/DATABASE_SCHEMA.md) | All 20+ Supabase tables, functions, and migrations |
-| [AI Analyzer System](docs/AI_ANALYZER_SYSTEM.md) | How the 12 AI analyzers work |
+| [AI Analyzer System](docs/AI_ANALYZER_SYSTEM.md) | How the 14 AI analyzers work |
 | [Coding Standards](docs/CODING_STANDARDS.md) | 400-line file limit, conventions |
 | [Decisions](docs/DECISIONS.md) | Architectural decision log |
 | [API Integrations](docs/API_INTEGRATIONS.md) | Gmail, Google People, OpenAI integration details |
 | [Inbox Performance Audit](docs/INBOX_PERFORMANCE_AUDIT.md) | Inbox performance findings and fixes |
+| [UI Field Audit](docs/UI_FIELD_AUDIT.md) | AI analyzer data surfacing audit |
+| [Email Sync Research](docs/EMAIL_SYNC_RESEARCH.md) | Email sync activation options and deployment |
 
 ## Project Structure
 
@@ -76,7 +78,7 @@ src/
     layout/           # Navbar, Sidebar, PageHeader
     onboarding/       # Onboarding wizard UI
   services/
-    analyzers/        # 12 AI analyzers (categorizer, action-extractor, multi-event-detector, etc.)
+    analyzers/        # 14 AI analyzers (categorizer, action-extractor, multi-event-detector, etc.)
     processors/       # Email processing orchestration
     sync/             # Initial sync, sender patterns, pre-filtering
     contacts/         # Contact enrichment service
@@ -88,8 +90,8 @@ src/
   types/              # database.ts (20+ table types), discovery.ts
   config/             # App config, analyzer config
 supabase/
-  migrations/         # 34 SQL migration files (001-034)
-scripts/              # seed.ts, verify-migrations.ts
+  functions/          # 5 Edge Functions (sync-emails, send-scheduled-emails, campaign-processor, follow-up-checker, renew-watches)
+scripts/              # 44 SQL migration files (001-044), seed.ts, verify-migrations.ts
 ```
 
 ## Features
@@ -97,13 +99,13 @@ scripts/              # seed.ts, verify-migrations.ts
 **Implemented:**
 - Streamlined 5-item navigation: Home, Inbox, Contacts, Calendar, Tasks
 - Multi-Gmail account sync (push notifications + scheduled polling)
-- 12 AI analyzers via two-phase pipeline (categorizer, content digest, action extractor, client tagger, date extractor, event detector, multi-event detector, contact enricher, sender type classifier, idea spark, insight extractor, news brief)
-- 12 life-bucket email categories with auto-categorization
+- 14 AI analyzers via two-phase pipeline (categorizer, content digest, action extractor, client tagger, date extractor, event detector, multi-event detector, contact enricher, sender type detector, idea spark, insight extractor, news brief, link analyzer, link resolver)
+- 13 life-bucket email categories with auto-categorization
 - Home page with daily briefing, AI priorities, today's schedule, pending tasks
 - Inbox with tabbed views: Categories (discover dashboard), Priority (AI-ranked), Archive
 - Unified contacts with clients merged in — tabbed filtering by All, Clients, Personal, Subscriptions
 - Unified calendar merging events + extracted dates with list/grid views and type filters
-- Task management with To-dos, Campaigns, and Templates tabs
+- Task management with Projects, All Items, Inbox Tasks, Campaigns, and Templates tabs
 - Action tracking with multi-action support
 - Contact intelligence with sender type classification and client promotion
 - Event detection with locality awareness
@@ -114,6 +116,10 @@ scripts/              # seed.ts, verify-migrations.ts
 - Idea Spark: AI-generated creative ideas from email content
 - Insight Extractor: Synthesizes tips, frameworks, observations from newsletters
 - News Brief: Extracts factual news items from digests
+- Link Analyzer: Deep URL intelligence with priority scoring and topic tagging
+- Project management with ideas, tasks, and routines (with recurrence)
+- AI email summaries with narrative digests and staleness tracking
+- Golden nugget extraction (deals, tips, quotes, stats, recommendations)
 - Onboarding wizard with AI-powered Mad Libs profile and initial sync
 - Google Contacts import with batched upserts
 - Smart VIP suggestion ranking with 12-signal weighted scoring

@@ -252,9 +252,10 @@ src/
     app.ts                      # App configuration
 
 supabase/
-  migrations/                   # 34 SQL migration files (001-034) — see DATABASE_SCHEMA.md for full list
+  functions/                    # 5 Edge Functions (sync-emails, send-scheduled-emails, campaign-processor, follow-up-checker, renew-watches)
 
 scripts/
+  migration-*.sql               # 44 SQL migration files (001-044) — see DATABASE_SCHEMA.md for full list
   seed.ts                       # Database seeding
   verify-migrations.ts          # Migration validation
 ```

@@ -165,7 +165,7 @@ These decisions were made after careful analysis and should guide all implementa
 |----------|--------|-----------|
 | **AI Model** | GPT-4.1-mini only | Best value (~$3-5/month), optimized for function calling, 1M context |
 | **No AI Fallback** | Single model | Fallback adds complexity without proportional benefit |
-| **Categories** | Life-bucket system (12 categories) | Categories represent what part of life the email touches (work, family, admin, info) - REFACTORED Jan 2026 |
+| **Categories** | Life-bucket system (13 categories) | Categories represent what part of life the email touches (work, family, admin, info) - REFACTORED Jan 2026, notifications added Feb 2026 |
 | **Client Tracking** | Via `contact_id` + `is_client` flag on contacts | Clients merged into contacts table (Feb 2026); `client_id` deprecated |
 | **Events** | Label-based (`has_event`) | Events are no longer a category - detected via labels, can appear in any life-bucket |
 | **Urgency** | Score-based (1-10) | No separate "action_required" category; urgency tracked via score across all categories |

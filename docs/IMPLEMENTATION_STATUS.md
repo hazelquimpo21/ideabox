@@ -1,7 +1,7 @@
 # IdeaBox - Implementation Status
 
-> **Last Updated:** February 2026
-> **Database Migrations:** 001-042
+> **Last Updated:** February 28, 2026
+> **Database Migrations:** 001-044 (in `scripts/migration-*.sql`)
 
 ## What's Built
 
@@ -15,8 +15,8 @@
 - Zod validation on all API boundaries
 
 ### AI Analysis Pipeline
-- **13 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
-  - Categorizer (12 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
+- **14 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
+  - Categorizer (13 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
   - Content Digest (gist, key points, links, golden nuggets [7 types incl. remember_this + sales_opportunity], email style ideas)
   - Action Extractor (multi-action support, urgency scoring, tightened for real tasks with new types: pay, submit, register, book)
   - Client Tagger (fuzzy matching, relationship signals)
