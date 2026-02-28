@@ -346,12 +346,12 @@ export interface Database {
           // Email type and AI brief (NEW Feb 2026)
           email_type: EmailTypeDb | null;
           ai_brief: string | null;
-          // NOTE: urgency_score and relationship_signal are used in UI but have
-          // no DB migration. They exist only in email_analyses JSONB. Reads from
-          // the emails table will return null. A future migration should add these
-          // columns if denormalization is desired.
+          // Urgency score from ActionExtractor (migration 043 — denormalized)
           urgency_score: number | null;
+          // Relationship signal from ClientTagger (migration 043 — denormalized)
           relationship_signal: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
+          // Golden nugget count from ContentDigest (migration 044 — denormalized)
+          golden_nugget_count: number;
           // Sync type (migration 023)
           sync_type: string;
           is_read: boolean;
@@ -398,6 +398,7 @@ export interface Database {
           ai_brief?: string | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
+          golden_nugget_count?: number;
           sync_type?: string;
           is_read?: boolean;
           is_archived?: boolean;
@@ -441,6 +442,7 @@ export interface Database {
           ai_brief?: string | null;
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
+          golden_nugget_count?: number;
           sync_type?: string;
           is_read?: boolean;
           is_archived?: boolean;
