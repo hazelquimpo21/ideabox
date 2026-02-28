@@ -13,7 +13,7 @@
 |------|----------|-----------|
 | AI Model | GPT-4.1-mini only | Best cost/capability ratio, ~$3-5/month |
 | AI Fallback | None | Adds complexity without proportional benefit |
-| Categories | Life-bucket focused (12 types) | Refactored Jan 2026 from action to life-bucket |
+| Categories | Life-bucket focused (13 types) | Refactored Jan 2026 from action to life-bucket, notifications added Feb 2026 |
 | Background Jobs | Supabase pg_cron + Edge Functions | Already using Supabase; Vercel Cron too limited |
 | Gmail Labels | Sync to Gmail | Users see categories in Gmail UI |
 | Failed Analysis | Mark unanalyzable; manual retry clears error | Auto-syncs skip failures; manual retry resets state |

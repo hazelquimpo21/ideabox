@@ -1,5 +1,9 @@
 # Phase 2 Implementation Prompt: Smart Display Patterns + New Surfaces
 
+> **STATUS: Phase 2 is NOT YET STARTED.**
+> This is a session-specific prompt for a future development session.
+> See `.plan.md` for the full plan and current Phase 2 item list.
+
 ## Context & Mission
 You are working on **IdeaBox**, an AI-powered email intelligence system that runs 14 analyzers on every email. Phase 1 (complete) denormalized key fields, added gem badges, sidebar badges, analysis summary bars, and contact intelligence. Phase 2 introduces new UI paradigms: hover previews, smart filters, style inspiration, confidence affordances, and inline quick actions.
 

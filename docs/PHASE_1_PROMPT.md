@@ -1,5 +1,9 @@
 # Phase 1 Implementation Prompt — Surface Email Analyzer Data Across All UI
 
+> **ARCHIVED — Phase 1 is COMPLETE as of February 28, 2026.**
+> This was a session-specific prompt used to implement Phase 1 of the UI analyzer data surfacing plan.
+> See `.plan.md` for the full plan and `docs/UI_FIELD_AUDIT.md` for results.
+
 > **Give this prompt to a new Claude Code instance to implement Phase 1 of the UI analyzer data surfacing plan.**
 
 ---
