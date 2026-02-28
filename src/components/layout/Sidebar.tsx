@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 
 import { createLogger } from '@/lib/utils/logger';
+import { useSidebarBadges } from '@/hooks/useSidebarBadges';
 
 import { cn } from '@/lib/utils/cn';
 import { Button, Badge, Card, CardContent } from '@/components/ui';
@@ -309,6 +310,7 @@ function NavLink({
   label,
   isActive,
   count,
+  actionBadge,
   onClick,
 }: {
   href: string;
@@ -316,6 +318,8 @@ function NavLink({
   label: string;
   isActive: boolean;
   count?: number;
+  /** Small action badge (e.g., must-reply count, deadline count) */
+  actionBadge?: { count: number; color: 'red' | 'amber' };
   onClick?: () => void;
 }) {
   return (
@@ -331,6 +335,19 @@ function NavLink({
     >
       <Icon className="h-4 w-4 flex-shrink-0" />
       <span className="flex-1 truncate">{label}</span>
+      {/* Action badge — small pill showing must-reply or deadline count */}
+      {actionBadge && actionBadge.count > 0 && (
+        <span
+          className={cn(
+            'text-[10px] px-1.5 rounded-full font-medium',
+            actionBadge.color === 'red'
+              ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+              : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+          )}
+        >
+          {actionBadge.count > 99 ? '99+' : actionBadge.count}
+        </span>
+      )}
       {count !== undefined && count > 0 && (
         <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-xs">
           {count > 99 ? '99+' : count}
@@ -619,6 +636,9 @@ export function Sidebar({
   const pathname = usePathname();
   const activePath = currentPath || pathname;
 
+  // Fetch action badge counts for sidebar nav items
+  const { mustReplyCount, todayDeadlineCount } = useSidebarBadges();
+
   /**
    * Check if a path is currently active.
    * Supports both exact matches and prefix matches for nested routes.
@@ -657,17 +677,27 @@ export function Sidebar({
     <>
       {/* Main Navigation */}
       <nav className="px-2 py-4 space-y-1">
-        {mainNavItems.map((item) => (
-          <NavLink
-            key={item.href}
-            href={item.href}
-            icon={item.icon}
-            label={item.label}
-            isActive={isActivePath(item.href)}
-            count={item.countKey ? categoryCounts[item.countKey] : undefined}
-            onClick={handleLinkClick}
-          />
-        ))}
+        {mainNavItems.map((item) => {
+          // Attach action badges to specific nav items
+          let actionBadge: { count: number; color: 'red' | 'amber' } | undefined;
+          if (item.label === 'Inbox' && mustReplyCount > 0) {
+            actionBadge = { count: mustReplyCount, color: 'red' };
+          } else if (item.label === 'Calendar' && todayDeadlineCount > 0) {
+            actionBadge = { count: todayDeadlineCount, color: 'amber' };
+          }
+          return (
+            <NavLink
+              key={item.href}
+              href={item.href}
+              icon={item.icon}
+              label={item.label}
+              isActive={isActivePath(item.href)}
+              count={item.countKey ? categoryCounts[item.countKey] : undefined}
+              actionBadge={actionBadge}
+              onClick={handleLinkClick}
+            />
+          );
+        })}
       </nav>
 
       {/* Category Quick Filters — link to /inbox/[category] (was /discover/[category]) */}
