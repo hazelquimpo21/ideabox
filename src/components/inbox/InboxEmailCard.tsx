@@ -55,8 +55,7 @@ import {
   TrendingUp,
   Mail,
   Image as ImageIcon,
-  Gem,
-  Palette,
+  Reply,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -149,6 +148,20 @@ const QUICK_ACTION_CONFIG: Record<string, {
     label: 'Unsub',
     colors: 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-300',
   },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL STRENGTH DISPLAY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tiny colored dot indicating AI-assessed signal strength.
+ * Matches the InboxEmailRow signal dot for visual consistency.
+ */
+const SIGNAL_DOT_COLORS: Record<string, string> = {
+  high: 'bg-green-500',
+  medium: 'bg-yellow-500',
+  low: 'bg-slate-400',
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -252,14 +265,18 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
     (c): c is EmailCategory => !!c && c !== category
   ) ?? [];
 
+  // Signal strength indicator
+  const signalStrength = email.signal_strength;
+  const signalDot = signalStrength ? SIGNAL_DOT_COLORS[signalStrength] : null;
+
+  // Reply worthiness — highlight emails that need a response
+  const replyWorthiness = email.reply_worthiness;
+  const showReplyBadge = replyWorthiness === 'must_reply' || replyWorthiness === 'should_reply';
+
   // Event detection — check labels array for 'has_event' or quick_action 'calendar'
   const labels = email.labels as string[] | null;
   const isEvent = (labels && Array.isArray(labels) && labels.includes('has_event')) ||
     quickAction === 'calendar';
-
-  // Golden nugget indicator — check key_points for deal/tip indicators
-  // The actual nuggets live in the analysis JSONB, but key_points are denormalized
-  const hasKeyPoints = email.key_points && Array.isArray(email.key_points) && email.key_points.length > 0;
 
   /** Isolate star click from card click */
   const handleStarClick = (e: React.MouseEvent) => {
@@ -339,6 +356,30 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
             >
               <Mail className="h-2 w-2" />
               {getAccountUsername(accountEmail)}
+            </span>
+          )}
+
+          {/* Signal strength dot */}
+          {signalDot && (
+            <span
+              className={cn('w-1.5 h-1.5 rounded-full shrink-0', signalDot)}
+              title={`Signal: ${signalStrength}`}
+              aria-label={`Signal strength: ${signalStrength}`}
+            />
+          )}
+
+          {/* Reply worthiness badge */}
+          {showReplyBadge && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-0.5 shrink-0 px-1 py-0.5 rounded text-[9px] font-semibold',
+                replyWorthiness === 'must_reply'
+                  ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400'
+                  : 'bg-orange-50 text-orange-600 dark:bg-orange-950/30 dark:text-orange-400',
+              )}
+            >
+              <Reply className="h-2 w-2" />
+              {replyWorthiness === 'must_reply' ? 'Reply' : 'Reply?'}
             </span>
           )}
 

@@ -58,7 +58,7 @@ const DEFAULT_LIMIT = 50;
  *
  * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
  */
-const EMAIL_LIST_FIELDS = 'id, gmail_id, gmail_account_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, gist, summary, priority_score, key_points, topics, labels, analyzed_at, analysis_error, contact_id, signal_strength' as const;
+const EMAIL_LIST_FIELDS = 'id, gmail_id, gmail_account_id, subject, sender_name, sender_email, date, snippet, category, additional_categories, is_read, is_starred, is_archived, quick_action, gist, summary, priority_score, key_points, topics, labels, analyzed_at, analysis_error, contact_id, signal_strength, reply_worthiness, email_type' as const;
 
 /** Logger instance for this hook */
 const logger = createLogger('useEmails');

@@ -38,6 +38,7 @@ import {
   AlertCircle,
   Lightbulb,
   Signal,
+  TrendingUp,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -403,6 +404,23 @@ export const EmailCard = React.memo(function EmailCard({
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────
+          ADDITIONAL CATEGORIES (multi-bucket classification)
+      ───────────────────────────────────────────────────────────────────── */}
+      {enhanced && email.additional_categories && Array.isArray(email.additional_categories) && email.additional_categories.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {(email.additional_categories as string[]).slice(0, 2).map((cat, index) => (
+            <Badge
+              key={`addcat-${index}-${cat}`}
+              variant="outline"
+              className="text-[9px] px-1 py-0 border-dashed text-muted-foreground/70"
+            >
+              {cat.replace(/_/g, ' ')}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────
           FOOTER: Quick Action Badge
       ───────────────────────────────────────────────────────────────────── */}
       {actionConfig && quickAction !== 'none' && quickAction !== 'archive' && (
@@ -416,22 +434,26 @@ export const EmailCard = React.memo(function EmailCard({
           </Badge>
 
           <div className="flex items-center gap-1.5">
-            {/* Idea spark indicator — signals ideas are available in detail view */}
-            {enhanced && email.analyzed_at && (
+            {/* Idea spark indicator — only show for high/medium signal emails (noise doesn't generate sparks) */}
+            {enhanced && email.analyzed_at && email.signal_strength && email.signal_strength !== 'noise' && email.signal_strength !== 'low' && (
               <Lightbulb
                 className="h-3.5 w-3.5 text-amber-400"
                 title="Has idea sparks — click to view"
               />
             )}
 
-            {/* Relationship signal indicator (enhanced) */}
+            {/* Relationship signal indicator (positive + negative) */}
+            {enhanced && email.relationship_signal === 'positive' && (
+              <TrendingUp
+                className="h-3.5 w-3.5 text-green-500"
+                title="Positive relationship signal"
+              />
+            )}
             {enhanced && email.relationship_signal === 'negative' && (
-              <span
-                className="text-amber-500 text-xs"
+              <TrendingUp
+                className="h-3.5 w-3.5 text-red-500 rotate-180"
                 title="This sender may need extra attention"
-              >
-                😟
-              </span>
+              />
             )}
           </div>
         </div>

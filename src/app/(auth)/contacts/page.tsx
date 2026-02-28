@@ -81,6 +81,10 @@ import {
   CheckCircle,
   XCircle,
   Archive,
+  Cake,
+  StickyNote,
+  Send,
+  Inbox as InboxIcon,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
@@ -583,16 +587,57 @@ function ContactCard({
                 </div>
               )}
 
+              {/* Birthday indicator */}
+              {contact.birthday && (
+                <div className="flex items-center gap-1 mt-1 text-xs text-pink-600 dark:text-pink-400">
+                  <Cake className="h-3 w-3" />
+                  <span>
+                    {(() => {
+                      const parts = contact.birthday.split('-');
+                      const month = new Date(`2000-${parts.length >= 2 ? parts[parts.length - 2] : '01'}-01`).toLocaleDateString('en-US', { month: 'short' });
+                      const day = parts[parts.length - 1];
+                      return `${month} ${parseInt(day, 10)}`;
+                    })()}
+                  </span>
+                </div>
+              )}
+
+              {/* Notes preview */}
+              {contact.notes && (
+                <div className="flex items-start gap-1 mt-1">
+                  <StickyNote className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-muted-foreground/80 line-clamp-1 italic">{contact.notes}</p>
+                </div>
+              )}
+
               {/* Stats row */}
               <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Mail className="h-3 w-3" />
                   {contact.email_count} emails
                 </span>
+                {contact.sent_count > 0 && (
+                  <span className="flex items-center gap-1" title={`${contact.sent_count} sent, ${contact.received_count} received`}>
+                    <Send className="h-3 w-3" />
+                    {contact.sent_count}
+                    <InboxIcon className="h-3 w-3 ml-1" />
+                    {contact.received_count}
+                  </span>
+                )}
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {formatRelativeTime(contact.last_seen_at)}
                 </span>
+                {contact.avg_response_hours !== null && contact.avg_response_hours > 0 && (
+                  <span className="flex items-center gap-1" title="Average response time">
+                    ~{contact.avg_response_hours < 1
+                      ? `${Math.round(contact.avg_response_hours * 60)}m`
+                      : contact.avg_response_hours < 24
+                        ? `${Math.round(contact.avg_response_hours)}h`
+                        : `${Math.round(contact.avg_response_hours / 24)}d`
+                    } reply
+                  </span>
+                )}
               </div>
             </div>
 
