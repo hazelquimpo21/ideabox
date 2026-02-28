@@ -44,7 +44,7 @@
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
-import { Inbox, TrendingUp, Archive, LayoutGrid, Lightbulb } from 'lucide-react';
+import { Inbox, TrendingUp, Archive, LayoutGrid, Lightbulb, Brain, Newspaper, Link2 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import type { EmailCategory } from '@/types/discovery';
 import { EMAIL_CATEGORIES_SET } from '@/types/discovery';
@@ -56,6 +56,9 @@ import { PriorityEmailList } from '@/components/inbox/PriorityEmailList';
 import { CategoryOverview } from '@/components/inbox/CategoryOverview';
 import { EmailDetailModal } from '@/components/email/EmailDetailModal';
 import { IdeasFeed } from '@/components/inbox/IdeasFeed';
+import { InsightsFeed } from '@/components/inbox/InsightsFeed';
+import { NewsFeed } from '@/components/inbox/NewsFeed';
+import { LinksFeed } from '@/components/inbox/LinksFeed';
 import { InboxSummaryBanner } from '@/components/inbox/InboxSummaryBanner';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -69,7 +72,7 @@ const logger = createLogger('InboxTabs');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** All valid tab values — used for URL param validation */
-const VALID_TABS = ['inbox', 'priority', 'categories', 'ideas', 'archive'] as const;
+const VALID_TABS = ['inbox', 'priority', 'categories', 'ideas', 'insights', 'news', 'links', 'archive'] as const;
 type InboxTab = (typeof VALID_TABS)[number];
 
 /** Default tab when no query param is present */
@@ -193,6 +196,27 @@ export function InboxTabs() {
             Ideas
           </TabsTrigger>
           <TabsTrigger
+            value="insights"
+            variant="underline"
+            icon={<Brain className="h-4 w-4" />}
+          >
+            Insights
+          </TabsTrigger>
+          <TabsTrigger
+            value="news"
+            variant="underline"
+            icon={<Newspaper className="h-4 w-4" />}
+          >
+            News
+          </TabsTrigger>
+          <TabsTrigger
+            value="links"
+            variant="underline"
+            icon={<Link2 className="h-4 w-4" />}
+          >
+            Links
+          </TabsTrigger>
+          <TabsTrigger
             value="archive"
             variant="underline"
             icon={<Archive className="h-4 w-4" />}
@@ -229,6 +253,18 @@ export function InboxTabs() {
 
         <TabsContent value="ideas">
           <IdeasFeed />
+        </TabsContent>
+
+        <TabsContent value="insights">
+          <InsightsFeed />
+        </TabsContent>
+
+        <TabsContent value="news">
+          <NewsFeed />
+        </TabsContent>
+
+        <TabsContent value="links">
+          <LinksFeed />
         </TabsContent>
 
         <TabsContent value="archive">

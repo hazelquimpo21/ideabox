@@ -70,6 +70,7 @@ import {
 import type { EmailCategory } from '@/types/discovery';
 import type { Email, QuickActionDb } from '@/types/database';
 import { CategoryIcon } from './CategoryIcon';
+import { EmailHoverCard } from '@/components/email/EmailHoverCard';
 import { SenderLogo } from './SenderLogo';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -417,14 +418,16 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
 
         {/* ── Row 2: Subject + Priority + Category ─────────────────────── */}
         <div className="flex items-center gap-1.5 mb-1">
-          <h4
-            className={cn(
-              'text-sm truncate flex-1',
-              isUnread ? 'font-medium text-foreground' : 'text-foreground/80',
-            )}
-          >
-            {email.subject || '(No subject)'}
-          </h4>
+          <EmailHoverCard email={email}>
+            <h4
+              className={cn(
+                'text-sm truncate flex-1',
+                isUnread ? 'font-medium text-foreground' : 'text-foreground/80',
+              )}
+            >
+              {email.subject || '(No subject)'}
+            </h4>
+          </EmailHoverCard>
 
           {/* Priority badge */}
           {showPriority && (

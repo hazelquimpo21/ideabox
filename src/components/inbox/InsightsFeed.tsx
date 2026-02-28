@@ -13,9 +13,12 @@
 
 'use client';
 
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState, useMemo, useEffect, useCallback } from 'react';
+import { Pagination } from '@/components/ui';
 import { useInsights } from '@/hooks/useInsights';
 import type { InsightItem } from '@/hooks/useInsights';
+import { FeedControls, filterBySearch, sortItems, paginateItems } from './FeedControls';
+import type { SortOption } from './FeedControls';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // INSIGHT TYPE FILTERS
@@ -131,12 +134,29 @@ const InsightRow = memo(function InsightRow({
  * <InsightsFeed />
  * ```
  */
+const ITEMS_PER_PAGE = 20;
+
 export function InsightsFeed() {
   const [typeFilter, setTypeFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [currentPage, setCurrentPage] = useState(1);
+
   const { items, stats, isLoading, refetch, saveInsight, dismissInsight } = useInsights({
-    limit: 20,
+    limit: 50,
     type: typeFilter || undefined,
   });
+
+  // Reset page on filter changes
+  useEffect(() => { setCurrentPage(1); }, [typeFilter, searchQuery, sortBy]);
+
+  // Client-side search, sort, pagination
+  const filteredItems = useMemo(() => {
+    const searched = filterBySearch(items, searchQuery, (i) => `${i.insight} ${i.topics.join(' ')} ${i.emailSubject || ''}`);
+    return sortItems(searched, sortBy, (i) => i.confidence, (i) => i.analyzedAt, (i) => i.topics[0] || '');
+  }, [items, searchQuery, sortBy]);
+
+  const { pageItems, totalPages } = paginateItems(filteredItems, currentPage, ITEMS_PER_PAGE);
 
   const handleSave = useCallback(async (item: InsightItem) => {
     try {
@@ -187,18 +207,27 @@ export function InsightsFeed() {
         ))}
       </div>
 
+      {/* Search + Sort Controls (Phase 2) */}
+      <FeedControls
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        searchPlaceholder="Search insights..."
+      />
+
       {/* Insights list */}
       {isLoading ? (
         <div className="text-center py-8 text-sm text-gray-400">Loading insights...</div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-8 text-sm text-gray-400">
-          {typeFilter
-            ? 'No insights of this type found. Try a different filter.'
+          {typeFilter || searchQuery
+            ? 'No matching insights found. Try a different filter or search.'
             : 'No insights extracted yet. Check back after processing more emails.'}
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map((item, index) => (
+          {pageItems.map((item, index) => (
             <InsightRow
               key={`${item.emailId}-${index}`}
               item={item}
@@ -206,6 +235,17 @@ export function InsightsFeed() {
               onDismiss={() => dismissInsight(item)}
             />
           ))}
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredItems.length}
+              pageSize={ITEMS_PER_PAGE}
+              onPageChange={setCurrentPage}
+              showInfo
+              className="mt-6"
+            />
+          )}
         </div>
       )}
     </div>

@@ -68,6 +68,7 @@ import { cn } from '@/lib/utils/cn';
 import { CATEGORY_BADGE_COLORS, CATEGORY_SHORT_LABELS } from '@/types/discovery';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
+import { EmailHoverCard } from '@/components/email/EmailHoverCard';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -218,9 +219,11 @@ const PriorityEmailRow = React.memo(function PriorityEmailRow({
             <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" aria-label="Has idea sparks" />
           )}
         </div>
-        <p className="text-sm truncate">
-          {email.subject || '(No subject)'}
-        </p>
+        <EmailHoverCard email={email as unknown as import('@/types/database').Email}>
+          <p className="text-sm truncate">
+            {email.subject || '(No subject)'}
+          </p>
+        </EmailHoverCard>
         {/* AI gist preview — the key "at a glance" addition */}
         {previewText && (
           <p className="text-xs text-muted-foreground/70 truncate mt-0.5">

@@ -16,3 +16,10 @@ export { CategoryIcon } from './CategoryIcon';
 export { SenderLogo } from './SenderLogo';
 export { PriorityEmailList } from './PriorityEmailList';
 export { InboxSummaryBanner } from './InboxSummaryBanner';
+// Phase 2 additions
+export { InboxFilterBar } from './InboxFilterBar';
+export { IdeasFeed } from './IdeasFeed';
+export { InsightsFeed } from './InsightsFeed';
+export { NewsFeed } from './NewsFeed';
+export { LinksFeed } from './LinksFeed';
+export { FeedControls } from './FeedControls';

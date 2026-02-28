@@ -98,6 +98,14 @@ export interface UseEmailsOptions {
   starredOnly?: boolean;
   /** Include event detection data for event-categorized emails (default: false) */
   includeEventData?: boolean;
+  /** Filter by reply worthiness (Phase 2) */
+  replyWorthiness?: 'must_reply' | 'should_reply' | null;
+  /** Filter by signal strength (Phase 2) */
+  signalStrength?: 'high' | 'medium' | null;
+  /** Only show emails with golden nuggets (Phase 2) */
+  hasNuggets?: boolean;
+  /** Only show emails with events (Phase 2) */
+  hasEvents?: boolean;
 }
 
 /**
@@ -171,6 +179,12 @@ export interface EmailStats {
   quickActionStats: QuickActionStats;
   /** Counts by category for filter bar */
   categoryStats: CategoryStats;
+  /** Count of emails with reply_worthiness = 'must_reply' (Phase 2) */
+  mustReplyCount: number;
+  /** Count of emails with signal_strength = 'high' (Phase 2) */
+  highSignalCount: number;
+  /** Count of emails with golden_nugget_count > 0 (Phase 2) */
+  nuggetCount: number;
 }
 
 /**
@@ -271,6 +285,9 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       local: 0,
       travel: 0,
     },
+    mustReplyCount: 0,
+    highSignalCount: 0,
+    nuggetCount: 0,
   });
   const [eventData, setEventData] = React.useState<Map<string, EventPreviewData>>(new Map());
 
@@ -278,7 +295,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
   const supabase = React.useMemo(() => createClient(), []);
 
   // Memoize options to prevent unnecessary refetches
-  // ENHANCED (Jan 2026): Added quickAction for AI-powered filtering
+  // ENHANCED (Feb 2026): Added smart filter bar options
   const {
     category = 'all',
     quickAction = null,
@@ -289,6 +306,10 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     unreadOnly = false,
     starredOnly = false,
     includeEventData = false,
+    replyWorthiness = null,
+    signalStrength = null,
+    hasNuggets = false,
+    hasEvents = false,
   } = options;
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -359,6 +380,27 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         logger.debug('Applied quick action filter', { quickAction });
       }
 
+      // Smart filter bar filters (Phase 2 — Feb 2026)
+      if (replyWorthiness) {
+        query = query.eq('reply_worthiness', replyWorthiness);
+        logger.debug('Applied reply worthiness filter', { replyWorthiness });
+      }
+
+      if (signalStrength) {
+        query = query.eq('signal_strength', signalStrength);
+        logger.debug('Applied signal strength filter', { signalStrength });
+      }
+
+      if (hasNuggets) {
+        query = query.gt('golden_nugget_count', 0);
+        logger.debug('Applied has nuggets filter');
+      }
+
+      if (hasEvents) {
+        query = query.contains('labels', ['has_event']);
+        logger.debug('Applied has events filter');
+      }
+
       // Client ID filter
       if (clientId) {
         query = query.eq('contact_id', clientId);
@@ -410,8 +452,11 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         travel: 0,
       };
 
-      // Count events from labels array (has_event label)
+      // Count events and Phase 2 filter stats from labels/fields
       let eventCount = 0;
+      let mustReplyCount = 0;
+      let highSignalCount = 0;
+      let nuggetCount = 0;
 
       for (const email of fetchedEmails) {
         // Count quick actions
@@ -427,10 +472,20 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         }
 
         // Count events from labels array
-        // labels field contains strings like 'has_event', 'urgent', etc.
         const labels = email.labels as string[] | null;
         if (labels && Array.isArray(labels) && labels.includes('has_event')) {
           eventCount++;
+        }
+
+        // Phase 2 filter counts
+        if (email.reply_worthiness === 'must_reply') {
+          mustReplyCount++;
+        }
+        if (email.signal_strength === 'high') {
+          highSignalCount++;
+        }
+        if (email.golden_nugget_count > 0) {
+          nuggetCount++;
         }
       }
 
@@ -449,6 +504,9 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         events: eventCount,
         quickActionStats,
         categoryStats,
+        mustReplyCount,
+        highSignalCount,
+        nuggetCount,
       });
 
       // Fetch event data for emails with event analysis if requested
@@ -513,7 +571,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, category, quickAction, clientId, limit, includeArchived, archivedOnly, unreadOnly, starredOnly, includeEventData]);
+  }, [supabase, category, quickAction, clientId, limit, includeArchived, archivedOnly, unreadOnly, starredOnly, includeEventData, replyWorthiness, signalStrength, hasNuggets, hasEvents]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Load More (Pagination)
@@ -564,6 +622,20 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         query = query.eq('quick_action', quickAction);
       }
 
+      // Smart filter bar filters (Phase 2)
+      if (replyWorthiness) {
+        query = query.eq('reply_worthiness', replyWorthiness);
+      }
+      if (signalStrength) {
+        query = query.eq('signal_strength', signalStrength);
+      }
+      if (hasNuggets) {
+        query = query.gt('golden_nugget_count', 0);
+      }
+      if (hasEvents) {
+        query = query.contains('labels', ['has_event']);
+      }
+
       if (clientId) {
         query = query.eq('contact_id', clientId);
       }
@@ -600,6 +672,10 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     archivedOnly,
     unreadOnly,
     starredOnly,
+    replyWorthiness,
+    signalStrength,
+    hasNuggets,
+    hasEvents,
   ]);
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -670,9 +746,12 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
           total: prev.total,
           unread: updatedEmails.filter((e) => !e.is_read).length,
           starred: updatedEmails.filter((e) => e.is_starred).length,
-          events: prev.events, // Events are detected via labels, keep existing count
+          events: prev.events,
           quickActionStats,
           categoryStats,
+          mustReplyCount: prev.mustReplyCount,
+          highSignalCount: prev.highSignalCount,
+          nuggetCount: prev.nuggetCount,
         };
       });
     }

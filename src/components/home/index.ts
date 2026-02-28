@@ -19,6 +19,8 @@ export { SavedLinksCard } from './SavedLinksCard';
 export { EmailSummaryCard } from './EmailSummaryCard';
 // NEW (Feb 2026): Active projects widget
 export { ActiveProjectsWidget } from './ActiveProjectsWidget';
+// NEW (Feb 2026): Email style inspiration card (Phase 2)
+export { StyleInspirationCard } from './StyleInspirationCard';
 
 export type { DailyBriefingHeaderProps } from './DailyBriefingHeader';
 export type { TodayScheduleProps, ScheduleItem } from './TodaySchedule';
