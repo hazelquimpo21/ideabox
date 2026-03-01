@@ -18,6 +18,11 @@
  *    - Processes sequentially with rate limiting
  *    - Also callable per-user after sync completes
  *
+ * 3. Retry Failed Analyses - Retries emails with analysis_error
+ *    - Picks up emails that failed within the last 7 days
+ *    - 24-hour cooldown between retries of the same email
+ *    - Caps at 25 emails per run
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
  * SCHEDULING RECOMMENDATIONS
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -48,6 +53,7 @@
  *   reassessPrioritiesForAllUsers,
  *   generateSummaryForUser,
  *   generateSummariesForStaleUsers,
+ *   retryFailedAnalyses,
  * } from '@/services/jobs';
  *
  * // Run for single user (e.g., after they log in)
@@ -61,6 +67,9 @@
  *
  * // Generate summaries for all stale users (cron job)
  * await generateSummariesForStaleUsers();
+ *
+ * // Retry failed analyses (cron job, daily)
+ * await retryFailedAnalyses();
  * ```
  *
  * @module services/jobs
@@ -91,3 +100,14 @@ export {
   type UserSummaryJobResult,
   type BatchSummaryJobResult,
 } from './summary-generation';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RETRY FAILED ANALYSES (NEW - Mar 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export {
+  retryFailedAnalyses,
+  RETRY_JOB_CONFIG,
+  type RetryJobResult,
+  type RetryJobEmailResult,
+} from './retry-failed-analyses';
