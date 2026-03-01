@@ -19,6 +19,7 @@ export type {
   Email,
   EmailCategory,
   Action,
+  ActionWithEmail,
   ActionType,
   ActionPriority,
   ActionStatus,

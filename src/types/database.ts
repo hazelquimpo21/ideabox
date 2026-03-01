@@ -1843,6 +1843,18 @@ export type UserSummaryStateRow = TableRow<'user_summary_state'>;
 export type Project = TableRow<'projects'>;
 export type ProjectItem = TableRow<'project_items'>;
 
+/** ProjectItem enriched with source email metadata for UI display */
+export interface ProjectItemWithEmail extends ProjectItem {
+  source_email_subject?: string | null;
+  source_email_sender?: string | null;
+}
+
+/** Action enriched with source email metadata for UI display */
+export interface ActionWithEmail extends Action {
+  email_subject?: string | null;
+  email_sender?: string | null;
+}
+
 /**
  * Cost usage summary from database function.
  */

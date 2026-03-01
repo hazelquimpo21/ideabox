@@ -36,7 +36,7 @@
 import * as React from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
-import type { Action, ActionStatus } from '@/types/database';
+import type { Action, ActionWithEmail, ActionStatus } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -88,8 +88,8 @@ export interface ActionStats {
  * Return value from the useActions hook.
  */
 export interface UseActionsReturn {
-  /** Array of action objects */
-  actions: Action[];
+  /** Array of action objects enriched with email metadata */
+  actions: ActionWithEmail[];
   /** Loading state */
   isLoading: boolean;
   /** Error object if fetch failed */
@@ -170,7 +170,7 @@ export function useActions(options: UseActionsOptions = {}): UseActionsReturn {
   // State
   // ───────────────────────────────────────────────────────────────────────────
 
-  const [actions, setActions] = React.useState<Action[]>([]);
+  const [actions, setActions] = React.useState<ActionWithEmail[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
   const [stats, setStats] = React.useState<ActionStats>({
@@ -247,7 +247,31 @@ export function useActions(options: UseActionsOptions = {}): UseActionsReturn {
         throw new Error(queryError.message);
       }
 
-      const fetchedActions = data || [];
+      const fetchedActions: ActionWithEmail[] = data || [];
+
+      // Enrich actions with source email metadata (subject, sender)
+      const emailIds = [...new Set(fetchedActions.filter((a) => a.email_id).map((a) => a.email_id!))];
+      if (emailIds.length > 0) {
+        const { data: emails } = await supabase
+          .from('emails')
+          .select('id, subject, sender_name, sender_email')
+          .in('id', emailIds);
+
+        if (emails) {
+          const emailMap = new Map(emails.map((e) => [e.id, e]));
+          for (const action of fetchedActions) {
+            if (action.email_id) {
+              const email = emailMap.get(action.email_id);
+              if (email) {
+                action.email_subject = email.subject;
+                action.email_sender = email.sender_name || email.sender_email;
+              }
+            }
+          }
+        }
+        logger.debug('Enriched actions with email metadata', { emailCount: emailIds.length });
+      }
+
       setActions(fetchedActions);
       setStats(calculateStats(fetchedActions));
 

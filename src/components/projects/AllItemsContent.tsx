@@ -34,8 +34,9 @@ import {
   Filter,
   Eye,
   EyeOff,
+  Mail,
 } from 'lucide-react';
-import type { ProjectItemType, ProjectItemStatus } from '@/types/database';
+import type { ProjectItemType, ProjectItemStatus, ProjectItemWithEmail } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STATS CARDS
@@ -88,29 +89,41 @@ function StatsCards({ stats, filter, onFilterChange }: StatsCardsProps) {
 
 type SortOption = 'due_date' | 'priority' | 'created_at' | 'sort_order';
 type StatusFilter = 'all' | 'pending' | 'in_progress' | 'completed';
+type SourceFilter = 'all' | 'email' | 'manual';
 
 interface FilterBarProps {
   sortBy: SortOption;
   onSortChange: (sort: SortOption) => void;
   statusFilter: StatusFilter;
   onStatusFilterChange: (status: StatusFilter) => void;
+  sourceFilter: SourceFilter;
+  onSourceFilterChange: (source: SourceFilter) => void;
   overdueOnly: boolean;
   onOverdueOnlyChange: (v: boolean) => void;
   showCompleted: boolean;
   onShowCompletedChange: (v: boolean) => void;
+  emailSourcedCount: number;
 }
 
 function FilterBar({
   sortBy, onSortChange,
   statusFilter, onStatusFilterChange,
+  sourceFilter, onSourceFilterChange,
   overdueOnly, onOverdueOnlyChange,
   showCompleted, onShowCompletedChange,
+  emailSourcedCount,
 }: FilterBarProps) {
   const statusOptions: { value: StatusFilter; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'pending', label: 'Pending' },
     { value: 'in_progress', label: 'In Progress' },
     { value: 'completed', label: 'Done' },
+  ];
+
+  const sourceOptions: { value: SourceFilter; label: string; icon?: React.ReactNode }[] = [
+    { value: 'all', label: 'Any source' },
+    { value: 'email', label: `From email (${emailSourcedCount})`, icon: <Mail className="h-3 w-3 mr-0.5" /> },
+    { value: 'manual', label: 'Manual' },
   ];
 
   return (
@@ -143,6 +156,24 @@ function FilterBar({
                 : 'bg-background border-input hover:bg-muted'
             }`}
           >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Source filter */}
+      <div className="flex items-center gap-1">
+        {sourceOptions.map((s) => (
+          <button
+            key={s.value}
+            onClick={() => onSourceFilterChange(s.value)}
+            className={`flex items-center px-2 py-0.5 text-xs rounded-full border transition-colors ${
+              sourceFilter === s.value
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background border-input hover:bg-muted'
+            }`}
+          >
+            {s.icon}
             {s.label}
           </button>
         ))}
@@ -189,6 +220,7 @@ function isOverdue(item: { due_date?: string | null; status: string }): boolean 
 export function AllItemsContent() {
   const [typeFilter, setTypeFilter] = React.useState<string>('all');
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all');
+  const [sourceFilter, setSourceFilter] = React.useState<SourceFilter>('all');
   const [sortBy, setSortBy] = React.useState<SortOption>('sort_order');
   const [overdueOnly, setOverdueOnly] = React.useState(false);
   const [showCompleted, setShowCompleted] = React.useState(false);
@@ -212,6 +244,12 @@ export function AllItemsContent() {
     setShowCreateDialog(true);
   };
 
+  // Count email-sourced items for filter badge
+  const emailSourcedCount = React.useMemo(
+    () => items.filter((i) => i.source_email_id || i.source_action_id).length,
+    [items]
+  );
+
   // ─── Client-side filtering ─────────────────────────────────────────────────
   const filteredItems = React.useMemo(() => {
     let result = items;
@@ -226,13 +264,20 @@ export function AllItemsContent() {
       result = result.filter((i) => i.status === statusFilter);
     }
 
+    // Source filter
+    if (sourceFilter === 'email') {
+      result = result.filter((i) => i.source_email_id || i.source_action_id);
+    } else if (sourceFilter === 'manual') {
+      result = result.filter((i) => !i.source_email_id && !i.source_action_id);
+    }
+
     // Overdue only
     if (overdueOnly) {
       result = result.filter(isOverdue);
     }
 
     return result;
-  }, [items, showCompleted, statusFilter, overdueOnly]);
+  }, [items, showCompleted, statusFilter, sourceFilter, overdueOnly]);
 
   return (
     <div>
@@ -253,10 +298,13 @@ export function AllItemsContent() {
         onSortChange={setSortBy}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
+        sourceFilter={sourceFilter}
+        onSourceFilterChange={setSourceFilter}
         overdueOnly={overdueOnly}
         onOverdueOnlyChange={setOverdueOnly}
         showCompleted={showCompleted}
         onShowCompletedChange={setShowCompleted}
+        emailSourcedCount={emailSourcedCount}
       />
 
       {/* Header with create button */}

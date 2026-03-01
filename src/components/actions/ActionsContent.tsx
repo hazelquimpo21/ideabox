@@ -28,7 +28,7 @@ import {
   CardTitle,
   Skeleton,
 } from '@/components/ui';
-import { useActions, type Action } from '@/hooks';
+import { useActions, type ActionWithEmail } from '@/hooks';
 import { useProjects } from '@/hooks/useProjects';
 import { useProjectItems } from '@/hooks/useProjectItems';
 import { ActionListItem } from './ActionListItem';
@@ -89,7 +89,7 @@ function EmptyState() {
 export function ActionsContent() {
   const [filter, setFilter] = React.useState<'all' | 'pending' | 'completed'>('all');
   const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [promoteAction, setPromoteAction] = React.useState<Action | null>(null);
+  const [promoteAction, setPromoteAction] = React.useState<ActionWithEmail | null>(null);
 
   // Fetch actions using the useActions hook
   const {

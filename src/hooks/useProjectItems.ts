@@ -15,7 +15,7 @@
 import * as React from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
-import type { ProjectItem, ProjectItemType, ProjectItemStatus } from '@/types/database';
+import type { ProjectItem, ProjectItemWithEmail, ProjectItemType, ProjectItemStatus } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -49,7 +49,7 @@ export interface ProjectItemStats {
 }
 
 export interface UseProjectItemsReturn {
-  items: ProjectItem[];
+  items: ProjectItemWithEmail[];
   isLoading: boolean;
   error: Error | null;
   stats: ProjectItemStats;
@@ -115,7 +115,7 @@ function calculateStats(items: ProjectItem[]): ProjectItemStats {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjectItemsReturn {
-  const [items, setItems] = React.useState<ProjectItem[]>([]);
+  const [items, setItems] = React.useState<ProjectItemWithEmail[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
   const [stats, setStats] = React.useState<ProjectItemStats>({
@@ -166,7 +166,31 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
       const { data, error: queryError } = await query;
       if (queryError) throw new Error(queryError.message);
 
-      const fetched = data || [];
+      const fetched: ProjectItemWithEmail[] = data || [];
+
+      // Enrich items with source email metadata (subject, sender)
+      const emailIds = [...new Set(fetched.filter((i) => i.source_email_id).map((i) => i.source_email_id!))];
+      if (emailIds.length > 0) {
+        const { data: emails } = await supabase
+          .from('emails')
+          .select('id, subject, sender_name, sender_email')
+          .in('id', emailIds);
+
+        if (emails) {
+          const emailMap = new Map(emails.map((e) => [e.id, e]));
+          for (const item of fetched) {
+            if (item.source_email_id) {
+              const email = emailMap.get(item.source_email_id);
+              if (email) {
+                item.source_email_subject = email.subject;
+                item.source_email_sender = email.sender_name || email.sender_email;
+              }
+            }
+          }
+        }
+        logger.debug('Enriched items with email metadata', { emailCount: emailIds.length });
+      }
+
       setItems(fetched);
       setStats(calculateStats(fetched));
       logger.success('Project items fetched', { count: fetched.length });
