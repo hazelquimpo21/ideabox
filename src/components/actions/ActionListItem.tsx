@@ -10,8 +10,9 @@
 
 'use client';
 
+import Link from 'next/link';
 import { Badge, Checkbox } from '@/components/ui';
-import type { Action, ActionType, ActionPriority } from '@/types/database';
+import type { ActionWithEmail, ActionType, ActionPriority } from '@/types/database';
 import {
   CheckSquare,
   Circle,
@@ -28,9 +29,9 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface ActionListItemProps {
-  action: Action;
+  action: ActionWithEmail;
   onToggleComplete: (id: string) => void;
-  onPromote?: (action: Action) => void;
+  onPromote?: (action: ActionWithEmail) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -141,10 +142,14 @@ export function ActionListItem({ action, onToggleComplete, onPromote }: ActionLi
 
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           {action.email_id && (
-            <span className="flex items-center gap-1">
+            <Link
+              href={`/inbox?email=${action.email_id}`}
+              className="flex items-center gap-1 hover:text-foreground transition-colors"
+              title="View source email"
+            >
               <Mail className="h-3 w-3" />
-              From email
-            </span>
+              {action.email_subject || action.email_sender || 'Source email'}
+            </Link>
           )}
           {action.contact_id && (
             <span className="flex items-center gap-1">

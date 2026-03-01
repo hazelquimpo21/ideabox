@@ -13,6 +13,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import {
   Dialog,
   DialogContent,
@@ -24,8 +25,9 @@ import {
   Checkbox,
   Badge,
 } from '@/components/ui';
+import { Mail } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
-import type { Action } from '@/types/database';
+import type { ActionWithEmail } from '@/types/database';
 import type { Project, ProjectItem, ProjectItemType } from '@/types/database';
 
 const logger = createLogger('PromoteActionDialog');
@@ -37,7 +39,7 @@ const logger = createLogger('PromoteActionDialog');
 export interface PromoteActionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  action: Action | null;
+  action: ActionWithEmail | null;
   projects: Project[];
   onCreateItem: (item: Partial<ProjectItem> & { title: string }) => Promise<ProjectItem | null>;
   onCompleteAction?: (actionId: string) => Promise<void>;
@@ -142,9 +144,21 @@ export function PromoteActionDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Source action reference */}
-          <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2">
-            Promoting action: <span className="font-medium">{action.title}</span>
+          {/* Source action + email reference */}
+          <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 space-y-1">
+            <div>
+              Promoting action: <span className="font-medium text-foreground">{action.title}</span>
+            </div>
+            {action.email_id && (
+              <Link
+                href={`/inbox?email=${action.email_id}`}
+                className="flex items-center gap-1 hover:text-foreground transition-colors w-fit"
+                title="View source email"
+              >
+                <Mail className="h-3 w-3" />
+                {action.email_subject || action.email_sender || 'View source email'}
+              </Link>
+            )}
           </div>
 
           {/* Project selection */}

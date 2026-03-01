@@ -113,6 +113,23 @@ export function InboxTabs() {
   const [selectedEmailCategory, setSelectedEmailCategory] = React.useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
 
+  // ─── Deep-link: auto-open email modal if ?email= is in URL ───────────────
+  const emailParam = searchParams.get('email');
+  React.useEffect(() => {
+    if (emailParam && !isModalOpen) {
+      setSelectedEmailId(emailParam);
+      setSelectedEmailCategory(null);
+      setIsModalOpen(true);
+
+      // Clean the URL to avoid re-opening on subsequent renders
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('email');
+      const queryString = params.toString();
+      const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [emailParam]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Tab Change Handler ────────────────────────────────────────────────────
   const handleTabChange = React.useCallback(
     (value: string) => {

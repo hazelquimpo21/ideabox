@@ -12,6 +12,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { Badge, Checkbox, Input } from '@/components/ui';
 import {
   Lightbulb,
@@ -20,18 +21,19 @@ import {
   Clock,
   AlertTriangle,
   Trash2,
+  Mail,
 } from 'lucide-react';
-import type { ProjectItem, ProjectItemType } from '@/types/database';
+import type { ProjectItemWithEmail, ProjectItemType } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface ProjectItemRowProps {
-  item: ProjectItem;
+  item: ProjectItemWithEmail;
   onToggleComplete: (id: string) => void;
   onDelete?: (id: string) => void;
-  onUpdate?: (id: string, updates: Partial<ProjectItem>) => Promise<void>;
+  onUpdate?: (id: string, updates: Partial<ProjectItemWithEmail>) => Promise<void>;
   projects?: Array<{ id: string; name: string; color?: string | null }>;
 }
 
@@ -258,6 +260,18 @@ export function ProjectItemRow({ item, onToggleComplete, onDelete, onUpdate, pro
             <span className="text-muted-foreground/70">
               {item.tags.slice(0, 2).join(', ')}
             </span>
+          )}
+
+          {/* ─── Source email link ────────────────────────────────────── */}
+          {item.source_email_id && (
+            <Link
+              href={`/inbox?email=${item.source_email_id}`}
+              className="flex items-center gap-1 hover:text-foreground transition-colors"
+              title="View source email"
+            >
+              <Mail className="h-3 w-3" />
+              {item.source_email_subject || item.source_email_sender || 'Source email'}
+            </Link>
           )}
 
           {/* ─── Project reassignment ──────────────────────────────────── */}

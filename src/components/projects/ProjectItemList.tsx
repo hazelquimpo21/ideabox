@@ -22,18 +22,18 @@ import {
   Plus,
   Inbox,
 } from 'lucide-react';
-import type { ProjectItem, ProjectItemType } from '@/types/database';
+import type { ProjectItemWithEmail, ProjectItemType } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface ProjectItemListProps {
-  items: ProjectItem[];
+  items: ProjectItemWithEmail[];
   isLoading: boolean;
   onToggleComplete: (id: string) => void;
   onDeleteItem?: (id: string) => void;
-  onUpdateItem?: (id: string, updates: Partial<ProjectItem>) => Promise<void>;
+  onUpdateItem?: (id: string, updates: Partial<ProjectItemWithEmail>) => Promise<void>;
   onAddItem?: (type: ProjectItemType) => void;
   showGroupHeaders?: boolean;
   emptyMessage?: string;
