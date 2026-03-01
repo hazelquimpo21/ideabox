@@ -181,7 +181,7 @@ export const analyzerConfig = {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for deterministic classification
-    maxTokens: 750,   // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness + emailType + aiBrief
+    maxTokens: 1000,  // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness + emailType + aiBrief — raised from 750 to avoid TokenLimitError on complex emails
   } satisfies AnalyzerConfig,
 
   /**
@@ -199,7 +199,7 @@ export const analyzerConfig = {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.3, // Slightly higher for natural gist writing
-    maxTokens: 2000,  // Increased from 1200 — golden_nuggets + email_style_ideas + links can exceed 1200 for long emails
+    maxTokens: 2500,  // Increased from 2000 — golden_nuggets + email_style_ideas + links can exceed 2000 for long newsletters
   } satisfies AnalyzerConfig,
 
   /**
@@ -394,7 +394,7 @@ export const analyzerConfig = {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.3, // Factual but readable narrative
-    maxTokens: 800,   // Headline + themed sections + stats
+    maxTokens: 1500,  // Headline + themed sections + stats — raised from 800 to avoid truncation on busy days with 5 sections × 5 items
   } satisfies AnalyzerConfig,
 } as const;
 

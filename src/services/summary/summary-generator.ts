@@ -346,7 +346,7 @@ async function gatherInputData(
       .eq('user_id', userId)
       .gte('date', sinceDate)
       .order('date', { ascending: false })
-      .limit(200),
+      .limit(100),
 
     // Pending actions
     supabase
@@ -389,7 +389,14 @@ async function gatherInputData(
   ]);
 
   // ─── Cluster emails by thread ──────────────────────────────────────────
-  const threads = clusterByThread(emailsResult.data || []);
+  const allThreads = clusterByThread(emailsResult.data || []);
+
+  // Cap to 50 highest-signal threads to keep the AI prompt within token budget.
+  // Sort so high-signal threads come first (they're most important for the summary).
+  const signalOrder: Record<string, number> = { high: 0, medium: 1, low: 2, noise: 3 };
+  const threads = allThreads
+    .sort((a, b) => (signalOrder[a.signal_strength || 'noise'] ?? 3) - (signalOrder[b.signal_strength || 'noise'] ?? 3))
+    .slice(0, 50);
 
   // ─── Build input data ──────────────────────────────────────────────────
   return {
