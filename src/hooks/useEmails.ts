@@ -54,12 +54,13 @@ const DEFAULT_LIMIT = 50;
  * Excludes body_html, body_text, and other heavy fields that are only
  * needed in the full email detail view. This reduces data transfer
  * by ~80-90% compared to select('*').
- * Now includes urgency_score, relationship_signal (migration 043) and
- * golden_nugget_count (migration 044) as denormalized columns.
+ *
+ * NOTE: urgency_score, relationship_signal, golden_nugget_count are NOT
+ * included — migrations 043/044 have not been applied to the database yet.
  *
  * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
  */
-const EMAIL_LIST_FIELDS = 'id, gmail_id, gmail_account_id, subject, sender_name, sender_email, date, snippet, category, additional_categories, is_read, is_starred, is_archived, quick_action, gist, summary, priority_score, key_points, topics, labels, analyzed_at, analysis_error, contact_id, signal_strength, reply_worthiness, email_type, urgency_score, relationship_signal, golden_nugget_count' as const;
+const EMAIL_LIST_FIELDS = 'id, gmail_id, gmail_account_id, subject, sender_name, sender_email, date, snippet, category, additional_categories, is_read, is_starred, is_archived, quick_action, gist, summary, priority_score, key_points, topics, labels, analyzed_at, analysis_error, contact_id, signal_strength, reply_worthiness, email_type' as const;
 
 /** Logger instance for this hook */
 const logger = createLogger('useEmails');
@@ -391,10 +392,11 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         logger.debug('Applied signal strength filter', { signalStrength });
       }
 
-      if (hasNuggets) {
-        query = query.gt('golden_nugget_count', 0);
-        logger.debug('Applied has nuggets filter');
-      }
+      // NOTE: golden_nugget_count filter disabled — migration 044 not applied yet
+      // if (hasNuggets) {
+      //   query = query.gt('golden_nugget_count', 0);
+      //   logger.debug('Applied has nuggets filter');
+      // }
 
       if (hasEvents) {
         query = query.contains('labels', ['has_event']);
@@ -484,9 +486,10 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         if (email.signal_strength === 'high') {
           highSignalCount++;
         }
-        if (email.golden_nugget_count > 0) {
-          nuggetCount++;
-        }
+        // NOTE: golden_nugget_count not available — migration 044 not applied yet
+        // if (email.golden_nugget_count > 0) {
+        //   nuggetCount++;
+        // }
       }
 
       logger.debug('Stats calculated', {
@@ -629,9 +632,10 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       if (signalStrength) {
         query = query.eq('signal_strength', signalStrength);
       }
-      if (hasNuggets) {
-        query = query.gt('golden_nugget_count', 0);
-      }
+      // NOTE: golden_nugget_count filter disabled — migration 044 not applied yet
+      // if (hasNuggets) {
+      //   query = query.gt('golden_nugget_count', 0);
+      // }
       if (hasEvents) {
         query = query.contains('labels', ['has_event']);
       }
