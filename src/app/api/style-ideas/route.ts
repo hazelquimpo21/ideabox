@@ -70,38 +70,23 @@ export async function GET(request: NextRequest) {
     logger.start('Fetching style ideas', { userId: user.id, limit, typeFilter });
 
     // ─── Query email_analyses for content_digest containing emailStyleIdeas ─
+    // NOTE: The email_analyses table stores analyzers in individual JSONB columns
+    // (content_digest, action_extraction, etc.) — there is no analysis_data column.
     const { data: analyses, error: queryError } = await supabase
       .from('email_analyses')
-      .select('email_id, analysis_data, emails!inner(subject, sender_name, sender_email, date)')
+      .select('email_id, content_digest, emails!inner(subject, sender_name, sender_email, date)')
       .eq('user_id', user.id)
-      .not('analysis_data->content_digest->emailStyleIdeas', 'is', null)
+      .not('content_digest', 'is', null)
       .order('created_at', { ascending: false })
       .limit(limit);
 
     if (queryError) {
-      // Fallback: try querying with content_digest column directly
-      logger.warn('Primary query failed, trying fallback', { error: queryError.message });
-
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('email_analyses')
-        .select('email_id, content_digest, emails!inner(subject, sender_name, sender_email, date)')
-        .eq('user_id', user.id)
-        .not('content_digest', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (fallbackError) {
-        logger.error('Fallback query also failed', { error: fallbackError.message });
-        return NextResponse.json({ error: 'Failed to fetch style ideas' }, { status: 500 });
-      }
-
-      const ideas = extractStyleIdeas(fallbackData || [], typeFilter, true);
-      logger.success('Style ideas fetched (fallback)', { count: ideas.length, duration: Date.now() - startTime });
-      return NextResponse.json({ ideas });
+      logger.error('Failed to fetch style ideas', { error: queryError.message });
+      return NextResponse.json({ error: 'Failed to fetch style ideas' }, { status: 500 });
     }
 
     // ─── Extract and flatten style ideas ──────────────────────────────────
-    const ideas = extractStyleIdeas(analyses || [], typeFilter, false);
+    const ideas = extractStyleIdeas(analyses || [], typeFilter);
 
     logger.success('Style ideas fetched', { count: ideas.length, duration: Date.now() - startTime });
     return NextResponse.json({ ideas });
@@ -124,7 +109,6 @@ export async function GET(request: NextRequest) {
 function extractStyleIdeas(
   analyses: Array<Record<string, unknown>>,
   typeFilter: string | null,
-  useFallbackFormat: boolean,
 ): StyleIdea[] {
   const allIdeas: StyleIdea[] = [];
 
@@ -132,24 +116,13 @@ function extractStyleIdeas(
     const emailData = record.emails as Record<string, unknown> | null;
     if (!emailData) continue;
 
-    // Extract style ideas from the JSONB structure
-    let styleIdeas: Array<Record<string, unknown>> = [];
-
-    if (useFallbackFormat) {
-      const digest = record.content_digest as Record<string, unknown> | null;
-      if (!digest) continue;
-      styleIdeas = (digest.emailStyleIdeas as Array<Record<string, unknown>>)
+    // Extract style ideas from the content_digest JSONB column
+    const digest = record.content_digest as Record<string, unknown> | null;
+    if (!digest) continue;
+    const styleIdeas: Array<Record<string, unknown>> =
+      (digest.emailStyleIdeas as Array<Record<string, unknown>>)
         || (digest.email_style_ideas as Array<Record<string, unknown>>)
         || [];
-    } else {
-      const analysisData = record.analysis_data as Record<string, unknown> | null;
-      if (!analysisData) continue;
-      const digest = (analysisData.content_digest || analysisData.contentDigest) as Record<string, unknown> | null;
-      if (!digest) continue;
-      styleIdeas = (digest.emailStyleIdeas as Array<Record<string, unknown>>)
-        || (digest.email_style_ideas as Array<Record<string, unknown>>)
-        || [];
-    }
 
     for (const si of styleIdeas) {
       const type = (si.type as string) || 'tone';
