@@ -53,7 +53,7 @@ src/
       contacts/       # Tabbed contacts (All, Clients, Personal, Subscriptions)
         [id]/         # Contact detail (CRM-style)
       calendar/       # Unified calendar (events + extracted dates)
-      tasks/          # Tabbed tasks (Projects, All Items, Inbox Tasks, Ideas, Campaigns, Templates)
+      tasks/          # Tabbed tasks (Triage, Board, Projects, Library)
         campaigns/    # Campaign detail + create routes
       sent/           # Email composition, outbox, sent history
       settings/       # User preferences + cost tracking
@@ -71,7 +71,7 @@ src/
     templates/        # TemplatesContent
     contacts/         # ContactsTabs, PromoteToClientDialog
     calendar/         # CalendarStats
-    tasks/            # TasksTabs (Projects, Items, Inbox Tasks, Ideas, Campaigns, Templates)
+    tasks/            # TasksTabs (Triage, Board, Projects, Library)
     projects/         # ProjectCard, ProjectItemRow, AllItemsContent, TriageTray, CreateItemDialog
     shared/           # PriorityCard (reusable across pages)
     discover/         # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions
@@ -106,7 +106,7 @@ scripts/              # 44 SQL migration files (001-044), seed.ts, verify-migrat
 - Inbox with 5 tabs: Inbox (unified feed), Priority (AI-ranked), Categories (overview grid), Discoveries (insights/news/links), Archive
 - Unified contacts with clients merged in — tabbed filtering by All, Clients, Personal, Subscriptions
 - Unified calendar merging events + extracted dates with list/grid views and type filters
-- Task management with Projects, All Items, Inbox Tasks, Ideas, Campaigns, and Templates tabs
+- Task management with 4 tabs: Triage (default — unified action/idea inbox), Board (kanban-first), Projects, Library (Campaigns + Templates)
 - Email traceability: clickable source email links on items/ideas with gist preview, quick task creation from email detail
 - Action tracking with multi-action support
 - Contact intelligence with sender type classification and client promotion

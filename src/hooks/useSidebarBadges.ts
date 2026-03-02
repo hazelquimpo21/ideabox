@@ -4,11 +4,13 @@
  * Queries:
  * 1. Must-reply count: emails where reply_worthiness = 'must_reply' AND is_read = false
  * 2. Today's deadlines count: actions where deadline is today and status != 'completed'
+ * 3. Triage count: pending actions (items needing triage)
  *
- * Refreshes every 5 minutes. Returns { mustReplyCount, todayDeadlineCount, isLoading }.
+ * Refreshes every 5 minutes. Returns { mustReplyCount, todayDeadlineCount, triageCount, isLoading }.
  *
  * @module hooks/useSidebarBadges
  * @since February 2026 — Phase 1: Sidebar actionable badges
+ * @updated March 2026 — Added triageCount for Tasks nav badge
  */
 
 'use client';
@@ -32,6 +34,8 @@ export interface SidebarBadges {
   mustReplyCount: number;
   /** Count of action items with deadlines today that aren't completed */
   todayDeadlineCount: number;
+  /** Count of pending actions needing triage (Tasks nav badge) */
+  triageCount: number;
   /** Whether data is currently being fetched */
   isLoading: boolean;
 }
@@ -47,6 +51,7 @@ export interface SidebarBadges {
 export function useSidebarBadges(): SidebarBadges {
   const [mustReplyCount, setMustReplyCount] = React.useState(0);
   const [todayDeadlineCount, setTodayDeadlineCount] = React.useState(0);
+  const [triageCount, setTriageCount] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
 
   const fetchBadges = React.useCallback(async () => {
@@ -61,8 +66,8 @@ export function useSidebarBadges(): SidebarBadges {
       const todayEnd = new Date();
       todayEnd.setHours(23, 59, 59, 999);
 
-      // Run both queries in parallel
-      const [replyResult, deadlineResult] = await Promise.all([
+      // Run all queries in parallel
+      const [replyResult, deadlineResult, triageResult] = await Promise.all([
         // Query 1: Must-reply unread emails
         supabase
           .from('emails')
@@ -78,17 +83,26 @@ export function useSidebarBadges(): SidebarBadges {
           .gte('deadline', todayStart.toISOString())
           .lte('deadline', todayEnd.toISOString())
           .neq('status', 'completed'),
+
+        // Query 3: Pending actions count (triage items)
+        supabase
+          .from('actions')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending'),
       ]);
 
       const replyCount = replyResult.count ?? 0;
       const deadlineCount = deadlineResult.count ?? 0;
+      const pendingTriageCount = triageResult.count ?? 0;
 
       setMustReplyCount(replyCount);
       setTodayDeadlineCount(deadlineCount);
+      setTriageCount(pendingTriageCount);
 
       logger.success('Sidebar badge counts fetched', {
         mustReplyCount: replyCount,
         todayDeadlineCount: deadlineCount,
+        triageCount: pendingTriageCount,
       });
     } catch (error) {
       logger.error('Failed to fetch sidebar badge counts', {
@@ -111,5 +125,5 @@ export function useSidebarBadges(): SidebarBadges {
     };
   }, [fetchBadges]);
 
-  return { mustReplyCount, todayDeadlineCount, isLoading };
+  return { mustReplyCount, todayDeadlineCount, triageCount, isLoading };
 }

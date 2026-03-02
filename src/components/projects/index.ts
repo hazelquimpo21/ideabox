@@ -13,6 +13,8 @@
 
 export { ProjectsContent } from './ProjectsContent';
 export { AllItemsContent } from './AllItemsContent';
+export { BoardContent } from './BoardContent';
+export { TriageContent } from './TriageContent';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UI COMPONENTS
@@ -58,3 +60,11 @@ export type { TaskKanbanBoardProps } from './TaskKanbanBoard';
 
 export { TriageTray } from './TriageTray';
 export type { TriageTrayProps } from './TriageTray';
+
+export { TriageActionCard } from './TriageActionCard';
+export type { TriageActionCardProps } from './TriageActionCard';
+
+export { TriageIdeaCard } from './TriageIdeaCard';
+export type { TriageIdeaCardProps } from './TriageIdeaCard';
+
+export { TriageEmptyState } from './TriageEmptyState';

@@ -129,7 +129,7 @@ src/
       contacts/                 # Contact management with tabs: All, Clients, Personal, Subscriptions
         [id]/                   # Contact detail (CRM-style)
       calendar/                 # Unified calendar (events + timeline merged)
-      tasks/                    # Tasks with 6 tabs: Projects, All Items, Inbox Tasks, Ideas, Campaigns, Templates
+      tasks/                    # Tasks with 4 tabs: Triage (default), Board, Projects, Library
         campaigns/
           [id]/                 # Campaign detail
           new/                  # Create campaign
@@ -201,8 +201,8 @@ src/
     templates/                  # TemplatesContent (extracted from old templates page)
     contacts/                   # ContactsTabs, PromoteToClientDialog
     calendar/                   # CalendarStats
-    tasks/                      # TasksTabs (6 tabs incl. Ideas)
-    projects/                   # ProjectCard, ProjectItemRow, AllItemsContent, TriageTray, CreateItemDialog, PromoteActionDialog
+    tasks/                      # TasksTabs (4 tabs: Triage, Board, Projects, Library)
+    projects/                   # ProjectCard, ProjectItemRow, AllItemsContent, BoardContent, TriageContent, TriageTray, CreateItemDialog, PromoteActionDialog
     shared/                     # PriorityCard (shared across pages)
     discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions, FailureSummary (wired to retry API)
     categories/                 # Category view (EmailCard, intelligence bar)

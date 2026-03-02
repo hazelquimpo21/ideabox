@@ -685,6 +685,32 @@ CREATE TABLE api_usage_logs (
 
 ---
 
+### 27. Tasks Page Triage-First Redesign: 6→4 Tabs (March 2026)
+
+**Decision:** Restructure the Tasks page from 6 tabs (Projects, All Items, Inbox Tasks, Ideas, Campaigns, Templates) to 4 tabs (Triage, Board, Projects, Library) with Triage as the default tab. Triage promotes the TriageTray into a full-width unified inbox of actions + ideas. Board is a kanban-first fork of AllItemsContent. Library consolidates Campaigns + Templates behind sub-tabs.
+
+**Alternatives Considered:**
+- Keep 6 tabs, just reorder (still too many choices per Hick's Law)
+- Merge everything into 3 tabs (too much crammed into each tab)
+- Make Board the default (answers "what am I doing?" but not "what's new?")
+- Delete AllItemsContent entirely (too aggressive, prevents rollback)
+
+**Rationale:**
+- **Hick's Law:** 6 tabs → 4 tabs reduces cognitive load on every visit. Daily-use tabs (Triage, Board) are separated from periodic-use (Projects, Library).
+- **Eisenhower separation:** "Deciding what to do" (Triage) and "doing it" (Board) are different mental modes that deserve separate tabs.
+- **Progressive commitment funnel:** Suggestions → Triage → Board → Done. Each stage has lower volume and higher commitment.
+- **Performance split:** Triage tab loads ~42 KB (3 queries), Board loads ~75 KB (3 queries) vs. AllItemsContent loading ~143 KB (6-7 queries).
+- **Backward compatibility:** `LEGACY_TAB_MAP` redirects all old URLs to new equivalents, preserving bookmarks.
+
+**Impact:**
+- 7 new files: `useTriageItems.ts`, `TriageContent.tsx`, `TriageActionCard.tsx`, `TriageIdeaCard.tsx`, `TriageEmptyState.tsx`, `BoardContent.tsx`, `LibraryContent.tsx`
+- Modified: `TasksTabs.tsx` (6→4 tabs), `useSidebarBadges.ts` (+triageCount), `Sidebar.tsx` (+amber badge on Tasks)
+- `AllItemsContent.tsx` and `TriageTray.tsx` kept as-is for rollback safety
+- Phase 2 will add QuickAcceptPopover (2-step promote) and Board refinements
+- Phase 3 will optimize queries and add snooze persistence
+
+---
+
 ## Decision Template (For Future Decisions)
 
 When making new architectural decisions, document them here using this template:

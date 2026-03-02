@@ -637,7 +637,7 @@ export function Sidebar({
   const activePath = currentPath || pathname;
 
   // Fetch action badge counts for sidebar nav items
-  const { mustReplyCount, todayDeadlineCount } = useSidebarBadges();
+  const { mustReplyCount, todayDeadlineCount, triageCount } = useSidebarBadges();
 
   /**
    * Check if a path is currently active.
@@ -684,6 +684,8 @@ export function Sidebar({
             actionBadge = { count: mustReplyCount, color: 'red' };
           } else if (item.label === 'Calendar' && todayDeadlineCount > 0) {
             actionBadge = { count: todayDeadlineCount, color: 'amber' };
+          } else if (item.label === 'Tasks' && triageCount > 0) {
+            actionBadge = { count: triageCount, color: 'amber' };
           }
           return (
             <NavLink
