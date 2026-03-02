@@ -47,7 +47,7 @@ import {
   X,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
-import type { ProjectItemType, ProjectItemWithEmail, ActionWithEmail } from '@/types/database';
+import type { ProjectItemType, ProjectItemStatus, ProjectItemWithEmail, ActionWithEmail } from '@/types/database';
 import type { IdeaItem } from '@/hooks/useIdeas';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -278,6 +278,7 @@ export function BoardContent() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [showCreateDialog, setShowCreateDialog] = React.useState(false);
   const [defaultItemType, setDefaultItemType] = React.useState<ProjectItemType>('task');
+  const [defaultItemStatus, setDefaultItemStatus] = React.useState<ProjectItemStatus | undefined>(undefined);
   const [promoteAction, setPromoteAction] = React.useState<ActionWithEmail | null>(null);
 
   const { items, isLoading, stats, toggleComplete, deleteItem, createItem, updateItem } =
@@ -296,6 +297,15 @@ export function BoardContent() {
 
   const handleAddItem = React.useCallback((type: ProjectItemType) => {
     setDefaultItemType(type);
+    setDefaultItemStatus(undefined);
+    setShowCreateDialog(true);
+  }, []);
+
+  /** Quick-add from kanban column "+" button — pre-fills status */
+  const handleQuickAdd = React.useCallback((status: string) => {
+    logger.info('Quick add from column', { status });
+    setDefaultItemType('task');
+    setDefaultItemStatus(status as ProjectItemStatus);
     setShowCreateDialog(true);
   }, []);
 
@@ -421,6 +431,8 @@ export function BoardContent() {
           onToggleComplete={toggleComplete}
           onDeleteItem={deleteItem}
           onUpdateItem={updateItem}
+          projects={projectList}
+          onQuickAdd={handleQuickAdd}
         />
       ) : (
         <ProjectItemList
@@ -441,6 +453,7 @@ export function BoardContent() {
         onOpenChange={setShowCreateDialog}
         onCreate={createItem}
         defaultType={defaultItemType}
+        defaultStatus={defaultItemStatus}
         projects={projectList}
       />
 

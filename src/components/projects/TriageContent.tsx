@@ -107,14 +107,53 @@ export function TriageContent() {
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
+  /** Legacy accept — only used as fallback when popover props aren't available */
   const handleAccept = React.useCallback((item: TriageItem) => {
-    logger.info('Item accepted', { type: item.type, itemId: item.id });
+    logger.info('Item accepted (legacy)', { type: item.type, itemId: item.id });
     if (item.type === 'action') {
       setPromoteAction(item.raw as ActionWithEmail);
     } else {
       saveIdea(item.raw as IdeaItem);
     }
   }, [saveIdea]);
+
+  /** Quick accept for actions — creates a project_item via the popover */
+  const handleQuickAcceptAction = React.useCallback(async (item: TriageItem, projectId: string, priority: string) => {
+    logger.info('Quick accept action', { itemId: item.id, projectId, priority });
+    const raw = item.raw as ActionWithEmail;
+    await createItem({
+      title: item.title,
+      item_type: 'task',
+      status: 'pending',
+      priority,
+      project_id: projectId || undefined,
+      source_action_id: raw.id,
+      source_email_id: item.sourceEmailId || undefined,
+    });
+    dismissItem(item.id, 'action');
+  }, [createItem, dismissItem]);
+
+  /** Quick accept for ideas — saves the idea AND creates a project_item */
+  const handleQuickAcceptIdea = React.useCallback(async (item: TriageItem, projectId: string, priority: string) => {
+    logger.info('Quick accept idea', { itemId: item.id, projectId, priority });
+    const idea = item.raw as IdeaItem;
+    await saveIdea(idea);
+    await createItem({
+      title: item.title,
+      item_type: 'idea',
+      status: 'pending',
+      priority,
+      project_id: projectId || undefined,
+      source_email_id: item.sourceEmailId || undefined,
+    });
+    dismissItem(item.id, 'idea');
+  }, [createItem, saveIdea, dismissItem]);
+
+  /** Open full PromoteActionDialog as fallback from "More options..." */
+  const handleFallbackToDialog = React.useCallback((item: TriageItem) => {
+    logger.info('Fallback to dialog', { itemId: item.id });
+    setPromoteAction(item.raw as ActionWithEmail);
+  }, []);
 
   const handleDismiss = React.useCallback((item: TriageItem) => {
     dismissItem(item.id, item.type);
@@ -184,6 +223,9 @@ export function TriageContent() {
                 onAccept={handleAccept}
                 onDismiss={handleDismiss}
                 onSnooze={handleSnooze}
+                projects={projects}
+                onCreateItem={(projectId, priority) => handleQuickAcceptAction(item, projectId, priority)}
+                onFallbackToDialog={handleFallbackToDialog}
               />
             ) : (
               <TriageIdeaCard
@@ -192,13 +234,15 @@ export function TriageContent() {
                 onAccept={handleAccept}
                 onDismiss={handleDismiss}
                 onSnooze={handleSnooze}
+                projects={projects}
+                onCreateItem={(projectId, priority) => handleQuickAcceptIdea(item, projectId, priority)}
               />
             )
           )}
         </div>
       )}
 
-      {/* Promote action dialog (Phase 1 — full dialog for actions) */}
+      {/* Promote action dialog — fallback from "More options..." in QuickAcceptPopover */}
       <PromoteActionDialog
         open={!!promoteAction}
         onOpenChange={(open) => { if (!open) setPromoteAction(null); }}

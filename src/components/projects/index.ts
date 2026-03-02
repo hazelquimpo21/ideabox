@@ -51,6 +51,9 @@ export type { DeleteProjectDialogProps } from './DeleteProjectDialog';
 export { PromoteActionDialog } from './PromoteActionDialog';
 export type { PromoteActionDialogProps } from './PromoteActionDialog';
 
+export { QuickAcceptPopover } from './QuickAcceptPopover';
+export type { QuickAcceptPopoverProps } from './QuickAcceptPopover';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // KANBAN & TRIAGE
 // ═══════════════════════════════════════════════════════════════════════════════

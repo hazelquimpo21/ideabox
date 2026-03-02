@@ -22,7 +22,7 @@ import {
   Badge,
 } from '@/components/ui';
 import { createLogger } from '@/lib/utils/logger';
-import type { ProjectItem, ProjectItemType, RecurrencePattern } from '@/types/database';
+import type { ProjectItem, ProjectItemType, ProjectItemStatus, RecurrencePattern } from '@/types/database';
 
 const logger = createLogger('CreateItemDialog');
 
@@ -40,6 +40,8 @@ export interface CreateItemDialogProps {
   /** Available projects for the selector dropdown. When provided and no
    *  projectId is set, a project picker is shown in the dialog. */
   projects?: Array<{ id: string; name: string; color?: string | null }>;
+  /** Pre-filled status for the new item (e.g. from kanban column quick-add) */
+  defaultStatus?: ProjectItemStatus;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -53,6 +55,7 @@ export function CreateItemDialog({
   defaultType = 'task',
   projectId,
   projects,
+  defaultStatus,
 }: CreateItemDialogProps) {
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -95,6 +98,7 @@ export function CreateItemDialog({
       description: description.trim() || undefined,
       item_type: itemType,
       priority,
+      status: defaultStatus || undefined,
       due_date: dueDate || null,
       start_date: startDate || null,
       end_date: endDate || null,

@@ -44,6 +44,7 @@
 | Inbox Tabs | 8→5 (consolidated Discoveries) | Insights/News/Links are all informational, not actionable |
 | Ideas on Tasks | Moved Ideas from Inbox to Tasks | Ideas are "things you might do" — actionable, not informational |
 | Email Traceability | Clickable links + gist preview | Users need to see and navigate to the email that spawned an item |
+| Quick Accept | 2-step popover replaces 6-step dialog | Fitts's Law: minimize motor cost for most frequent triage action |
 
 ---
 
@@ -709,6 +710,27 @@ CREATE TABLE api_usage_logs (
 - Phase 2 will add QuickAcceptPopover (2-step promote) and Board refinements
 - Phase 3 will optimize queries and add snooze persistence
 
+### 28. QuickAcceptPopover: 2-Step Promote (March 2026)
+
+**Decision:** Replace the 6-step PromoteActionDialog as the primary accept path in triage with a lightweight 2-step popover (project + priority only). PromoteActionDialog kept as fallback via "More options..." link.
+
+**Alternatives Considered:**
+- Keep PromoteActionDialog as the only promote path — too many steps for a frequent action
+- Inline accept (no project selection) — users need to categorize into projects at triage time
+- Full redesign of PromoteActionDialog — unnecessary, the full dialog has its place for detailed editing
+
+**Rationale:**
+- **Fitts's Law:** Reducing motor cost from 6-7 interaction steps to 2 for the most frequent triage operation.
+- **Context preservation:** Popover doesn't obscure the triage list, maintaining spatial context. Dialog is a modal that interrupts flow.
+- **Progressive disclosure:** Quick popover for the 80% case, full dialog for the 20% that need title edits, description, due dates, etc.
+- **MRU project default:** localStorage persistence of last-used project means repeat triage sessions need even fewer clicks.
+
+**Impact:**
+- New files: `popover.tsx` (lightweight UI primitive), `QuickAcceptPopover.tsx` (~150 lines)
+- Modified: `TriageActionCard.tsx` + `TriageIdeaCard.tsx` (Accept button becomes popover trigger), `TriageContent.tsx` (new accept handlers for quick promote)
+- `PromoteActionDialog.tsx` unchanged — still importable for "More options..." fallback
+- Board enhancements: project color stripes on kanban cards, Done column auto-collapse (7-day threshold), quick-add "+" buttons on column headers
+
 ---
 
 ## Decision Template (For Future Decisions)
@@ -747,3 +769,4 @@ When making new architectural decisions, document them here using this template:
 | Feb 2026 | Initial sync refinement (100 emails, relaxed filters, batch checkpoints), re-analysis of failed emails, unified prompt voice | Claude (analyzer refinement) |
 | Feb 2026 | Action→project item promotion bridge, project edit/delete, inline item editing, sort & filter, recurrence display | Claude (projects phase 3) |
 | Mar 2026 | Inbox tab consolidation (8→5), Ideas moved to Tasks, email traceability, quick task creation from email, search in AllItemsContent | Claude (items & email UX) |
+| Mar 2026 | QuickAcceptPopover (2-step promote), Board project color stripes, Done auto-collapse, column quick-add | Claude (tasks redesign phase 2) |
