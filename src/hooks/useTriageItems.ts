@@ -10,6 +10,7 @@
  *
  * @module hooks/useTriageItems
  * @since March 2026 — Phase 1 Tasks Page Redesign
+ * @updated March 2026 — Phase 3: Snooze persistence via localStorage
  */
 
 'use client';
@@ -25,6 +26,9 @@ import type { ActionWithEmail } from '@/types/database';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const logger = createLogger('useTriageItems');
+
+/** localStorage key for persisting snoozed items across page refreshes */
+const SNOOZE_STORAGE_KEY = 'ideabox_triage_snoozed';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -66,7 +70,7 @@ export interface UseTriageItemsReturn {
   isLoading: boolean;
   /** Dismiss an item (local state for actions, API call for ideas) */
   dismissItem: (id: string, type: 'action' | 'idea') => void;
-  /** Snooze an item for N minutes (local state only, clears on refresh) */
+  /** Snooze an item for N minutes (persisted to localStorage, survives refresh) */
   snoozeItem: (id: string, type: 'action' | 'idea', minutes: number) => void;
   /** Refetch both actions and ideas */
   refetch: () => void;
@@ -199,7 +203,19 @@ export function useTriageItems(): UseTriageItemsReturn {
 
   // ─── Local state ────────────────────────────────────────────────────────────
   const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(new Set());
-  const [snoozedUntil, setSnoozedUntil] = React.useState<Map<string, number>>(new Map());
+  const [snoozedUntil, setSnoozedUntil] = React.useState<Map<string, number>>(() => {
+    if (typeof window === 'undefined') return new Map();
+    try {
+      const stored = localStorage.getItem(SNOOZE_STORAGE_KEY);
+      if (!stored) return new Map();
+      const entries: [string, number][] = JSON.parse(stored);
+      // Filter out expired snoozes on mount
+      const now = Date.now();
+      return new Map(entries.filter(([, until]) => until > now));
+    } catch {
+      return new Map();
+    }
+  });
 
   const isLoading = actionsLoading || ideasLoading;
 
@@ -264,13 +280,20 @@ export function useTriageItems(): UseTriageItemsReturn {
   /**
    * Snooze an item for a given number of minutes.
    * Item reappears when snoozedUntil timestamp passes.
-   * Local state only — does not persist across page refresh.
+   * Persisted to localStorage — survives page refresh.
+   * Expired snoozes are cleaned up on mount.
    */
   const snoozeItem = React.useCallback(
     (id: string, type: 'action' | 'idea', minutes: number) => {
       const until = Date.now() + minutes * 60 * 1000;
       logger.info('Item snoozed', { type, itemId: id, snoozedUntil: new Date(until).toISOString() });
-      setSnoozedUntil((prev) => new Map(prev).set(id, until));
+      setSnoozedUntil((prev) => {
+        const next = new Map(prev).set(id, until);
+        try {
+          localStorage.setItem(SNOOZE_STORAGE_KEY, JSON.stringify([...next.entries()]));
+        } catch { /* localStorage full — ignore */ }
+        return next;
+      });
     },
     []
   );

@@ -6,6 +6,11 @@
  * source, overdue, and completed visibility.
  * Includes a Triage Tray for email-suggested actions and ideas.
  *
+ * @deprecated March 2026 — Replaced by BoardContent + TriageContent in Phase 1.
+ * Kept for rollback safety. Will be deleted after April 2026.
+ * @see BoardContent for the kanban-first board view
+ * @see TriageContent for the triage inbox view
+ *
  * @module components/projects/AllItemsContent
  * @since February 2026
  */

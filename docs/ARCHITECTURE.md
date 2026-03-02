@@ -202,7 +202,7 @@ src/
     contacts/                   # ContactsTabs, PromoteToClientDialog
     calendar/                   # CalendarStats
     tasks/                      # TasksTabs (4 tabs: Triage, Board, Projects, Library)
-    projects/                   # ProjectCard, ProjectItemRow, AllItemsContent, BoardContent, TriageContent, TriageTray, CreateItemDialog, PromoteActionDialog
+    projects/                   # ProjectCard, ProjectItemRow, BoardContent, TriageContent, TriageTray, CreateItemDialog, PromoteActionDialog, QuickAcceptPopover (AllItemsContent deprecated Mar 2026)
     shared/                     # PriorityCard (shared across pages)
     discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions, FailureSummary (wired to retry API)
     categories/                 # Category view (EmailCard, intelligence bar)
@@ -211,7 +211,7 @@ src/
 
   hooks/                        # 23 custom React hooks
     useEmails.ts                # Email list, search, filters
-    useActions.ts               # Action management
+    useActions.ts               # Action management (Supabase join for email enrichment — Phase 3)
     useContacts.ts              # Contact + client management (unified)
     useEvents.ts                # Event data
     useExtractedDates.ts        # Extracted date data (deadlines, birthdays, etc.)
@@ -290,6 +290,10 @@ scripts/
    `POST /api/onboarding/profile-suggestions` (AI) and `GET /api/user/context` (VIP emails)
    in parallel via `Promise.all()`, only clearing the loading state when both complete.
    This prevents VIP chips from flashing in after the card renders.
+8. **Supabase foreign key joins** — `useActions` and `useProjectItems` use PostgREST
+   foreign key joins (e.g., `emails!email_id(subject, sender_name)`) to fetch related
+   email metadata in a single query instead of a separate enrichment round-trip.
+   (See `useActions.ts` TRIAGE_LIST_FIELDS, `useProjectItems.ts` BOARD_LIST_FIELDS.)
 
 ## Security
 

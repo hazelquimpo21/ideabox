@@ -40,7 +40,7 @@
  * @module components/tasks/TasksTabs
  * @since February 2026 — Phase 3 Navigation Redesign
  * @updated March 2026 — Phase 1 Tasks Page Redesign (6→4 tabs, triage-first)
- * @see docs/TASKS_PAGE_REDESIGN.md for the master plan
+ * @see docs/DECISIONS.md #27 (triage-first redesign), #28 (QuickAcceptPopover), #29 (query optimization)
  */
 
 'use client';

@@ -213,7 +213,7 @@ export function IdeaSparksCard({
             <Lightbulb className="h-5 w-5 text-amber-500" />
             Idea Sparks
           </CardTitle>
-          <Link href="/tasks?tab=ideas">
+          <Link href="/tasks">
             <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
               View all
               <ArrowRight className="h-3 w-3" />

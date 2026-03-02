@@ -29,6 +29,7 @@
  * ```
  *
  * @module hooks/useActions
+ * @updated March 2026 — Phase 3: Select specific fields + Supabase join (eliminates second email query)
  */
 
 'use client';
@@ -47,6 +48,13 @@ const DEFAULT_LIMIT = 100;
 
 /** Logger instance for this hook */
 const logger = createLogger('useActions');
+
+/**
+ * Specific fields to select for triage list queries.
+ * Avoids `select('*')` to reduce payload size (~6KB savings).
+ * @since March 2026 — Phase 3 query optimization
+ */
+const TRIAGE_LIST_FIELDS = 'id, title, action_type, priority, urgency_score, deadline, email_id, status, created_at, completed_at, client_id';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -204,8 +212,11 @@ export function useActions(options: UseActionsOptions = {}): UseActionsReturn {
     logger.start('Fetching actions', { status, clientId, emailId, limit, sortBy });
 
     try {
-      // Build the base query
-      let query = supabase.from('actions').select('*').limit(limit);
+      // Build the base query — single query with Supabase foreign key join
+      let query = supabase
+        .from('actions')
+        .select(`${TRIAGE_LIST_FIELDS}, emails!email_id(subject, sender_name, sender_email)`)
+        .limit(limit);
 
       // Apply sorting
       switch (sortBy) {
@@ -247,30 +258,14 @@ export function useActions(options: UseActionsOptions = {}): UseActionsReturn {
         throw new Error(queryError.message);
       }
 
-      const fetchedActions: ActionWithEmail[] = data || [];
+      // Map joined email data to ActionWithEmail fields
+      const fetchedActions: ActionWithEmail[] = (data || []).map((row) => ({
+        ...row,
+        email_subject: row.emails?.subject ?? null,
+        email_sender: row.emails?.sender_name || row.emails?.sender_email || null,
+      }));
 
-      // Enrich actions with source email metadata (subject, sender)
-      const emailIds = [...new Set(fetchedActions.filter((a) => a.email_id).map((a) => a.email_id!))];
-      if (emailIds.length > 0) {
-        const { data: emails } = await supabase
-          .from('emails')
-          .select('id, subject, sender_name, sender_email')
-          .in('id', emailIds);
-
-        if (emails) {
-          const emailMap = new Map(emails.map((e) => [e.id, e]));
-          for (const action of fetchedActions) {
-            if (action.email_id) {
-              const email = emailMap.get(action.email_id);
-              if (email) {
-                action.email_subject = email.subject;
-                action.email_sender = email.sender_name || email.sender_email;
-              }
-            }
-          }
-        }
-        logger.debug('Enriched actions with email metadata', { emailCount: emailIds.length });
-      }
+      logger.debug('Single-query fetch with join', { count: fetchedActions.length });
 
       setActions(fetchedActions);
       setStats(calculateStats(fetchedActions));
