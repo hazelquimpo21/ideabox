@@ -1,12 +1,13 @@
 /**
  * Tasks Tabs Component
  *
- * Manages the five-tab interface for the Tasks page:
+ * Manages the six-tab interface for the Tasks page:
  *   1. Projects (default) — project management with ideas/tasks/routines
  *   2. All Items — flat list of all project items across projects
- *   3. To-dos — actions/tasks from ActionsPage
- *   4. Campaigns — campaign management from CampaignsPage
- *   5. Templates — template management from TemplatesPage
+ *   3. Inbox Tasks — actions/tasks extracted from emails
+ *   4. Ideas — AI-generated idea sparks (consolidated home for all ideas)
+ *   5. Campaigns — campaign management
+ *   6. Templates — template management
  *
  * Tab state is persisted in the URL via the `?tab=` query parameter.
  *
@@ -17,19 +18,22 @@
  * - (default)          → Projects tab → ProjectsContent component
  * - ?tab=items         → All Items tab → AllItemsContent component
  * - ?tab=todos         → To-dos tab → ActionsContent component
+ * - ?tab=ideas         → Ideas tab → IdeasFeed component
  * - ?tab=campaigns     → Campaigns tab → CampaignsContent component
  * - ?tab=templates     → Templates tab → TemplatesContent component
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * USAGE
+ * DESIGN DECISION (March 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * ```tsx
- * <TasksTabs />
- * ```
+ * Ideas moved from Inbox to Tasks because ideas are "things you might do" —
+ * they belong near tasks and projects, not buried in email tabs. The Inbox
+ * retains a consolidated "Discoveries" tab for informational content
+ * (insights, news, links) which are not directly actionable.
  *
  * @module components/tasks/TasksTabs
  * @since February 2026 — Phase 3 Navigation Redesign
+ * @updated March 2026 — Ideas tab added, human-centered redesign
  * @see components/inbox/InboxTabs for the pattern reference
  */
 
@@ -38,12 +42,13 @@
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
-import { FolderKanban, ListChecks, CheckSquare, Megaphone, FileText } from 'lucide-react';
+import { FolderKanban, ListChecks, CheckSquare, Lightbulb, Megaphone, FileText } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
-// ─── Extracted content components ────────────────────────────────────────────
+// ─── Content components ──────────────────────────────────────────────────────
 import { ProjectsContent, AllItemsContent } from '@/components/projects';
 import { ActionsContent } from '@/components/actions';
+import { IdeasFeed } from '@/components/inbox/IdeasFeed';
 import { CampaignsContent } from '@/components/campaigns';
 import { TemplatesContent } from '@/components/templates';
 
@@ -58,7 +63,7 @@ const logger = createLogger('TasksTabs');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** Valid tab values for URL routing. */
-const VALID_TABS = ['projects', 'items', 'todos', 'campaigns', 'templates'] as const;
+const VALID_TABS = ['projects', 'items', 'todos', 'ideas', 'campaigns', 'templates'] as const;
 type TasksTab = (typeof VALID_TABS)[number];
 
 /** Default tab when no query param is present. */
@@ -69,7 +74,7 @@ const DEFAULT_TAB: TasksTab = 'projects';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * TasksTabs — five-tab interface for the Tasks page.
+ * TasksTabs — six-tab interface for the Tasks page.
  *
  * Reads the `?tab=` query param to determine the active tab.
  * When the user switches tabs, the URL is updated without a full navigation.
@@ -139,6 +144,13 @@ export function TasksTabs() {
           Inbox Tasks
         </TabsTrigger>
         <TabsTrigger
+          value="ideas"
+          variant="underline"
+          icon={<Lightbulb className="h-4 w-4" />}
+        >
+          Ideas
+        </TabsTrigger>
+        <TabsTrigger
           value="campaigns"
           variant="underline"
           icon={<Megaphone className="h-4 w-4" />}
@@ -167,6 +179,11 @@ export function TasksTabs() {
       {/* ─── Tab Content: Inbox Tasks ──────────────────────────────────────── */}
       <TabsContent value="todos">
         <ActionsContent />
+      </TabsContent>
+
+      {/* ─── Tab Content: Ideas (consolidated home for AI-generated ideas) ── */}
+      <TabsContent value="ideas">
+        <IdeasFeed />
       </TabsContent>
 
       {/* ─── Tab Content: Campaigns ───────────────────────────────────────── */}

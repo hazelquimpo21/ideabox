@@ -1,6 +1,6 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
-> **Last Updated:** February 28, 2026
+> **Last Updated:** March 2, 2026
 > **Source of Truth:** `scripts/migration-*.sql` (migrations 001-044)
 > **TypeScript Types:** `src/types/database.ts`
 
@@ -611,10 +611,12 @@ CREATE TABLE project_items (
   -- Time tracking
   estimated_minutes INTEGER,
 
-  -- Source linking
+  -- Source linking (email traceability — see DECISIONS.md #25)
   source_action_id UUID REFERENCES actions(id) ON DELETE SET NULL,
   source_email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  -- Note: useProjectItems enriches items with source_email_subject, source_email_sender,
+  -- and source_email_gist (from emails.gist) at query time via ProjectItemWithEmail type
 
   -- Organization
   tags TEXT[],

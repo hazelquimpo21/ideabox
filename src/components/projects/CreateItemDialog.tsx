@@ -35,7 +35,11 @@ export interface CreateItemDialogProps {
   onOpenChange: (open: boolean) => void;
   onCreate: (item: Partial<ProjectItem> & { title: string }) => Promise<ProjectItem | null>;
   defaultType?: ProjectItemType;
+  /** Pre-selected project. If omitted, user can choose from projects list. */
   projectId?: string;
+  /** Available projects for the selector dropdown. When provided and no
+   *  projectId is set, a project picker is shown in the dialog. */
+  projects?: Array<{ id: string; name: string; color?: string | null }>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -48,6 +52,7 @@ export function CreateItemDialog({
   onCreate,
   defaultType = 'task',
   projectId,
+  projects,
 }: CreateItemDialogProps) {
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -60,6 +65,7 @@ export function CreateItemDialog({
   const [estimatedMinutes, setEstimatedMinutes] = React.useState('');
   const [tagInput, setTagInput] = React.useState('');
   const [tags, setTags] = React.useState<string[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = React.useState<string>(projectId || '');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   // Reset type when defaultType changes
@@ -95,7 +101,7 @@ export function CreateItemDialog({
       recurrence_pattern: (recurrencePattern || null) as RecurrencePattern | null,
       estimated_minutes: estimatedMinutes ? parseInt(estimatedMinutes) : undefined,
       tags: tags.length > 0 ? tags : undefined,
-      project_id: projectId || undefined,
+      project_id: selectedProjectId || projectId || undefined,
     });
 
     setIsSubmitting(false);
@@ -144,6 +150,26 @@ export function CreateItemDialog({
               ))}
             </div>
           </div>
+
+          {/* Project Selector — shown when projects list is provided and no
+              pre-selected projectId exists. Lets users assign items to projects
+              during creation instead of having to reassign afterward. */}
+          {!projectId && projects && projects.length > 0 && (
+            <div>
+              <label htmlFor="item-project" className="text-sm font-medium">Project</label>
+              <select
+                id="item-project"
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">No project (standalone item)</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Title */}
           <div>

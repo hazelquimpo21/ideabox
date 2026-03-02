@@ -42,6 +42,8 @@ import {
   List,
   LayoutGrid,
   Inbox,
+  Search,
+  X,
 } from 'lucide-react';
 import type { ProjectItemType, ProjectItemStatus, ProjectItemWithEmail, ActionWithEmail } from '@/types/database';
 import type { IdeaItem } from '@/hooks/useIdeas';
@@ -255,6 +257,7 @@ export function AllItemsContent() {
   const [viewMode, setViewMode] = React.useState<ViewMode>('list');
   const [overdueOnly, setOverdueOnly] = React.useState(false);
   const [showCompleted, setShowCompleted] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
   const [showCreateDialog, setShowCreateDialog] = React.useState(false);
   const [defaultItemType, setDefaultItemType] = React.useState<ProjectItemType>('task');
   const [promoteAction, setPromoteAction] = React.useState<ActionWithEmail | null>(null);
@@ -318,8 +321,20 @@ export function AllItemsContent() {
       result = result.filter(isOverdue);
     }
 
+    // Text search — matches title, description, tags, and source email subject
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((i) =>
+        i.title.toLowerCase().includes(q) ||
+        i.description?.toLowerCase().includes(q) ||
+        i.tags?.some((t) => t.toLowerCase().includes(q)) ||
+        i.source_email_subject?.toLowerCase().includes(q) ||
+        i.source_email_sender?.toLowerCase().includes(q)
+      );
+    }
+
     return result;
-  }, [items, showCompleted, statusFilter, sourceFilter, overdueOnly]);
+  }, [items, showCompleted, statusFilter, sourceFilter, overdueOnly, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -358,11 +373,31 @@ export function AllItemsContent() {
         onViewModeChange={setViewMode}
       />
 
-      {/* Header with create button */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground">
+      {/* Search & header row */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search items..."
+            className="w-full pl-8 pr-8 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <h2 className="text-sm font-medium text-muted-foreground whitespace-nowrap">
           {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
           {typeFilter !== 'all' ? ` (${typeFilter}s)` : ''}
+          {searchQuery.trim() ? ` matching "${searchQuery.trim()}"` : ''}
         </h2>
         <Button size="sm" onClick={() => setShowCreateDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
@@ -398,6 +433,7 @@ export function AllItemsContent() {
         onOpenChange={setShowCreateDialog}
         onCreate={createItem}
         defaultType={defaultItemType}
+        projects={projectList}
       />
 
       {/* Promote action dialog */}

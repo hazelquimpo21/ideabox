@@ -2,7 +2,7 @@
 
 **Date:** February 2026
 **Scope:** Comprehensive audit of how AI analyzer fields are displayed (or not) across the IdeaBox frontend
-**Last Updated:** February 28, 2026 — Phase 1 implementation complete
+**Last Updated:** March 2, 2026 — Phase 1 complete, email traceability enhanced
 
 ---
 
@@ -128,8 +128,8 @@ Analysis confidence scores are available but mostly hidden. Consider:
 
 ### Low Priority (Nice-to-Have)
 
-#### I. Saved Insights/News/Links Full-Page Views
-Currently these are only shown on the Home page cards. Dedicated `/insights`, `/news`, `/links` pages (or tabs within Inbox) would let users browse, search, and manage their saved intelligence.
+#### I. Saved Insights/News/Links Full-Page Views ✅ PARTIALLY ADDRESSED
+~~Currently these are only shown on the Home page cards.~~ Insights, News, and Links are now browsable via the Discoveries tab in Inbox (`?tab=discoveries`), which consolidates all three under internal sub-tabs. Full search/filter/sort controls within each feed are still future work.
 
 #### J. Email Thread Intelligence
 When multiple emails in a thread are analyzed, the insights could be aggregated — e.g., "This thread has 3 action items across 5 messages." Currently each email is treated independently.

@@ -149,6 +149,9 @@ AI-powered email processing system with specialized analyzers that:
 > **Note:** Email sending was added (Jan 2026) via Gmail API - send, schedule, templates,
 > campaigns, open tracking, follow-up automation. See `docs/DATABASE_SCHEMA.md` (Email Sending Tables) and `docs/API_INTEGRATIONS.md` (Gmail API).
 
+> **Note:** Inbox consolidated from 8→5 tabs (March 2026): Insights/News/Links merged into
+> Discoveries tab, Ideas moved to Tasks page. See `docs/DECISIONS.md` (#24-26) for rationale.
+
 ## Design Principles
 1. **Modular First**: Every component standalone and replaceable
 2. **AI as Specialist**: Many focused analyzers > one general analyzer
@@ -156,6 +159,7 @@ AI-powered email processing system with specialized analyzers that:
 4. **Surface Don't Bury**: Intelligence visible, not hidden in algorithms
 5. **Privacy Conscious**: User owns their data, clear about what's stored
 6. **Cost Aware**: Efficient API usage, batch processing, smart caching
+7. **Human-Centered**: Ideas live where they're actionable (Tasks), information lives where it's browsable (Discoveries)
 
 ## Key Architectural Decisions (January 2026)
 

@@ -1,6 +1,6 @@
 # IdeaBox - System Architecture
 
-> **Last Updated:** February 2026
+> **Last Updated:** March 2026
 
 ## Tech Stack
 
@@ -123,13 +123,13 @@ src/
   app/
     (auth)/                     # Protected routes (requires login)
       home/                     # Daily briefing dashboard (replaces hub)
-      inbox/                    # Email inbox with tabs: Categories, Priority, Archive
+      inbox/                    # Email inbox with 5 tabs: Inbox, Priority, Categories, Discoveries, Archive
         [category]/             # Category deep-dive views
           [emailId]/            # Single email detail
       contacts/                 # Contact management with tabs: All, Clients, Personal, Subscriptions
         [id]/                   # Contact detail (CRM-style)
       calendar/                 # Unified calendar (events + timeline merged)
-      tasks/                    # Tasks with tabs: To-dos, Campaigns, Templates
+      tasks/                    # Tasks with 6 tabs: Projects, All Items, Inbox Tasks, Ideas, Campaigns, Templates
         campaigns/
           [id]/                 # Campaign detail
           new/                  # Create campaign
@@ -193,15 +193,16 @@ src/
   components/
     ui/                         # Base UI library (Button, Card, Dialog, etc.)
     email/                      # Email display (list, detail, compose)
-    home/                       # Home page: DailyBriefingHeader, TodaySchedule, PendingTasksList, SavedLinksCard
-    inbox/                      # Inbox page: InboxTabs, PriorityEmailList (all 12 category colors)
+    home/                       # Home page: DailyBriefingHeader, TodaySchedule, PendingTasksList, IdeaSparksCard, SavedLinksCard
+    inbox/                      # Inbox page: InboxTabs (5 tabs), PriorityEmailList, DiscoveriesFeed, CategoryOverview
     actions/                    # ActionsContent (extracted from old actions page)
     archive/                    # ArchiveContent — queries is_archived emails, supports restore/hard-delete/click-to-detail
     campaigns/                  # CampaignsContent (extracted from old campaigns page)
     templates/                  # TemplatesContent (extracted from old templates page)
     contacts/                   # ContactsTabs, PromoteToClientDialog
     calendar/                   # CalendarStats
-    tasks/                      # TasksTabs
+    tasks/                      # TasksTabs (6 tabs incl. Ideas)
+    projects/                   # ProjectCard, ProjectItemRow, AllItemsContent, TriageTray, CreateItemDialog, PromoteActionDialog
     shared/                     # PriorityCard (shared across pages)
     discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions, FailureSummary (wired to retry API)
     categories/                 # Category view (EmailCard, intelligence bar)

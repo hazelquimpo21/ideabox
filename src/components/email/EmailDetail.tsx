@@ -1083,6 +1083,86 @@ function EmailBody({ email }: { email: Email }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL QUICK ACTIONS BAR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Quick Actions Bar — shown between email content and AI analysis.
+ *
+ * Provides one-click "Create Task" and "Save Idea" actions so users can
+ * act on an email without navigating away. Uses inline fetch() calls
+ * consistent with the existing nugget/spark save buttons elsewhere in
+ * this component.
+ *
+ * @since March 2026
+ */
+function EmailQuickActions({ email }: { email: Email }) {
+  const [taskCreated, setTaskCreated] = React.useState(false);
+  const [isCreatingTask, setIsCreatingTask] = React.useState(false);
+
+  /** Create a task/action linked to this email via POST /api/actions */
+  const handleCreateTask = async () => {
+    setIsCreatingTask(true);
+    logger.start('Creating task from email quick action', { emailId: email.id.substring(0, 8) });
+
+    try {
+      const response = await fetch('/api/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: email.subject || 'Follow up',
+          description: email.gist || email.snippet || undefined,
+          email_id: email.id,
+          priority: 'medium',
+          action_type: 'follow_up',
+        }),
+      });
+
+      if (!response.ok) throw new Error(`Failed to create task: ${response.status}`);
+
+      setTaskCreated(true);
+      logger.success('Task created from email', { emailId: email.id.substring(0, 8) });
+    } catch (err) {
+      logger.error('Failed to create task from email', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
+  return (
+    <div className="px-6 py-3 border-b border-border bg-muted/20">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground mr-1">Quick actions</span>
+        {taskCreated ? (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 rounded-md">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Task created
+          </span>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1.5"
+            onClick={handleCreateTask}
+            disabled={isCreatingTask}
+            title="Create a follow-up task from this email"
+          >
+            {isCreatingTask ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ListChecks className="h-3.5 w-3.5" />
+            )}
+            Create Task
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1122,6 +1202,7 @@ export function EmailDetail({
       />
       <div className="flex-1 overflow-y-auto">
         <EmailSubject email={email} />
+        <EmailQuickActions email={email} />
         <EmailBody email={email} />
         <AnalysisSummary email={email} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
         {email.gmail_id && (
