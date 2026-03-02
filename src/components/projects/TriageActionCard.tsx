@@ -25,7 +25,9 @@ import {
   AlarmClock,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
+import { QuickAcceptPopover } from './QuickAcceptPopover';
 import type { TriageItem } from '@/hooks/useTriageItems';
+import type { Project } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -81,6 +83,12 @@ export interface TriageActionCardProps {
   onAccept: (item: TriageItem) => void;
   onDismiss: (item: TriageItem) => void;
   onSnooze: (item: TriageItem) => void;
+  /** Available projects for the QuickAcceptPopover dropdown */
+  projects?: Project[];
+  /** Create a project item — passed to QuickAcceptPopover */
+  onCreateItem?: (projectId: string, priority: string) => Promise<void>;
+  /** Open full PromoteActionDialog as fallback */
+  onFallbackToDialog?: (item: TriageItem) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -95,7 +103,7 @@ export interface TriageActionCardProps {
  * @module components/projects/TriageActionCard
  * @since March 2026
  */
-export function TriageActionCard({ item, onAccept, onDismiss, onSnooze }: TriageActionCardProps) {
+export function TriageActionCard({ item, onAccept, onDismiss, onSnooze, projects, onCreateItem, onFallbackToDialog }: TriageActionCardProps) {
   const [dismissed, setDismissed] = React.useState(false);
   const raw = item.raw as { action_type?: string; description?: string; email_id?: string };
   const typeInfo = raw.action_type ? ACTION_TYPE_LABELS[raw.action_type] : null;
@@ -171,15 +179,34 @@ export function TriageActionCard({ item, onAccept, onDismiss, onSnooze }: Triage
 
       {/* Accept / Snooze / Dismiss actions */}
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-200">
-        <Button
-          variant="default"
-          size="sm"
-          className="h-7 px-2.5 text-xs shadow-sm"
-          onClick={handleAccept}
-        >
-          <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
-          Accept
-        </Button>
+        {projects && onCreateItem ? (
+          <QuickAcceptPopover
+            item={item}
+            projects={projects}
+            onAccept={onCreateItem}
+            onFallbackToDialog={onFallbackToDialog ? () => onFallbackToDialog(item) : undefined}
+            trigger={
+              <Button
+                variant="default"
+                size="sm"
+                className="h-7 px-2.5 text-xs shadow-sm"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+                Accept
+              </Button>
+            }
+          />
+        ) : (
+          <Button
+            variant="default"
+            size="sm"
+            className="h-7 px-2.5 text-xs shadow-sm"
+            onClick={handleAccept}
+          >
+            <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+            Accept
+          </Button>
+        )}
         <button
           onClick={handleSnooze}
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"

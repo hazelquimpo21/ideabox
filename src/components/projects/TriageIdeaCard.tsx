@@ -24,8 +24,10 @@ import {
   AlarmClock,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
+import { QuickAcceptPopover } from './QuickAcceptPopover';
 import type { TriageItem } from '@/hooks/useTriageItems';
 import type { IdeaItem } from '@/hooks/useIdeas';
+import type { Project } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -48,6 +50,10 @@ export interface TriageIdeaCardProps {
   onAccept: (item: TriageItem) => void;
   onDismiss: (item: TriageItem) => void;
   onSnooze: (item: TriageItem) => void;
+  /** Available projects for the QuickAcceptPopover dropdown */
+  projects?: Project[];
+  /** Create a project item — passed to QuickAcceptPopover */
+  onCreateItem?: (projectId: string, priority: string) => Promise<void>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -62,7 +68,7 @@ export interface TriageIdeaCardProps {
  * @module components/projects/TriageIdeaCard
  * @since March 2026
  */
-export function TriageIdeaCard({ item, onAccept, onDismiss, onSnooze }: TriageIdeaCardProps) {
+export function TriageIdeaCard({ item, onAccept, onDismiss, onSnooze, projects, onCreateItem }: TriageIdeaCardProps) {
   const [dismissed, setDismissed] = React.useState(false);
   const idea = item.raw as IdeaItem;
 
@@ -128,15 +134,33 @@ export function TriageIdeaCard({ item, onAccept, onDismiss, onSnooze }: TriageId
 
       {/* Save / Snooze / Dismiss actions */}
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-200">
-        <Button
-          variant="default"
-          size="sm"
-          className="h-7 px-2.5 text-xs shadow-sm"
-          onClick={handleAccept}
-        >
-          <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
-          Save
-        </Button>
+        {projects && onCreateItem ? (
+          <QuickAcceptPopover
+            item={item}
+            projects={projects}
+            onAccept={onCreateItem}
+            trigger={
+              <Button
+                variant="default"
+                size="sm"
+                className="h-7 px-2.5 text-xs shadow-sm"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+                Save
+              </Button>
+            }
+          />
+        ) : (
+          <Button
+            variant="default"
+            size="sm"
+            className="h-7 px-2.5 text-xs shadow-sm"
+            onClick={handleAccept}
+          >
+            <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+            Save
+          </Button>
+        )}
         <button
           onClick={handleSnooze}
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"

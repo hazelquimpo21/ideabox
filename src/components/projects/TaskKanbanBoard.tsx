@@ -45,6 +45,8 @@ import {
   Mail,
   Trash2,
   GripVertical,
+  Plus,
+  ChevronDown,
 } from 'lucide-react';
 import type { ProjectItemWithEmail, ProjectItemType, ProjectItemStatus } from '@/types/database';
 
@@ -58,6 +60,10 @@ export interface TaskKanbanBoardProps {
   onToggleComplete: (id: string) => void;
   onDeleteItem?: (id: string) => void;
   onUpdateItem?: (id: string, updates: Partial<ProjectItemWithEmail>) => Promise<void>;
+  /** Projects for color stripe indicators on cards */
+  projects?: Array<{ id: string; name: string; color: string | null }>;
+  /** Callback to quick-add an item with a pre-filled status */
+  onQuickAdd?: (status: string) => void;
 }
 
 interface ColumnConfig {
@@ -148,21 +154,29 @@ interface KanbanCardProps {
   item: ProjectItemWithEmail;
   onDelete?: (id: string) => void;
   isDragOverlay?: boolean;
+  /** Project color hex for left border stripe */
+  projectColor?: string;
 }
 
-function KanbanCardContent({ item, onDelete, isDragOverlay }: KanbanCardProps) {
+function KanbanCardContent({ item, onDelete, isDragOverlay, projectColor }: KanbanCardProps) {
   const dueInfo = item.due_date ? formatDueDate(item.due_date) : null;
   const priorityColor = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.low;
 
   return (
-    <div className={cn(
-      'rounded-lg border bg-card p-3 space-y-2 group',
-      'transition-all duration-200',
-      isDragOverlay
-        ? 'shadow-xl ring-2 ring-primary/30 scale-[1.02] rotate-[1deg] opacity-95'
-        : 'shadow-sm hover:shadow-md',
-      item.status === 'completed' && 'opacity-60',
-    )}>
+    <div
+      className={cn(
+        'rounded-lg border bg-card p-3 space-y-2 group',
+        'transition-all duration-200',
+        isDragOverlay
+          ? 'shadow-xl ring-2 ring-primary/30 scale-[1.02] rotate-[1deg] opacity-95'
+          : 'shadow-sm hover:shadow-md',
+        item.status === 'completed' && 'opacity-60',
+      )}
+      style={{
+        borderLeftColor: projectColor || undefined,
+        borderLeftWidth: projectColor ? '3px' : undefined,
+      }}
+    >
       {/* Priority accent stripe */}
       <div className={cn('h-0.5 -mt-3 -mx-3 rounded-t-lg mb-2', priorityColor)} />
 
@@ -237,7 +251,7 @@ function KanbanCardContent({ item, onDelete, isDragOverlay }: KanbanCardProps) {
 }
 
 /** Wrapper that makes a card sortable/draggable */
-function SortableKanbanCard({ item, onDelete }: { item: ProjectItemWithEmail; onDelete?: (id: string) => void }) {
+function SortableKanbanCard({ item, onDelete, projectColor }: { item: ProjectItemWithEmail; onDelete?: (id: string) => void; projectColor?: string }) {
   const {
     attributes,
     listeners,
@@ -255,7 +269,7 @@ function SortableKanbanCard({ item, onDelete }: { item: ProjectItemWithEmail; on
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <KanbanCardContent item={item} onDelete={onDelete} />
+      <KanbanCardContent item={item} onDelete={onDelete} projectColor={projectColor} />
     </div>
   );
 }
@@ -264,15 +278,44 @@ function SortableKanbanCard({ item, onDelete }: { item: ProjectItemWithEmail; on
 // DROPPABLE COLUMN
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** Number of days after which completed items are auto-collapsed */
+const DONE_COLLAPSE_DAYS = 7;
+
 interface DroppableColumnProps {
   column: ColumnConfig;
   items: ProjectItemWithEmail[];
   isOver: boolean;
   onDelete?: (id: string) => void;
+  /** Project color map for card left-border stripes */
+  projectColorMap?: Record<string, string>;
+  /** Quick-add callback — renders "+" button in column header */
+  onQuickAdd?: (status: string) => void;
 }
 
-function DroppableColumn({ column, items, isOver, onDelete }: DroppableColumnProps) {
+function DroppableColumn({ column, items, isOver, onDelete, projectColorMap, onQuickAdd }: DroppableColumnProps) {
   const { setNodeRef } = useDroppable({ id: column.status });
+  const [showOlderDone, setShowOlderDone] = React.useState(false);
+
+  // Done column auto-collapse: split recent vs older completed items
+  const isDoneColumn = column.status === 'completed';
+  const now = Date.now();
+  const cutoff = now - DONE_COLLAPSE_DAYS * 24 * 60 * 60 * 1000;
+
+  const recentItems = isDoneColumn
+    ? items.filter((item) => {
+        const completedAt = item.completed_at ? new Date(item.completed_at).getTime() : now;
+        return completedAt >= cutoff;
+      })
+    : items;
+
+  const olderItems = isDoneColumn
+    ? items.filter((item) => {
+        const completedAt = item.completed_at ? new Date(item.completed_at).getTime() : now;
+        return completedAt < cutoff;
+      })
+    : [];
+
+  const visibleItems = isDoneColumn && !showOlderDone ? recentItems : items;
 
   return (
     <div className="flex flex-col min-w-[220px]">
@@ -282,10 +325,22 @@ function DroppableColumn({ column, items, isOver, onDelete }: DroppableColumnPro
         column.headerBg,
         column.accentBorder,
       )}>
-        <span className={cn('text-sm font-semibold', column.color)}>{column.label}</span>
-        <Badge variant="secondary" className="text-xs h-5 min-w-[20px] justify-center tabular-nums">
-          {items.length}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <span className={cn('text-sm font-semibold', column.color)}>{column.label}</span>
+          <Badge variant="secondary" className="text-xs h-5 min-w-[20px] justify-center tabular-nums">
+            {items.length}
+          </Badge>
+        </div>
+        {onQuickAdd && (
+          <button
+            onClick={() => onQuickAdd(column.status)}
+            className="p-0.5 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
+            aria-label={`Add item to ${column.label}`}
+            title={`Add item to ${column.label}`}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Column body — droppable zone */}
@@ -297,8 +352,8 @@ function DroppableColumn({ column, items, isOver, onDelete }: DroppableColumnPro
           isOver ? cn('ring-2', column.dropHighlight) : 'bg-muted/5',
         )}
       >
-        <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-          {items.length === 0 ? (
+        <SortableContext items={visibleItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+          {visibleItems.length === 0 && olderItems.length === 0 ? (
             <div className={cn(
               'flex flex-col items-center justify-center h-24 text-xs rounded-md border-2 border-dashed',
               'transition-colors duration-200',
@@ -309,11 +364,27 @@ function DroppableColumn({ column, items, isOver, onDelete }: DroppableColumnPro
               {isOver ? 'Drop here' : 'Drag items here'}
             </div>
           ) : (
-            items.map((item) => (
-              <SortableKanbanCard key={item.id} item={item} onDelete={onDelete} />
+            visibleItems.map((item) => (
+              <SortableKanbanCard
+                key={item.id}
+                item={item}
+                onDelete={onDelete}
+                projectColor={projectColorMap?.[item.project_id ?? ''] || undefined}
+              />
             ))
           )}
         </SortableContext>
+
+        {/* Done column: "Show N older" toggle */}
+        {isDoneColumn && olderItems.length > 0 && (
+          <button
+            onClick={() => setShowOlderDone((prev) => !prev)}
+            className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronDown className={cn('h-3 w-3 transition-transform', showOlderDone && 'rotate-180')} />
+            {showOlderDone ? 'Hide older' : `Show ${olderItems.length} older`}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -356,9 +427,21 @@ export function TaskKanbanBoard({
   onToggleComplete,
   onDeleteItem,
   onUpdateItem,
+  projects,
+  onQuickAdd,
 }: TaskKanbanBoardProps) {
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [overColumnId, setOverColumnId] = React.useState<string | null>(null);
+
+  // Build project color lookup map
+  const projectColorMap = React.useMemo(() => {
+    if (!projects) return {};
+    const map: Record<string, string> = {};
+    for (const p of projects) {
+      if (p.color) map[p.id] = p.color;
+    }
+    return map;
+  }, [projects]);
 
   // ─── Sensors ────────────────────────────────────────────────────────────────
   const sensors = useSensors(
@@ -462,6 +545,8 @@ export function TaskKanbanBoard({
             items={col.items}
             isOver={overColumnId === col.status}
             onDelete={onDeleteItem}
+            projectColorMap={projectColorMap}
+            onQuickAdd={onQuickAdd}
           />
         ))}
       </div>
@@ -472,7 +557,11 @@ export function TaskKanbanBoard({
         easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
       }}>
         {activeItem ? (
-          <KanbanCardContent item={activeItem} isDragOverlay />
+          <KanbanCardContent
+            item={activeItem}
+            isDragOverlay
+            projectColor={projectColorMap[activeItem.project_id ?? ''] || undefined}
+          />
         ) : null}
       </DragOverlay>
     </DndContext>
