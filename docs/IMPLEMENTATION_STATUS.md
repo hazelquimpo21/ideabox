@@ -1,6 +1,6 @@
 # IdeaBox - Implementation Status
 
-> **Last Updated:** February 28, 2026
+> **Last Updated:** March 2, 2026
 > **Database Migrations:** 001-044 (in `scripts/migration-*.sql`)
 
 ## What's Built
@@ -55,13 +55,13 @@ The app uses a 5-item sidebar navigation (redesigned Feb 2026):
 | Nav Item | Route | Description |
 |----------|-------|-------------|
 | **Home** | `/home` | Daily briefing: greeting, top 3 priorities, today's schedule, pending tasks, idea sparks, daily review queue, saved links, profile nudge |
-| **Inbox** | `/inbox` | Tabbed email view — Categories (discover dashboard), Priority (AI-ranked), Archive |
+| **Inbox** | `/inbox` | 5 tabs — Inbox (unified feed), Priority (AI-ranked), Categories (overview grid), Discoveries (insights/news/links), Archive |
 | | `/inbox/[category]` | Category deep-dive (email list for a life-bucket) |
 | | `/inbox/[category]/[emailId]` | Single email detail view |
 | **Contacts** | `/contacts` | Tabbed contacts — All, Clients, Personal, Subscriptions |
 | | `/contacts/[id]` | Contact detail (CRM-style with emails, actions, events, notes) |
 | **Calendar** | `/calendar` | Unified calendar: list/grid views, merged events + extracted dates, type filters |
-| **Tasks** | `/tasks` | Tabbed task management — Projects, All Items, Inbox Tasks, Campaigns, Templates |
+| **Tasks** | `/tasks` | 6 tabs — Projects, All Items, Inbox Tasks, Ideas, Campaigns, Templates |
 | | `/tasks/campaigns/new` | Create new campaign |
 | | `/tasks/campaigns/[id]` | Campaign detail |
 | **Summaries** | `/summaries` | Browsable history of AI-synthesized email summaries, grouped by date |
@@ -98,8 +98,8 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 ### UI Components
 - Full component library: Button, Card, Badge, Dialog, Toast, Skeleton, Spinner, Input, Select, Switch, Checkbox, Pagination
 - Layout: Navbar (search, sync indicator), Sidebar (5-item nav, category filters, top contacts, upcoming events), PageHeader (breadcrumbs)
-- Tab containers: InboxTabs, ContactsTabs, TasksTabs (all URL-synced via `?tab=`)
-- Extracted content components: ActionsContent, CampaignsContent, TemplatesContent, DiscoverContent, ArchiveContent, ProjectsContent, AllItemsContent
+- Tab containers: InboxTabs (5 tabs), ContactsTabs, TasksTabs (6 tabs incl. Ideas) — all URL-synced via `?tab=` with legacy redirects
+- Extracted content components: ActionsContent, CampaignsContent, TemplatesContent, DiscoverContent, ArchiveContent, ProjectsContent, AllItemsContent, DiscoveriesFeed
 - Project components: ProjectCard, ProjectItemRow, ProjectItemList, ProjectDateRange, CreateProjectDialog, CreateItemDialog, EditProjectDialog, DeleteProjectDialog, PromoteActionDialog, ActiveProjectsWidget
 - Shared components: PriorityCard (used by Home page)
 - Category enhancements: urgency dots, AI briefings, key points, relationship health
@@ -169,3 +169,4 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Projects | Feb 2026 | Project management system (Phase 1+2). Migration 041: `projects` + `project_items` tables with RLS, indexes, triggers. TypeScript types + Zod schemas. 6 API route files (projects CRUD, project items CRUD, cross-project items). `useProjects` + `useProjectItems` hooks with optimistic updates. 8 UI components: ProjectCard, ProjectItemRow, ProjectItemList, ProjectDateRange, CreateProjectDialog, CreateItemDialog, ProjectsContent, AllItemsContent. ActiveProjectsWidget on home page. TasksTabs expanded from 3→5 tabs (Projects, All Items, Inbox Tasks, Campaigns, Templates). Items support due dates, date ranges, recurrence patterns, tags, priority, estimated time. Items can exist without a project. Source linking to actions/emails for "promote to project" workflow. |
 | Projects Phase 3 | Feb 2026 | Action→project item promotion bridge (PromoteActionDialog + ActionsContent integration). EditProjectDialog + DeleteProjectDialog with confirmation. ProjectsContent detail view enhanced with date progress bar, edit/delete buttons. ProjectItemRow inline editing (double-click title, click priority to cycle, click due date to change, project reassignment dropdown). AllItemsContent sort (due date, priority, created, manual) + status filter (pending/in_progress/completed) + overdue-only toggle + show-completed toggle (default off). Recurrence badge on routines (human-readable: "Weekly (Mon)", "Every 2 weeks"). Auto-create next routine occurrence on completion. Updated barrel exports. |
 | Analyzer Refinement | Feb 2026 | Unified "right on top of that, Rose!" prompt voice across all analyzers. Added 2 new golden nugget types (remember_this, sales_opportunity) with max increased from 5→7. Multi-category display in inbox UI (secondary dots + badges). Initial sync increased 50→100 emails, relaxed SKIP_SENDER_PATTERNS (removed noreply/notifications/alerts), timeout 120s→240s. Batch checkpoints in initial sync orchestrator (checkpoint saved after each batch for interruption recovery). Fixed retry-analysis route to clear analysis_error before re-processing. Fixed single email analyze route to reset error state on force-reanalyze. Enhanced logging across categorizer, content-digest, insight-extractor (invalid value warnings, low-confidence alerts, failure details). Color-coded nugget badges in EmailDetail. Updated DECISIONS.md (#20-22), AI_ANALYZER_SYSTEM.md (nugget types, voice, checkpoints, re-analysis). |
+| Items & Email UX | Mar 2026 | **Email traceability**: Clickable source email links on IdeaSparksCard and ProjectItemRow (pill-style chips with Mail icon), email gist preview on items, `source_email_gist` added to ProjectItemWithEmail type + useProjectItems enrichment. **Quick actions**: EmailQuickActions component in EmailDetail for one-click task creation from email. **Tab consolidation**: Inbox reduced from 8→5 tabs (consolidated Insights+News+Links into DiscoveriesFeed with internal sub-tabs), legacy URL redirects for old bookmarks. Ideas moved from Inbox to Tasks (6 tabs now). **UX improvements**: Search filter in AllItemsContent (title/description/tags/email), project selector in CreateItemDialog, TriageTray auto-expand when 3+ suggestions. IdeaSparksCard "View all" link updated to `/tasks?tab=ideas`. |

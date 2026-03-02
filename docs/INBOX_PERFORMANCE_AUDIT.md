@@ -430,7 +430,8 @@ All changes are in the `src/components/inbox/` directory and `src/types/discover
 | **CategoryFilterBar** | Added logger. `aria-pressed` for accessibility. `shadow-sm` on active pills. Transition animation. Uses centralized constants. |
 | **CategorySummaryPanel** | Added logger. `aria-pressed` and `role="complementary"`. Active state ring indicator. Uses centralized constants. |
 | **PriorityEmailList** | Now fetches `gist`, `quick_action`, `signal_strength` fields. Rows show AI gist preview and quick action icon. Uses centralized constants. |
-| **InboxTabs** | Increased tab spacing (`mb-6`). Comprehensive logging. Cleaned up comments. |
+| **InboxTabs** | Increased tab spacing (`mb-6`). Comprehensive logging. Cleaned up comments. **March 2026:** Consolidated from 8→5 tabs (Inbox, Priority, Categories, Discoveries, Archive). Ideas moved to Tasks page. Legacy URL redirects for old bookmarks. |
+| **DiscoveriesFeed** | **NEW (March 2026)** Consolidated view for insights, news, and links with internal sub-tabs. Replaces 3 separate Inbox tabs with one. |
 | **Inbox page** | Updated JSDoc to reflect current tab structure. |
 
 ### Centralized Constants (New in discovery.ts)

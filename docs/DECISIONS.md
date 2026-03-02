@@ -3,7 +3,7 @@
 > **Purpose:** Quick reference for all key architectural decisions made during planning.
 > Each decision includes context, alternatives considered, and rationale.
 >
-> **Last Updated:** February 2026
+> **Last Updated:** March 2026
 
 ---
 
@@ -41,6 +41,9 @@
 | Navigation | 5 items with tabs | 11→5 items, tabbed UIs for merged pages |
 | Client Tracking | Merged into contacts | `is_client` flag + client columns on contacts table |
 | Action Promotion | Dialog-based bridge to projects | User-controlled promote with project/type/date overrides |
+| Inbox Tabs | 8→5 (consolidated Discoveries) | Insights/News/Links are all informational, not actionable |
+| Ideas on Tasks | Moved Ideas from Inbox to Tasks | Ideas are "things you might do" — actionable, not informational |
+| Email Traceability | Clickable links + gist preview | Users need to see and navigate to the email that spawned an item |
 
 ---
 
@@ -612,6 +615,76 @@ CREATE TABLE api_usage_logs (
 
 ---
 
+### 24. Inbox Tab Consolidation: 8→5 Tabs (March 2026)
+
+**Decision:** Reduce the Inbox from 8 tabs (Inbox, Priority, Categories, Ideas, Insights, News, Links, Archive) to 5 tabs (Inbox, Priority, Categories, Discoveries, Archive). Insights, News, and Links are consolidated into a single "Discoveries" tab with internal sub-tabs. Ideas are moved to the Tasks page.
+
+**Alternatives Considered:**
+- Keep all 8 tabs (too many — users face tab fatigue, cognitive overload)
+- Collapse to 3 tabs with deep nesting (hides useful features)
+- Use a sidebar filter instead of tabs (breaks the established UI pattern)
+
+**Rationale:**
+- Insights, News, and Links are all *informational* content — "things worth knowing." They share the same mental model: information extracted from emails. Consolidating them under "Discoveries" reduces tab count while preserving all functionality via internal sub-tabs.
+- Ideas are *actionable* — "things you might do." They belong alongside tasks and projects on the Tasks page, not with informational feeds in the Inbox.
+- 5 tabs is the sweet spot: clean enough to scan, comprehensive enough to find everything.
+- Legacy URL redirects ensure old bookmarks and links still work (`?tab=ideas` → `/tasks?tab=ideas`, `?tab=insights` → `?tab=discoveries`, etc.).
+
+**Impact:**
+- New `DiscoveriesFeed` component with internal sub-tabs (insights/news/links)
+- `InboxTabs` reduced from 8 to 5 `TabsTrigger` entries
+- `TasksTabs` expanded from 5 to 6 tabs (added Ideas with `IdeasFeed`)
+- `LEGACY_TAB_MAP` constant for backward-compatible redirects
+- `IdeaSparksCard` "View all" link updated from `/inbox` to `/tasks?tab=ideas`
+
+---
+
+### 25. Email Traceability: Clickable Source Links + Gist Preview (March 2026)
+
+**Decision:** Every item, task, or idea that originated from an email must show a clickable link back to the source email, enhanced with an AI gist preview for context.
+
+**Alternatives Considered:**
+- Plain text "From email" label (not actionable — users can't navigate back)
+- Full email embed in the item detail (too heavy, duplicates content)
+- Email ID reference only (meaningless to users)
+
+**Rationale:**
+- The connection between "email that triggered this" and "task I need to do" is critical for context. Users frequently need to re-read the original email to understand the full scope of a task.
+- Clickable pill-style chips with Mail icon + subject line give users instant recognition and one-click navigation.
+- The gist preview (one-line AI summary) provides enough context to decide whether to click through, reducing unnecessary navigation.
+- The `?email=` deep-link pattern (already used by InboxTabs) opens the email in a modal, preserving the user's current context.
+
+**Impact:**
+- `IdeaSparksCard`: Email reference changed from plain `<p>` to clickable `<Link>` with Mail icon
+- `ProjectItemRow`: Enhanced email provenance chip with `bg-muted/50` background + gist preview line
+- `ProjectItemWithEmail` type: Added `source_email_gist` field
+- `useProjectItems` hook: Enrichment query now fetches `gist` from emails table
+- `EmailDetail`: New `EmailQuickActions` component for one-click task creation from emails
+
+---
+
+### 26. Quick Task Creation from Email Detail (March 2026)
+
+**Decision:** Add an inline "Create Task" quick action bar directly in the email detail view, allowing users to create a task from an email with one click.
+
+**Alternatives Considered:**
+- Navigate to Tasks page and manually create (too many steps, context lost)
+- Drag-and-drop email onto Tasks sidebar (complex, discoverability issue)
+- Auto-create tasks for all emails with actions (too noisy)
+
+**Rationale:**
+- The email detail view is the moment of highest context — the user has just read the email and knows what action is needed. A one-click "Create Task" button captures that intent immediately.
+- Pre-fills title from email subject, description from gist, and links via `email_id` so the provenance trail is preserved.
+- Uses the existing `POST /api/actions` endpoint with inline `fetch()`, matching the established pattern used for saving nuggets and ideas.
+- Shows a green checkmark success state to confirm the action was taken.
+
+**Impact:**
+- New `EmailQuickActions` sub-component in `EmailDetail.tsx`
+- Placed between `EmailSubject` and `EmailBody` for prominence without interrupting reading flow
+- No database migration needed — uses existing `actions` table
+
+---
+
 ## Decision Template (For Future Decisions)
 
 When making new architectural decisions, document them here using this template:
@@ -647,3 +720,4 @@ When making new architectural decisions, document them here using this template:
 | Feb 2026 | VIP suggestion scoring (12-signal), contact import batching, parallel onboarding loading | Claude (contact onboarding) |
 | Feb 2026 | Initial sync refinement (100 emails, relaxed filters, batch checkpoints), re-analysis of failed emails, unified prompt voice | Claude (analyzer refinement) |
 | Feb 2026 | Action→project item promotion bridge, project edit/delete, inline item editing, sort & filter, recurrence display | Claude (projects phase 3) |
+| Mar 2026 | Inbox tab consolidation (8→5), Ideas moved to Tasks, email traceability, quick task creation from email, search in AllItemsContent | Claude (items & email UX) |

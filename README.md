@@ -48,12 +48,12 @@ src/
   app/
     (auth)/           # Protected routes (5 main nav items + sent + settings)
       home/           # Daily briefing dashboard
-      inbox/          # Tabbed email view (Categories, Priority, Archive)
+      inbox/          # Tabbed email view (Inbox, Priority, Categories, Discoveries, Archive)
         [category]/   # Category deep-dive + email detail
       contacts/       # Tabbed contacts (All, Clients, Personal, Subscriptions)
         [id]/         # Contact detail (CRM-style)
       calendar/       # Unified calendar (events + extracted dates)
-      tasks/          # Tabbed tasks (To-dos, Campaigns, Templates)
+      tasks/          # Tabbed tasks (Projects, All Items, Inbox Tasks, Ideas, Campaigns, Templates)
         campaigns/    # Campaign detail + create routes
       sent/           # Email composition, outbox, sent history
       settings/       # User preferences + cost tracking
@@ -63,15 +63,16 @@ src/
   components/
     ui/               # Base UI library (Button, Card, Dialog, etc.)
     email/            # Email display components
-    home/             # DailyBriefingHeader, TodaySchedule, PendingTasksList
-    inbox/            # InboxTabs, PriorityEmailList
+    home/             # DailyBriefingHeader, TodaySchedule, PendingTasksList, IdeaSparksCard
+    inbox/            # InboxTabs, PriorityEmailList, DiscoveriesFeed (insights/news/links)
     actions/          # ActionsContent
     archive/          # ArchiveContent
     campaigns/        # CampaignsContent
     templates/        # TemplatesContent
     contacts/         # ContactsTabs, PromoteToClientDialog
     calendar/         # CalendarStats
-    tasks/            # TasksTabs
+    tasks/            # TasksTabs (Projects, Items, Inbox Tasks, Ideas, Campaigns, Templates)
+    projects/         # ProjectCard, ProjectItemRow, AllItemsContent, TriageTray, CreateItemDialog
     shared/           # PriorityCard (reusable across pages)
     discover/         # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions
     categories/       # Category-specific UI (EmailCard, etc.)
@@ -101,11 +102,12 @@ scripts/              # 44 SQL migration files (001-044), seed.ts, verify-migrat
 - Multi-Gmail account sync (push notifications + scheduled polling)
 - 14 AI analyzers via two-phase pipeline (categorizer, content digest, action extractor, client tagger, date extractor, event detector, multi-event detector, contact enricher, sender type detector, idea spark, insight extractor, news brief, link analyzer, link resolver)
 - 13 life-bucket email categories with auto-categorization
-- Home page with daily briefing, AI priorities, today's schedule, pending tasks
-- Inbox with tabbed views: Categories (discover dashboard), Priority (AI-ranked), Archive
+- Home page with daily briefing, AI priorities, today's schedule, pending tasks, idea sparks
+- Inbox with 5 tabs: Inbox (unified feed), Priority (AI-ranked), Categories (overview grid), Discoveries (insights/news/links), Archive
 - Unified contacts with clients merged in — tabbed filtering by All, Clients, Personal, Subscriptions
 - Unified calendar merging events + extracted dates with list/grid views and type filters
-- Task management with Projects, All Items, Inbox Tasks, Campaigns, and Templates tabs
+- Task management with Projects, All Items, Inbox Tasks, Ideas, Campaigns, and Templates tabs
+- Email traceability: clickable source email links on items/ideas with gist preview, quick task creation from email detail
 - Action tracking with multi-action support
 - Contact intelligence with sender type classification and client promotion
 - Event detection with locality awareness
