@@ -48,3 +48,13 @@ export type { DeleteProjectDialogProps } from './DeleteProjectDialog';
 
 export { PromoteActionDialog } from './PromoteActionDialog';
 export type { PromoteActionDialogProps } from './PromoteActionDialog';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// KANBAN & TRIAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { TaskKanbanBoard } from './TaskKanbanBoard';
+export type { TaskKanbanBoardProps } from './TaskKanbanBoard';
+
+export { TriageTray } from './TriageTray';
+export type { TriageTrayProps } from './TriageTray';

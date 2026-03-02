@@ -2,8 +2,9 @@
  * All Items Content Component
  *
  * Flat list of all project items across all projects.
- * Supports filtering by type, status, overdue, and completed visibility.
- * Supports sorting by due date, priority, created date, and status.
+ * Supports List and Kanban views, filtering by type, status,
+ * source, overdue, and completed visibility.
+ * Includes a Triage Tray for email-suggested actions and ideas.
  *
  * @module components/projects/AllItemsContent
  * @since February 2026
@@ -20,7 +21,10 @@ import {
   Checkbox,
 } from '@/components/ui';
 import { ProjectItemList } from './ProjectItemList';
+import { TaskKanbanBoard } from './TaskKanbanBoard';
+import { TriageTray } from './TriageTray';
 import { CreateItemDialog } from './CreateItemDialog';
+import { PromoteActionDialog } from './PromoteActionDialog';
 import { useProjectItems } from '@/hooks/useProjectItems';
 import { useProjects } from '@/hooks/useProjects';
 import {
@@ -35,8 +39,12 @@ import {
   Eye,
   EyeOff,
   Mail,
+  List,
+  LayoutGrid,
+  Inbox,
 } from 'lucide-react';
-import type { ProjectItemType, ProjectItemStatus, ProjectItemWithEmail } from '@/types/database';
+import type { ProjectItemType, ProjectItemStatus, ProjectItemWithEmail, ActionWithEmail } from '@/types/database';
+import type { IdeaItem } from '@/hooks/useIdeas';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STATS CARDS
@@ -90,6 +98,7 @@ function StatsCards({ stats, filter, onFilterChange }: StatsCardsProps) {
 type SortOption = 'due_date' | 'priority' | 'created_at' | 'sort_order';
 type StatusFilter = 'all' | 'pending' | 'in_progress' | 'completed';
 type SourceFilter = 'all' | 'email' | 'manual';
+type ViewMode = 'list' | 'kanban';
 
 interface FilterBarProps {
   sortBy: SortOption;
@@ -103,6 +112,8 @@ interface FilterBarProps {
   showCompleted: boolean;
   onShowCompletedChange: (v: boolean) => void;
   emailSourcedCount: number;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
 }
 
 function FilterBar({
@@ -112,6 +123,7 @@ function FilterBar({
   overdueOnly, onOverdueOnlyChange,
   showCompleted, onShowCompletedChange,
   emailSourcedCount,
+  viewMode, onViewModeChange,
 }: FilterBarProps) {
   const statusOptions: { value: StatusFilter; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -128,6 +140,24 @@ function FilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-3 mb-4">
+      {/* View mode toggle */}
+      <div className="flex items-center border border-input rounded-md">
+        <button
+          onClick={() => onViewModeChange('list')}
+          className={`p-1.5 rounded-l-md transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+          title="List view"
+        >
+          <List className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => onViewModeChange('kanban')}
+          className={`p-1.5 rounded-r-md transition-colors ${viewMode === 'kanban' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+          title="Kanban view"
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
       {/* Sort selector */}
       <div className="flex items-center gap-1.5">
         <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -222,10 +252,12 @@ export function AllItemsContent() {
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all');
   const [sourceFilter, setSourceFilter] = React.useState<SourceFilter>('all');
   const [sortBy, setSortBy] = React.useState<SortOption>('sort_order');
+  const [viewMode, setViewMode] = React.useState<ViewMode>('list');
   const [overdueOnly, setOverdueOnly] = React.useState(false);
   const [showCompleted, setShowCompleted] = React.useState(false);
   const [showCreateDialog, setShowCreateDialog] = React.useState(false);
   const [defaultItemType, setDefaultItemType] = React.useState<ProjectItemType>('task');
+  const [promoteAction, setPromoteAction] = React.useState<ActionWithEmail | null>(null);
 
   const { items, isLoading, stats, toggleComplete, deleteItem, createItem, updateItem } =
     useProjectItems({
@@ -241,6 +273,16 @@ export function AllItemsContent() {
 
   const handleAddItem = (type: ProjectItemType) => {
     setDefaultItemType(type);
+    setShowCreateDialog(true);
+  };
+
+  const handlePromoteAction = (action: ActionWithEmail) => {
+    setPromoteAction(action);
+  };
+
+  const handleAcceptIdea = (idea: IdeaItem) => {
+    // Pre-fill a new item dialog with the idea
+    setDefaultItemType('idea');
     setShowCreateDialog(true);
   };
 
@@ -280,7 +322,14 @@ export function AllItemsContent() {
   }, [items, showCompleted, statusFilter, sourceFilter, overdueOnly]);
 
   return (
-    <div>
+    <div className="space-y-6">
+      {/* Triage Tray — suggested tasks and ideas from emails */}
+      <TriageTray
+        onPromoteAction={handlePromoteAction}
+        onAcceptIdea={handleAcceptIdea}
+        defaultExpanded={false}
+      />
+
       {/* Stats cards */}
       <StatsCards stats={stats} filter={typeFilter} onFilterChange={setTypeFilter} />
 
@@ -305,10 +354,12 @@ export function AllItemsContent() {
         showCompleted={showCompleted}
         onShowCompletedChange={setShowCompleted}
         emailSourcedCount={emailSourcedCount}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
       {/* Header with create button */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-muted-foreground">
           {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
           {typeFilter !== 'all' ? ` (${typeFilter}s)` : ''}
@@ -319,24 +370,43 @@ export function AllItemsContent() {
         </Button>
       </div>
 
-      {/* Items list */}
-      <ProjectItemList
-        items={filteredItems}
-        isLoading={isLoading}
-        onToggleComplete={toggleComplete}
-        onDeleteItem={deleteItem}
-        onUpdateItem={updateItem}
-        onAddItem={handleAddItem}
-        showGroupHeaders={typeFilter === 'all'}
-        emptyMessage={typeFilter === 'all' ? 'No items yet — create one to get started' : `No ${typeFilter}s yet`}
-        projects={projectList}
-      />
+      {/* Items — List or Kanban view */}
+      {viewMode === 'kanban' ? (
+        <TaskKanbanBoard
+          items={filteredItems}
+          isLoading={isLoading}
+          onToggleComplete={toggleComplete}
+          onDeleteItem={deleteItem}
+          onUpdateItem={updateItem}
+        />
+      ) : (
+        <ProjectItemList
+          items={filteredItems}
+          isLoading={isLoading}
+          onToggleComplete={toggleComplete}
+          onDeleteItem={deleteItem}
+          onUpdateItem={updateItem}
+          onAddItem={handleAddItem}
+          showGroupHeaders={typeFilter === 'all'}
+          emptyMessage={typeFilter === 'all' ? 'No items yet — create one to get started' : `No ${typeFilter}s yet`}
+          projects={projectList}
+        />
+      )}
 
       <CreateItemDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onCreate={createItem}
         defaultType={defaultItemType}
+      />
+
+      {/* Promote action dialog */}
+      <PromoteActionDialog
+        open={!!promoteAction}
+        onOpenChange={(open) => { if (!open) setPromoteAction(null); }}
+        action={promoteAction}
+        projects={projects}
+        onCreateItem={createItem}
       />
     </div>
   );
