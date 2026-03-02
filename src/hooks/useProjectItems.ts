@@ -8,6 +8,7 @@
  *
  * @module hooks/useProjectItems
  * @since February 2026
+ * @updated March 2026 — Phase 3: Select specific fields + Supabase join (eliminates second email query)
  */
 
 'use client';
@@ -23,6 +24,13 @@ import type { ProjectItem, ProjectItemWithEmail, ProjectItemType, ProjectItemSta
 
 const DEFAULT_LIMIT = 100;
 const logger = createLogger('useProjectItems');
+
+/**
+ * Specific fields to select for board list queries.
+ * Avoids `select('*')` to reduce payload size.
+ * @since March 2026 — Phase 3 query optimization
+ */
+const BOARD_LIST_FIELDS = 'id, project_id, item_type, title, description, status, priority, due_date, source_email_id, source_action_id, tags, sort_order, completed_at, created_at, recurrence_pattern, recurrence_config, estimated_minutes';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -142,7 +150,11 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
     logger.start('Fetching project items', { projectId, itemType, status, sortBy });
 
     try {
-      let query = supabase.from('project_items').select('*').limit(limit);
+      // Single query with Supabase foreign key join — eliminates second email query
+      let query = supabase
+        .from('project_items')
+        .select(`${BOARD_LIST_FIELDS}, emails!source_email_id(id, subject, sender_name, sender_email, gist)`)
+        .limit(limit);
 
       switch (sortBy) {
         case 'due_date':
@@ -166,31 +178,15 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
       const { data, error: queryError } = await query;
       if (queryError) throw new Error(queryError.message);
 
-      const fetched: ProjectItemWithEmail[] = data || [];
+      // Map joined email data to ProjectItemWithEmail fields
+      const fetched: ProjectItemWithEmail[] = (data || []).map((row) => ({
+        ...row,
+        source_email_subject: row.emails?.subject ?? null,
+        source_email_sender: row.emails?.sender_name || row.emails?.sender_email || null,
+        source_email_gist: row.emails?.gist ?? null,
+      }));
 
-      // Enrich items with source email metadata (subject, sender, gist)
-      const emailIds = [...new Set(fetched.filter((i) => i.source_email_id).map((i) => i.source_email_id!))];
-      if (emailIds.length > 0) {
-        const { data: emails } = await supabase
-          .from('emails')
-          .select('id, subject, sender_name, sender_email, gist')
-          .in('id', emailIds);
-
-        if (emails) {
-          const emailMap = new Map(emails.map((e) => [e.id, e]));
-          for (const item of fetched) {
-            if (item.source_email_id) {
-              const email = emailMap.get(item.source_email_id);
-              if (email) {
-                item.source_email_subject = email.subject;
-                item.source_email_sender = email.sender_name || email.sender_email;
-                item.source_email_gist = email.gist;
-              }
-            }
-          }
-        }
-        logger.debug('Enriched items with email metadata', { emailCount: emailIds.length });
-      }
+      logger.debug('Single-query fetch with join', { count: fetched.length });
 
       setItems(fetched);
       setStats(calculateStats(fetched));

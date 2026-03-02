@@ -45,6 +45,7 @@
 | Ideas on Tasks | Moved Ideas from Inbox to Tasks | Ideas are "things you might do" — actionable, not informational |
 | Email Traceability | Clickable links + gist preview | Users need to see and navigate to the email that spawned an item |
 | Quick Accept | 2-step popover replaces 6-step dialog | Fitts's Law: minimize motor cost for most frequent triage action |
+| Query Optimization | Field selection + Supabase joins | Eliminates second round-trip, reduces payload ~6 KB per hook |
 
 ---
 
@@ -731,6 +732,27 @@ CREATE TABLE api_usage_logs (
 - `PromoteActionDialog.tsx` unchanged — still importable for "More options..." fallback
 - Board enhancements: project color stripes on kanban cards, Done column auto-collapse (7-day threshold), quick-add "+" buttons on column headers
 
+### 29. Query Optimization: Field Selection + Supabase Joins (March 2026)
+
+**Decision:** Replace `select('*')` + second email enrichment query in `useActions` and `useProjectItems` with field-specific `select()` using Supabase PostgREST foreign key joins (e.g., `emails!email_id(subject, sender_name, sender_email)`). Smarter triage badge subtracts promoted actions. Snooze state persists to localStorage.
+
+**Alternatives Considered:**
+- Keep `select('*')` and optimize only the enrichment query — still over-fetches columns
+- Add database views for pre-joined data — adds migration complexity
+- Store snooze state in database — over-engineered for a temporary UI state
+
+**Rationale:**
+- **Payload reduction:** `select('*')` returns all columns (~6 KB extra per query). Field-specific select returns only what the UI needs.
+- **Network round-trip elimination:** Each hook made 2 sequential queries (fetch + enrich). Supabase joins collapse this to 1 query.
+- **Accurate triage badge:** Pending actions that have already been promoted to project_items were inflating the sidebar badge count.
+- **Snooze durability:** Users expect snoozed items to stay snoozed after a page refresh. localStorage is the right persistence tier — no migration needed, auto-cleans expired entries.
+
+**Impact:**
+- Modified: `useActions.ts` (TRIAGE_LIST_FIELDS constant + join), `useProjectItems.ts` (BOARD_LIST_FIELDS constant + join), `useSidebarBadges.ts` (4th query for promoted count), `useTriageItems.ts` (localStorage hydration + persistence)
+- `AllItemsContent.tsx` deprecated (JSDoc + removed from barrel export)
+- No database migrations required
+- No changes to hook return types — fully backward compatible
+
 ---
 
 ## Decision Template (For Future Decisions)
@@ -770,3 +792,4 @@ When making new architectural decisions, document them here using this template:
 | Feb 2026 | Action→project item promotion bridge, project edit/delete, inline item editing, sort & filter, recurrence display | Claude (projects phase 3) |
 | Mar 2026 | Inbox tab consolidation (8→5), Ideas moved to Tasks, email traceability, quick task creation from email, search in AllItemsContent | Claude (items & email UX) |
 | Mar 2026 | QuickAcceptPopover (2-step promote), Board project color stripes, Done auto-collapse, column quick-add | Claude (tasks redesign phase 2) |
+| Mar 2026 | Query optimization (field selection + Supabase joins), smarter triage badge, snooze persistence, AllItemsContent deprecation | Claude (tasks redesign phase 3) |

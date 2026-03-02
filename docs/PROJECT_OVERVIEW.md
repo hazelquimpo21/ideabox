@@ -152,6 +152,10 @@ AI-powered email processing system with specialized analyzers that:
 > **Note:** Inbox consolidated from 8→5 tabs (March 2026): Insights/News/Links merged into
 > Discoveries tab, Ideas moved to Tasks page. See `docs/DECISIONS.md` (#24-26) for rationale.
 
+> **Note:** Tasks page redesigned (March 2026): 6→4 tabs (Triage, Board, Projects, Library)
+> with Triage as default entry point. Queries optimized with Supabase foreign key joins.
+> See `docs/DECISIONS.md` (#27-29) for rationale.
+
 ## Design Principles
 1. **Modular First**: Every component standalone and replaceable
 2. **AI as Specialist**: Many focused analyzers > one general analyzer

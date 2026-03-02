@@ -72,7 +72,7 @@ src/
     contacts/         # ContactsTabs, PromoteToClientDialog
     calendar/         # CalendarStats
     tasks/            # TasksTabs (Triage, Board, Projects, Library)
-    projects/         # ProjectCard, ProjectItemRow, AllItemsContent, TriageTray, CreateItemDialog
+    projects/         # ProjectCard, ProjectItemRow, BoardContent, TriageContent, TriageTray, CreateItemDialog, QuickAcceptPopover
     shared/           # PriorityCard (reusable across pages)
     discover/         # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions
     categories/       # Category-specific UI (EmailCard, etc.)

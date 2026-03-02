@@ -12,7 +12,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export { ProjectsContent } from './ProjectsContent';
-export { AllItemsContent } from './AllItemsContent';
+// AllItemsContent — @deprecated March 2026, replaced by BoardContent + TriageContent.
+// Kept in codebase for rollback safety. Removed from barrel export.
 export { BoardContent } from './BoardContent';
 export { TriageContent } from './TriageContent';
 

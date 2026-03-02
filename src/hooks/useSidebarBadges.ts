@@ -11,6 +11,7 @@
  * @module hooks/useSidebarBadges
  * @since February 2026 — Phase 1: Sidebar actionable badges
  * @updated March 2026 — Added triageCount for Tasks nav badge
+ * @updated March 2026 — Phase 3: Smarter triage count excludes already-promoted actions
  */
 
 'use client';
@@ -67,7 +68,7 @@ export function useSidebarBadges(): SidebarBadges {
       todayEnd.setHours(23, 59, 59, 999);
 
       // Run all queries in parallel
-      const [replyResult, deadlineResult, triageResult] = await Promise.all([
+      const [replyResult, deadlineResult, triageResult, promotedResult] = await Promise.all([
         // Query 1: Must-reply unread emails
         supabase
           .from('emails')
@@ -84,25 +85,37 @@ export function useSidebarBadges(): SidebarBadges {
           .lte('deadline', todayEnd.toISOString())
           .neq('status', 'completed'),
 
-        // Query 3: Pending actions count (triage items)
+        // Query 3: All pending actions count
         supabase
           .from('actions')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'pending'),
+
+        // Query 4: Promoted actions count (already accepted into project_items)
+        supabase
+          .from('project_items')
+          .select('source_action_id', { count: 'exact', head: true })
+          .not('source_action_id', 'is', null),
       ]);
 
       const replyCount = replyResult.count ?? 0;
       const deadlineCount = deadlineResult.count ?? 0;
-      const pendingTriageCount = triageResult.count ?? 0;
+      const pendingCount = triageResult.count ?? 0;
+      const promotedCount = promotedResult.count ?? 0;
+
+      // Triage count = pending actions minus those already promoted to project_items
+      const refinedTriageCount = Math.max(0, pendingCount - promotedCount);
 
       setMustReplyCount(replyCount);
       setTodayDeadlineCount(deadlineCount);
-      setTriageCount(pendingTriageCount);
+      setTriageCount(refinedTriageCount);
 
       logger.success('Sidebar badge counts fetched', {
         mustReplyCount: replyCount,
         todayDeadlineCount: deadlineCount,
-        triageCount: pendingTriageCount,
+        triageCount: refinedTriageCount,
+        pendingActions: pendingCount,
+        promotedActions: promotedCount,
       });
     } catch (error) {
       logger.error('Failed to fetch sidebar badge counts', {
