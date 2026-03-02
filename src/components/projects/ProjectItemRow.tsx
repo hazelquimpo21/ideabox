@@ -5,6 +5,10 @@
  * with checkbox, type icon, title, priority badge, due date, and
  * inline editing capabilities.
  *
+ * UPDATED (March 2026): Enhanced email provenance display — items
+ * originating from email now show a richer context block with sender,
+ * subject, gist preview, and a prominent link back to the source email.
+ *
  * @module components/projects/ProjectItemRow
  * @since February 2026
  */
@@ -262,16 +266,28 @@ export function ProjectItemRow({ item, onToggleComplete, onDelete, onUpdate, pro
             </span>
           )}
 
-          {/* ─── Source email link ────────────────────────────────────── */}
+          {/* ─── Source email context ──────────────────────────────────
+               Items originating from email show a richer provenance block
+               with sender, subject, and a link back to the full email.
+               ──────────────────────────────────────────────────────────── */}
           {item.source_email_id && (
             <Link
               href={`/inbox?email=${item.source_email_id}`}
-              className="flex items-center gap-1 hover:text-foreground transition-colors"
-              title="View source email"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/50 hover:bg-muted hover:text-foreground transition-colors max-w-[280px]"
+              title={item.source_email_gist || item.source_email_subject || 'View source email'}
             >
-              <Mail className="h-3 w-3" />
-              {item.source_email_subject || item.source_email_sender || 'Source email'}
+              <Mail className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <span className="truncate text-xs">
+                {item.source_email_subject || item.source_email_sender || 'Source email'}
+              </span>
             </Link>
+          )}
+
+          {/* ─── Email gist preview — shows AI summary of source email ── */}
+          {item.source_email_gist && (
+            <p className="basis-full text-[11px] text-muted-foreground/70 italic line-clamp-1 mt-0.5">
+              {item.source_email_gist}
+            </p>
           )}
 
           {/* ─── Project reassignment ──────────────────────────────────── */}

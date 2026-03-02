@@ -168,12 +168,12 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
 
       const fetched: ProjectItemWithEmail[] = data || [];
 
-      // Enrich items with source email metadata (subject, sender)
+      // Enrich items with source email metadata (subject, sender, gist)
       const emailIds = [...new Set(fetched.filter((i) => i.source_email_id).map((i) => i.source_email_id!))];
       if (emailIds.length > 0) {
         const { data: emails } = await supabase
           .from('emails')
-          .select('id, subject, sender_name, sender_email')
+          .select('id, subject, sender_name, sender_email, gist')
           .in('id', emailIds);
 
         if (emails) {
@@ -184,6 +184,7 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
               if (email) {
                 item.source_email_subject = email.subject;
                 item.source_email_sender = email.sender_name || email.sender_email;
+                item.source_email_gist = email.gist;
               }
             }
           }

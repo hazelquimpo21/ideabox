@@ -1847,6 +1847,8 @@ export type ProjectItem = TableRow<'project_items'>;
 export interface ProjectItemWithEmail extends ProjectItem {
   source_email_subject?: string | null;
   source_email_sender?: string | null;
+  /** AI-generated one-line summary of the source email content */
+  source_email_gist?: string | null;
 }
 
 /** Action enriched with source email metadata for UI display */

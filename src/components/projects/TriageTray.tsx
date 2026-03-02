@@ -337,6 +337,15 @@ export function TriageTray({
   const totalSuggestions = visibleActions.length + ideas.length;
   const isLoading = actionsLoading || ideasLoading;
 
+  // ─── Smart auto-expand: open tray when suggestions arrive ─────────────────
+  // If the tray was collapsed (defaultExpanded=false) but AI found things
+  // worth triaging, expand automatically so the user sees them.
+  React.useEffect(() => {
+    if (!isLoading && totalSuggestions >= 3 && !expanded) {
+      setExpanded(true);
+    }
+  }, [isLoading, totalSuggestions]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <Card className={cn(
       'border-dashed transition-all duration-300',

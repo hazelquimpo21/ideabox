@@ -5,22 +5,32 @@
  * orchestrator that wires together all inbox views and the email detail modal.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * TABS
+ * TABS (Simplified March 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- *   1. Inbox (default) — unified email feed with search + category filtering
+ *   1. Inbox (default)  — unified email feed with search + category filtering
  *   2. Priority         — emails ranked by AI priority score
- *   3. Archive          — archived emails with search/filter/bulk actions
+ *   3. Categories       — category overview grid with rich previews
+ *   4. Discoveries      — consolidated insights, news, and links from emails
+ *   5. Archive          — archived emails with search/filter/bulk actions
+ *
+ * Reduced from 8 tabs to 5: Ideas moved to Tasks page (they're actionable,
+ * not informational). Insights/News/Links consolidated into Discoveries.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * TAB ROUTING
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * Tab state is persisted in the URL via the `?tab=` query parameter:
- *   - (default)       → Inbox feed
- *   - ?tab=priority   → Priority tab
- *   - ?tab=archive    → Archive tab
- *   - ?tab=categories → Legacy alias, maps to Inbox feed
+ *   - (default)          → Inbox feed
+ *   - ?tab=priority      → Priority tab
+ *   - ?tab=categories    → Categories grid
+ *   - ?tab=discoveries   → Discoveries feed (insights/news/links)
+ *   - ?tab=archive       → Archive tab
+ *   - ?tab=ideas         → Legacy redirect → /tasks?tab=ideas
+ *   - ?tab=insights      → Legacy redirect → ?tab=discoveries
+ *   - ?tab=news          → Legacy redirect → ?tab=discoveries
+ *   - ?tab=links         → Legacy redirect → ?tab=discoveries
  *
  * Tab switches use router.replace() (no scroll) for instant transitions.
  *
@@ -37,6 +47,7 @@
  *
  * @module components/inbox/InboxTabs
  * @since February 2026 — Inbox UI Redesign v2
+ * @updated March 2026 — Simplified from 8 to 5 tabs, human-centered redesign
  */
 
 'use client';
@@ -44,7 +55,7 @@
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
-import { Inbox, TrendingUp, Archive, LayoutGrid, Lightbulb, Brain, Newspaper, Link2 } from 'lucide-react';
+import { Inbox, TrendingUp, Archive, LayoutGrid, Sparkles } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import type { EmailCategory } from '@/types/discovery';
 import { EMAIL_CATEGORIES_SET } from '@/types/discovery';
@@ -55,10 +66,7 @@ import { ArchiveContent } from '@/components/archive';
 import { PriorityEmailList } from '@/components/inbox/PriorityEmailList';
 import { CategoryOverview } from '@/components/inbox/CategoryOverview';
 import { EmailDetailModal } from '@/components/email/EmailDetailModal';
-import { IdeasFeed } from '@/components/inbox/IdeasFeed';
-import { InsightsFeed } from '@/components/inbox/InsightsFeed';
-import { NewsFeed } from '@/components/inbox/NewsFeed';
-import { LinksFeed } from '@/components/inbox/LinksFeed';
+import { DiscoveriesFeed } from '@/components/inbox/DiscoveriesFeed';
 import { InboxSummaryBanner } from '@/components/inbox/InboxSummaryBanner';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -72,11 +80,18 @@ const logger = createLogger('InboxTabs');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** All valid tab values — used for URL param validation */
-const VALID_TABS = ['inbox', 'priority', 'categories', 'ideas', 'insights', 'news', 'links', 'archive'] as const;
+const VALID_TABS = ['inbox', 'priority', 'categories', 'discoveries', 'archive'] as const;
 type InboxTab = (typeof VALID_TABS)[number];
 
 /** Default tab when no query param is present */
 const DEFAULT_TAB: InboxTab = 'inbox';
+
+/** Legacy tab aliases — redirects old bookmarks/links to new locations */
+const LEGACY_TAB_MAP: Record<string, string> = {
+  insights: 'discoveries',
+  news: 'discoveries',
+  links: 'discoveries',
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
@@ -96,9 +111,25 @@ export function InboxTabs() {
 
   // ─── Determine Active Tab from URL ─────────────────────────────────────────
   const tabParam = searchParams.get('tab');
-  const normalizedTab = tabParam;
-  const activeTab: InboxTab = VALID_TABS.includes(normalizedTab as InboxTab)
-    ? (normalizedTab as InboxTab)
+
+  // Handle legacy tab redirects (ideas moved to Tasks, others consolidated)
+  React.useEffect(() => {
+    if (tabParam === 'ideas') {
+      // Ideas now live on the Tasks page — redirect gracefully
+      logger.info('Legacy redirect: ideas tab → /tasks?tab=ideas');
+      router.replace('/tasks?tab=ideas');
+      return;
+    }
+    if (tabParam && LEGACY_TAB_MAP[tabParam]) {
+      logger.info('Legacy redirect', { from: tabParam, to: LEGACY_TAB_MAP[tabParam] });
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', LEGACY_TAB_MAP[tabParam]);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeTab: InboxTab = VALID_TABS.includes(tabParam as InboxTab)
+    ? (tabParam as InboxTab)
     : DEFAULT_TAB;
 
   // ─── Category Filter from URL (set when navigating from CategoryOverview) ──
@@ -206,32 +237,11 @@ export function InboxTabs() {
             Categories
           </TabsTrigger>
           <TabsTrigger
-            value="ideas"
+            value="discoveries"
             variant="underline"
-            icon={<Lightbulb className="h-4 w-4" />}
+            icon={<Sparkles className="h-4 w-4" />}
           >
-            Ideas
-          </TabsTrigger>
-          <TabsTrigger
-            value="insights"
-            variant="underline"
-            icon={<Brain className="h-4 w-4" />}
-          >
-            Insights
-          </TabsTrigger>
-          <TabsTrigger
-            value="news"
-            variant="underline"
-            icon={<Newspaper className="h-4 w-4" />}
-          >
-            News
-          </TabsTrigger>
-          <TabsTrigger
-            value="links"
-            variant="underline"
-            icon={<Link2 className="h-4 w-4" />}
-          >
-            Links
+            Discoveries
           </TabsTrigger>
           <TabsTrigger
             value="archive"
@@ -268,20 +278,9 @@ export function InboxTabs() {
           />
         </TabsContent>
 
-        <TabsContent value="ideas">
-          <IdeasFeed />
-        </TabsContent>
-
-        <TabsContent value="insights">
-          <InsightsFeed />
-        </TabsContent>
-
-        <TabsContent value="news">
-          <NewsFeed />
-        </TabsContent>
-
-        <TabsContent value="links">
-          <LinksFeed />
+        {/* ── Discoveries: consolidated insights, news, links ──────────── */}
+        <TabsContent value="discoveries">
+          <DiscoveriesFeed />
         </TabsContent>
 
         <TabsContent value="archive">

@@ -54,6 +54,7 @@ import {
   Home,
   TrendingUp,
   MapPin,
+  Mail,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import type { IdeaItem } from '@/hooks/useIdeas';
@@ -212,7 +213,7 @@ export function IdeaSparksCard({
             <Lightbulb className="h-5 w-5 text-amber-500" />
             Idea Sparks
           </CardTitle>
-          <Link href="/inbox">
+          <Link href="/tasks?tab=ideas">
             <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
               View all
               <ArrowRight className="h-3 w-3" />
@@ -263,9 +264,21 @@ export function IdeaSparksCard({
                   {/* Idea content */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm leading-snug">{idea.idea}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      From: {idea.emailSubject || idea.emailSender || 'Unknown email'}
-                    </p>
+                    {/* Source email — clickable link back to the email that sparked this idea */}
+                    {idea.emailId ? (
+                      <Link
+                        href={`/inbox?email=${idea.emailId}`}
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-0.5 truncate hover:text-foreground transition-colors"
+                        title="View source email"
+                      >
+                        <Mail className="h-3 w-3 shrink-0" />
+                        {idea.emailSubject || idea.emailSender || 'Source email'}
+                      </Link>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        From: {idea.emailSubject || idea.emailSender || 'Unknown email'}
+                      </p>
+                    )}
                   </div>
 
                   {/* Actions (visible on hover) */}
