@@ -8,10 +8,9 @@
  * NEW (FEB 2026): Creative Idea Generation from Email Content
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Each email produces 3 ideas by cross-referencing its content with the user's
- * role, interests, projects, location, family, and current season. Ideas span:
- * social posts, networking, business, hobbies, date nights, family activities,
- * personal growth, and community involvement.
+ * Idea-worthy emails produce 0-3 ideas by cross-referencing content with the
+ * user's context. Ideas span: tweet drafts, networking, business, learning,
+ * tools to try, places to visit, date nights, family, growth, and community.
  *
  * Users can:
  * - Save ideas they want to pursue (promotes to email_ideas table)
@@ -44,17 +43,19 @@ import {
   ArrowRight,
   Bookmark,
   X,
-  Share2,
+  MessageCircle,
   Users,
   Briefcase,
   FileText,
-  Palette,
-  ShoppingBag,
+  BookOpen,
+  Wrench,
+  Navigation,
   Heart,
   Home,
   TrendingUp,
   MapPin,
   Mail,
+  Share2,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import type { IdeaItem } from '@/hooks/useIdeas';
@@ -94,11 +95,12 @@ const IDEA_TYPE_CONFIG: Record<string, {
   className: string;
   icon: typeof Lightbulb;
 }> = {
-  social_post: {
-    label: 'Social Post',
+  // ── New types (Mar 2026) ──────────────────────────────────────────────────
+  tweet_draft: {
+    label: 'Tweet',
     variant: 'default',
     className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-    icon: Share2,
+    icon: MessageCircle,
   },
   networking: {
     label: 'Networking',
@@ -118,17 +120,23 @@ const IDEA_TYPE_CONFIG: Record<string, {
     className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-800',
     icon: FileText,
   },
-  hobby: {
-    label: 'Hobby',
+  learning: {
+    label: 'Learning',
     variant: 'default',
     className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
-    icon: Palette,
+    icon: BookOpen,
   },
-  shopping: {
-    label: 'Shopping',
+  tool_to_try: {
+    label: 'Tool',
     variant: 'default',
-    className: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300 border-pink-200 dark:border-pink-800',
-    icon: ShoppingBag,
+    className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 border-violet-200 dark:border-violet-800',
+    icon: Wrench,
+  },
+  place_to_visit: {
+    label: 'Place',
+    variant: 'default',
+    className: 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300 border-lime-200 dark:border-lime-800',
+    icon: Navigation,
   },
   date_night: {
     label: 'Date Night',
@@ -153,6 +161,19 @@ const IDEA_TYPE_CONFIG: Record<string, {
     variant: 'default',
     className: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-200 dark:border-teal-800',
     icon: MapPin,
+  },
+  // ── Legacy types (backward compat for existing data) ──────────────────────
+  social_post: {
+    label: 'Tweet',
+    variant: 'default',
+    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    icon: Share2,
+  },
+  hobby: {
+    label: 'Learning',
+    variant: 'default',
+    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+    icon: BookOpen,
   },
 };
 

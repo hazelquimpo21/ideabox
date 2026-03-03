@@ -27,17 +27,19 @@ import {
   RefreshCw,
   ExternalLink,
   Filter,
-  Share2,
+  MessageCircle,
   Users,
   Briefcase,
   FileText,
-  Palette,
-  ShoppingBag,
+  BookOpen,
+  Wrench,
+  Navigation,
   Heart,
   Home,
   TrendingUp,
   MapPin,
   Inbox,
+  Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { Pagination } from '@/components/ui';
@@ -62,10 +64,11 @@ const IDEA_TYPE_CONFIG: Record<string, {
   className: string;
   icon: React.ElementType;
 }> = {
-  social_post: {
-    label: 'Social Post',
+  // ── New types (Mar 2026) ──────────────────────────────────────────────────
+  tweet_draft: {
+    label: 'Tweet',
     className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    icon: Share2,
+    icon: MessageCircle,
   },
   networking: {
     label: 'Networking',
@@ -82,15 +85,20 @@ const IDEA_TYPE_CONFIG: Record<string, {
     className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
     icon: FileText,
   },
-  hobby: {
-    label: 'Hobby',
+  learning: {
+    label: 'Learning',
     className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
-    icon: Palette,
+    icon: BookOpen,
   },
-  shopping: {
-    label: 'Shopping',
-    className: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
-    icon: ShoppingBag,
+  tool_to_try: {
+    label: 'Tool',
+    className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+    icon: Wrench,
+  },
+  place_to_visit: {
+    label: 'Place',
+    className: 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300',
+    icon: Navigation,
   },
   date_night: {
     label: 'Date Night',
@@ -112,6 +120,17 @@ const IDEA_TYPE_CONFIG: Record<string, {
     className: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
     icon: MapPin,
   },
+  // ── Legacy types (backward compat for existing data) ──────────────────────
+  social_post: {
+    label: 'Tweet',
+    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    icon: Share2,
+  },
+  hobby: {
+    label: 'Learning',
+    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
+    icon: BookOpen,
+  },
 };
 
 function getTypeConfig(type: string) {
@@ -122,13 +141,18 @@ function getTypeConfig(type: string) {
   };
 }
 
-/** All available type filter options */
+/** Legacy types that shouldn't appear as filter options */
+const LEGACY_TYPES = new Set(['social_post', 'hobby']);
+
+/** All available type filter options (excludes legacy types) */
 const TYPE_FILTERS = [
   { value: '', label: 'All' },
-  ...Object.entries(IDEA_TYPE_CONFIG).map(([value, config]) => ({
-    value,
-    label: config.label,
-  })),
+  ...Object.entries(IDEA_TYPE_CONFIG)
+    .filter(([value]) => !LEGACY_TYPES.has(value))
+    .map(([value, config]) => ({
+      value,
+      label: config.label,
+    })),
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

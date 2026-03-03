@@ -38,7 +38,7 @@ const logger = createLogger('IdeasAPI');
 interface SparkIdea {
   /** The idea text */
   idea: string;
-  /** Category: social_post, networking, business, etc. */
+  /** Category: tweet_draft, networking, business, learning, tool_to_try, place_to_visit, etc. */
   type: string;
   /** Why this connects to the user */
   relevance: string;
@@ -65,7 +65,7 @@ interface SparkIdea {
  *
  * Query params:
  * - limit: Number of emails to check for ideas (default: 10, max: 30)
- * - type: Filter by idea type (e.g., 'social_post', 'networking')
+ * - type: Filter by idea type (e.g., 'tweet_draft', 'networking', 'learning')
  * - min_confidence: Minimum confidence threshold (default: 0.3)
  *
  * Response: Array of spark ideas with source email context
@@ -238,7 +238,7 @@ export async function GET(request: NextRequest) {
  *
  * Body:
  * - idea: string — the idea text
- * - ideaType: string — category (social_post, networking, etc.)
+ * - ideaType: string — category (tweet_draft, networking, learning, etc.)
  * - relevance: string — why it's relevant
  * - confidence: number — confidence score
  * - emailId: string — source email ID (optional)
