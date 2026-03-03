@@ -67,6 +67,9 @@ function extractFirstImageUrl(html: string): string | null {
     // Skip data URIs (usually tiny icons or spacers)
     if (src.startsWith('data:')) continue;
 
+    // Skip cid: URIs (MIME Content-ID references for inline email attachments)
+    if (src.startsWith('cid:')) continue;
+
     // Skip tracking pixel patterns
     if (TRACKING_PATTERNS.some((pattern) => pattern.test(src))) continue;
 
