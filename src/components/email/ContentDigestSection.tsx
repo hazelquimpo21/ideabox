@@ -4,6 +4,9 @@
  * Renders the AI-generated content digest for an email: gist, key points,
  * and extracted links. Designed for use inside the EmailDetail analysis card.
  *
+ * ENHANCED (Mar 2026): Key points now have inline "+" save buttons to capture
+ * as ideas with one click.
+ *
  * @module components/email/ContentDigestSection
  * @since February 2026
  */
@@ -11,9 +14,16 @@
 'use client';
 
 import * as React from 'react';
-import { Badge } from '@/components/ui';
-import { FileText, ExternalLink, Link2 } from 'lucide-react';
+import { Badge, Button } from '@/components/ui';
+import { FileText, ExternalLink, Link2, Plus, CheckCircle2 } from 'lucide-react';
+import { createLogger } from '@/lib/utils/logger';
 import type { ContentDigestResult } from '@/hooks/useEmailAnalysis';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('ContentDigestSection');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LINK TYPE STYLING
@@ -44,16 +54,65 @@ const CONTENT_TYPE_LABELS: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CATEGORY → IDEA TYPE INFERENCE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CATEGORY_TO_IDEA_TYPE: Record<string, string> = {
+  clients: 'business',
+  work: 'business',
+  newsletters_creator: 'content_creation',
+  newsletters_industry: 'learning',
+  personal_friends_family: 'personal_growth',
+  family: 'family_activity',
+  finance: 'business',
+  shopping: 'personal_growth',
+  local: 'place_to_visit',
+  travel: 'place_to_visit',
+  news_politics: 'learning',
+  product_updates: 'tool_to_try',
+  notifications: 'learning',
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface ContentDigestSectionProps {
   digest: ContentDigestResult;
+  /** Email ID for linking saved items back to source email */
+  emailId?: string;
+  /** Email category for smart idea type inference */
+  emailCategory?: string | null;
 }
 
-export function ContentDigestSection({ digest }: ContentDigestSectionProps) {
+export function ContentDigestSection({ digest, emailId, emailCategory }: ContentDigestSectionProps) {
   const mainLinks = digest.links.filter(l => l.isMainContent && l.type !== 'unsubscribe');
   const otherLinks = digest.links.filter(l => !l.isMainContent && l.type !== 'unsubscribe');
+  const [savedPoints, setSavedPoints] = React.useState<Set<number>>(new Set());
+
+  const inferredIdeaType = emailCategory ? (CATEGORY_TO_IDEA_TYPE[emailCategory] || 'learning') : 'learning';
+
+  const handleSaveKeyPoint = React.useCallback(async (point: string, index: number) => {
+    if (!emailId) return;
+
+    try {
+      await fetch('/api/ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idea: point,
+          ideaType: inferredIdeaType,
+          relevance: 'Key point from email content digest',
+          confidence: 0.7,
+          emailId,
+        }),
+      });
+      setSavedPoints((prev: Set<number>) => new Set(prev).add(index));
+      logger.info('Key point saved as idea', { emailId: emailId.substring(0, 8), index });
+    } catch (err) {
+      logger.error('Failed to save key point', { error: err instanceof Error ? err.message : 'Unknown' });
+    }
+  }, [emailId, inferredIdeaType]);
 
   return (
     <div className="pt-3 border-t">
@@ -79,7 +138,7 @@ export function ContentDigestSection({ digest }: ContentDigestSectionProps) {
         <div className="pl-6 mb-2">
           <ul className="space-y-1">
             {digest.keyPoints.map((kp, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
+              <li key={i} className="group/kp flex items-start gap-2 text-sm">
                 <span className="text-blue-400 mt-1 shrink-0">&#8226;</span>
                 <div className="flex-1">
                   <span>{kp.point}</span>
@@ -89,6 +148,23 @@ export function ContentDigestSection({ digest }: ContentDigestSectionProps) {
                     </span>
                   )}
                 </div>
+                {emailId && (
+                  savedPoints.has(i) ? (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600 dark:text-green-400 shrink-0 mt-0.5">
+                      <CheckCircle2 className="h-3 w-3" />
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 opacity-0 group-hover/kp:opacity-100 transition-opacity shrink-0 mt-0.5"
+                      title="Save as idea"
+                      onClick={() => handleSaveKeyPoint(kp.point, i)}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  )
+                )}
               </li>
             ))}
           </ul>

@@ -22,6 +22,7 @@ import {
   ArrowUpRight,
   X,
   AlarmClock,
+  ExternalLink,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import { QuickAcceptPopover } from './QuickAcceptPopover';
@@ -160,6 +161,15 @@ export function TriageIdeaCard({ item, onAccept, onDismiss, onSnooze, projects, 
             <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
             Save
           </Button>
+        )}
+        {item.sourceEmailId && (
+          <Link
+            href={`/inbox?email=${item.sourceEmailId}`}
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+            title="View source email"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
         )}
         <button
           onClick={handleSnooze}

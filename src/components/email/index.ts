@@ -30,3 +30,6 @@ export type { EventPreviewProps } from './EventPreview';
 
 export { SyncStatusBanner, default as SyncStatusBannerDefault } from './SyncStatusBanner';
 export type { SyncStatusBannerProps, SyncStatus, SyncStatusInfo } from './SyncStatusBanner';
+
+export { SmartCaptureBar, default as SmartCaptureBarDefault } from './SmartCaptureBar';
+export type { SmartCaptureBarProps } from './SmartCaptureBar';

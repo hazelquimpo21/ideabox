@@ -16,6 +16,7 @@ import { useEmailAnalysis, useExtractedDates } from '@/hooks';
 import { EventDetailsCard } from './EventDetailsCard';
 import { ContentDigestSection } from './ContentDigestSection';
 import { DateExtractionSection } from './DateExtractionSection';
+import { SmartCaptureBar } from './SmartCaptureBar';
 import { createLogger } from '@/lib/utils/logger';
 import { cn } from '@/lib/utils/cn';
 import {
@@ -359,6 +360,12 @@ function AnalysisSummary({
   const { analysis, isLoading: isLoadingAnalysis, refetch } = useEmailAnalysis(email.id);
   const { dates: extractedDates } = useExtractedDates({ emailId: email.id });
 
+  // Track which items have been saved (nuggets, ideas, insights, style ideas)
+  const [savedItems, setSavedItems] = React.useState<Set<string>>(new Set());
+  const markSaved = React.useCallback((key: string) => {
+    setSavedItems((prev) => new Set(prev).add(key));
+  }, []);
+
   // Handle analyze button click - await analysis then refetch
   const handleAnalyze = React.useCallback(async () => {
     if (onAnalyze) {
@@ -540,7 +547,7 @@ function AnalysisSummary({
 
         {/* Content Digest — gist, key points, links */}
         {analysis?.contentDigest && analysis.contentDigest.gist && (
-          <ContentDigestSection digest={analysis.contentDigest} />
+          <ContentDigestSection digest={analysis.contentDigest} emailId={email.id} emailCategory={email.category} />
         )}
 
         {/* Golden Nuggets — deals, tips, quotes, stats, recommendations, remember_this, sales_opportunity (ENHANCED Feb 2026) */}
@@ -563,40 +570,48 @@ function AnalysisSummary({
                     {nugget.type.replace(/_/g, ' ')}
                   </Badge>
                   <p className="text-sm leading-snug flex-1">{nugget.nugget}</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    title="Save nugget"
-                    onClick={() => {
-                      const nuggetTypeToIdeaType: Record<string, string> = {
-                        deal: 'business',
-                        tip: 'learning',
-                        quote: 'content_creation',
-                        stat: 'business',
-                        recommendation: 'learning',
-                        remember_this: 'business',
-                        sales_opportunity: 'business',
-                      };
-                      fetch('/api/ideas', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          idea: nugget.nugget,
-                          ideaType: nuggetTypeToIdeaType[nugget.type] || 'business',
-                          relevance: `Extracted ${nugget.type.replace(/_/g, ' ')} from email`,
-                          confidence: 0.8,
-                          emailId: email.id,
-                        }),
-                      }).then(() => {
-                        logger.info('Golden nugget saved', { emailId: email.id.substring(0, 8), type: nugget.type });
-                      }).catch(err => {
-                        logger.error('Failed to save nugget', { error: err instanceof Error ? err.message : 'Unknown error' });
-                      });
-                    }}
-                  >
-                    <Bookmark className="h-3 w-3" />
-                  </Button>
+                  {savedItems.has(`nugget-${index}`) ? (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600 dark:text-green-400 shrink-0">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Saved
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Save nugget"
+                      onClick={() => {
+                        const nuggetTypeToIdeaType: Record<string, string> = {
+                          deal: 'business',
+                          tip: 'learning',
+                          quote: 'content_creation',
+                          stat: 'business',
+                          recommendation: 'learning',
+                          remember_this: 'business',
+                          sales_opportunity: 'business',
+                        };
+                        fetch('/api/ideas', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            idea: nugget.nugget,
+                            ideaType: nuggetTypeToIdeaType[nugget.type] || 'business',
+                            relevance: `Extracted ${nugget.type.replace(/_/g, ' ')} from email`,
+                            confidence: 0.8,
+                            emailId: email.id,
+                          }),
+                        }).then(() => {
+                          markSaved(`nugget-${index}`);
+                          logger.info('Golden nugget saved', { emailId: email.id.substring(0, 8), type: nugget.type });
+                        }).catch(err => {
+                          logger.error('Failed to save nugget', { error: err instanceof Error ? err.message : 'Unknown error' });
+                        });
+                      }}
+                    >
+                      <Bookmark className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -623,31 +638,39 @@ function AnalysisSummary({
                     <p className="text-sm leading-snug">{style.idea}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{style.whyItWorks}</p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    title="Save email style idea"
-                    onClick={() => {
-                      fetch('/api/ideas', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          idea: `${style.idea} — ${style.whyItWorks}`,
-                          ideaType: 'content_creation',
-                          relevance: `Email style idea (${style.type.replace(/_/g, ' ')}) from ${email.sender_name || email.sender_email}`,
-                          confidence: style.confidence,
-                          emailId: email.id,
-                        }),
-                      }).then(() => {
-                        logger.info('Email style idea saved', { emailId: email.id.substring(0, 8), type: style.type });
-                      }).catch(err => {
-                        logger.error('Failed to save style idea', { error: err instanceof Error ? err.message : 'Unknown error' });
-                      });
-                    }}
-                  >
-                    <Bookmark className="h-3 w-3" />
-                  </Button>
+                  {savedItems.has(`style-${index}`) ? (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600 dark:text-green-400 shrink-0">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Saved
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Save email style idea"
+                      onClick={() => {
+                        fetch('/api/ideas', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            idea: `${style.idea} — ${style.whyItWorks}`,
+                            ideaType: 'content_creation',
+                            relevance: `Email style idea (${style.type.replace(/_/g, ' ')}) from ${email.sender_name || email.sender_email}`,
+                            confidence: style.confidence,
+                            emailId: email.id,
+                          }),
+                        }).then(() => {
+                          markSaved(`style-${index}`);
+                          logger.info('Email style idea saved', { emailId: email.id.substring(0, 8), type: style.type });
+                        }).catch(err => {
+                          logger.error('Failed to save style idea', { error: err instanceof Error ? err.message : 'Unknown error' });
+                        });
+                      }}
+                    >
+                      <Bookmark className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -810,37 +833,44 @@ function AnalysisSummary({
                     <p className="text-sm leading-snug">{idea.idea}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{idea.relevance}</p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    title="Save idea"
-                    onClick={() => {
-                      // Save idea via Ideas API
-                      fetch('/api/ideas', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          idea: idea.idea,
-                          ideaType: idea.type,
-                          relevance: idea.relevance,
-                          confidence: idea.confidence,
-                          emailId: email.id,
-                        }),
-                      }).then(() => {
-                        logger.info('Idea saved from email detail', {
-                          emailId: email.id.substring(0, 8),
-                          ideaType: idea.type,
+                  {savedItems.has(`idea-${index}`) ? (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600 dark:text-green-400 shrink-0">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Saved
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Save idea"
+                      onClick={() => {
+                        fetch('/api/ideas', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            idea: idea.idea,
+                            ideaType: idea.type,
+                            relevance: idea.relevance,
+                            confidence: idea.confidence,
+                            emailId: email.id,
+                          }),
+                        }).then(() => {
+                          markSaved(`idea-${index}`);
+                          logger.info('Idea saved from email detail', {
+                            emailId: email.id.substring(0, 8),
+                            ideaType: idea.type,
+                          });
+                        }).catch(err => {
+                          logger.error('Failed to save idea from detail', {
+                            error: err instanceof Error ? err.message : 'Unknown error',
+                          });
                         });
-                      }).catch(err => {
-                        logger.error('Failed to save idea from detail', {
-                          error: err instanceof Error ? err.message : 'Unknown error',
-                        });
-                      });
-                    }}
-                  >
-                    <Bookmark className="h-3 w-3" />
-                  </Button>
+                      }}
+                    >
+                      <Bookmark className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -878,36 +908,44 @@ function AnalysisSummary({
                       </div>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    title="Save insight"
-                    onClick={() => {
-                      fetch('/api/insights', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          insight: item.insight,
-                          insightType: item.type,
-                          topics: item.topics,
-                          confidence: item.confidence,
-                          emailId: email.id,
-                        }),
-                      }).then(() => {
-                        logger.info('Insight saved from email detail', {
-                          emailId: email.id.substring(0, 8),
-                          insightType: item.type,
+                  {savedItems.has(`insight-${index}`) ? (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600 dark:text-green-400 shrink-0">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Saved
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Save insight"
+                      onClick={() => {
+                        fetch('/api/insights', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            insight: item.insight,
+                            insightType: item.type,
+                            topics: item.topics,
+                            confidence: item.confidence,
+                            emailId: email.id,
+                          }),
+                        }).then(() => {
+                          markSaved(`insight-${index}`);
+                          logger.info('Insight saved from email detail', {
+                            emailId: email.id.substring(0, 8),
+                            insightType: item.type,
+                          });
+                        }).catch(err => {
+                          logger.error('Failed to save insight from detail', {
+                            error: err instanceof Error ? err.message : 'Unknown error',
+                          });
                         });
-                      }).catch(err => {
-                        logger.error('Failed to save insight from detail', {
-                          error: err instanceof Error ? err.message : 'Unknown error',
-                        });
-                      });
-                    }}
-                  >
-                    <Bookmark className="h-3 w-3" />
-                  </Button>
+                      }}
+                    >
+                      <Bookmark className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -946,36 +984,44 @@ function AnalysisSummary({
                       )}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    title="Save news item"
-                    onClick={() => {
-                      fetch('/api/news', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          headline: item.headline,
-                          detail: item.detail,
-                          topics: item.topics,
-                          dateMentioned: item.dateMentioned,
-                          confidence: item.confidence,
-                          emailId: email.id,
-                        }),
-                      }).then(() => {
-                        logger.info('News item saved from email detail', {
-                          emailId: email.id.substring(0, 8),
+                  {savedItems.has(`news-${index}`) ? (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600 dark:text-green-400 shrink-0">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Saved
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Save news item"
+                      onClick={() => {
+                        fetch('/api/news', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            headline: item.headline,
+                            detail: item.detail,
+                            topics: item.topics,
+                            dateMentioned: item.dateMentioned,
+                            confidence: item.confidence,
+                            emailId: email.id,
+                          }),
+                        }).then(() => {
+                          markSaved(`news-${index}`);
+                          logger.info('News item saved from email detail', {
+                            emailId: email.id.substring(0, 8),
+                          });
+                        }).catch(err => {
+                          logger.error('Failed to save news item from detail', {
+                            error: err instanceof Error ? err.message : 'Unknown error',
+                          });
                         });
-                      }).catch(err => {
-                        logger.error('Failed to save news item from detail', {
-                          error: err instanceof Error ? err.message : 'Unknown error',
-                        });
-                      });
-                    }}
-                  >
-                    <Bookmark className="h-3 w-3" />
-                  </Button>
+                      }}
+                    >
+                      <Bookmark className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1043,6 +1089,16 @@ function AnalysisSummary({
             </div>
           </div>
         )}
+
+        {/* Smart Capture Bar — Quick save actions & ideas to board (NEW Mar 2026) */}
+        <SmartCaptureBar
+          emailId={email.id}
+          emailSubject={email.subject || undefined}
+          emailGist={email.gist || email.snippet || undefined}
+          actionExtraction={analysis?.actionExtraction}
+          ideaSparks={analysis?.ideaSparks}
+          contactId={analysis?.clientTagging?.clientId}
+        />
 
         {/* Meta info */}
         {(analysis?.tokensUsed || analysis?.processingTimeMs) && (
