@@ -44,6 +44,7 @@ import {
   Briefcase,
   ExternalLink,
 } from 'lucide-react';
+import { SummaryItemCapture } from './SummaryItemCapture';
 import type { EmailSummary, SummarySection, SummaryItem, SummaryEmailIndex } from '@/services/summary';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -107,25 +108,34 @@ const SummaryItemRow = memo(function SummaryItemRow({
     : null;
 
   return (
-    <li className={`pl-3 py-1.5 text-sm border-l-2 ${item.action_needed ? URGENCY_STYLES[item.urgency] || '' : 'border-l-transparent'}`}>
-      <span className={item.action_needed ? 'font-medium' : 'text-muted-foreground'}>
-        {item.text}
-      </span>
-      {item.action_needed && (
-        <span className="ml-1.5 inline-block text-[10px] font-semibold uppercase tracking-wider text-red-600 bg-red-50 px-1 py-0.5 rounded">
-          Action
+    <li className={`group/item pl-3 py-1.5 text-sm border-l-2 flex items-start gap-1 ${item.action_needed ? URGENCY_STYLES[item.urgency] || '' : 'border-l-transparent'}`}>
+      <div className="flex-1 min-w-0">
+        <span className={item.action_needed ? 'font-medium' : 'text-muted-foreground'}>
+          {item.text}
         </span>
-      )}
-      {emailHref && (
-        <Link
-          href={emailHref}
-          className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
-          title={emailRef?.subject || 'View email'}
-        >
-          <ExternalLink className="h-2.5 w-2.5" />
-          View
-        </Link>
-      )}
+        {item.action_needed && (
+          <span className="ml-1.5 inline-block text-[10px] font-semibold uppercase tracking-wider text-red-600 bg-red-50 px-1 py-0.5 rounded">
+            Action
+          </span>
+        )}
+        {emailHref && (
+          <Link
+            href={emailHref}
+            className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+            title={emailRef?.subject || 'View email'}
+          >
+            <ExternalLink className="h-2.5 w-2.5" />
+            View
+          </Link>
+        )}
+      </div>
+      <div className="opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0 mt-0.5">
+        <SummaryItemCapture
+          text={item.text}
+          actionNeeded={item.action_needed}
+          emailId={primaryEmailId}
+        />
+      </div>
     </li>
   );
 });

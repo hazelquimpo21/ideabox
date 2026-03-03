@@ -23,6 +23,7 @@ import {
   ArrowUpRight,
   X,
   AlarmClock,
+  Reply,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import { QuickAcceptPopover } from './QuickAcceptPopover';
@@ -206,6 +207,15 @@ export function TriageActionCard({ item, onAccept, onDismiss, onSnooze, projects
             <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
             Accept
           </Button>
+        )}
+        {item.sourceEmailId && raw.action_type === 'respond' && (
+          <Link
+            href={`/inbox?email=${item.sourceEmailId}&compose=reply`}
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+            title="Reply to email"
+          >
+            <Reply className="h-3.5 w-3.5" />
+          </Link>
         )}
         <button
           onClick={handleSnooze}
