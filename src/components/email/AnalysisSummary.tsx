@@ -153,7 +153,7 @@ export const AnalysisSummary = React.memo(function AnalysisSummary({
           )}
         </div>
       </CardHeader>
-      <CardContent className="pt-4 space-y-1">
+      <CardContent className="pt-4 space-y-0">
         {analysis.categorization && (
           <CategoriesSection
             categorization={analysis.categorization}

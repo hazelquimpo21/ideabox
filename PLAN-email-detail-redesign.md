@@ -142,14 +142,18 @@ EmailHeader → EmailSubject → AISummaryBar → EmailBody → AnalysisSummary
 
 ---
 
-## Phase 2 — Decompose the Analysis Monolith ⬜ NEXT
+## Phase 2 — Decompose the Analysis Monolith ✅ COMPLETE
 
 **Theme**: Break the 780-line `AnalysisSummary` into independent, collapsible,
 memoized sections that don't re-render each other.
 
+> **Status**: Implemented March 2026. All tasks complete.
+> **Commit**: `feat: decompose AnalysisSummary into collapsible memoized sections (Phase 2)`
+> **Branch**: `claude/email-analysis-summary-r3CfS`
+>
 > **Prerequisites**: Phase 1 complete. Analysis data now flows as props from
 > EmailDetailModal → EmailDetail → AnalysisSummary. The `AnalysisSummary`
-> function (EmailDetail.tsx, starts at ~line 365) is the target for decomposition.
+> function (EmailDetail.tsx, starts at ~line 365) was the target for decomposition.
 
 ### 2A. Create a `CollapsibleAnalysisSection` wrapper
 
@@ -271,17 +275,22 @@ const AnalysisSummary = React.memo(function AnalysisSummary({
 Each section decides *how* to show itself. This is the single-responsibility
 principle applied to UI — the parent is a layout coordinator, not a renderer.
 
-**Files touched in Phase 2**:
-- `src/components/email/analysis/` — **new directory** with 11 section files
-- `src/components/email/CollapsibleAnalysisSection.tsx` — **new file**
-- `src/components/email/AnalysisSummary.tsx` — rewrite to thin orchestrator
-- `src/components/email/EmailDetail.tsx` — update imports (minimal)
+**Files touched in Phase 2** (actual):
+- `src/components/email/analysis/` — **new directory** with 12 files (10 sections + helpers + barrel)
+- `src/components/email/CollapsibleAnalysisSection.tsx` — **new file** (54 lines) — reusable collapse wrapper with CSS grid animation
+- `src/components/email/AnalysisSummary.tsx` — **new file** (277 lines) — thin orchestrator extracted from EmailDetail
+- `src/components/email/EmailDetail.tsx` — removed inline AnalysisSummary (~780 lines) + helper functions, imports from new files. Reduced from 1377 to ~320 lines.
+- Note: Each section with save buttons manages its own `savedItems` state internally — the shared Set was eliminated. Dead `EmailQuickActions` function was also removed.
 
 ---
 
-## Phase 3 — Deferred Loading, Caching & Polish
+## Phase 3 — Deferred Loading, Caching & Polish ⬜ NEXT
 
 **Theme**: Eliminate wasted work and add tactile quality.
+
+> **Prerequisites**: Phase 2 complete. Analysis sections are now independent,
+> collapsible, memoized components. SmartCaptureBar, AISummaryBar, and
+> CollapsibleAnalysisSection are ready for the enhancements below.
 
 ### 3A. Defer `SmartCaptureBar` data fetching
 
@@ -396,13 +405,24 @@ Small touches that add up:
 | `src/components/email/EmailDetailModal.tsx` | Modified | Hoisted hooks, updated handleAnalyze, threaded props |
 | `src/components/email/EmailDetail.tsx` | Modified | Extended props, reordered render, removed EmailQuickActions |
 
-### Phase 2 files (planned)
-| File | Lines (est.) | Purpose |
-|------|-------------|---------|
-| `src/components/email/CollapsibleAnalysisSection.tsx` | ~60 | Reusable collapse wrapper |
-| `src/components/email/analysis/index.ts` | ~15 | Barrel export for section components |
-| `src/components/email/analysis/*.tsx` (11 files) | ~80 each | Individual analysis sections |
-| `src/components/email/EmailDetail.tsx` | Modified | Extract AnalysisSummary, update imports |
+### Phase 2 files (complete)
+| File | Lines | Purpose |
+|------|-------|---------|
+| `src/components/email/CollapsibleAnalysisSection.tsx` | 54 | Reusable collapse wrapper (CSS grid animation) |
+| `src/components/email/AnalysisSummary.tsx` | 277 | Thin orchestrator (extracted from EmailDetail) |
+| `src/components/email/analysis/helpers.ts` | 193 | Shared helper functions (getCategoryBadge, etc.) |
+| `src/components/email/analysis/index.ts` | 10 | Barrel export for section components |
+| `src/components/email/analysis/CategoriesSection.tsx` | 91 | Category, signal, reply badges |
+| `src/components/email/analysis/GoldenNuggetsSection.tsx` | 96 | Worth remembering items + save |
+| `src/components/email/analysis/EmailStyleIdeasSection.tsx` | 88 | Email format observations + save |
+| `src/components/email/analysis/ActionExtractionSection.tsx` | 121 | Multi-action extraction |
+| `src/components/email/analysis/ClientTaggingSection.tsx` | 48 | Client match + relationship signal |
+| `src/components/email/analysis/IdeaSparksSection.tsx` | 95 | AI-generated ideas + save |
+| `src/components/email/analysis/InsightsSection.tsx` | 100 | Synthesized tips/frameworks + save |
+| `src/components/email/analysis/NewsBriefSection.tsx` | 101 | Factual news items + save |
+| `src/components/email/analysis/MultiEventSection.tsx` | 58 | Multiple events from a single email |
+| `src/components/email/analysis/AnalysisMetaInfo.tsx` | 25 | Tokens/timing/version display |
+| `src/components/email/EmailDetail.tsx` | Modified | 1377→320 lines, imports AnalysisSummary |
 
 ### Phase 3 files (planned)
 | File | Change scope |
