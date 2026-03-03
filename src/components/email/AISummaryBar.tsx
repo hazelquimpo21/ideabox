@@ -86,7 +86,7 @@ export function AISummaryBar({ email, analysis, isLoading }: AISummaryBarProps) 
   // Shaped skeleton while analysis hook is still loading
   if (isLoading && !analysis) {
     return (
-      <div className="flex items-center gap-3 px-4 py-3 bg-muted/30 rounded-lg h-14 animate-pulse">
+      <div className="flex items-center gap-3 px-4 py-3 bg-background/95 backdrop-blur-sm rounded-lg h-14 animate-pulse sticky top-0 z-10 shadow-sm">
         <Skeleton className="h-5 w-20 rounded-full" />
         <Skeleton className="h-3 w-16" />
         <Skeleton className="h-3 w-24" />
@@ -108,7 +108,7 @@ export function AISummaryBar({ email, analysis, isLoading }: AISummaryBarProps) 
   const ActionIcon = quickAction ? ACTION_ICONS[quickAction] : null;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 bg-muted/30 rounded-lg min-h-[3.5rem]">
+    <div className="flex items-center gap-3 px-4 py-3 bg-background/95 backdrop-blur-sm rounded-lg min-h-[3.5rem] sticky top-0 z-10 shadow-sm">
       {/* Category badge */}
       {category && (
         <Badge variant="outline" className="shrink-0 text-xs">

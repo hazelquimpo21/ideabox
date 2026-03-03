@@ -2,11 +2,12 @@
 
 import * as React from 'react';
 import { Card, CardHeader, CardContent, Button, Skeleton } from '@/components/ui';
-import { Brain, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Brain, Loader2, CheckCircle2, AlertCircle, Zap } from 'lucide-react';
 import { EventDetailsCard } from './EventDetailsCard';
 import { ContentDigestSection } from './ContentDigestSection';
 import { DateExtractionSection } from './DateExtractionSection';
 import { SmartCaptureBar } from './SmartCaptureBar';
+import { CollapsibleAnalysisSection } from './CollapsibleAnalysisSection';
 import {
   CategoriesSection,
   GoldenNuggetsSection,
@@ -42,6 +43,13 @@ export const AnalysisSummary = React.memo(function AnalysisSummary({
   extractedDates,
   refetchAnalysis,
 }: AnalysisSummaryProps) {
+  const [captureExpanded, setCaptureExpanded] = React.useState(false);
+  const captureEverOpened = React.useRef(false);
+  const handleCaptureToggle = React.useCallback((isOpen: boolean) => {
+    setCaptureExpanded(isOpen);
+    if (isOpen) captureEverOpened.current = true;
+  }, []);
+
   const handleAnalyze = React.useCallback(async () => {
     if (onAnalyze) {
       await onAnalyze(email.id);
@@ -242,14 +250,24 @@ export const AnalysisSummary = React.memo(function AnalysisSummary({
           />
         )}
 
-        <SmartCaptureBar
-          emailId={email.id}
-          emailSubject={email.subject || undefined}
-          emailGist={email.gist || email.snippet || undefined}
-          actionExtraction={analysis.actionExtraction}
-          ideaSparks={analysis.ideaSparks}
-          contactId={analysis.clientTagging?.clientId}
-        />
+        <CollapsibleAnalysisSection
+          icon={Zap}
+          title="Quick Capture"
+          subtitle="Save actions & ideas to board"
+          iconColor="text-orange-500"
+          onToggle={handleCaptureToggle}
+        >
+          {captureEverOpened.current && (
+            <SmartCaptureBar
+              emailId={email.id}
+              emailSubject={email.subject || undefined}
+              emailGist={email.gist || email.snippet || undefined}
+              actionExtraction={analysis.actionExtraction}
+              ideaSparks={analysis.ideaSparks}
+              contactId={analysis.clientTagging?.clientId}
+            />
+          )}
+        </CollapsibleAnalysisSection>
 
         <AnalysisMetaInfo
           tokensUsed={analysis.tokensUsed}

@@ -32,6 +32,7 @@ export interface UseProjectsOptions {
   status?: ProjectStatus | 'all';
   limit?: number;
   sortBy?: 'updated_at' | 'created_at' | 'name' | 'priority';
+  enabled?: boolean;
 }
 
 export interface ProjectStats {
@@ -80,11 +81,12 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   });
 
   const supabase = React.useMemo(() => createClient(), []);
-  const { status = 'all', limit = DEFAULT_LIMIT, sortBy = 'updated_at' } = options;
+  const { status = 'all', limit = DEFAULT_LIMIT, sortBy = 'updated_at', enabled } = options;
 
   // ─── Fetch ──────────────────────────────────────────────────────────────────
 
   const fetchProjects = React.useCallback(async () => {
+    if (enabled === false) { setIsLoading(false); return; }
     setIsLoading(true);
     setError(null);
     logger.start('Fetching projects', { status, limit, sortBy });
@@ -123,7 +125,7 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, status, limit, sortBy]);
+  }, [supabase, status, limit, sortBy, enabled]);
 
   // ─── Create ─────────────────────────────────────────────────────────────────
 
@@ -222,8 +224,9 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   // ─── Effects ────────────────────────────────────────────────────────────────
 
   React.useEffect(() => {
+    if (enabled === false) return;
     fetchProjects();
-  }, [fetchProjects]);
+  }, [fetchProjects, enabled]);
 
   return {
     projects, isLoading, error, stats,
