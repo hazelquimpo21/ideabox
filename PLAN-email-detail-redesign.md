@@ -31,9 +31,13 @@ BEFORE (current)                         AFTER (target)
 
 ---
 
-## Phase 1 — Fix the Waterfall & Add the Summary Bar
+## Phase 1 — Fix the Waterfall & Add the Summary Bar ✅ COMPLETE
 
 **Theme**: Make the important data load first, not last.
+
+> **Status**: Implemented March 2026. All tasks complete.
+> **Commit**: `feat: hoist analysis hooks and add AISummaryBar to email detail modal (Phase 1)`
+> **Branch**: `claude/email-detail-redesign-phase-1-09Lnx`
 
 ### 1A. Hoist `useEmailAnalysis` to `EmailDetailModal`
 
@@ -130,18 +134,22 @@ EmailHeader → EmailSubject → AISummaryBar → EmailBody → AnalysisSummary
   action buttons). This eliminates a full-width section that added vertical
   space without much value.
 
-**Files touched in Phase 1**:
-- `src/components/email/EmailDetailModal.tsx` — hoist hooks
-- `src/components/email/EmailDetail.tsx` — accept analysis props, reorder sections
-- `src/components/email/AISummaryBar.tsx` — **new file**
-- `src/components/email/AnalysisSummary.tsx` — remove hook calls, accept props
+**Files touched in Phase 1** (actual):
+- `src/components/email/EmailDetailModal.tsx` — hoisted `useEmailAnalysis` + `useExtractedDates`, updated `handleAnalyze` to call `refetchAnalysis()`, threaded 4 new props to `EmailDetail`
+- `src/components/email/EmailDetail.tsx` — extended `EmailDetailProps` with analysis props, removed unused hook imports (kept type-only imports), removed `EmailQuickActions` from render, added `AISummaryBar` between subject and body, updated `AnalysisSummary` to accept props instead of calling hooks
+- `src/components/email/AISummaryBar.tsx` — **new file** (~150 lines) with skeleton loading, null for unanalyzed emails, compact horizontal summary bar
+- Note: `AnalysisSummary` was NOT extracted to its own file — it remains an internal function inside `EmailDetail.tsx` (extraction is Phase 2)
 
 ---
 
-## Phase 2 — Decompose the Analysis Monolith
+## Phase 2 — Decompose the Analysis Monolith ⬜ NEXT
 
 **Theme**: Break the 780-line `AnalysisSummary` into independent, collapsible,
 memoized sections that don't re-render each other.
+
+> **Prerequisites**: Phase 1 complete. Analysis data now flows as props from
+> EmailDetailModal → EmailDetail → AnalysisSummary. The `AnalysisSummary`
+> function (EmailDetail.tsx, starts at ~line 365) is the target for decomposition.
 
 ### 2A. Create a `CollapsibleAnalysisSection` wrapper
 
@@ -381,24 +389,31 @@ Small touches that add up:
 
 ## File Inventory
 
-### New files (4)
+### Phase 1 files (complete)
+| File | Status | What changed |
+|------|--------|-------------|
+| `src/components/email/AISummaryBar.tsx` | **Created** (~150 lines) | Above-fold summary bar with skeleton |
+| `src/components/email/EmailDetailModal.tsx` | Modified | Hoisted hooks, updated handleAnalyze, threaded props |
+| `src/components/email/EmailDetail.tsx` | Modified | Extended props, reordered render, removed EmailQuickActions |
+
+### Phase 2 files (planned)
 | File | Lines (est.) | Purpose |
 |------|-------------|---------|
-| `src/components/email/AISummaryBar.tsx` | ~100 | Above-fold summary bar with skeleton |
 | `src/components/email/CollapsibleAnalysisSection.tsx` | ~60 | Reusable collapse wrapper |
 | `src/components/email/analysis/index.ts` | ~15 | Barrel export for section components |
 | `src/components/email/analysis/*.tsx` (11 files) | ~80 each | Individual analysis sections |
+| `src/components/email/EmailDetail.tsx` | Modified | Extract AnalysisSummary, update imports |
 
-### Modified files (7)
+### Phase 3 files (planned)
 | File | Change scope |
 |------|-------------|
-| `EmailDetailModal.tsx` | Hoist hooks, remove timeout, add cache |
-| `EmailDetail.tsx` | Accept analysis props, reorder children, remove QuickActions |
-| `AnalysisSummary.tsx` | Rewrite from ~780 lines → ~100 lines (thin orchestrator) |
 | `SmartCaptureBar.tsx` | Add `isExpanded` prop gating |
 | `useEmailAnalysis.ts` | Add memoization, optional cache layer |
 | `useProjects.ts` | Add `enabled` option |
 | `useProjectItems.ts` | Add `enabled` option |
+| `EmailDetailModal.tsx` | Remove state-clearing timeout, add cache ref |
+| `AISummaryBar.tsx` | Add sticky positioning |
+| `CollapsibleAnalysisSection.tsx` | Add enter animation |
 
 ### Deleted files (0)
 No files deleted. `AnalysisSummaryBar.tsx` stays — it's used in a different

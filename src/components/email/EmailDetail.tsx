@@ -5,14 +5,33 @@
  * Displays the full content of a selected email with rich AI analysis.
  * Used in a slide-out panel from the email list.
  *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * ARCHITECTURE (Phase 1 Redesign — March 2026)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Data flow: EmailDetailModal (hooks) → EmailDetail (layout) → sections (render)
+ *
+ * - useEmailAnalysis and useExtractedDates are hoisted to EmailDetailModal so
+ *   they fire in parallel with the email fetch (no more request waterfall).
+ * - This component receives analysis/extractedDates/refetchAnalysis as props.
+ * - AISummaryBar renders between subject and body for at-a-glance insights.
+ * - AnalysisSummary (internal function) is the full analysis section below body.
+ *   It receives data via props — it no longer calls hooks itself.
+ *
+ * Render order: EmailHeader → EmailSubject → AISummaryBar → EmailBody → AnalysisSummary
+ *
  * @module components/email/EmailDetail
+ * @see EmailDetailModal — data boundary (hook calls live there)
+ * @see AISummaryBar — compact summary bar above email body
  */
 
 'use client';
 
 import * as React from 'react';
 import { Button, Badge, Card, CardContent, CardHeader, Skeleton } from '@/components/ui';
-import { useEmailAnalysis, useExtractedDates } from '@/hooks';
+// NOTE: useEmailAnalysis and useExtractedDates are now called in EmailDetailModal
+// (hoisted to fire in parallel with email fetch). This component receives their
+// results as props. Only type imports are needed here.
 import type { NormalizedAnalysis } from '@/hooks/useEmailAnalysis';
 import type { ExtractedDate } from '@/hooks/useExtractedDates';
 import { EventDetailsCard } from './EventDetailsCard';
@@ -356,6 +375,13 @@ function EmailSubject({ email }: { email: Email }) {
   );
 }
 
+/**
+ * Full analysis section rendered below the email body.
+ *
+ * Phase 1 change: No longer calls useEmailAnalysis / useExtractedDates directly.
+ * Receives all analysis data as props from EmailDetailModal via EmailDetail.
+ * Phase 2 will extract this into its own file and decompose into collapsible sections.
+ */
 function AnalysisSummary({
   email,
   onAnalyze,

@@ -25,8 +25,15 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils/cn';
+import { createLogger } from '@/lib/utils/logger';
 import type { NormalizedAnalysis } from '@/hooks/useEmailAnalysis';
 import type { Email } from '@/types/database';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('AISummaryBar');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -62,10 +69,21 @@ const ACTION_ICONS: Record<string, React.ElementType> = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function AISummaryBar({ email, analysis, isLoading }: AISummaryBarProps) {
-  // Don't render anything for unanalyzed emails
+  React.useEffect(() => {
+    if (analysis) {
+      logger.debug('AISummaryBar rendered', {
+        emailId: email.id,
+        category: analysis.categorization?.category,
+        hasGist: !!analysis.contentDigest?.gist,
+      });
+    }
+  }, [email.id, analysis]);
+
+  // Don't render anything for unanalyzed emails — the "Analyze Now" card
+  // in AnalysisSummary handles the CTA for unanalyzed emails.
   if (!email.analyzed_at) return null;
 
-  // Skeleton while analysis is loading
+  // Shaped skeleton while analysis hook is still loading
   if (isLoading && !analysis) {
     return (
       <div className="flex items-center gap-3 px-4 py-3 bg-muted/30 rounded-lg h-14 animate-pulse">

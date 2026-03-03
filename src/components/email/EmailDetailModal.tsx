@@ -20,6 +20,10 @@
  *
  * - Fetches email body (body_html/body_text) only when the modal opens,
  *   since list views use EMAIL_LIST_FIELDS which exclude heavy body fields.
+ * - useEmailAnalysis and useExtractedDates are hoisted here (Phase 1 redesign)
+ *   so they fire in parallel with the email fetch, eliminating the request
+ *   waterfall that previously delayed analysis display. Analysis data is
+ *   threaded through EmailDetail → AnalysisSummary as props.
  * - Wraps EmailDetail (existing component) in a Dialog for consistent UX.
  * - Star/archive actions optimistically update via onEmailUpdated callback
  *   so the parent list reflects changes immediately.
