@@ -29,7 +29,7 @@ const logger = createLogger('useIdeas');
 export interface IdeaItem {
   /** The idea itself — 1-2 sentences, specific and actionable */
   idea: string;
-  /** Category: social_post, networking, business, content_creation, etc. */
+  /** Category: tweet_draft, networking, business, learning, tool_to_try, place_to_visit, etc. */
   type: string;
   /** Why this connects to the user's context */
   relevance: string;

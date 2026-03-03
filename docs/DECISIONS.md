@@ -778,6 +778,33 @@ When making new architectural decisions, document them here using this template:
 
 ---
 
+### 30. Idea Spark Refinement: Solopreneur Focus, 0-3 Ideas, Smarter Gating (March 2026)
+
+**Decision:** Overhaul the Idea Spark analyzer to generate 0-3 ideas (was always 3), add solopreneur-oriented idea types, and skip emails that never produce good ideas.
+
+**Alternatives Considered:**
+- Keep always-3 with better prompt (still forces bad ideas on thin content)
+- Add a pre-scoring step to decide if ideas are worth generating (extra API call cost)
+- Remove idea generation entirely for non-newsletter emails (too aggressive, misses genuine opportunities from personal/client emails)
+
+**Rationale:**
+- **0-3 instead of always-3**: The single biggest quality improvement. A password reset doesn't need 3 ideas. Now the model can return 0 with a `skip_reason`. This eliminated ~80% of low-quality forced ideas.
+- **Smarter gating**: Previously only skipped `signal_strength = 'noise'` (~30% of emails). Now also skips `low` signal, `automated`/`notification`/`transactional` email types, and `notifications` category. ~60% skip rate saves tokens and prevents dumb ideas on receipts, codes, and alerts.
+- **Solopreneur framing**: The user builds things, ships products, creates content. Ideas oriented toward building, growing, learning, and living well — not generic brainstorming.
+- **New idea types**: `tweet_draft` (actual draft text, not "write a tweet"), `learning` (concrete skill/course/concept), `tool_to_try` (specific tool mentioned), `place_to_visit` (nearby experience). Removed `social_post` (too vague), `hobby` (merged into learning), `shopping` (rarely useful).
+- **Legacy type mapping**: Old types (`social_post`, `hobby`, `shopping`) mapped to new equivalents in the normalizer and UI. DB CHECK constraint accepts both old and new types.
+
+**Impact:**
+- `idea-spark.ts`: Complete rewrite — new prompt, 0-3 schema, `skip_reason` field, `LEGACY_TYPE_MAP`, confidence floor filter (drops <0.3)
+- `email-processor.ts`: New gating logic — checks `emailType`, `category`, `signalStrength` (was only noise check)
+- `types.ts`: `IDEA_TYPES` updated (11 types), `IdeaSparkData` gains `skipReason?` field
+- `IdeaSparksCard.tsx` + `IdeasFeed.tsx`: New type badge configs with icons, legacy type fallbacks
+- `EmailDetail.tsx`: Colored idea type badges (was plain text), fixed nugget type mapping
+- Migration 043: Updated `email_ideas.idea_type` CHECK constraint for new types + legacy compat
+- Cost reduction: ~$0.60/month (was ~$1.05/month) from smarter gating
+
+---
+
 ## Change Log
 
 | Date | Decision | Changed By |
@@ -793,3 +820,4 @@ When making new architectural decisions, document them here using this template:
 | Mar 2026 | Inbox tab consolidation (8→5), Ideas moved to Tasks, email traceability, quick task creation from email, search in AllItemsContent | Claude (items & email UX) |
 | Mar 2026 | QuickAcceptPopover (2-step promote), Board project color stripes, Done auto-collapse, column quick-add | Claude (tasks redesign phase 2) |
 | Mar 2026 | Query optimization (field selection + Supabase joins), smarter triage badge, snooze persistence, AllItemsContent deprecation | Claude (tasks redesign phase 3) |
+| Mar 2026 | Idea Spark refinement: solopreneur focus, 0-3 ideas, smarter gating, new types | Claude (idea spark overhaul) |

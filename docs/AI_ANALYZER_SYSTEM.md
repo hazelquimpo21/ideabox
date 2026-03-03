@@ -1374,29 +1374,38 @@ const result = senderTypeDetector.detect({
 
 ---
 
-### 7. Idea Spark Analyzer (NEW Feb 2026)
+### 7. Idea Spark Analyzer (Feb 2026, REFINED Mar 2026)
 
-**Purpose:** Generate creative, actionable ideas from email content
+**Purpose:** Generate creative, actionable ideas from email content — oriented toward solopreneurs
 
-> This is the most "creative" analyzer in the system. While other analyzers classify, extract, or summarize, this one generates NEW ideas that connect the email's content to the user's actual life.
+> This is the most "creative" analyzer in the system. While other analyzers classify, extract, or summarize, this one generates NEW ideas that connect the email's content to the user's actual life, business, and projects.
 >
-> **VOICE (Feb 2026):** Speaks like a creative thinking partner — "the friend who reads your email over coffee and goes 'oh wait, this gave me an idea for you.'" Ideas should feel like a genuine "hey, you should do this" from a smart friend, not a brainstorming bot.
+> **VOICE:** Speaks like a sharp solopreneur friend — "reads your email over coffee and spots opportunities you'd miss." Ideas should feel like a genuine "hey, you should do this" from someone who knows your business, not a brainstorming bot.
 
-**When It Runs:** PHASE 2 (conditional). Skipped when `signal_strength = 'noise'` to save tokens (~30% of emails). Uses higher temperature (0.7) for creative output.
+**When It Runs:** PHASE 2 (conditional). Uses higher temperature (0.7) for creative output. **Skipped for:**
+- `signal_strength = 'noise'` or `'low'` (background noise, generic promos)
+- `email_type = 'automated'`, `'notification'`, or `'transactional'` (receipts, codes, alerts)
+- `category = 'notifications'` (password resets, 2FA, login alerts)
+- Estimated skip rate: ~60% of emails (was ~30% before Mar 2026 refinement)
 
-**Idea Types:**
+**Key Design Change (Mar 2026):** Returns **0-3 ideas** instead of always 3. The model can return 0 ideas with a `skip_reason` when the email isn't idea-worthy. This eliminates forced, low-quality ideas from emails like receipts and shipping updates.
+
+**Idea Types (UPDATED Mar 2026):**
 | Type | Description | Example |
 |------|-------------|---------|
-| `social_post` | Content for social media | Tweet about an industry trend from newsletter |
+| `tweet_draft` | Actual tweet/post draft text | "Draft: 'Builders underestimate X. Here's what I learned...'" |
 | `networking` | Reach out, connect, collaborate | Intro to speaker from event invite |
 | `business` | Business opportunity, strategy | Proposal idea inspired by client email |
-| `content_creation` | Blog, article, podcast topic | Article inspired by product update |
-| `hobby` | Personal interests, side projects | DIY project from shopping confirmation |
-| `shopping` | Gift ideas, wishlist items | Gift for spouse based on their interests |
+| `content_creation` | Blog, article, podcast topic | Article inspired by industry newsletter |
+| `learning` | Course, tutorial, book, skill, concept | Deep-dive on RAG framework from newsletter |
+| `tool_to_try` | Tool, app, or service worth trying | Scheduling tool mentioned in product email |
+| `place_to_visit` | Restaurant, event, experience | Pottery class near user's city |
 | `date_night` | Partner/relationship activities | Restaurant from local event email |
 | `family_activity` | Activities with kids, family outings | Science museum from school newsletter |
-| `personal_growth` | Skills to learn, habits to build | Course inspired by industry newsletter |
+| `personal_growth` | Habits, routines, wellness | Morning routine inspired by newsletter tip |
 | `community` | Local involvement, volunteering | Volunteer opportunity from community email |
+
+**Legacy Types (backward compat):** `social_post` → `tweet_draft`, `hobby` → `learning`, `shopping` → `personal_growth`
 
 **Function Schema:**
 ```typescript
@@ -1405,33 +1414,36 @@ const result = senderTypeDetector.detect({
   parameters: {
     type: 'object',
     properties: {
+      has_ideas: { type: 'boolean', description: 'False for emails that don\'t warrant ideas' },
+      skip_reason: { type: 'string', description: 'Why no ideas (e.g., "transactional receipt")' },
       ideas: {
         type: 'array',
         items: {
           type: 'object',
           properties: {
             idea: { type: 'string', description: '1-2 sentence specific, actionable idea' },
-            type: { type: 'string', enum: ['social_post', 'networking', 'business', 'content_creation', 'hobby', 'shopping', 'date_night', 'family_activity', 'personal_growth', 'community'] },
-            connection: { type: 'string', description: 'How this connects to the user\'s life' },
-            effort: { type: 'string', enum: ['5min', '30min', '1hr', 'half_day', 'ongoing'] },
+            type: { type: 'string', enum: ['tweet_draft', 'networking', 'business', 'content_creation', 'learning', 'tool_to_try', 'place_to_visit', 'date_night', 'family_activity', 'personal_growth', 'community'] },
+            relevance: { type: 'string', description: 'Why this connects to the user\'s context' },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
           },
-          required: ['idea', 'type', 'connection', 'effort'],
+          required: ['idea', 'type', 'relevance', 'confidence'],
         },
-        minItems: 1,
+        minItems: 0,
         maxItems: 3,
       },
       confidence: { type: 'number', minimum: 0, maximum: 1 },
     },
-    required: ['ideas', 'confidence'],
+    required: ['has_ideas', 'ideas', 'confidence'],
   },
 }
 ```
 
 **Database Storage:**
-- `email_analyses.idea_sparks` JSONB: Array of idea objects
+- `email_analyses.idea_sparks` JSONB: `{ has_ideas, ideas[], skip_reason?, confidence }`
 - Promoted ideas saved to `email_ideas` table via POST /api/ideas
+- Migration 043: Updated `email_ideas.idea_type` CHECK constraint for new types
 
-**Cost:** ~$0.0003 per email (runs in Phase 2, skipped for noise)
+**Cost:** ~$0.0002 per email × ~100 emails/day (after smarter filtering) = ~$0.60/month
 
 ---
 
@@ -1556,14 +1568,15 @@ All follow the same BaseAnalyzer pattern, making them easy to add/remove/modify 
 │  PHASE 2: Conditional Analyzers                                                          │
 │                                                                                          │
 │    ┌─────────────────────────────┐     ┌─────────────────────────┐     ┌──────────────────────────┐ │
-│    │ signal_strength != 'noise'? │     │ substantive content?    │     │ has_event?               │ │
-│    └──────────────┬──────────────┘     └────────────┬────────────┘     └────────────┬─────────────┘ │
-│         ┌────────┴────────┐               ┌────────┴────────┐         ┌────────────┴────────────┐  │
-│         │ YES             │ NO             │ YES             │ NO       │YES                    NO│  │
-│         ▼                 ▼                ▼                 ▼          ▼                         ▼  │
-│  ┌─────────────┐   ┌─────────┐     ┌─────────────┐  ┌─────────┐  ┌──────────────────────┐ ┌─────┐ │
-│  │  IdeaSpark  │   │  Skip   │     │  Insight    │  │  Skip   │  │ has_multiple_events? │ │Skip │ │
-│  │  (NEW Feb)  │   │ (save$) │     │  Extractor  │  │ (save$) │  └──────────┬───────────┘ │     │ │
+│    │ signal != noise/low AND    │     │ substantive content?    │     │ has_event?               │ │
+│    │ type != auto/notif/txn AND │     └────────────┬────────────┘     └────────────┬─────────────┘ │
+│    │ cat != notifications?      │          ┌───────┴────────┐         ┌────────────┴────────────┐  │
+│    └──────────────┬──────────────┘         │ YES            │ NO       │YES                    NO│  │
+│         ┌────────┴────────┐               ▼                 ▼          ▼                         ▼  │
+│         │ YES             │ NO      ┌─────────────┐  ┌─────────┐  ┌──────────────────────┐ ┌─────┐ │
+│  ┌─────────────┐   ┌─────────┐     │  Insight    │  │  Skip   │  │ has_multiple_events? │ │Skip │ │
+│  │  IdeaSpark  │   │  Skip   │     │  Extractor  │  │ (save$) │  └──────────┬───────────┘ │     │ │
+│  │  (0-3 ideas)│   │ (save$) │
 │  │ + ideas     │   └─────────┘     │  (NEW Feb)  │  └─────────┘   ┌────────┴────────┐    └─────┘ │
 │  │ + types     │                   │ + insights  │                 │ YES             │ NO          │
 │  └──────┬──────┘                   │ + tips      │                 ▼                 ▼             │

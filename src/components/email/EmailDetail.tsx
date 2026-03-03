@@ -63,6 +63,42 @@ import type { Email, EmailCategory } from '@/types/database';
 const logger = createLogger('EmailDetail');
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// IDEA TYPE HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const IDEA_TYPE_LABELS: Record<string, string> = {
+  tweet_draft: 'Tweet', networking: 'Networking', business: 'Business',
+  content_creation: 'Content', learning: 'Learning', tool_to_try: 'Tool',
+  place_to_visit: 'Place', date_night: 'Date Night', family_activity: 'Family',
+  personal_growth: 'Growth', community: 'Community',
+  social_post: 'Tweet', hobby: 'Learning', // legacy
+};
+
+const IDEA_TYPE_STYLES: Record<string, string> = {
+  tweet_draft: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800',
+  networking: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800',
+  business: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800',
+  content_creation: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800',
+  learning: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-800',
+  tool_to_try: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800',
+  place_to_visit: 'bg-lime-50 text-lime-700 border-lime-200 dark:bg-lime-900/20 dark:text-lime-300 dark:border-lime-800',
+  date_night: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-800',
+  family_activity: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800',
+  personal_growth: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-800',
+  community: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800',
+  social_post: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800',
+  hobby: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-800',
+};
+
+function getIdeaTypeLabel(type: string): string {
+  return IDEA_TYPE_LABELS[type] || type.replace(/_/g, ' ');
+}
+
+function getIdeaTypeStyle(type: string): string {
+  return IDEA_TYPE_STYLES[type] || '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -534,11 +570,11 @@ function AnalysisSummary({
                     title="Save nugget"
                     onClick={() => {
                       const nuggetTypeToIdeaType: Record<string, string> = {
-                        deal: 'shopping',
-                        tip: 'personal_growth',
+                        deal: 'business',
+                        tip: 'learning',
                         quote: 'content_creation',
                         stat: 'business',
-                        recommendation: 'personal_growth',
+                        recommendation: 'learning',
                         remember_this: 'business',
                         sales_opportunity: 'business',
                       };
@@ -767,8 +803,8 @@ function AnalysisSummary({
                   key={index}
                   className="group flex items-start gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
                 >
-                  <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
-                    {idea.type.replace(/_/g, ' ')}
+                  <Badge variant="outline" className={cn('text-xs shrink-0 mt-0.5', getIdeaTypeStyle(idea.type))}>
+                    {getIdeaTypeLabel(idea.type)}
                   </Badge>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm leading-snug">{idea.idea}</p>

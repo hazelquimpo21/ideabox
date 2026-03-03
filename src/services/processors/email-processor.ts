@@ -447,20 +447,43 @@ export class EmailProcessor {
 
     // ─────────────────────────────────────────────────────────────────────────
     // IdeaSpark: Generate creative ideas from email content + user context
-    // NEW (Feb 2026): Runs on ALL non-noise emails. Skips noise to save tokens.
-    // This is the most "creative" analyzer — higher temperature, lateral thinking.
+    // REFINED (Mar 2026): Smarter gating — skip emails that never produce good ideas.
+    // Previously ran on ALL non-noise emails. Now also skips:
+    //   - low signal (background noise, generic promos)
+    //   - automated/notification/transactional email types (receipts, codes, alerts)
+    //   - notifications category (password resets, login alerts, 2FA)
     // ─────────────────────────────────────────────────────────────────────────
-    if (!isNoise && this.ideaSpark.isEnabled()) {
-      logger.debug('Running IdeaSpark (signal_strength != noise)', {
+    const emailType = categorizationResult.success
+      ? categorizationResult.data.emailType
+      : undefined;
+    const emailCategory = categorizationResult.success
+      ? categorizationResult.data.category
+      : undefined;
+    const isLowSignal = signalStrength === 'low';
+    const isIdeaUnworthyType = emailType === 'automated' || emailType === 'notification' || emailType === 'transactional';
+    const isIdeaUnworthyCategory = emailCategory === 'notifications';
+    const shouldRunIdeaSpark = !isNoise && !isLowSignal && !isIdeaUnworthyType && !isIdeaUnworthyCategory && this.ideaSpark.isEnabled();
+
+    if (shouldRunIdeaSpark) {
+      logger.debug('Running IdeaSpark', {
         emailId: emailInput.id,
         signalStrength: signalStrength ?? 'unknown',
+        emailType: emailType ?? 'unknown',
+        emailCategory: emailCategory ?? 'unknown',
         hasUserContext: !!(enrichedContext.role || enrichedContext.interests?.length),
       });
       ideaSparkResult = await this.runIdeaSpark(emailInput, enrichedContext);
-    } else if (isNoise) {
-      logger.debug('Skipping IdeaSpark — email classified as noise', {
+    } else {
+      const skipReason = isNoise ? 'noise' :
+        isLowSignal ? 'low_signal' :
+        isIdeaUnworthyType ? `email_type:${emailType}` :
+        isIdeaUnworthyCategory ? `category:${emailCategory}` : 'disabled';
+      logger.debug('Skipping IdeaSpark', {
         emailId: emailInput.id,
+        skipReason,
         signalStrength,
+        emailType,
+        emailCategory,
       });
     }
 
@@ -1752,7 +1775,7 @@ export class EmailProcessor {
           }
         : null,
 
-      // Idea sparks (NEW Feb 2026: creative ideas from email content + user context)
+      // Idea sparks (Feb 2026, REFINED Mar 2026: 0-3 ideas, smarter gating)
       idea_sparks: analysis.ideaSparks
         ? {
             has_ideas: analysis.ideaSparks.hasIdeas,
@@ -1762,6 +1785,7 @@ export class EmailProcessor {
               relevance: idea.relevance,
               confidence: idea.confidence,
             })),
+            skip_reason: analysis.ideaSparks.skipReason || undefined,
             confidence: analysis.ideaSparks.confidence,
           }
         : null,
