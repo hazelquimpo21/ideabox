@@ -165,7 +165,7 @@ src/
       content-digest.ts         # Email summary + key points + links + golden nuggets + email style ideas
       contact-enricher.ts       # Contact metadata extraction
       sender-type-detector.ts   # Direct vs broadcast classification
-      idea-spark.ts             # Creative ideas from emails (NEW Feb 2026)
+      idea-spark.ts             # Creative ideas from emails (Feb 2026, REFINED Mar 2026: 0-3 ideas, solopreneur focus)
       insight-extractor.ts      # Newsletter insights/tips (NEW Feb 2026)
       news-brief.ts             # Factual news extraction (NEW Feb 2026)
       link-analyzer.ts          # Deep URL intelligence from email content (NEW Feb 2026)

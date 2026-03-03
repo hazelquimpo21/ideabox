@@ -488,7 +488,7 @@ CREATE TABLE email_analyses (
   content_digest JSONB,       -- {gist, key_points, links, content_type, golden_nuggets, email_style_ideas} (migration 025, enhanced Feb 2026)
 
   -- Phase 2 analyzer columns (Feb 2026)
-  idea_sparks JSONB,          -- {has_ideas, ideas[{idea, type, relevance, confidence}], confidence} (migration 033)
+  idea_sparks JSONB,          -- {has_ideas, ideas[{idea, type, relevance, confidence}], skip_reason?, confidence} (migration 033, types updated 043)
   insight_extraction JSONB,   -- {has_insights, insights[{insight, type, topics[], confidence}], confidence} (migration 034)
   news_brief JSONB,           -- {has_news, news_items[{headline, detail, topics[], date_mentioned, confidence}], confidence} (migration 034)
   multi_event_detection JSONB, -- {has_events, events[{event_title, event_date, event_time, location, ...}]} max 10 (migration 035)
@@ -535,7 +535,7 @@ CREATE TABLE email_ideas (
   email_id UUID REFERENCES emails(id) ON DELETE SET NULL,
 
   idea TEXT NOT NULL,
-  idea_type TEXT NOT NULL,   -- social_post, networking, business, content_creation, hobby, shopping, date_night, family_activity, personal_growth, community
+  idea_type TEXT NOT NULL,   -- tweet_draft, networking, business, content_creation, learning, tool_to_try, place_to_visit, date_night, family_activity, personal_growth, community (legacy: social_post, hobby, shopping)
   relevance TEXT,
   status TEXT NOT NULL DEFAULT 'new',  -- new, saved, dismissed, done
   confidence DECIMAL(3,2),
@@ -1223,8 +1223,7 @@ All migrations are in `scripts/migration-*.sql` (not `supabase/migrations/`).
 | 040 | profile-expansion.sql | gender, birthday, address, employment, household_members, pets on user_context |
 | 041 | projects.sql | projects + project_items tables with RLS, indexes, triggers, recurrence support |
 | 042 | link-analysis.sql | saved_links table, enhanced url_extraction JSONB with priority scoring |
-| 043 | denormalize-urgency-relationship.sql | urgency_score INTEGER + relationship_signal TEXT on emails (backfill from email_analyses) |
-| 044 | golden-nugget-count.sql | golden_nugget_count INTEGER on emails (backfill from content_digest nuggets) |
+| 043 | idea-types-update.sql | Update email_ideas.idea_type CHECK constraint: new types (tweet_draft, learning, tool_to_try, place_to_visit) + keep legacy types |
 | — | migrate-categories-feb2026.sql | Data migration: consolidate old categories to 13 life-bucket values |
 
 ---
