@@ -185,15 +185,10 @@ export function EmailDetailModal({
     };
   }, [isOpen, emailId, supabase, onEmailUpdated]);
 
-  // Clean up email state when modal closes
+  // Clear errors when modal closes, but keep email for instant re-open
   React.useEffect(() => {
     if (!isOpen) {
-      // Small delay to allow close animation before clearing
-      const timeout = setTimeout(() => {
-        setEmail(null);
-        setError(null);
-      }, 200);
-      return () => clearTimeout(timeout);
+      setError(null);
     }
   }, [isOpen]);
 

@@ -47,6 +47,8 @@ export interface UseProjectItemsOptions {
   sortBy?: 'sort_order' | 'due_date' | 'priority' | 'created_at';
   /** Max items */
   limit?: number;
+  /** Skip fetch when false */
+  enabled?: boolean;
 }
 
 export interface ProjectItemStats {
@@ -140,11 +142,13 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
     status = 'all',
     sortBy = 'sort_order',
     limit = DEFAULT_LIMIT,
+    enabled,
   } = options;
 
   // ─── Fetch ──────────────────────────────────────────────────────────────────
 
   const fetchItems = React.useCallback(async () => {
+    if (enabled === false) { setIsLoading(false); return; }
     setIsLoading(true);
     setError(null);
     logger.start('Fetching project items', { projectId, itemType, status, sortBy });
@@ -198,7 +202,7 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, projectId, itemType, status, sortBy, limit]);
+  }, [supabase, projectId, itemType, status, sortBy, limit, enabled]);
 
   // ─── Create ─────────────────────────────────────────────────────────────────
 
@@ -344,8 +348,9 @@ export function useProjectItems(options: UseProjectItemsOptions = {}): UseProjec
   // ─── Effects ────────────────────────────────────────────────────────────────
 
   React.useEffect(() => {
+    if (enabled === false) return;
     fetchItems();
-  }, [fetchItems]);
+  }, [fetchItems, enabled]);
 
   return {
     items, isLoading, error, stats,

@@ -90,7 +90,7 @@ The following recommendations from the original audit have been fully implemente
 **Migration 044:** Added `golden_nugget_count INTEGER DEFAULT 0` to emails table with backfill from `email_analyses` JSONB. Gem badge (purple `Gem` icon + count) now renders in InboxEmailRow, InboxEmailCard, and CategoryEmailCard when count > 0.
 
 ### B. Email Style Ideas Discovery Surface
-Deferred to Phase 2 (item 2.3 in `.plan.md`).
+Deferred to a future session (email style ideas feed — hook + API + component).
 
 ### C. Denormalize `urgency_score` ✅
 **Migration 043:** Added `urgency_score INTEGER` to emails table. Backfilled from `email_analyses.action_extraction.urgencyScore`. Email processor now denormalizes during analysis. CategoryEmailCard urgency display is no longer dead code.

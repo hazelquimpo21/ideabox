@@ -502,6 +502,14 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// MODULE-LEVEL CACHE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Persists across hook instances within the same page session.
+// Background refetch on every open ensures staleness is bounded to one modal-open cycle.
+const analysisCache = new Map<string, NormalizedAnalysis>();
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // HOOK IMPLEMENTATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -521,8 +529,12 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
  * ```
  */
 export function useEmailAnalysis(emailId: string | null): UseEmailAnalysisReturn {
-  const [analysis, setAnalysis] = React.useState<NormalizedAnalysis | null>(null);
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [analysis, setAnalysis] = React.useState<NormalizedAnalysis | null>(
+    emailId ? (analysisCache.get(emailId) ?? null) : null
+  );
+  const [isLoading, setIsLoading] = React.useState(
+    emailId ? !analysisCache.has(emailId) : false
+  );
   const [error, setError] = React.useState<Error | null>(null);
 
   const supabase = React.useMemo(() => createClient(), []);
@@ -533,10 +545,17 @@ export function useEmailAnalysis(emailId: string | null): UseEmailAnalysisReturn
       return;
     }
 
-    setIsLoading(true);
+    // If we have a cached result, show it immediately but still refetch
+    const cached = analysisCache.get(emailId);
+    if (cached) {
+      setAnalysis(cached);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     setError(null);
 
-    logger.debug('Fetching email analysis', { emailId });
+    logger.debug('Fetching email analysis', { emailId, fromCache: !!cached });
 
     try {
       const { data, error: queryError } = await supabase
@@ -552,17 +571,27 @@ export function useEmailAnalysis(emailId: string | null): UseEmailAnalysisReturn
       if (!data) {
         logger.debug('No analysis found for email', { emailId });
         setAnalysis(null);
+        setIsLoading(false);
         return;
       }
 
       const normalized = normalizeAnalysis(data as EmailAnalysis);
-      setAnalysis(normalized);
+
+      // Only update state if the data actually changed (preserves referential stability)
+      const existing = analysisCache.get(emailId);
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(normalized)) {
+        analysisCache.set(emailId, normalized);
+        setAnalysis(normalized);
+      }
 
       logger.debug('Analysis fetched', { emailId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       logger.error('Failed to fetch analysis', { emailId, error: errorMessage });
-      setError(err instanceof Error ? err : new Error(errorMessage));
+      // Only set error if we don't have cached data to fall back on
+      if (!cached) {
+        setError(err instanceof Error ? err : new Error(errorMessage));
+      }
     } finally {
       setIsLoading(false);
     }

@@ -1,6 +1,6 @@
 -- Migration 043: Denormalize urgency_score and relationship_signal to emails table
 -- These fields exist in email_analyses JSONB but are needed for fast list-view access.
--- See: .plan.md section 1.1, docs/UI_FIELD_AUDIT.md recommendations C and D.
+-- See: docs/UI_FIELD_AUDIT.md recommendations C and D.
 
 ALTER TABLE emails ADD COLUMN IF NOT EXISTS urgency_score INTEGER;
 ALTER TABLE emails ADD COLUMN IF NOT EXISTS relationship_signal TEXT;

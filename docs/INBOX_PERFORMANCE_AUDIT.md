@@ -374,7 +374,7 @@ This addresses the user's core request: "see email detail in modal before going 
 | **P0-A** | Email Detail Modal | **DONE** | EmailDetailModal component + wired into all tabs |
 | **P0-B** | `select('*')` → select specific fields | **DONE** | EMAIL_LIST_FIELDS / MODAL_LIST_FIELDS constants |
 | **P1-A** | Fix broken `/inbox/[category]` route | **DONE** | Rebuilt as inline component using useEmails |
-| **P1-B** | Add SWR/React Query cache | TODO | Deferred — requires new dependency |
+| **P1-B** | Add SWR/React Query cache | **PARTIAL** | Analysis cache added (module-level Map with stale-while-revalidate) in Phase 3. Full SWR/RQ for all hooks deferred. |
 | **P2-A** | ArchiveContent server-side filtering | **DONE** | New `archivedOnly` option in useEmails |
 | **P2-B** | Batch bulk operations | **DONE** | Single `.in('id', ids)` call |
 | **P2-C** | SQL aggregation for stats | TODO | Requires API endpoint |
@@ -410,6 +410,15 @@ This addresses the user's core request: "see email detail in modal before going 
 - `src/components/categories/EmailCard.tsx` — wrapped in React.memo, removed debug useEffect
 - `src/components/archive/ArchiveContent.tsx` — ArchivedEmailItem wrapped in React.memo
 - `src/components/inbox/PriorityEmailList.tsx` — extracted PriorityEmailRow (React.memo), Supabase client at component level
+
+### Email Detail Redesign — Performance (Phase 3, March 2026)
+- `src/hooks/useEmailAnalysis.ts` — Module-level `Map<string, NormalizedAnalysis>` cache with stale-while-revalidate. Cached analysis shown instantly on re-open; background refetch silently updates if data changed. JSON comparison prevents unnecessary re-renders.
+- `src/hooks/useProjects.ts` — `enabled?: boolean` option to skip fetch (used by SmartCaptureBar deferred loading)
+- `src/hooks/useProjectItems.ts` — Same `enabled` pattern
+- `src/components/email/AnalysisSummary.tsx` — SmartCaptureBar wrapped in collapsible section, deferred mount via ref (saves 2 Supabase queries per modal open)
+- `src/components/email/EmailDetailModal.tsx` — Removed state-clearing timeout on close (keeps email data for instant re-open)
+- `src/components/email/AISummaryBar.tsx` — Sticky positioning with backdrop blur
+- `src/components/email/CollapsibleAnalysisSection.tsx` — `onToggle` callback, fade-in animation on expand
 
 ---
 
@@ -462,10 +471,9 @@ Now centralized in `src/types/discovery.ts`:
 
 ## Remaining Work
 
-### P1-B: Client-Side Data Cache
-- Add `swr` or `@tanstack/react-query` to `package.json`
-- Wrap Supabase calls in `useSWR` or `useQuery` hooks
-- Automatic deduplication, stale-while-revalidate, background refetching
+### P1-B: Client-Side Data Cache (partially addressed)
+- Analysis data now has a module-level stale-while-revalidate cache (Phase 3)
+- Full SWR/React Query for all hooks (useEmails, useContacts, etc.) still deferred — requires new dependency
 
 ### P2-C: SQL Aggregation for Stats
 - Create `/api/emails/stats` endpoint with `GROUP BY category` SQL
