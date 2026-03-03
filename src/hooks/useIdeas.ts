@@ -14,7 +14,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createLogger } from '@/lib/utils/logger';
 
 const logger = createLogger('useIdeas');
@@ -128,11 +128,16 @@ export function useIdeas(options: UseIdeasOptions = {}): UseIdeasReturn {
   const [stats, setStats] = useState<IdeasStats | null>(null);
   const [isLoading, setIsLoading] = useState(!skip);
   const [error, setError] = useState<Error | null>(null);
+  const isFetchingRef = useRef(false);
 
   /**
    * Fetch ideas from the API.
    */
   const fetchIdeas = useCallback(async () => {
+    // Prevent overlapping fetches from re-renders
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     try {
       setIsLoading(true);
       setError(null);
@@ -165,6 +170,7 @@ export function useIdeas(options: UseIdeasOptions = {}): UseIdeasReturn {
       setError(fetchError);
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
   }, [limit, type, minConfidence]);
 
