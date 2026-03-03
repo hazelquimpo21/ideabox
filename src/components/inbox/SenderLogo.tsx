@@ -56,7 +56,8 @@ function shouldSkipDomain(domain: string): boolean {
       'marketing', 'orders', 'rewards', 'enotify', 'shared1', 'mail-service',
       'bounce', 'return', 'reply', 'comms', 'mailer', 'updates', 'alerts',
       'messages', 'system', 'do-not-reply', 'donotreply', 'no-reply',
-      'notifications', 'promo', 'campaign', 'digest',
+      'notifications', 'promo', 'campaign', 'digest', 'creators',
+      'members', 'community', 'shop', 'store', 'support', 'account',
     ].includes(sub)) {
       return true;
     }
