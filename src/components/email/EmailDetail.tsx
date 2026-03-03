@@ -5,18 +5,40 @@
  * Displays the full content of a selected email with rich AI analysis.
  * Used in a slide-out panel from the email list.
  *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * ARCHITECTURE (Phase 1 Redesign — March 2026)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Data flow: EmailDetailModal (hooks) → EmailDetail (layout) → sections (render)
+ *
+ * - useEmailAnalysis and useExtractedDates are hoisted to EmailDetailModal so
+ *   they fire in parallel with the email fetch (no more request waterfall).
+ * - This component receives analysis/extractedDates/refetchAnalysis as props.
+ * - AISummaryBar renders between subject and body for at-a-glance insights.
+ * - AnalysisSummary (internal function) is the full analysis section below body.
+ *   It receives data via props — it no longer calls hooks itself.
+ *
+ * Render order: EmailHeader → EmailSubject → AISummaryBar → EmailBody → AnalysisSummary
+ *
  * @module components/email/EmailDetail
+ * @see EmailDetailModal — data boundary (hook calls live there)
+ * @see AISummaryBar — compact summary bar above email body
  */
 
 'use client';
 
 import * as React from 'react';
 import { Button, Badge, Card, CardContent, CardHeader, Skeleton } from '@/components/ui';
-import { useEmailAnalysis, useExtractedDates } from '@/hooks';
+// NOTE: useEmailAnalysis and useExtractedDates are now called in EmailDetailModal
+// (hoisted to fire in parallel with email fetch). This component receives their
+// results as props. Only type imports are needed here.
+import type { NormalizedAnalysis } from '@/hooks/useEmailAnalysis';
+import type { ExtractedDate } from '@/hooks/useExtractedDates';
 import { EventDetailsCard } from './EventDetailsCard';
 import { ContentDigestSection } from './ContentDigestSection';
 import { DateExtractionSection } from './DateExtractionSection';
 import { SmartCaptureBar } from './SmartCaptureBar';
+import { AISummaryBar } from './AISummaryBar';
 import { createLogger } from '@/lib/utils/logger';
 import { cn } from '@/lib/utils/cn';
 import {
@@ -112,6 +134,11 @@ export interface EmailDetailProps {
   onClose?: () => void;
   isLoading?: boolean;
   isAnalyzing?: boolean;
+  // Hoisted analysis data (from EmailDetailModal)
+  analysis?: NormalizedAnalysis | null;
+  isLoadingAnalysis?: boolean;
+  extractedDates?: ExtractedDate[];
+  refetchAnalysis?: () => Promise<void>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -348,18 +375,30 @@ function EmailSubject({ email }: { email: Email }) {
   );
 }
 
+/**
+ * Full analysis section rendered below the email body.
+ *
+ * Phase 1 change: No longer calls useEmailAnalysis / useExtractedDates directly.
+ * Receives all analysis data as props from EmailDetailModal via EmailDetail.
+ * Phase 2 will extract this into its own file and decompose into collapsible sections.
+ */
 function AnalysisSummary({
   email,
   onAnalyze,
   isAnalyzing,
+  analysis,
+  isLoadingAnalysis,
+  extractedDates,
+  refetchAnalysis,
 }: {
   email: Email;
   onAnalyze?: (emailId: string) => Promise<void>;
   isAnalyzing?: boolean;
+  analysis?: NormalizedAnalysis | null;
+  isLoadingAnalysis?: boolean;
+  extractedDates?: ExtractedDate[];
+  refetchAnalysis?: () => Promise<void>;
 }) {
-  const { analysis, isLoading: isLoadingAnalysis, refetch } = useEmailAnalysis(email.id);
-  const { dates: extractedDates } = useExtractedDates({ emailId: email.id });
-
   // Track which items have been saved (nuggets, ideas, insights, style ideas)
   const [savedItems, setSavedItems] = React.useState<Set<string>>(new Set());
   const markSaved = React.useCallback((key: string) => {
@@ -371,9 +410,9 @@ function AnalysisSummary({
     if (onAnalyze) {
       await onAnalyze(email.id);
       // Refetch analysis data after it completes
-      await refetch();
+      if (refetchAnalysis) await refetchAnalysis();
     }
-  }, [onAnalyze, email.id, refetch]);
+  }, [onAnalyze, email.id, refetchAnalysis]);
 
   // Not analyzed yet
   if (!email.analyzed_at) {
@@ -1029,10 +1068,10 @@ function AnalysisSummary({
         )}
 
         {/* Date Extraction — deadlines, dates, time-sensitive items */}
-        {(extractedDates.length > 0 || analysis?.dateExtraction) && (
+        {((extractedDates && extractedDates.length > 0) || analysis?.dateExtraction) && (
           <DateExtractionSection
             extraction={analysis?.dateExtraction}
-            dates={extractedDates.length > 0 ? extractedDates.map(d => ({
+            dates={extractedDates && extractedDates.length > 0 ? extractedDates.map(d => ({
               dateType: d.date_type || 'other',
               date: d.date,
               time: d.event_time || undefined,
@@ -1267,6 +1306,10 @@ export function EmailDetail({
   onClose,
   isLoading = false,
   isAnalyzing = false,
+  analysis,
+  isLoadingAnalysis,
+  extractedDates,
+  refetchAnalysis,
 }: EmailDetailProps) {
   if (isLoading) {
     return (
@@ -1294,9 +1337,24 @@ export function EmailDetail({
       />
       <div className="flex-1 overflow-y-auto">
         <EmailSubject email={email} />
-        <EmailQuickActions email={email} />
+        {/* AI Summary Bar — above the body */}
+        <div className="px-6 pb-2">
+          <AISummaryBar
+            email={email}
+            analysis={analysis ?? null}
+            isLoading={isLoadingAnalysis ?? false}
+          />
+        </div>
         <EmailBody email={email} />
-        <AnalysisSummary email={email} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
+        <AnalysisSummary
+          email={email}
+          onAnalyze={onAnalyze}
+          isAnalyzing={isAnalyzing}
+          analysis={analysis}
+          isLoadingAnalysis={isLoadingAnalysis}
+          extractedDates={extractedDates}
+          refetchAnalysis={refetchAnalysis}
+        />
         {email.gmail_id && (
           <div className="px-6 py-4 border-t border-border">
             <a

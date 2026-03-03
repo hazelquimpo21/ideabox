@@ -20,6 +20,10 @@
  *
  * - Fetches email body (body_html/body_text) only when the modal opens,
  *   since list views use EMAIL_LIST_FIELDS which exclude heavy body fields.
+ * - useEmailAnalysis and useExtractedDates are hoisted here (Phase 1 redesign)
+ *   so they fire in parallel with the email fetch, eliminating the request
+ *   waterfall that previously delayed analysis display. Analysis data is
+ *   threaded through EmailDetail → AnalysisSummary as props.
  * - Wraps EmailDetail (existing component) in a Dialog for consistent UX.
  * - Star/archive actions optimistically update via onEmailUpdated callback
  *   so the parent list reflects changes immediately.
@@ -43,6 +47,8 @@ import { EmailDetail } from './EmailDetail';
 import { ExternalLink } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
+import { useEmailAnalysis } from '@/hooks/useEmailAnalysis';
+import { useExtractedDates } from '@/hooks/useExtractedDates';
 import type { Email } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -94,6 +100,18 @@ export function EmailDetailModal({
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+
+  // ─── Hoisted analysis hooks — fire in parallel with email fetch ────────────
+
+  const {
+    analysis,
+    isLoading: isLoadingAnalysis,
+    refetch: refetchAnalysis,
+  } = useEmailAnalysis(isOpen ? emailId : null);
+
+  const {
+    dates: extractedDates,
+  } = useExtractedDates(isOpen && emailId ? { emailId } : {});
 
   // ─── Fetch full email data when modal opens ─────────────────────────────────
 
@@ -269,17 +287,16 @@ export function EmailDetailModal({
         throw new Error('Analysis failed');
       }
 
-      // Refetch email to get updated analysis
+      // Refetch both email and analysis
       const { data } = await supabase
         .from('emails')
         .select('*')
         .eq('id', emailId)
         .single();
 
-      if (data) {
-        setEmail(data);
-        logger.success('Email re-analyzed in modal', { emailId });
-      }
+      if (data) setEmail(data);
+      await refetchAnalysis();
+      logger.success('Email re-analyzed in modal', { emailId });
     } catch (err) {
       logger.error('Failed to analyze in modal', { error: String(err) });
     } finally {
@@ -371,6 +388,10 @@ export function EmailDetailModal({
               onAnalyze={handleAnalyze}
               onClose={onClose}
               isAnalyzing={isAnalyzing}
+              analysis={analysis}
+              isLoadingAnalysis={isLoadingAnalysis}
+              extractedDates={extractedDates}
+              refetchAnalysis={refetchAnalysis}
             />
 
             {/* Footer with "Open Full Page" */}
