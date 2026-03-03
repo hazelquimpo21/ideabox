@@ -51,11 +51,12 @@ function shouldSkipDomain(domain: string): boolean {
   if (parts.length > 2) {
     const sub = parts[0]!;
     if ([
-      'mail', 'email', 'e', 'em', 'info', 'news', 'notify', 'noreply', 'service',
-      'reminder', 'mail8', 'send', 'hello', 'marketing', 'orders', 'rewards',
-      'enotify', 'shared1', 'mail-service', 'bounce', 'return', 'reply',
-      'comms', 'mailer', 'updates', 'alerts', 'messages', 'system',
-      'do-not-reply', 'donotreply', 'no-reply', 'notifications',
+      'mail', 'email', 'emails', 'e', 'em', 'info', 'news', 'newsletters',
+      'notify', 'noreply', 'service', 'reminder', 'mail8', 'send', 'hello',
+      'marketing', 'orders', 'rewards', 'enotify', 'shared1', 'mail-service',
+      'bounce', 'return', 'reply', 'comms', 'mailer', 'updates', 'alerts',
+      'messages', 'system', 'do-not-reply', 'donotreply', 'no-reply',
+      'notifications', 'promo', 'campaign', 'digest',
     ].includes(sub)) {
       return true;
     }
