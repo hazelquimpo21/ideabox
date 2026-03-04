@@ -2751,6 +2751,17 @@ export class EmailProcessor {
 
     // Build update object (normalize category to prevent DB constraint violations)
     const validCategory = normalizeCategory(categorization.category) ?? categorization.category;
+
+    // MIGRATION SAFETY: Map new email_type values to old constraint-safe values
+    // when migration 044 hasn't been applied yet. Once applied, this is a no-op.
+    const LEGACY_EMAIL_TYPE_MAP: Record<string, string> = {
+      marketing: 'promo',       // 'marketing' → 'promo' (old constraint value)
+    };
+    const rawEmailType = categorization.emailType || null;
+    const safeEmailType = rawEmailType && LEGACY_EMAIL_TYPE_MAP[rawEmailType]
+      ? LEGACY_EMAIL_TYPE_MAP[rawEmailType]
+      : rawEmailType;
+
     const updates: Record<string, unknown> = {
       category: validCategory,
       summary: categorization.summary || null,
@@ -2764,17 +2775,9 @@ export class EmailProcessor {
       additional_categories: categorization.additionalCategories && categorization.additionalCategories.length > 0
         ? categorization.additionalCategories
         : null,
-      // NEW Feb 2026: Email type (nature of communication) and AI brief
-      email_type: categorization.emailType || null,
+      // Email type: use safe value that works with both old and new constraints
+      email_type: safeEmailType,
       ai_brief: categorization.aiBrief || null,
-      // NEW Mar 2026 (Taxonomy v2): Timeliness and scoring dimensions
-      timeliness: categorization.timeliness || null,
-      importance_score: scores.importance,
-      urgency_score: scores.urgency,
-      action_score: scores.action_score,
-      cognitive_load: scores.cognitive_load,
-      missability_score: scores.missability,
-      surface_priority: scores.surface_priority,
     };
 
     // Add content digest fields if available (NEW Jan 2026)
@@ -2801,35 +2804,88 @@ export class EmailProcessor {
     //   updates.relationship_signal = clientTagging.relationshipSignal ?? null;
     // }
 
+    // TAXONOMY V2 COLUMNS: Try to write timeliness + scoring columns.
+    // These require migration 044. If it hasn't been applied, the first
+    // update will succeed (core fields only) and the extended update
+    // will fail gracefully.
+    const extendedUpdates: Record<string, unknown> = {
+      ...updates,
+      timeliness: categorization.timeliness || null,
+      importance_score: scores.importance,
+      urgency_score: scores.urgency,
+      action_score: scores.action_score,
+      cognitive_load: scores.cognitive_load,
+      missability_score: scores.missability,
+      surface_priority: scores.surface_priority,
+    };
+
     const { error } = await supabase
       .from('emails')
-      .update(updates)
+      .update(extendedUpdates)
       .eq('id', emailId);
 
     if (error) {
-      // If a column doesn't exist in the schema cache (migration not yet applied),
-      // retry with only the core columns that are guaranteed to exist
-      if (error.message.includes('schema cache')) {
-        logger.warn('Schema cache miss — retrying with core columns only', {
+      // If migration 044 hasn't been applied, the extended columns or
+      // new email_type values may cause errors. Retry with core columns only.
+      const isConstraintViolation = error.message.includes('check constraint') || error.message.includes('violates');
+      const isSchemaMiss = error.message.includes('schema cache') || error.message.includes('column');
+
+      if (isConstraintViolation || isSchemaMiss) {
+        logger.warn('Extended update failed — retrying with core columns only (migration 044 may not be applied)', {
           emailId,
           error: error.message,
+          isConstraintViolation,
+          isSchemaMiss,
         });
+
+        // Core-only update: only fields guaranteed to exist pre-migration-044
         const coreUpdates: Record<string, unknown> = {
           category: updates.category,
           summary: updates.summary,
           quick_action: updates.quick_action,
           labels: updates.labels,
           topics: updates.topics,
+          signal_strength: updates.signal_strength,
+          reply_worthiness: updates.reply_worthiness,
+          additional_categories: updates.additional_categories,
+          ai_brief: updates.ai_brief,
+          // For email_type constraint violations, fall back further
+          ...(isConstraintViolation ? {} : { email_type: updates.email_type }),
         };
+
+        // Filter out null-valued keys to minimize update footprint
+        const filteredCoreUpdates = Object.fromEntries(
+          Object.entries(coreUpdates).filter(([, v]) => v !== undefined)
+        );
+
         const { error: retryError } = await supabase
           .from('emails')
-          .update(coreUpdates)
+          .update(filteredCoreUpdates)
           .eq('id', emailId);
+
         if (retryError) {
-          logger.warn('Failed to update email analysis fields (retry)', {
+          // Last resort: absolute minimum fields
+          logger.warn('Core update also failed — trying minimum fields', {
             emailId,
             error: retryError.message,
           });
+          const minUpdates: Record<string, unknown> = {
+            category: updates.category,
+            summary: updates.summary,
+            quick_action: updates.quick_action,
+            labels: updates.labels,
+            topics: updates.topics,
+          };
+          const { error: minError } = await supabase
+            .from('emails')
+            .update(minUpdates)
+            .eq('id', emailId);
+          if (minError) {
+            logger.error('Failed to update email analysis fields (all retries)', {
+              emailId,
+              error: minError.message,
+            });
+          }
         }
       } else {
         logger.warn('Failed to update email analysis fields', {
