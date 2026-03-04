@@ -122,6 +122,17 @@ export interface EventMetadata {
   eventSummary?: string | null;
   /** Key points about the event */
   keyPoints?: string[] | null;
+  /**
+   * Relevance score (0-10) estimating how likely the user is to attend.
+   * NEW (March 2026): Higher = more relevant based on locality, cost,
+   * interest match, and sender relationship.
+   */
+  relevanceScore?: number;
+  /**
+   * One-sentence explanation of why this event might interest the user.
+   * NEW (March 2026): Personalized to user's interests and context.
+   */
+  whyAttend?: string | null;
 }
 
 /**

@@ -83,6 +83,10 @@ const MAX_EVENTS_PER_EMAIL = 10;
 
 function buildSystemPrompt(context?: UserContext): string {
   const userLocation = context?.locationMetro || context?.locationCity || 'unknown';
+  const userInterests = context?.interests?.length
+    ? context.interests.join(', ')
+    : 'unknown';
+  const userRole = context?.role || 'unknown';
 
   return `You are an event extraction specialist. This email contains MULTIPLE events, dates, or schedule items. Your job is to extract ALL of them.
 
@@ -92,6 +96,12 @@ USER CONTEXT
 
 User's location: ${userLocation}
 (Use this to determine if events are local, out of town, or virtual)
+
+User's interests: ${userInterests}
+(Use this to score relevance — events matching interests get higher scores)
+
+User's role: ${userRole}
+(Use this for professional event relevance)
 
 ═══════════════════════════════════════════════════════════════════════════════
 YOUR MISSION
@@ -175,7 +185,22 @@ IMPORTANT NOTES
 - If the email links to a page with more details, that content may be included below
 - Share common fields (organizer, location) across events when they come from the same source
 - Be conservative: if unsure about a field, leave it empty
-- Each event needs at minimum: title and date`;
+- Each event needs at minimum: title and date
+
+═══════════════════════════════════════════════════════════════════════════════
+RELEVANCE SCORE (0-10) — PER EVENT (NEW!)
+═══════════════════════════════════════════════════════════════════════════════
+
+For EACH event, score how likely the user is to attend (0-10):
+- Local + free + matches interests → 8-10
+- Virtual + relevant topic → 6-7
+- Out of town or expensive → 2-4
+- Generic marketing/no interest match → 0-1
+
+Also provide a one-sentence "why_attend" for events scoring >= 5.
+Example: "Matches your interest in web development and it's free and local."
+Set why_attend to null for events scoring < 5.`;
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -272,8 +297,19 @@ const EVENT_ITEM_SCHEMA = {
       maximum: 1,
       description: 'Confidence in this event extraction (0-1)',
     },
+    // Relevance scoring (NEW March 2026)
+    relevance_score: {
+      type: 'number',
+      minimum: 0,
+      maximum: 10,
+      description: 'How likely the user is to attend (0-10). 8-10 = highly relevant, 5-7 = moderate, 0-4 = low.',
+    },
+    why_attend: {
+      type: 'string',
+      description: 'One sentence explaining why this event might interest the user. Null if relevance < 5.',
+    },
   },
-  required: ['event_title', 'event_date', 'location_type', 'rsvp_required', 'is_key_date', 'confidence', 'event_summary'],
+  required: ['event_title', 'event_date', 'location_type', 'rsvp_required', 'is_key_date', 'confidence', 'event_summary', 'relevance_score'],
 };
 
 const FUNCTION_SCHEMA: FunctionSchema = {

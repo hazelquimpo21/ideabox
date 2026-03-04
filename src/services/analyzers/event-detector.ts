@@ -134,6 +134,10 @@ const KEY_DATE_TYPES = ['registration_deadline', 'open_house', 'deadline', 'rele
  */
 function buildSystemPrompt(context?: UserContext): string {
   const userLocation = context?.locationMetro || context?.locationCity || 'unknown';
+  const userInterests = context?.interests?.length
+    ? context.interests.join(', ')
+    : 'unknown';
+  const userRole = context?.role || 'unknown';
 
   return `You are an event extraction specialist and personal assistant. Your job is to extract detailed event information AND present it in a way that helps busy users quickly understand what they need to know.
 
@@ -143,6 +147,12 @@ USER CONTEXT
 
 User's location: ${userLocation}
 (Use this to determine if events are local, out of town, or virtual)
+
+User's interests: ${userInterests}
+(Use this to score relevance — events matching interests get higher scores)
+
+User's role: ${userRole}
+(Use this for professional event relevance — conferences, meetups in their field)
 
 ═══════════════════════════════════════════════════════════════════════════════
 YOUR MISSION
@@ -284,6 +294,60 @@ OTHER DETAILS
 - organizer: Who is hosting
 - cost: Price info ("Free", "$25", etc.)
 - additional_details: Parking, dress code, what to bring
+
+═══════════════════════════════════════════════════════════════════════════════
+RELEVANCE SCORE (0-10) — "Would the user actually go to this?" (NEW!)
+═══════════════════════════════════════════════════════════════════════════════
+
+Score how likely the user is to ATTEND or CARE about this event.
+Consider these factors (in order of importance):
+
+1. LOCALITY (biggest factor):
+   - Local (in/near ${userLocation}): +3 points base
+   - Virtual: +2 points base (easy to attend)
+   - Out of town: +0 points (requires travel commitment)
+
+2. COST BARRIER:
+   - Free: +2 points
+   - Low cost (<$50): +1 point
+   - Expensive (>$100): -1 point
+
+3. INTEREST MATCH:
+   - Matches user's stated interests or industry: +2 points
+   - Tangentially related: +1 point
+   - No clear match: +0 points
+
+4. SENDER RELATIONSHIP:
+   - From VIP contact or known person: +2 points
+   - From organization user subscribes to: +1 point
+   - Generic marketing/mass email: +0 points
+
+5. EVENT TYPE:
+   - Personal invite / small gathering: +1 point
+   - Community/networking event: +1 point
+   - Large generic conference: +0 points
+   - Marketing webinar: -1 point
+
+EXAMPLES:
+- Local free tech meetup matching user's interests → 8-9
+- Virtual webinar from trusted source on relevant topic → 6-7
+- Out-of-town conference, expensive, weak interest match → 2-3
+- Generic marketing webinar, no interest match → 0-1
+
+═══════════════════════════════════════════════════════════════════════════════
+WHY ATTEND (one sentence — REQUIRED for relevance_score >= 5)
+═══════════════════════════════════════════════════════════════════════════════
+
+Write ONE personalized sentence explaining why the user might want to attend.
+Use second person ("you"). Reference their location or interests when possible.
+
+GOOD EXAMPLES:
+- "Matches your interest in AI/ML and it's a free local event."
+- "Great networking opportunity — the organizer is in your VIP contacts."
+- "Covers web development best practices, which aligns with your work."
+- "Free virtual event you can attend from home on a topic you follow."
+
+For relevance_score < 5, set why_attend to null.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CONFIDENCE
@@ -438,8 +502,22 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         maximum: 1,
         description: 'Confidence in the extraction accuracy (0-1)',
       },
+
+      // Relevance score (NEW March 2026)
+      relevance_score: {
+        type: 'number',
+        minimum: 0,
+        maximum: 10,
+        description: 'How likely the user is to attend (0-10). 8-10 = highly relevant (local, free, matches interests), 5-7 = moderate, 2-4 = low, 0-1 = noise.',
+      },
+
+      // Why attend (NEW March 2026)
+      why_attend: {
+        type: 'string',
+        description: 'One sentence explaining why this event might interest the user, personalized to their context. Example: "Matches your interest in AI and it\'s local and free." Null if no strong reason.',
+      },
     },
-    required: ['has_event', 'is_key_date', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence', 'event_summary', 'key_points'],
+    required: ['has_event', 'is_key_date', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence', 'event_summary', 'key_points', 'relevance_score'],
   },
 };
 
@@ -682,6 +760,10 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
 
       // Confidence
       confidence: (rawData.confidence as number) || 0.5,
+
+      // Relevance scoring (NEW March 2026)
+      relevanceScore: rawData.relevance_score as number | undefined,
+      whyAttend: rawData.why_attend as string | null | undefined,
     };
   }
 }
