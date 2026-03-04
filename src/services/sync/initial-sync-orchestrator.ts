@@ -553,9 +553,9 @@ export class InitialSyncOrchestrator {
         const clientTagging = analysis.clientTagging;
 
         // Add to analyzed emails
-        // REFACTORED (Jan 2026): 'noise' fallback → 'newsletters_creator'
+        // REFACTORED (Mar 2026): Taxonomy v2 — fallback → 'newsletters'
         this.addAnalyzedEmail(originalEmail, {
-          category: (categorization?.category as EmailCategory) || 'newsletters_creator',
+          category: (categorization?.category as EmailCategory) || 'newsletters',
           confidence: categorization?.confidence || 0.5,
           hasAction: actionExtraction?.hasAction,
           actionUrgency: actionExtraction?.urgencyScore,

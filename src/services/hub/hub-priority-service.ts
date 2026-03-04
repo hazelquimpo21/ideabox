@@ -231,24 +231,35 @@ export const HUB_SCORING_CONFIG = {
   // REFACTORED (Jan 2026): Updated for life-bucket categories.
   // Higher multipliers for categories that typically need attention.
   // ─────────────────────────────────────────────────────────────────────────
+  // Updated Mar 2026: Taxonomy v2 — 20 categories
   categoryBoosts: {
-    // Work & Business - high priority
+    // Professional - high priority
     clients: 1.5,                       // Client work needs attention
     work: 1.3,                          // Professional matters
-    // Family & Personal - moderate-high priority
-    family: 1.35,                       // Family, kids, health - often time-sensitive
-    personal_friends_family: 1.2,       // Personal relationships
+    job_search: 1.4,                    // Time-sensitive applications/interviews
+    // People - moderate-high priority
+    personal: 1.2,                      // Personal relationships, hobbies
+    family: 1.35,                       // Family communication
+    parenting: 1.4,                     // Kids — school, activities, often time-sensitive
     // Life Admin - moderate priority
-    finance: 1.2,                       // Bills, payments
+    health: 1.3,                        // Medical appointments, prescriptions
+    finance: 1.2,                       // Banking, investments
+    billing: 0.8,                       // Receipts, bills — routine
+    // Lifestyle - variable priority
     travel: 1.3,                        // Travel is time-sensitive
-    shopping: 0.6,                      // Orders, promos - lower priority
+    shopping: 0.6,                      // Orders, tracking
+    deals: 0.4,                         // Promos, sales — low priority
+    // Community
     local: 1.1,                         // Community events
+    civic: 0.9,                         // Government, HOA
+    sports: 0.5,                        // Fan sports — can wait
     // Information - lower priority
-    newsletters_creator: 0.5,           // Rarely urgent
-    newsletters_industry: 0.6,          // Slightly more relevant than creator newsletters
-    news_politics: 0.4,                 // Can wait
+    news: 0.5,                          // Can wait
+    politics: 0.4,                      // Can wait
+    newsletters: 0.5,                   // Rarely urgent
     product_updates: 0.3,               // Almost never urgent
-    other: 0.4,                         // Miscellaneous - low priority
+    // System
+    notifications: 0.7,                 // OTPs may be time-sensitive
   },
 
   // Urgency score weights (from AI analysis)

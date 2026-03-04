@@ -54,25 +54,33 @@ export const paginationSchema = z.object({
  * Migration mapping:
  * - action_required → clients
  * - event → local (events detected via has_event label)
- * - newsletter → newsletters_creator
+ * - newsletter → newsletters
  * - promo → shopping
  * - admin → finance
- * - personal → personal_friends_family
- * - noise → newsletters_creator
+ * - personal → personal
+ * - noise → newsletters
  */
 export const emailCategorySchema = z.enum([
-  'newsletters_creator',           // Substacks, digests, curated content
-  'newsletters_industry',          // Industry-specific newsletters
-  'news_politics',                 // News outlets, political updates
-  'product_updates',               // Tech products, SaaS tools
-  'local',                         // Community events, neighborhood, local orgs
-  'shopping',                      // Orders, shipping, deals, retail
-  'travel',                        // Flights, hotels, bookings, trip info
-  'finance',                       // Bills, banking, investments, receipts
-  'family',                        // School, kids, health, appointments, family scheduling
   'clients',                       // Direct client correspondence, project work
   'work',                          // Team/internal, industry, professional
-  'personal_friends_family',       // Social, relationships, personal
+  'job_search',                    // Job applications, recruiters, career
+  'personal',                      // Social, relationships, personal
+  'family',                        // School, kids, family scheduling
+  'parenting',                     // Parenting-specific emails
+  'health',                        // Health, medical, wellness
+  'finance',                       // Bills, banking, investments, receipts
+  'billing',                       // Subscriptions, billing statements
+  'travel',                        // Flights, hotels, bookings, trip info
+  'shopping',                      // Orders, shipping, deals, retail
+  'deals',                         // Deals, coupons, promotions
+  'local',                         // Community events, neighborhood, local orgs
+  'civic',                         // Government, civic engagement
+  'sports',                        // Sports updates, teams, leagues
+  'news',                          // News outlets, current events
+  'politics',                      // Political updates, campaigns
+  'newsletters',                   // Substacks, digests, curated content
+  'product_updates',               // Tech products, SaaS tools
+  'notifications',                 // Automated notifications, alerts
 ]);
 
 /**
@@ -797,7 +805,7 @@ export type ExtractedDateActionInput = z.infer<typeof extractedDateActionSchema>
  *
  * @example Archive by category
  * POST /api/emails/bulk-archive
- * { "category": "newsletters_creator" }
+ * { "category": "newsletters" }
  *
  * @example Archive by email IDs
  * POST /api/emails/bulk-archive

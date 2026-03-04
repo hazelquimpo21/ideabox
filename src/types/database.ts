@@ -32,20 +32,33 @@
  * The AI analyzer uses human-eye inference to categorize - it considers sender
  * context, domain patterns, and content to make smart categorization decisions.
  */
+/**
+ * Email categories (20 life-bucket focused).
+ *
+ * REFACTORED (Mar 2026 — Taxonomy v2): Expanded from 13 → 20 categories.
+ * See docs/INBOX_CATEGORY_TAXONOMY_PLAN.md for full rationale.
+ */
 export type EmailCategory =
-  | 'clients'                       // Direct client correspondence, project work
-  | 'work'                          // Team/internal, industry stuff, professional
-  | 'personal_friends_family'       // Social, relationships, personal correspondence
-  | 'family'                        // Kids, school, health, appointments, family scheduling
-  | 'finance'                       // Bills, banking, investments, receipts
-  | 'travel'                        // Flights, hotels, bookings, trip info
-  | 'shopping'                      // Orders, shipping, deals, retail
-  | 'local'                         // Community events, neighborhood, local orgs
-  | 'newsletters_creator'           // Substacks, personal blogs, creator content
-  | 'newsletters_industry'          // Tech/biz digests, industry roundups
-  | 'news_politics'                 // News outlets, political updates
-  | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
-  | 'notifications';                // Verification codes, OTPs, login alerts, password resets, system alerts
+  | 'clients'           // Direct client work, billable relationships
+  | 'work'              // Professional non-client
+  | 'job_search'        // Applications, recruiters, interviews, offers
+  | 'personal'          // Friends, social relationships, adult hobbies/clubs
+  | 'family'            // Family relationships
+  | 'parenting'         // Kids: school, childcare, extracurriculars, tutors
+  | 'health'            // Medical, dental, prescriptions, insurance EOBs, vet
+  | 'finance'           // Banking, investments, tax, financial planning
+  | 'billing'           // Receipts, subscriptions, autopay, bills, payment failures
+  | 'travel'            // Flights, hotels, bookings, trip planning
+  | 'shopping'          // Orders, shipping, returns, tracking
+  | 'deals'             // Sales, discounts, coupons, limited-time offers
+  | 'local'             // Community, neighborhood, local businesses/events
+  | 'civic'             // Government, council, school board, HOA, voting
+  | 'sports'            // Fan sports: scores, fantasy, team updates
+  | 'news'              // News outlets, current events, breaking news
+  | 'politics'          // Political news, campaigns, policy
+  | 'newsletters'       // Substacks, digests, curated content
+  | 'product_updates'   // SaaS tools, release notes, changelogs
+  | 'notifications';    // Verification codes, OTPs, 2FA, login alerts
 
 /**
  * Action types that can be extracted from emails.
@@ -352,6 +365,14 @@ export interface Database {
           relationship_signal: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           // Golden nugget count from ContentDigest (migration 044 — denormalized)
           golden_nugget_count: number;
+          // Timeliness object — email's relationship to time (migration 044 — taxonomy v2)
+          timeliness: Record<string, unknown> | null;
+          // Scoring columns — all 0.0–1.0 scale (migration 044 — taxonomy v2)
+          importance_score: number | null;
+          action_score: number | null;
+          cognitive_load: number | null;
+          missability_score: number | null;
+          surface_priority: number | null;
           // Sync type (migration 023)
           sync_type: string;
           is_read: boolean;
@@ -399,6 +420,12 @@ export interface Database {
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           golden_nugget_count?: number;
+          timeliness?: Record<string, unknown> | null;
+          importance_score?: number | null;
+          action_score?: number | null;
+          cognitive_load?: number | null;
+          missability_score?: number | null;
+          surface_priority?: number | null;
           sync_type?: string;
           is_read?: boolean;
           is_archived?: boolean;
@@ -443,6 +470,12 @@ export interface Database {
           urgency_score?: number | null;
           relationship_signal?: 'positive' | 'neutral' | 'negative' | 'unknown' | null;
           golden_nugget_count?: number;
+          timeliness?: Record<string, unknown> | null;
+          importance_score?: number | null;
+          action_score?: number | null;
+          cognitive_load?: number | null;
+          missability_score?: number | null;
+          surface_priority?: number | null;
           sync_type?: string;
           is_read?: boolean;
           is_archived?: boolean;
@@ -1913,7 +1946,11 @@ export type ReplyWorthinessDb = 'must_reply' | 'should_reply' | 'optional_reply'
  * Stored in categorization JSONB as email_type and denormalized to emails table.
  * NEW (Feb 2026).
  */
-export type EmailTypeDb = 'personal' | 'transactional' | 'newsletter' | 'notification' | 'promo' | 'cold_outreach' | 'needs_response' | 'fyi' | 'automated';
+/**
+ * Email type — simplified to 6 values in Taxonomy v2 (Mar 2026).
+ * Old values mapped: transactional/notification→automated, promo/cold_outreach→marketing.
+ */
+export type EmailTypeDb = 'personal' | 'newsletter' | 'needs_response' | 'fyi' | 'automated' | 'marketing';
 
 /**
  * Event format type - describes how attendees participate.

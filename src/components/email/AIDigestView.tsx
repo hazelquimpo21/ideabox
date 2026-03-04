@@ -54,13 +54,13 @@ const SIGNAL_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_TO_IDEA_TYPE: Record<string, string> = {
-  clients: 'business', work: 'business',
-  newsletters_creator: 'content_creation', newsletters_industry: 'learning',
-  personal_friends_family: 'personal_growth', family: 'family_activity',
-  finance: 'business', shopping: 'personal_growth',
-  local: 'place_to_visit', travel: 'place_to_visit',
-  news_politics: 'learning', product_updates: 'tool_to_try',
-  notifications: 'learning',
+  clients: 'business', work: 'business', job_search: 'business',
+  personal: 'personal_growth', family: 'family_activity', parenting: 'family_activity',
+  health: 'personal_growth', finance: 'business', billing: 'business',
+  travel: 'place_to_visit', shopping: 'personal_growth', deals: 'personal_growth',
+  local: 'place_to_visit', civic: 'community', sports: 'learning',
+  news: 'learning', politics: 'learning', newsletters: 'content_creation',
+  product_updates: 'tool_to_try', notifications: 'learning',
 };
 
 const NUGGET_TO_IDEA_TYPE: Record<string, string> = {

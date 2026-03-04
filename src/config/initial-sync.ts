@@ -135,24 +135,26 @@ export const AUTO_CATEGORIZE_DOMAINS: Record<string, EmailCategory> = {
   'dhl.com': 'shopping',
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Newsletters - Creator (substacks, digests, curated content)
+  // Newsletters (substacks, digests, curated content)
+  // Updated Mar 2026: Taxonomy v2 — merged newsletters_creator/industry → newsletters
   // ─────────────────────────────────────────────────────────────────────────
-  'substack.com': 'newsletters_creator',
-  'substackinc.com': 'newsletters_creator',
-  'medium.com': 'newsletters_creator',
-  'morningbrew.com': 'newsletters_creator',
-  'thehustle.co': 'newsletters_creator',
-  'ycombinator.com': 'newsletters_creator', // HN digest
+  'substack.com': 'newsletters',
+  'substackinc.com': 'newsletters',
+  'medium.com': 'newsletters',
+  'morningbrew.com': 'newsletters',
+  'thehustle.co': 'newsletters',
+  'ycombinator.com': 'newsletters', // HN digest
 
   // ─────────────────────────────────────────────────────────────────────────
-  // News & Politics
+  // News (current events, journalism)
+  // Updated Mar 2026: Taxonomy v2 — split news_politics → news + politics
   // ─────────────────────────────────────────────────────────────────────────
-  'axios.com': 'news_politics',
-  'thedailybeast.com': 'news_politics',
-  'nytimes.com': 'news_politics',
-  'washingtonpost.com': 'news_politics',
-  'wsj.com': 'news_politics',
-  'bloomberg.com': 'news_politics',
+  'axios.com': 'news',
+  'thedailybeast.com': 'news',
+  'nytimes.com': 'news',
+  'washingtonpost.com': 'news',
+  'wsj.com': 'news',
+  'bloomberg.com': 'news',
 
   // ─────────────────────────────────────────────────────────────────────────
   // Product Updates (tech, services you use)
@@ -194,14 +196,14 @@ export const AUTO_CATEGORIZE_DOMAINS: Record<string, EmailCategory> = {
   // Product Updates - Social (notifications from social platforms)
   // ─────────────────────────────────────────────────────────────────────────
   'linkedin.com': 'work', // Professional network
-  'quora.com': 'newsletters_creator',
-  'pinterest.com': 'personal_friends_family',
-  'twitter.com': 'newsletters_creator',
-  'x.com': 'newsletters_creator',
-  'facebook.com': 'personal_friends_family',
-  'facebookmail.com': 'personal_friends_family',
-  'instagram.com': 'personal_friends_family',
-  'tiktok.com': 'personal_friends_family',
+  'quora.com': 'newsletters',
+  'pinterest.com': 'personal',
+  'twitter.com': 'newsletters',
+  'x.com': 'newsletters',
+  'facebook.com': 'personal',
+  'facebookmail.com': 'personal',
+  'instagram.com': 'personal',
+  'tiktok.com': 'personal',
 };
 
 /**
@@ -229,12 +231,12 @@ export const AUTO_CATEGORIZE_PREFIXES: Record<string, EmailCategory> = {
   billing: 'finance',
   payment: 'finance',
 
-  // Newsletters - Creator
-  newsletter: 'newsletters_creator',
-  newsletters: 'newsletters_creator',
-  digest: 'newsletters_creator',
-  weekly: 'newsletters_creator',
-  daily: 'newsletters_creator',
+  // Newsletters
+  newsletter: 'newsletters',
+  newsletters: 'newsletters',
+  digest: 'newsletters',
+  weekly: 'newsletters',
+  daily: 'newsletters',
   update: 'product_updates',
   updates: 'product_updates',
 
@@ -272,51 +274,6 @@ export const CATEGORY_INSIGHT_TEMPLATES: Record<
     plural: (count: number, urgentCount?: number) => string;
   }
 > = {
-  newsletters_creator: {
-    empty: 'No newsletters',
-    singular: '1 newsletter',
-    plural: (count) => `${count} newsletters and digests`,
-  },
-  newsletters_industry: {
-    empty: 'No industry newsletters',
-    singular: '1 industry newsletter',
-    plural: (count) => `${count} industry newsletters`,
-  },
-  news_politics: {
-    empty: 'No news updates',
-    singular: '1 news update',
-    plural: (count) => `${count} news and politics updates`,
-  },
-  product_updates: {
-    empty: 'No product updates',
-    singular: '1 product update',
-    plural: (count) => `${count} product updates`,
-  },
-  local: {
-    empty: 'No local updates',
-    singular: '1 local event or update',
-    plural: (count) => `${count} local events and updates`,
-  },
-  shopping: {
-    empty: 'No shopping emails',
-    singular: '1 shopping email',
-    plural: (count) => `${count} orders, shipping, and deals`,
-  },
-  travel: {
-    empty: 'No travel emails',
-    singular: '1 travel email',
-    plural: (count) => `${count} travel confirmations and updates`,
-  },
-  finance: {
-    empty: 'No finance emails',
-    singular: '1 finance email',
-    plural: (count) => `${count} bills, payments, and statements`,
-  },
-  family: {
-    empty: 'No family emails',
-    singular: '1 family email',
-    plural: (count) => `${count} family emails`,
-  },
   clients: {
     empty: 'No client emails',
     singular: '1 client email',
@@ -330,10 +287,95 @@ export const CATEGORY_INSIGHT_TEMPLATES: Record<
     singular: '1 work email',
     plural: (count) => `${count} work and business emails`,
   },
-  personal_friends_family: {
+  job_search: {
+    empty: 'No job search emails',
+    singular: '1 job search email',
+    plural: (count) => `${count} job search emails`,
+  },
+  personal: {
     empty: 'No personal emails',
     singular: '1 personal email',
     plural: (count) => `${count} personal emails`,
+  },
+  family: {
+    empty: 'No family emails',
+    singular: '1 family email',
+    plural: (count) => `${count} family emails`,
+  },
+  parenting: {
+    empty: 'No parenting emails',
+    singular: '1 parenting email',
+    plural: (count) => `${count} parenting emails`,
+  },
+  health: {
+    empty: 'No health emails',
+    singular: '1 health email',
+    plural: (count) => `${count} health emails`,
+  },
+  finance: {
+    empty: 'No finance emails',
+    singular: '1 finance email',
+    plural: (count) => `${count} bills, payments, and statements`,
+  },
+  billing: {
+    empty: 'No billing emails',
+    singular: '1 billing email',
+    plural: (count) => `${count} billing and subscription emails`,
+  },
+  travel: {
+    empty: 'No travel emails',
+    singular: '1 travel email',
+    plural: (count) => `${count} travel confirmations and updates`,
+  },
+  shopping: {
+    empty: 'No shopping emails',
+    singular: '1 shopping email',
+    plural: (count) => `${count} orders and shipping updates`,
+  },
+  deals: {
+    empty: 'No deals emails',
+    singular: '1 deals email',
+    plural: (count) => `${count} deals and promotions`,
+  },
+  local: {
+    empty: 'No local updates',
+    singular: '1 local event or update',
+    plural: (count) => `${count} local events and updates`,
+  },
+  civic: {
+    empty: 'No civic emails',
+    singular: '1 civic email',
+    plural: (count) => `${count} civic and government emails`,
+  },
+  sports: {
+    empty: 'No sports emails',
+    singular: '1 sports email',
+    plural: (count) => `${count} sports updates`,
+  },
+  news: {
+    empty: 'No news updates',
+    singular: '1 news update',
+    plural: (count) => `${count} news updates`,
+  },
+  politics: {
+    empty: 'No politics emails',
+    singular: '1 politics email',
+    plural: (count) => `${count} politics updates`,
+  },
+  newsletters: {
+    empty: 'No newsletters',
+    singular: '1 newsletter',
+    plural: (count) => `${count} newsletters and digests`,
+  },
+  product_updates: {
+    empty: 'No product updates',
+    singular: '1 product update',
+    plural: (count) => `${count} product updates`,
+  },
+  notifications: {
+    empty: 'No notifications',
+    singular: '1 notification',
+    plural: (count) => `${count} notifications`,
   },
 };
 

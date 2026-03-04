@@ -1,15 +1,19 @@
 /**
  * CategoryIcon Component
  *
- * Custom SVG icons for each of the 12 email categories.
- * Replaces the old single-letter avatar bubbles with instantly
- * recognizable, category-themed icons.
- *
- * Each icon is hand-crafted to be legible at small sizes (16-36px)
+ * Custom SVG icons for all 20 email categories (Taxonomy v2).
+ * Each icon is hand-crafted to be legible at small sizes (14–24px)
  * and pairs with the category accent color system from discovery.ts.
+ *
+ * EXPANDED (Mar 2026 — Taxonomy v2): 12 → 20 icons.
+ * New: job_search, parenting, health, billing, deals, civic, sports,
+ *      news, politics, newsletters, notifications.
+ * Renamed: personal_friends_family → personal
+ * Merged: newsletters_creator + newsletters_industry → newsletters
  *
  * @module components/inbox/CategoryIcon
  * @since February 2026 — Inbox UI Redesign v2
+ * @updated March 2026 — Taxonomy v2 (20 categories)
  */
 
 'use client';
@@ -42,31 +46,45 @@ const SIZE_CONFIG = {
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CATEGORY COLORS — bg + icon fill pairs
+// CATEGORY COLORS — bg + icon fill pairs (20 categories)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CATEGORY_ICON_COLORS: Record<EmailCategory, { bg: string; fg: string }> = {
-  clients:                   { bg: 'bg-blue-100 dark:bg-blue-900/40',    fg: 'text-blue-600 dark:text-blue-300' },
-  work:                      { bg: 'bg-violet-100 dark:bg-violet-900/40', fg: 'text-violet-600 dark:text-violet-300' },
-  personal_friends_family:   { bg: 'bg-pink-100 dark:bg-pink-900/40',    fg: 'text-pink-600 dark:text-pink-300' },
-  family:                    { bg: 'bg-amber-100 dark:bg-amber-900/40',  fg: 'text-amber-600 dark:text-amber-300' },
-  finance:                   { bg: 'bg-green-100 dark:bg-green-900/40',  fg: 'text-green-600 dark:text-green-300' },
-  travel:                    { bg: 'bg-sky-100 dark:bg-sky-900/40',      fg: 'text-sky-600 dark:text-sky-300' },
-  shopping:                  { bg: 'bg-orange-100 dark:bg-orange-900/40', fg: 'text-orange-600 dark:text-orange-300' },
-  local:                     { bg: 'bg-teal-100 dark:bg-teal-900/40',    fg: 'text-teal-600 dark:text-teal-300' },
-  newsletters_creator:       { bg: 'bg-emerald-100 dark:bg-emerald-900/40', fg: 'text-emerald-600 dark:text-emerald-300' },
-  newsletters_industry:      { bg: 'bg-cyan-100 dark:bg-cyan-900/40',    fg: 'text-cyan-600 dark:text-cyan-300' },
-  news_politics:             { bg: 'bg-slate-200 dark:bg-slate-800/60',  fg: 'text-slate-600 dark:text-slate-300' },
-  product_updates:           { bg: 'bg-indigo-100 dark:bg-indigo-900/40', fg: 'text-indigo-600 dark:text-indigo-300' },
+  // Work & Professional
+  clients:         { bg: 'bg-blue-100 dark:bg-blue-900/40',     fg: 'text-blue-600 dark:text-blue-300' },
+  work:            { bg: 'bg-violet-100 dark:bg-violet-900/40', fg: 'text-violet-600 dark:text-violet-300' },
+  job_search:      { bg: 'bg-lime-100 dark:bg-lime-900/40',     fg: 'text-lime-600 dark:text-lime-300' },
+  // People & Relationships
+  personal:        { bg: 'bg-pink-100 dark:bg-pink-900/40',     fg: 'text-pink-600 dark:text-pink-300' },
+  family:          { bg: 'bg-amber-100 dark:bg-amber-900/40',   fg: 'text-amber-600 dark:text-amber-300' },
+  parenting:       { bg: 'bg-rose-100 dark:bg-rose-900/40',     fg: 'text-rose-600 dark:text-rose-300' },
+  // Life Admin
+  health:          { bg: 'bg-red-100 dark:bg-red-900/40',       fg: 'text-red-600 dark:text-red-300' },
+  finance:         { bg: 'bg-green-100 dark:bg-green-900/40',   fg: 'text-green-600 dark:text-green-300' },
+  billing:         { bg: 'bg-emerald-100 dark:bg-emerald-900/40', fg: 'text-emerald-600 dark:text-emerald-300' },
+  travel:          { bg: 'bg-sky-100 dark:bg-sky-900/40',       fg: 'text-sky-600 dark:text-sky-300' },
+  shopping:        { bg: 'bg-orange-100 dark:bg-orange-900/40', fg: 'text-orange-600 dark:text-orange-300' },
+  deals:           { bg: 'bg-fuchsia-100 dark:bg-fuchsia-900/40', fg: 'text-fuchsia-600 dark:text-fuchsia-300' },
+  // Community & Civic
+  local:           { bg: 'bg-teal-100 dark:bg-teal-900/40',     fg: 'text-teal-600 dark:text-teal-300' },
+  civic:           { bg: 'bg-stone-200 dark:bg-stone-800/60',   fg: 'text-stone-600 dark:text-stone-300' },
+  sports:          { bg: 'bg-yellow-100 dark:bg-yellow-900/40', fg: 'text-yellow-600 dark:text-yellow-300' },
+  // Information
+  news:            { bg: 'bg-slate-200 dark:bg-slate-800/60',   fg: 'text-slate-600 dark:text-slate-300' },
+  politics:        { bg: 'bg-zinc-200 dark:bg-zinc-800/60',     fg: 'text-zinc-600 dark:text-zinc-300' },
+  newsletters:     { bg: 'bg-emerald-100 dark:bg-emerald-900/40', fg: 'text-emerald-600 dark:text-emerald-300' },
+  product_updates: { bg: 'bg-indigo-100 dark:bg-indigo-900/40', fg: 'text-indigo-600 dark:text-indigo-300' },
+  // System
+  notifications:   { bg: 'bg-gray-100 dark:bg-gray-800/40',    fg: 'text-gray-500 dark:text-gray-400' },
 };
 
 const FALLBACK_COLORS = { bg: 'bg-gray-100 dark:bg-gray-800/40', fg: 'text-gray-500 dark:text-gray-400' };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SVG ICON PATHS — each icon is a simple, legible shape
+// SVG ICON PATHS — each icon is a simple, legible shape in 24x24 viewBox
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** All SVG icons render in a 24x24 viewBox */
+/** Shared SVG wrapper — all icons render in a 24x24 viewBox */
 function IconSvg({ children, size }: { children: React.ReactNode; size: number }) {
   return (
     <svg
@@ -107,19 +125,31 @@ function BuildingIcon({ size }: { size: number }) {
   );
 }
 
-/** Heart with people — personal_friends_family */
-function PeopleHeartIcon({ size }: { size: number }) {
+/** Magnifying glass + person — job_search */
+function JobSearchIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
-      <path d="M16 8a4 4 0 1 0-8 0c0 4 4 8 4 8s4-4 4-8Z" />
-      <circle cx="8" cy="18" r="2" />
-      <circle cx="16" cy="18" r="2" />
-      <path d="M12 16v-2" />
+      <circle cx="10" cy="10" r="7" />
+      <path d="m21 21-4.35-4.35" />
+      <circle cx="10" cy="8" r="2" />
+      <path d="M7 13a3 3 0 0 1 6 0" />
     </IconSvg>
   );
 }
 
-/** Home/Family — family (merged kids+health) */
+/** Two people — personal */
+function PeopleIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <circle cx="9" cy="7" r="3" />
+      <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+      <circle cx="17" cy="8" r="2.5" />
+      <path d="M21 21v-1.5a3 3 0 0 0-2-2.83" />
+    </IconSvg>
+  );
+}
+
+/** House — family */
 function FamilyIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
@@ -130,13 +160,46 @@ function FamilyIcon({ size }: { size: number }) {
   );
 }
 
-/** Dollar/Coin — finance */
+/** Parent holding child's hand — parenting */
+function ParentingIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <circle cx="9" cy="5" r="3" />
+      <path d="M9 8v6" />
+      <path d="M6 14h6" />
+      <path d="M9 14v7" />
+      <circle cx="17" cy="10" r="2" />
+      <path d="M17 12v5" />
+      <path d="M15 17h4" />
+    </IconSvg>
+  );
+}
+
+/** Heart with pulse line — health */
+function HealthIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <path d="M19.5 12.572l-7.5 7.428-7.5-7.428A5 5 0 1 1 12 6.006a5 5 0 1 1 7.5 6.572" />
+      <path d="M4 12h3l2-3 3 6 2-3h6" />
+    </IconSvg>
+  );
+}
+
+/** Chart trending up — finance */
 function FinanceIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.5 0-2.5 1-2.5 2.25s1 2.25 2.5 2.25c1.5 0 2.5 1 2.5 2.25S13.5 17 12 17c-1 0-2-.5-2.5-1.5" />
-      <path d="M12 6v1.5M12 16.5V18" />
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </IconSvg>
+  );
+}
+
+/** Receipt with dollar — billing */
+function BillingIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+      <path d="M14 8h-4M14 12h-4M10 16h2" />
     </IconSvg>
   );
 }
@@ -161,6 +224,17 @@ function ShoppingIcon({ size }: { size: number }) {
   );
 }
 
+/** Price tag with percent — deals */
+function DealsIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <path d="M12 2 2 7l10 5 10-5-10-5Z" />
+      <path d="M2 17l10 5 10-5" />
+      <path d="M2 12l10 5 10-5" />
+    </IconSvg>
+  );
+}
+
 /** Map pin — local */
 function LocalIcon({ size }: { size: number }) {
   return (
@@ -171,18 +245,37 @@ function LocalIcon({ size }: { size: number }) {
   );
 }
 
-/** Pen/Quill — newsletters_creator (Substacks, personal blogs) */
-function CreatorNewsletterIcon({ size }: { size: number }) {
+/** Classical columns — civic */
+function CivicIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-      <path d="m15 5 4 4" />
+      <path d="M3 21h18" />
+      <path d="M5 21V7" />
+      <path d="M19 21V7" />
+      <path d="M9 21V7" />
+      <path d="M15 21V7" />
+      <path d="M12 21V7" />
+      <path d="M3 7l9-5 9 5" />
     </IconSvg>
   );
 }
 
-/** Newspaper — newsletters_industry (tech/biz digests) */
-function IndustryNewsletterIcon({ size }: { size: number }) {
+/** Trophy — sports */
+function SportsIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+      <path d="M6 4h12v5a6 6 0 0 1-12 0V4Z" />
+      <path d="M12 15v3" />
+      <path d="M8 21h8" />
+      <path d="M10 18h4" />
+    </IconSvg>
+  );
+}
+
+/** Newspaper — news */
+function NewsIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
       <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
@@ -191,13 +284,23 @@ function IndustryNewsletterIcon({ size }: { size: number }) {
   );
 }
 
-/** Globe/News — news_politics */
-function GlobeNewsIcon({ size }: { size: number }) {
+/** Ballot box with checkmark — politics */
+function PoliticsIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-      <path d="M2 12h20" />
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      <path d="M9 16l2 2 4-4" />
+    </IconSvg>
+  );
+}
+
+/** Open book/letter — newsletters */
+function NewsletterIcon({ size }: { size: number }) {
+  return (
+    <IconSvg size={size}>
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2Z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7Z" />
     </IconSvg>
   );
 }
@@ -212,13 +315,12 @@ function PackageIcon({ size }: { size: number }) {
   );
 }
 
-/** Clipboard — unused, kept for potential future use */
-function ClipboardIcon({ size }: { size: number }) {
+/** Bell — notifications */
+function BellIcon({ size }: { size: number }) {
   return (
     <IconSvg size={size}>
-      <rect x="5" y="2" width="14" height="20" rx="2" />
-      <path d="M9 2h6v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V2Z" />
-      <path d="M9 12h6M9 16h4" />
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
     </IconSvg>
   );
 }
@@ -234,22 +336,30 @@ function MailFallbackIcon({ size }: { size: number }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ICON REGISTRY
+// ICON REGISTRY — maps every category to its icon component
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CATEGORY_ICONS: Record<EmailCategory, React.FC<{ size: number }>> = {
   clients: BriefcaseIcon,
   work: BuildingIcon,
-  personal_friends_family: PeopleHeartIcon,
+  job_search: JobSearchIcon,
+  personal: PeopleIcon,
   family: FamilyIcon,
+  parenting: ParentingIcon,
+  health: HealthIcon,
   finance: FinanceIcon,
+  billing: BillingIcon,
   travel: TravelIcon,
   shopping: ShoppingIcon,
+  deals: DealsIcon,
   local: LocalIcon,
-  newsletters_creator: CreatorNewsletterIcon,
-  newsletters_industry: IndustryNewsletterIcon,
-  news_politics: GlobeNewsIcon,
+  civic: CivicIcon,
+  sports: SportsIcon,
+  news: NewsIcon,
+  politics: PoliticsIcon,
+  newsletters: NewsletterIcon,
   product_updates: PackageIcon,
+  notifications: BellIcon,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════

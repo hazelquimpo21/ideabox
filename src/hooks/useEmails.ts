@@ -150,16 +150,24 @@ export interface QuickActionStats {
 export interface CategoryStats {
   clients: number;
   work: number;
-  personal_friends_family: number;
+  job_search: number;
+  personal: number;
   family: number;
+  parenting: number;
+  health: number;
   finance: number;
-  shopping: number;
-  newsletters_creator: number;
-  newsletters_industry: number;
-  news_politics: number;
-  product_updates: number;
-  local: number;
+  billing: number;
   travel: number;
+  shopping: number;
+  deals: number;
+  local: number;
+  civic: number;
+  sports: number;
+  news: number;
+  politics: number;
+  newsletters: number;
+  product_updates: number;
+  notifications: number;
 }
 
 /**
@@ -275,16 +283,24 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
     categoryStats: {
       clients: 0,
       work: 0,
-      personal_friends_family: 0,
+      job_search: 0,
+      personal: 0,
       family: 0,
+      parenting: 0,
+      health: 0,
       finance: 0,
-      shopping: 0,
-      newsletters_creator: 0,
-      newsletters_industry: 0,
-      news_politics: 0,
-      product_updates: 0,
-      local: 0,
+      billing: 0,
       travel: 0,
+      shopping: 0,
+      deals: 0,
+      local: 0,
+      civic: 0,
+      sports: 0,
+      news: 0,
+      politics: 0,
+      newsletters: 0,
+      product_updates: 0,
+      notifications: 0,
     },
     mustReplyCount: 0,
     highSignalCount: 0,
@@ -442,16 +458,24 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
       const categoryStats: CategoryStats = {
         clients: 0,
         work: 0,
-        personal_friends_family: 0,
+        job_search: 0,
+        personal: 0,
         family: 0,
+        parenting: 0,
+        health: 0,
         finance: 0,
-        shopping: 0,
-        newsletters_creator: 0,
-        newsletters_industry: 0,
-        news_politics: 0,
-        product_updates: 0,
-        local: 0,
+        billing: 0,
         travel: 0,
+        shopping: 0,
+        deals: 0,
+        local: 0,
+        civic: 0,
+        sports: 0,
+        news: 0,
+        politics: 0,
+        newsletters: 0,
+        product_updates: 0,
+        notifications: 0,
       };
 
       // Count events and Phase 2 filter stats from labels/fields
@@ -722,16 +746,24 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsReturn {
         const categoryStats: CategoryStats = {
           clients: 0,
           work: 0,
-          personal_friends_family: 0,
+          job_search: 0,
+          personal: 0,
           family: 0,
+          parenting: 0,
+          health: 0,
           finance: 0,
-          shopping: 0,
-          newsletters_creator: 0,
-          newsletters_industry: 0,
-          news_politics: 0,
-          product_updates: 0,
-          local: 0,
+          billing: 0,
           travel: 0,
+          shopping: 0,
+          deals: 0,
+          local: 0,
+          civic: 0,
+          sports: 0,
+          news: 0,
+          politics: 0,
+          newsletters: 0,
+          product_updates: 0,
+          notifications: 0,
         };
 
         for (const email of updatedEmails) {

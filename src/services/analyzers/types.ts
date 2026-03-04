@@ -34,7 +34,7 @@ import type { AnalyzerConfig as BaseAnalyzerConfig } from '@/config/analyzers';
  * - category=finance + email_type=transactional (bank receipt)
  * - category=clients + email_type=needs_response (client asking a question)
  * - category=shopping + email_type=promo (sale alert from a store)
- * - category=newsletters_creator + email_type=newsletter (Substack post)
+ * - category=newsletters + email_type=newsletter (Substack post)
  * - category=notifications + email_type=automated (2FA code)
  */
 /**
@@ -631,7 +631,7 @@ export interface CategorizationData {
    * Examples:
    * - A client email about a dinner → primary: 'clients', additional: ['local']
    * - A family member's school newsletter → primary: 'family', additional: ['local']
-   * - A finance newsletter with shopping deals → primary: 'newsletters_industry', additional: ['finance', 'shopping']
+   * - A finance newsletter with shopping deals → primary: 'newsletters', additional: ['finance', 'shopping']
    *
    * Maximum 2 additional categories. Only include if genuinely relevant.
    * The email will show up in inbox views for ALL its categories.

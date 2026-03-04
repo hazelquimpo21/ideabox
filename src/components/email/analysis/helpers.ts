@@ -84,7 +84,7 @@ export function getCategoryBadge(category: EmailCategory | null): {
       return { variant: 'default', label: 'Client', icon: React.createElement(Building2, { className: 'h-3 w-3' }) };
     case 'work':
       return { variant: 'secondary', label: 'Work', icon: React.createElement(Building2, { className: 'h-3 w-3' }) };
-    case 'personal_friends_family':
+    case 'personal':
       return { variant: 'outline', label: 'Personal', icon: React.createElement(User, { className: 'h-3 w-3' }) };
     case 'family':
       return { variant: 'outline', label: 'Family', icon: React.createElement(User, { className: 'h-3 w-3' }) };
@@ -92,11 +92,9 @@ export function getCategoryBadge(category: EmailCategory | null): {
       return { variant: 'secondary', label: 'Finance', icon: React.createElement(Mail, { className: 'h-3 w-3' }) };
     case 'shopping':
       return { variant: 'outline', label: 'Shopping', icon: React.createElement(Mail, { className: 'h-3 w-3' }) };
-    case 'newsletters_creator':
+    case 'newsletters':
       return { variant: 'secondary', label: 'Newsletter', icon: React.createElement(Newspaper, { className: 'h-3 w-3' }) };
-    case 'newsletters_industry':
-      return { variant: 'secondary', label: 'Industry Newsletter', icon: React.createElement(Newspaper, { className: 'h-3 w-3' }) };
-    case 'news_politics':
+    case 'news':
       return { variant: 'secondary', label: 'News', icon: React.createElement(Newspaper, { className: 'h-3 w-3' }) };
     case 'product_updates':
       return { variant: 'outline', label: 'Product Update', icon: React.createElement(Mail, { className: 'h-3 w-3' }) };

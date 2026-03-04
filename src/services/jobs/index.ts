@@ -23,6 +23,11 @@
  *    - 24-hour cooldown between retries of the same email
  *    - Caps at 25 emails per run
  *
+ * 4. Timeliness Actions (NEW Mar 2026) - Run every 4 hours
+ *    - Auto-archives expired emails (past timeliness.expires date)
+ *    - Auto-archives old ephemeral/perishable emails (>24h)
+ *    - Recalculates urgency scores as dates approach
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
  * SCHEDULING RECOMMENDATIONS
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -111,3 +116,12 @@ export {
   type RetryJobResult,
   type RetryJobEmailResult,
 } from './retry-failed-analyses';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TIMELINESS ACTIONS (NEW - Mar 2026, Taxonomy v2)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export {
+  runTimelinessActions,
+  type TimelinessActionsResult,
+} from './timeliness-actions';
