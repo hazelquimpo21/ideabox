@@ -50,25 +50,49 @@ export interface AnalyzerConfig {
  * These are life-bucket focused: what PART OF LIFE does this email touch?
  *
  * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
- * Actions are tracked separately via the `actions` table and action extraction.
+ * EXPANDED (Mar 2026): Taxonomy v2 — 13 → 20 categories.
+ *   - Renamed: personal_friends_family → personal
+ *   - Split: news_politics → news + politics
+ *   - Merged: newsletters_creator + newsletters_industry → newsletters
+ *   - New: job_search, parenting, health, billing, deals, civic, sports
  *
  * The AI analyzer uses human-eye inference to categorize - considering sender
  * context, domain patterns, and content to make smart categorization decisions.
  */
 export const EMAIL_CATEGORIES = [
-  'newsletters_creator',           // Substacks, digests, curated content
-  'newsletters_industry',          // Industry-specific newsletters
-  'news_politics',                 // News outlets, political updates
-  'product_updates',               // Tech products, SaaS tools, subscriptions you use
-  'local',                         // Community events, neighborhood, local orgs
-  'shopping',                      // Orders, shipping, deals, retail
-  'travel',                        // Flights, hotels, bookings, trip info
-  'finance',                       // Bills, banking, investments, receipts
-  'family',                        // School, kids, health, appointments, family scheduling
-  'clients',                       // Direct client correspondence, project work
-  'work',                          // Team/internal, industry stuff, professional
-  'personal_friends_family',       // Social, relationships, personal correspondence
-  'notifications',                 // Verification codes, OTPs, login alerts, password resets, system alerts
+  // --- Professional ---
+  'clients',                       // Direct client work, billable relationships
+  'work',                          // Professional non-client (team, industry, networking)
+  'job_search',                    // Applications, recruiters, interviews, offers
+
+  // --- People ---
+  'personal',                      // Friends, social relationships, adult hobbies/clubs
+  'family',                        // Family relationships
+  'parenting',                     // Kids: school, childcare, pediatrician, extracurriculars, tutors
+
+  // --- Life Admin ---
+  'health',                        // Medical, dental, prescriptions, insurance EOBs, vet
+  'finance',                       // Banking, investments, tax, financial planning
+  'billing',                       // Receipts, subscriptions, autopay, bills, payment failures
+
+  // --- Lifestyle ---
+  'travel',                        // Flights, hotels, bookings, trip planning
+  'shopping',                      // Orders, shipping, returns, tracking
+  'deals',                         // Sales, discounts, coupons, limited-time offers
+
+  // --- Community ---
+  'local',                         // Community, neighborhood, local businesses/events
+  'civic',                         // Government, council, school board, HOA, voting
+  'sports',                        // Fan sports: scores, fantasy leagues, team updates
+
+  // --- Information ---
+  'news',                          // News outlets, current events, breaking news
+  'politics',                      // Political news, campaigns, policy
+  'newsletters',                   // Substacks, digests, curated content
+  'product_updates',               // SaaS tools, release notes, changelogs
+
+  // --- System ---
+  'notifications',                 // Verification codes, OTPs, 2FA, login alerts
 ] as const;
 
 export type EmailCategory = typeof EMAIL_CATEGORIES[number];
@@ -89,6 +113,7 @@ export const EMAIL_LABELS_SUMMARY = {
   personal: ['family_related', 'community'],
   financial: ['invoice', 'receipt', 'payment_due'],
   calendar: ['meeting_request', 'rsvp_needed', 'appointment'],
+  timeliness: ['invited', 'confirmation', 'has_tickets', 'deadline'],  // NEW Mar 2026
   learning: ['educational', 'industry_news', 'job_opportunity'],
   noise: ['sales_pitch', 'webinar_invite', 'fake_recognition', 'mass_outreach', 'promotional'],
 } as const;
@@ -96,17 +121,19 @@ export const EMAIL_LABELS_SUMMARY = {
 /**
  * Email type values — the nature of the communication.
  * NEW (Feb 2026): Orthogonal to category. Category = life area, type = communication nature.
+ * SIMPLIFIED (Mar 2026): Taxonomy v2 — 9 → 6 values.
+ *   - Merged: transactional + notification → automated
+ *   - Merged: promo + cold_outreach → marketing
+ *   - Kept: needs_response, personal, newsletter, fyi, automated
+ *   - New: marketing
  */
 export const EMAIL_TYPES = [
-  'personal',        // Direct human correspondence
-  'transactional',   // Receipts, confirmations, shipping updates
-  'newsletter',      // Newsletters, digests, content roundups
-  'notification',    // App notifications, social media alerts
-  'promo',           // Marketing, sales, deals
-  'cold_outreach',   // Unsolicited sales, PR, fake awards
   'needs_response',  // Someone is waiting for a reply
-  'fyi',             // Informational, no action needed
-  'automated',       // Machine-generated codes, alerts
+  'personal',        // Direct human-to-human correspondence
+  'newsletter',      // Content/digest delivery
+  'automated',       // Machine-generated (receipts, alerts, 2FA, notifications)
+  'marketing',       // Promotional, sales, deals, cold outreach
+  'fyi',             // Informational — worth knowing but no action needed
 ] as const;
 
 /**
@@ -181,7 +208,7 @@ export const analyzerConfig = {
     enabled: true,
     model: 'gpt-4.1-mini' as AIModel,
     temperature: 0.2, // Low for deterministic classification
-    maxTokens: 1000,  // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness + emailType + aiBrief — raised from 750 to avoid TokenLimitError on complex emails
+    maxTokens: 1200,  // Increased: category + reasoning + topics + summary + quickAction + signalStrength + replyWorthiness + emailType + timeliness + aiBrief — raised from 1000 to accommodate timeliness object (Mar 2026)
   } satisfies AnalyzerConfig,
 
   /**

@@ -89,6 +89,7 @@ import { IdeaSparkAnalyzer } from '@/services/analyzers/idea-spark';
 import { InsightExtractorAnalyzer } from '@/services/analyzers/insight-extractor';
 import { NewsBriefAnalyzer } from '@/services/analyzers/news-brief';
 import { LinkAnalyzer } from '@/services/analyzers/link-analyzer';
+import { calculateScores, type ScoringInput } from '@/services/analyzers/scoring-engine';
 import { ANALYZER_VERSION } from '@/services/analyzers/base-analyzer';
 import { toEmailInput } from '@/services/analyzers/types';
 import { getUserContext } from '@/services/user-context';
@@ -461,7 +462,7 @@ export class EmailProcessor {
       ? categorizationResult.data.category
       : undefined;
     const isLowSignal = signalStrength === 'low';
-    const isIdeaUnworthyType = emailType === 'automated' || emailType === 'notification' || emailType === 'transactional';
+    const isIdeaUnworthyType = emailType === 'automated' || emailType === 'marketing';
     const isIdeaUnworthyCategory = emailCategory === 'notifications';
     const shouldRunIdeaSpark = !isNoise && !isLowSignal && !isIdeaUnworthyType && !isIdeaUnworthyCategory && this.ideaSpark.isEnabled();
 
@@ -699,11 +700,36 @@ export class EmailProcessor {
         }
 
         // Update email with analysis fields (category, summary, quick_action, labels, topics,
-        // urgency_score, relationship_signal, golden_nugget_count)
+        // timeliness, scoring dimensions) — Taxonomy v2 Mar 2026
         if (categorizationResult.success) {
+          // Calculate scoring dimensions from all analyzer signals
+          const scoringInput: ScoringInput = {
+            category: categorizationResult.data.category,
+            additional_categories: categorizationResult.data.additionalCategories ?? [],
+            email_type: categorizationResult.data.emailType ?? null,
+            labels: categorizationResult.data.labels ?? [],
+            timeliness: categorizationResult.data.timeliness ?? null,
+            signal_strength: categorizationResult.data.signalStrength ?? null,
+            reply_worthiness: categorizationResult.data.replyWorthiness ?? null,
+            has_contact: !!contact,
+            has_prior_exchange: contact ? (contact.email_count ?? 0) > 1 : false,
+          };
+          const scores = calculateScores(scoringInput);
+
+          logger.info('Scores calculated', {
+            emailId: emailInput.id,
+            importance: scores.importance,
+            urgency: scores.urgency,
+            action_score: scores.action_score,
+            cognitive_load: scores.cognitive_load,
+            missability: scores.missability,
+            surface_priority: scores.surface_priority,
+          });
+
           await this.updateEmailAnalysisFields(
             emailInput.id,
             categorizationResult.data,
+            scores,
             contentDigestResult.success ? contentDigestResult.data : undefined,
             actionResult.success ? actionResult.data : undefined,
             clientResult.success ? clientResult.data : undefined
@@ -2716,6 +2742,7 @@ export class EmailProcessor {
   private async updateEmailAnalysisFields(
     emailId: string,
     categorization: CategorizationResult['data'],
+    scores: import('@/services/analyzers/scoring-engine').ScoringOutput,
     contentDigest?: ContentDigestResult['data'],
     actionExtraction?: ActionExtractionResult['data'],
     clientTagging?: ClientTaggingResult['data']
@@ -2740,6 +2767,14 @@ export class EmailProcessor {
       // NEW Feb 2026: Email type (nature of communication) and AI brief
       email_type: categorization.emailType || null,
       ai_brief: categorization.aiBrief || null,
+      // NEW Mar 2026 (Taxonomy v2): Timeliness and scoring dimensions
+      timeliness: categorization.timeliness || null,
+      importance_score: scores.importance,
+      urgency_score: scores.urgency,
+      action_score: scores.action_score,
+      cognitive_load: scores.cognitive_load,
+      missability_score: scores.missability,
+      surface_priority: scores.surface_priority,
     };
 
     // Add content digest fields if available (NEW Jan 2026)

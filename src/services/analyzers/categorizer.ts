@@ -9,19 +9,17 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * Categories are now LIFE-BUCKET focused, not action-focused:
- * - newsletters_creator: Substacks, digests, curated content (default for unsorted newsletters)
- * - newsletters_industry: Industry-specific newsletters, professional reading
- * - news_politics: News outlets, political updates
- * - product_updates: Tech products, SaaS tools you use
- * - local: Community events, neighborhood, local orgs
- * - shopping: Orders, shipping, deals, retail
- * - travel: Flights, hotels, bookings, trip info
- * - finance: Bills, banking, investments, receipts
- * - family: Family, kids, school, health, appointments
- * - clients: Direct client correspondence, project work
- * - work: Team, industry, professional (not direct clients)
- * - personal_friends_family: Social, relationships, personal correspondence
- * Every email is assigned to one of these — no "other" or uncategorized bucket.
+ *
+ * TAXONOMY v2 (Mar 2026): Expanded from 13 → 20 categories.
+ * Professional: clients, work, job_search
+ * People: personal, family, parenting
+ * Life Admin: health, finance, billing
+ * Lifestyle: travel, shopping, deals
+ * Community: local, civic, sports
+ * Information: news, politics, newsletters, product_updates
+ * System: notifications
+ *
+ * Every email is assigned to one of these 20 — no "other" or uncategorized bucket.
  *
  * Actions are tracked separately via the `actions` table and `has_event` label.
  * Events are now detected via the `has_event` label and processed by EventDetector.
@@ -281,24 +279,26 @@ EMAIL TYPE (what kind of communication is this?)
 ═══════════════════════════════════════════════════════════════════════════════
 
 This is ORTHOGONAL to category. Category = what life area. Type = communication nature.
-An email can be category=finance + type=transactional, or category=clients + type=needs_response.
+An email can be category=finance + type=automated, or category=clients + type=needs_response.
 
-- personal: Direct human-to-human correspondence. Someone wrote this to the user specifically.
-- transactional: Receipts, confirmations, shipping updates, account alerts, order status.
-- newsletter: Newsletters, digests, content roundups, Substacks, curated reading.
-- notification: App notifications (LinkedIn, GitHub, Slack), social media alerts, system notices.
-- promo: Marketing emails, sales, deals, discounts, upsells from known companies.
-- cold_outreach: Unsolicited contact — sales pitches, PR, link exchange, fake awards, "partnership" requests.
+6 types (simplified Mar 2026):
 - needs_response: Someone is waiting for a reply. A direct question, a request, a follow-up.
+- personal: Direct human-to-human correspondence. Someone wrote this to the user specifically.
+- newsletter: Newsletters, digests, content roundups, Substacks, curated reading.
+- automated: Machine-generated — receipts, confirmations, shipping updates, verification codes,
+  2FA, CI/CD alerts, app notifications, social media alerts, system notices, password resets.
+- marketing: Promotional emails, sales, deals, discounts, upsells, cold outreach, PR pitches,
+  fake awards, "partnership" requests. Both known companies and unsolicited.
 - fyi: Informational — worth knowing but no reply or action expected. Updates, announcements, FYIs.
-- automated: Machine-generated — verification codes, 2FA, CI/CD alerts, cron reports, password resets.
 
 DISAMBIGUATION:
 - A newsletter with a direct question to the reader → newsletter (not needs_response — it's broadcast)
 - A client saying "just FYI" → needs_response if they might expect acknowledgment, fyi if truly one-way
-- A promo from a company you use → promo (even if useful — it's still marketing)
-- A cold email that asks a question → cold_outreach (the "question" is a sales tactic)
-- Verification code → automated (not notification — it's ephemeral machine output)
+- A promo from a company you use → marketing (even if useful — it's still marketing)
+- A cold email that asks a question → marketing (the "question" is a sales tactic)
+- Verification code → automated (ephemeral machine output)
+- LinkedIn notification → automated (app-generated, not human correspondence)
+- Shipping confirmation → automated (machine-generated transactional notice)
 
 ═══════════════════════════════════════════════════════════════════════════════
 AI BRIEF (for a future AI to read — NOT for the user)
@@ -351,66 +351,102 @@ NOT networking opportunities (even if they claim to be):
 - Pay-to-play anything (speaker slots, awards, features)
 
 ═══════════════════════════════════════════════════════════════════════════════
-CATEGORIES (choose ONE primary life bucket)
+CATEGORIES (choose ONE primary life bucket — 20 categories)
 ═══════════════════════════════════════════════════════════════════════════════
 
-- newsletters_creator: Substacks, digests, curated content, reading material
-  Examples: Morning Brew, Hacker News digest, creator newsletters
-  KEY: Default for unsorted newsletter content
-
-- newsletters_industry: Industry-specific newsletters, professional reading
-  Examples: Industry trade publications, professional association updates, sector-specific digests
-  KEY: Newsletters focused on a specific industry or profession
-
-- news_politics: News outlets, political updates, current events
-  Examples: NYT, CNN, political campaigns, government notices
-
-- product_updates: Tech products, SaaS tools, services you subscribe to
-  Examples: Figma updates, GitHub notifications, Spotify, Netflix
-  KEY: Tools/products the user actively USES, not marketing from random companies
-
-- local: Community events, neighborhood, local organizations
-  Examples: Local meetups, community boards, city newsletters, library events
-  KEY: Geographically local to the user's area
-
-- shopping: Orders, shipping, deals, retail, purchases
-  Examples: Amazon orders, shipping notifications, sale alerts, returns
-
-- travel: Flights, hotels, bookings, trip planning
-  Examples: Airline confirmations, hotel bookings, Airbnb, trip itineraries
-
-- finance: Bills, banking, investments, financial receipts
-  Examples: Bank statements, credit card alerts, invoices, payment confirmations
-
-- family: Family, kids, school, health, appointments, family scheduling
-  Examples: Teacher emails, school newsletters, doctor appointments, health reminders,
-  kid activities, class signups, prescription alerts
-  KEY: Related to family life - children, health, education, activities, care
-
-- clients: Direct client work, project correspondence, billable relationships
+PROFESSIONAL:
+- clients: Direct client work, billable relationships, project correspondence
   Examples: Client emails about projects, contract discussions, deliverable reviews
   KEY: People/companies you do paid work FOR
 
-- work: Professional but not direct client work
-  Examples: Internal team emails, industry discussions, professional networking,
-  job boards, B2B SaaS marketing, conference invites
+- work: Professional non-client — team, industry, networking, conferences
+  Examples: Internal team emails, industry discussions, professional networking, conference invites
   KEY: Work-related but not a paying client relationship
 
-- personal_friends_family: Social relationships, personal correspondence
-  Examples: Friends reaching out, family messages, social invitations, personal news
-  KEY: Personal relationships (not business, not logistics)
+- job_search: Applications, recruiters, interviews, offers, job boards
+  Examples: LinkedIn recruiter messages, job application confirmations, interview scheduling
+  KEY: Active or passive job seeking activity
 
-- notifications: Verification codes, OTPs, login alerts, password resets, 2FA,
-  system alerts, security notifications, ephemeral emails
-  Examples: "Your verification code is 482910", "New login from Chrome on Mac",
-  "Password reset requested", "Your 2FA code is 739201"
-  KEY: Glance-and-delete emails — no lasting value, just codes or alerts
+PEOPLE:
+- personal: Friends, social relationships, adult hobbies, clubs, casual correspondence
+  Examples: Friends reaching out, social invitations, craft club emails, running group updates
+  KEY: Personal social life, adult hobbies/interests (not business, not logistics)
 
-IMPORTANT: Every email MUST be assigned to one of the 13 categories above. There is
+- family: Family relationships, extended family correspondence
+  Examples: Mom sharing photos, sibling group emails, family event planning
+  KEY: Adult-to-adult family communication
+
+- parenting: ALL kid-related — school, childcare, pediatrician, extracurriculars, tutors, kids sports teams
+  Examples: Teacher emails, school newsletters, soccer practice schedule, art tutor invoice,
+  pediatrician appointment, daycare updates, PTA announcements, kid birthday party invites
+  KEY: Anything involving your children — covers ALL domains when kids are the subject
+
+LIFE ADMIN:
+- health: Medical, dental, prescriptions, insurance EOBs, wellness, vet
+  Examples: Doctor appointment confirmations, prescription refills, insurance claims, vet reminders
+  KEY: Health and wellness for adults (kid health goes to parenting)
+
+- finance: Banking, investments, tax, financial planning, portfolio updates
+  Examples: Bank statements, investment reports, tax documents, financial advisor emails
+  KEY: Financial LIFE and planning — where your money grows/is managed
+
+- billing: Receipts, subscriptions, autopay, bills, payment failures, invoices
+  Examples: Utility bills, Netflix renewal, credit card statement, payment confirmation, subscription charges
+  KEY: Administrative money paperwork — the receipt/bill side, not the planning side
+
+LIFESTYLE:
+- travel: Flights, hotels, bookings, trip planning, itineraries
+  Examples: Airline confirmations, hotel bookings, Airbnb, rental car reservations
+
+- shopping: Orders, shipping, returns, tracking, product deliveries
+  Examples: Amazon order confirmation, FedEx tracking, return authorization
+  KEY: The lifecycle of a purchase (deals/promos go in 'deals')
+
+- deals: Sales, discounts, coupons, limited-time offers, promotional offers worth knowing
+  Examples: "40% off this weekend", "Flash sale ends tonight", coupon codes
+  KEY: Money-saving opportunities — promos the user might actually want
+
+COMMUNITY:
+- local: Community, neighborhood, local businesses, local events
+  Examples: Local meetups, community boards, city newsletters, library events, neighborhood app
+  KEY: Geographically local to the user's area
+
+- civic: Government, council, school board, HOA, voting, municipal services
+  Examples: City council agenda, HOA notices, voter registration, school board meeting, permit status
+  KEY: Civic engagement and governance — your duty as a citizen/homeowner
+
+- sports: Fan sports — scores, fantasy leagues, team updates, sports media
+  Examples: ESPN alerts, fantasy football league, team score notifications, sports newsletter
+  KEY: Fan/spectator sports ONLY (kids sports teams → parenting, adult rec leagues → personal)
+
+INFORMATION:
+- news: News outlets, current events, breaking news, journalism
+  Examples: NYT, CNN, AP News, breaking news alerts
+  KEY: What happened in the world today
+
+- politics: Political news, campaigns, policy, political action, political commentary
+  Examples: Campaign emails, political action committees, policy newsletters, political punditry
+  KEY: Political content specifically (general news goes to 'news')
+
+- newsletters: Substacks, digests, curated content, creator newsletters, reading material
+  Examples: Morning Brew, Hacker News digest, industry Substacks, creator content
+  KEY: Default for newsletter/digest content regardless of topic
+
+- product_updates: SaaS tools, release notes, changelogs, app updates
+  Examples: Figma updates, GitHub release notes, Notion changelog, Spotify new features
+  KEY: Tools/products the user actively USES, not marketing from random companies
+
+SYSTEM:
+- notifications: Verification codes, OTPs, 2FA, login alerts, password resets,
+  security notifications, ephemeral system emails
+  Examples: "Your verification code is 482910", "New login from Chrome on Mac"
+  KEY: Glance-and-delete — no lasting value, just codes or alerts
+
+IMPORTANT: Every email MUST be assigned to one of the 20 categories above. There is
 NO "other" or "uncategorized" option. Pick the BEST FIT even if the match isn't
-perfect. Use your best judgment — lean toward personal_friends_family for personal
-content, product_updates for automated/system content, or notifications for
-verification codes and ephemeral alerts.
+perfect. Use your best judgment — lean toward personal for personal content,
+product_updates for automated/system content, or notifications for verification
+codes and ephemeral alerts.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ADDITIONAL CATEGORIES (0-2 secondary categories)
@@ -423,10 +459,12 @@ all its categories in the inbox.
 
 Examples:
 - Client invites you to a local dinner → primary: clients, additional: [local]
-- Family member's school newsletter about a community event → primary: family, additional: [local]
-- Finance newsletter with shopping deals → primary: newsletters_industry, additional: [finance, shopping]
-- Work colleague sharing a travel deal → primary: work, additional: [travel]
-- Newsletter about a product you use → primary: newsletters_creator, additional: [product_updates]
+- Family member's school newsletter about a community event → primary: parenting, additional: [local]
+- Finance newsletter with shopping deals → primary: newsletters, additional: [finance, deals]
+- Work colleague sharing a travel deal → primary: work, additional: [travel, deals]
+- Newsletter about a product you use → primary: newsletters, additional: [product_updates]
+- Travel deal email → primary: deals, additional: [travel]
+- Kid's soccer team fundraiser → primary: parenting, additional: [local]
 
 Rules:
 - Only add additional categories when there's a GENUINE secondary bucket
@@ -435,29 +473,72 @@ Rules:
 - Additional categories should be clearly relevant, not tangential
 
 ═══════════════════════════════════════════════════════════════════════════════
-DISAMBIGUATION GUIDE
+DISAMBIGUATION GUIDE (Taxonomy v2 — Mar 2026)
 ═══════════════════════════════════════════════════════════════════════════════
 
-PRODUCT UPDATES vs WORK:
+PRODUCT UPDATES vs WORK vs MARKETING:
 - Tool you USE daily (Figma, Slack, GitHub) → product_updates
-- Random B2B marketing → work
+- Random B2B marketing → work (if relevant) or deals (if promotional)
 - Tool for a specific client project → product_updates (still a tool you use)
 
-CLIENTS vs WORK:
+CLIENTS vs WORK vs JOB_SEARCH:
 - Email FROM a paying client → clients
 - Email about industry news → work
-- LinkedIn recruiter → work
+- LinkedIn recruiter → job_search
 - LinkedIn message from potential client → clients
+- Job application confirmation → job_search
 
-PERSONAL vs FAMILY:
-- Friend inviting you to dinner → personal_friends_family
-- Kid's school event → family
-- Mom sharing photos → personal_friends_family
-- Pediatrician appointment → family
+PERSONAL vs FAMILY vs PARENTING:
+- Friend inviting you to dinner → personal
+- Adult craft club email → personal
+- Mom sharing photos → family
+- Sibling group chat about holiday plans → family
+- Kid's school event → parenting
+- Pediatrician appointment → parenting
+- Soccer practice schedule change → parenting
+- Kid's art tutor invoice → parenting
+
+FINANCE vs BILLING:
+- Investment portfolio update → finance
+- Bank statement → finance
+- Tax document from CPA → finance
+- Netflix subscription renewal → billing
+- Utility bill → billing
+- Payment failure notification → billing
+- Credit card charge receipt → billing
+
+NEWS vs POLITICS vs NEWSLETTERS:
+- NYT breaking news alert → news
+- Political campaign email → politics
+- Morning Brew daily digest → newsletters
+- Policy analysis Substack → politics (primary), newsletters (additional)
+
+SHOPPING vs DEALS vs BILLING:
+- Amazon order shipped → shopping
+- "40% off sale this weekend" → deals
+- Amazon Prime subscription renewal → billing
+
+HEALTH vs PARENTING:
+- Your doctor appointment → health
+- Kid's pediatrician appointment → parenting
+- Your prescription refill → health
+- Vet appointment → health
+
+SPORTS vs PERSONAL vs PARENTING:
+- ESPN game score alert → sports
+- Fantasy football league → sports
+- Your adult rec basketball league → personal
+- Kid's soccer team schedule → parenting
+
+CIVIC vs LOCAL:
+- City council meeting agenda → civic
+- Neighborhood block party → local
+- HOA meeting notice → civic
+- Local restaurant opening → local
 
 LOCAL vs OTHER:
 - Event in your metro area → local (even if also tech, art, etc.)
-- Virtual webinar → work or newsletters_creator
+- Virtual webinar → work or newsletters
 - Conference in another city → travel or work
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -499,6 +580,12 @@ CALENDAR LABELS:
 - rsvp_needed: RSVP or registration required
 - appointment: Scheduled appointment
 
+TIMELINESS LABELS (NEW Mar 2026):
+- invited: Personally/directly invited — social weight, someone expects an answer
+- confirmation: Booking/order/appointment confirmed — reference material
+- has_tickets: Contains tickets, passes, QR codes — need this document later
+- deadline: Something expires or is due by a specific date
+
 LEARNING/CAREER LABELS:
 - educational: Learning content
 - industry_news: Industry updates
@@ -510,6 +597,51 @@ NOISE LABELS (apply when detected):
 - fake_recognition: Fake awards, pay-to-play nomination
 - mass_outreach: PR pitch, link exchange, generic partnerships
 - promotional: Deals, discounts, upsells
+
+═══════════════════════════════════════════════════════════════════════════════
+TIMELINESS (NEW Mar 2026 — email's relationship to time)
+═══════════════════════════════════════════════════════════════════════════════
+
+Every email has a relationship to TIME. Capture this as a structured object.
+
+NATURE (required — pick one):
+- ephemeral: Worthless after its moment (verification codes, OTPs, 2FA, login alerts)
+- today: Only matters today (daily digests, today's deals, breaking news)
+- upcoming: References a future date/event (appointments, bookings, deadlines, flights)
+- asap: Needs attention soon but no specific date (someone waiting for reply, urgent request)
+- reference: Worth keeping but no time pressure (receipts, confirmations, tax docs)
+- evergreen: Always relevant content (educational, how-to, long-form essays)
+
+DATES (optional — include when present):
+- relevant_date: When the thing itself happens (flight date, appointment time, event date)
+  Format: ISO date string "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS"
+- late_after: Consequence threshold — soft deadline before which you should act
+  Format: ISO date string. E.g., event is March 20, but early-bird pricing ends March 15.
+- expires: Hard cutoff — no action possible after this date
+  Format: ISO date string. E.g., coupon expires, RSVP closes, offer ends.
+
+PERISHABLE (required boolean):
+- true: This email becomes worthless after its moment (codes, daily news, flash sales)
+- false: This email retains value over time (receipts, bookings, personal messages)
+
+EXAMPLES:
+- Verification code: { nature: "ephemeral", perishable: true }
+- Flight on March 20: { nature: "upcoming", relevant_date: "2026-03-20", perishable: false }
+- "40% off ends Friday": { nature: "upcoming", expires: "2026-03-07", perishable: true }
+- Morning Brew digest: { nature: "today", perishable: true }
+- Client needs reply: { nature: "asap", perishable: false }
+- RSVP by March 10 for March 15 event: { nature: "upcoming", relevant_date: "2026-03-15", late_after: "2026-03-10", perishable: false }
+- Tax receipt: { nature: "reference", perishable: false }
+- Industry deep-dive article: { nature: "evergreen", perishable: false }
+- Concert tickets for April 5: { nature: "upcoming", relevant_date: "2026-04-05", perishable: false }
+- Kid's school picture day March 12: { nature: "upcoming", relevant_date: "2026-03-12", perishable: false }
+
+RULES:
+- Always provide nature and perishable — they're required.
+- Dates are optional. Only include when explicitly mentioned or clearly implied.
+- Use the user's current date context to calibrate "today" vs "upcoming".
+- If a deadline is implied but no specific date is given, use nature: "asap" (not "upcoming").
+- For newsletters/digests, consider whether the content is truly daily (today) or evergreen.
 
 ═══════════════════════════════════════════════════════════════════════════════
 SUMMARY (one line — what does the user need to know?)
@@ -717,11 +849,41 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Up to 2 additional categories if the email genuinely belongs in multiple life buckets. E.g., a client dinner invite = primary clients, additional [local]. Only include if truly relevant.',
       },
 
-      // Email type (NEW Feb 2026) — nature of the communication
+      // Email type (NEW Feb 2026, SIMPLIFIED Mar 2026) — nature of the communication
       email_type: {
         type: 'string',
         enum: EMAIL_TYPES as unknown as string[],
-        description: 'Nature of the communication: personal, transactional, newsletter, notification, promo, cold_outreach, needs_response, fyi, automated',
+        description: 'Nature of the communication: needs_response, personal, newsletter, automated, marketing, fyi',
+      },
+
+      // Timeliness (NEW Mar 2026) — email's relationship to time
+      timeliness: {
+        type: 'object',
+        description: 'Email\'s relationship to time. Always include nature and perishable. Dates optional.',
+        properties: {
+          nature: {
+            type: 'string',
+            enum: ['ephemeral', 'today', 'upcoming', 'asap', 'reference', 'evergreen'],
+            description: 'How this email relates to time',
+          },
+          relevant_date: {
+            type: 'string',
+            description: 'ISO date when the thing happens (e.g., "2026-03-20")',
+          },
+          late_after: {
+            type: 'string',
+            description: 'ISO date — consequence threshold / soft deadline (e.g., "2026-03-18")',
+          },
+          expires: {
+            type: 'string',
+            description: 'ISO date — hard cutoff, no action possible after (e.g., "2026-03-15")',
+          },
+          perishable: {
+            type: 'boolean',
+            description: 'True if worthless after its moment (codes, daily news, flash sales)',
+          },
+        },
+        required: ['nature', 'perishable'],
       },
 
       // AI brief (NEW Feb 2026) — dense internal summary for downstream AI
@@ -730,7 +892,7 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Dense, structured summary for a future AI to read when batch-summarizing. Format: "IMPORTANCE | From WHO (relationship) | What about | Action needed | Key context"',
       },
     },
-    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action', 'email_type', 'ai_brief'],
+    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action', 'email_type', 'timeliness', 'ai_brief'],
   },
 };
 
@@ -741,13 +903,15 @@ const FUNCTION_SCHEMA: FunctionSchema = {
 /**
  * Categorizer Analyzer
  *
- * Classifies emails into one of 12 life-bucket categories.
+ * Classifies emails into one of 20 life-bucket categories (Taxonomy v2, Mar 2026).
  * This analyzer runs first in the pipeline and determines category,
- * signal strength, reply worthiness, and which Phase 2 analyzers run.
+ * signal strength, reply worthiness, timeliness, and which Phase 2 analyzers run.
  *
  * Key design decisions:
  * - Life-bucket categories (what area of life, not what action)
- * - 12 categories: clients, work, personal, family, finance, etc.
+ * - 20 categories across 7 groups: Professional, People, Life Admin, Lifestyle,
+ *   Community, Information, System
+ * - Timeliness object captures email's relationship to time
  * - Signal strength gates Phase 2 analyzers (noise = skip)
  * - Extracts topics for filtering and search
  *
@@ -857,6 +1021,7 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
         labels: result.data.labels ?? [],
         topics: result.data.topics ?? [],
         confidence: result.data.confidence,
+        timeliness: result.data.timeliness ?? null,
         summaryPreview: result.data.summary?.substring(0, 80),
         aiBriefPreview: result.data.aiBrief?.substring(0, 80),
       });
@@ -1001,7 +1166,49 @@ export class CategorizerAnalyzer extends BaseAnalyzer<CategorizationData> {
 
       // Additional categories (NEW Feb 2026)
       ...(rawAdditional && rawAdditional.length > 0 ? { additionalCategories: rawAdditional } : {}),
+
+      // Timeliness (NEW Mar 2026 — Taxonomy v2)
+      ...(rawData.timeliness ? { timeliness: this.normalizeTimeliness(rawData.timeliness as Record<string, unknown>) } : {}),
     };
+  }
+
+  /**
+   * Normalizes the timeliness object from OpenAI response.
+   * Validates nature enum, coerces dates to ISO strings, and ensures perishable is boolean.
+   *
+   * @param raw - Raw timeliness data from OpenAI
+   * @returns Validated Timeliness object
+   */
+  private normalizeTimeliness(raw: Record<string, unknown>): import('./types').Timeliness {
+    const VALID_NATURES = new Set(['ephemeral', 'today', 'upcoming', 'asap', 'reference', 'evergreen']);
+    const rawNature = raw.nature as string;
+    const nature = VALID_NATURES.has(rawNature)
+      ? rawNature as import('./types').TimelinessNature
+      : 'reference'; // Default to 'reference' if invalid
+
+    if (!VALID_NATURES.has(rawNature)) {
+      logger.warn('AI returned invalid timeliness.nature — defaulting to reference', {
+        received: rawNature,
+      });
+    }
+
+    const result: import('./types').Timeliness = {
+      nature,
+      perishable: typeof raw.perishable === 'boolean' ? raw.perishable : false,
+    };
+
+    // Include optional date fields when present and valid
+    if (typeof raw.relevant_date === 'string' && raw.relevant_date.length > 0) {
+      result.relevant_date = raw.relevant_date;
+    }
+    if (typeof raw.late_after === 'string' && raw.late_after.length > 0) {
+      result.late_after = raw.late_after;
+    }
+    if (typeof raw.expires === 'string' && raw.expires.length > 0) {
+      result.expires = raw.expires;
+    }
+
+    return result;
   }
 
   /**
