@@ -486,7 +486,7 @@ CONTENT LABELS:
 - has_attachment: Email mentions or has attachments
 - has_link: Contains important links
 - has_question: Direct question asked
-- has_event: Contains a calendar-worthy event (date/time)
+- has_event: Contains a calendar-worthy event (date/time). IMPORTANT: Apply this label even if the email is primarily about something else (e.g., a newsletter mentioning an upcoming summit in a P.S., a personal email that mentions a meetup in passing, a community update that links to a webinar). Scan the ENTIRE email including footers and P.S. sections.
 - has_multiple_events: Email lists MULTIPLE distinct events, course dates, class schedules, or a calendar of upcoming dates (apply WITH has_event)
 
 FINANCIAL LABELS:

@@ -76,6 +76,11 @@
 
 import { BaseAnalyzer } from './base-analyzer';
 import { analyzerConfig } from '@/config/analyzers';
+import {
+  resolveEventLinks,
+  formatResolvedLinksForPrompt,
+  type LinkInput,
+} from './link-resolver';
 import type { FunctionSchema } from '@/lib/ai/openai-client';
 import type {
   EventDetectionData,
@@ -591,58 +596,62 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
    */
   private currentContext?: UserContext;
 
+  /** Additional content from resolved links (set before analysis) */
+  private resolvedLinkContent: string = '';
+
   /**
    * Analyzes an email and extracts event details.
    *
    * IMPORTANT: This analyzer should only be called when the email
    * has the `has_event` label (detected by the Categorizer).
    *
-   * REFACTORED (Jan 2026): Now uses user context for locality detection.
+   * ENHANCED (Mar 2026): Now accepts optional links for resolution,
+   * matching the multi-event detector's capability. When an event email
+   * contains registration/signup links, the resolver fetches the page
+   * to extract additional details (dates, times, location, cost).
    *
    * @param email - Email data to analyze
    * @param context - User context (used for locality detection)
+   * @param links - Optional links from ContentDigest to resolve for additional context
    * @returns Event detection result with all extracted fields
-   *
-   * @example
-   * ```typescript
-   * const result = await detector.analyze({
-   *   id: 'email-123',
-   *   subject: 'You\'re Invited: Milwaukee Tech Meetup',
-   *   senderEmail: 'events@mketech.org',
-   *   senderName: 'MKE Tech Community',
-   *   date: '2026-01-15T10:00:00Z',
-   *   snippet: 'Join us for our January meetup on January 25th at 6pm...',
-   *   bodyText: 'Milwaukee Tech Meetup: AI in Production...',
-   * }, { locationMetro: 'Milwaukee, WI' });
-   *
-   * // result.data:
-   * // {
-   * //   hasEvent: true,
-   * //   isKeyDate: false,
-   * //   eventTitle: 'Milwaukee Tech Meetup: AI in Production',
-   * //   eventDate: '2026-01-25',
-   * //   eventTime: '18:00',
-   * //   locationType: 'in_person',
-   * //   eventLocality: 'local',  // NEW
-   * //   location: '123 Main St, Milwaukee, WI 53211',
-   * //   rsvpRequired: true,
-   * //   confidence: 0.95,
-   * // }
-   * ```
    */
   async analyze(
     email: EmailInput,
-    context?: UserContext
+    context?: UserContext,
+    links?: LinkInput[]
   ): Promise<EventDetectionResult> {
     // Store context for use in getSystemPrompt
     this.currentContext = context;
+    this.resolvedLinkContent = '';
 
     // Log with context info for debugging
     this.logger.debug('Running event detection (for emails with has_event label)', {
       emailId: email.id,
       subject: email.subject?.substring(0, 50),
       userLocation: context?.locationMetro || context?.locationCity || 'unknown',
+      linkCount: links?.length ?? 0,
     });
+
+    // Resolve links for additional context (non-blocking — failure is fine)
+    if (links && links.length > 0) {
+      try {
+        const resolved = await resolveEventLinks(links);
+        if (resolved.length > 0) {
+          this.resolvedLinkContent = formatResolvedLinksForPrompt(resolved);
+          this.logger.info('Resolved links for event context', {
+            emailId: email.id,
+            linksResolved: resolved.length,
+            contentChars: this.resolvedLinkContent.length,
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.debug('Link resolution failed (non-fatal)', {
+          emailId: email.id,
+          error: message,
+        });
+      }
+    }
 
     // Use the base class executeAnalysis which handles all common logic
     const result = await this.executeAnalysis(email);
@@ -655,6 +664,7 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
 
     // Clear context after use
     this.currentContext = undefined;
+    this.resolvedLinkContent = '';
 
     return result;
   }
@@ -697,6 +707,21 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
   getSystemPrompt(context?: UserContext): string {
     // Use stored context if available (from analyze call), otherwise use passed context
     return buildSystemPrompt(this.currentContext || context);
+  }
+
+  /**
+   * Override formatEmailForAnalysis to include resolved link content.
+   * When links are resolved, their content is appended to give the AI
+   * more context about the event (e.g., full schedule from a signup page).
+   */
+  protected formatEmailForAnalysis(email: EmailInput): string {
+    const baseContent = super.formatEmailForAnalysis(email);
+
+    if (this.resolvedLinkContent) {
+      return baseContent + '\n' + this.resolvedLinkContent;
+    }
+
+    return baseContent;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
