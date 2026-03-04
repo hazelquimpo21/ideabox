@@ -23,7 +23,7 @@
  *
  * <Sidebar
  *   currentPath="/inbox"
- *   categoryCounts={{ clients: 5, newsletters_creator: 12 }}
+ *   categoryCounts={{ clients: 5, newsletters: 12 }}
  *   clients={[{ id: '1', name: 'Acme Corp' }]}
  *   isOpen={sidebarOpen}
  *   onClose={() => setSidebarOpen(false)}
@@ -80,18 +80,26 @@ const logger = createLogger('Sidebar');
  * Categories now represent what part of life the email touches.
  */
 export type EmailCategory =
-  | 'newsletters_creator'           // Substacks, digests
-  | 'newsletters_industry'          // Industry-specific newsletters
-  | 'news_politics'                 // News, political updates
-  | 'product_updates'               // Tech products, SaaS
-  | 'local'                         // Community, local events
-  | 'shopping'                      // Orders, shipping, deals
-  | 'travel'                        // Flights, hotels, trips
-  | 'finance'                       // Bills, banking
-  | 'family'                        // School, kids, health, appointments
   | 'clients'                       // Client work
   | 'work'                          // Work, professional
-  | 'personal_friends_family';      // Friends, family
+  | 'job_search'                    // Job applications, recruiters
+  | 'personal'                      // Friends, social
+  | 'family'                        // School, kids, family scheduling
+  | 'parenting'                     // Parenting-specific
+  | 'health'                        // Health, medical, wellness
+  | 'finance'                       // Bills, banking
+  | 'billing'                       // Subscriptions, billing
+  | 'travel'                        // Flights, hotels, trips
+  | 'shopping'                      // Orders, shipping, deals
+  | 'deals'                         // Deals, coupons, promos
+  | 'local'                         // Community, local events
+  | 'civic'                         // Government, civic
+  | 'sports'                        // Sports updates
+  | 'news'                          // News, current events
+  | 'politics'                      // Political updates
+  | 'newsletters'                   // Substacks, digests
+  | 'product_updates'               // Tech products, SaaS
+  | 'notifications';                // Automated alerts
 
 /**
  * Category counts for sidebar badges.
@@ -252,7 +260,7 @@ const categoryItems: CategoryItem[] = [
   // Note: Events moved to dedicated /events page and main nav (Jan 2026)
   {
     label: 'Newsletters',
-    category: 'newsletters_creator',
+    category: 'newsletters',
     icon: Newspaper,
     color: 'text-blue-500',
   },

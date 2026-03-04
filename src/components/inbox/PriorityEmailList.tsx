@@ -171,7 +171,7 @@ const PriorityEmailRow = React.memo(function PriorityEmailRow({
   email: PriorityEmail;
   onEmailSelect?: (email: PriorityEmail) => void;
 }) {
-  const category = email.category || 'personal_friends_family';
+  const category = email.category || 'personal';
   const categoryColor = CATEGORY_BADGE_COLORS[category as keyof typeof CATEGORY_BADGE_COLORS] || 'bg-gray-50 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
   const categoryLabel = CATEGORY_SHORT_LABELS[category as keyof typeof CATEGORY_SHORT_LABELS] || category.replace(/_/g, ' ');
 

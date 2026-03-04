@@ -14,13 +14,18 @@ IdeaBox transforms email overwhelm into organized intelligence. It's an AI-power
 
 ## Solution
 AI-powered email processing system with specialized analyzers that:
-- **Categorize by life-bucket** (REFACTORED Jan 2026, ENHANCED Feb 2026): 13 categories representing what part of life the email touches:
-  - **Work & Business**: `clients` (active client work), `work` (professional/work)
-  - **Family & Personal**: `family` (kids, school, health, appointments), `personal_friends_family`
-  - **Life Admin**: `finance`, `travel`, `shopping`, `local` (community/events)
-  - **Information**: `newsletters_creator`, `newsletters_industry`, `news_politics`, `product_updates`
-  - **Transient**: `notifications` (verification codes, OTPs, login alerts, password resets)
+- **Categorize by life-bucket** (TAXONOMY V2, March 2026): 20 categories representing what part of life the email touches:
+  - **Professional**: `clients` (active client work), `work` (professional/work), `job_search` (applications, recruiters, interviews)
+  - **People**: `personal` (friends, social), `family` (family relationships), `parenting` (kids, school, childcare, extracurriculars)
+  - **Life Admin**: `health` (medical, dental, prescriptions), `finance` (banking, investments, tax), `billing` (receipts, subscriptions, bills)
+  - **Lifestyle**: `travel`, `shopping`, `deals` (sales, coupons, limited-time offers)
+  - **Community**: `local` (community/events), `civic` (government, HOA, voting), `sports` (fan sports, fantasy leagues)
+  - **Information**: `news`, `politics`, `newsletters`, `product_updates`
+  - **System**: `notifications` (verification codes, OTPs, login alerts, password resets)
   - Emails can have a primary category plus up to 2 additional categories, appearing in multiple inbox views
+  - Email types simplified to 6 values: `needs_response`, `personal`, `newsletter`, `automated`, `marketing`, `fyi`
+  - **Timeliness** tracking: each email has a `timeliness` object (`{nature, relevant_date, late_after, expires, perishable}`) enabling time-aware smart views
+  - **5-dimension scoring**: `importance_score`, `urgency_score`, `action_score`, `cognitive_load`, `missability_score` with composite `surface_priority`
 - **Track client relationships**: Clients unified into contacts (`is_client` flag, `client_status`, `client_priority`)
 - **Extract actions**: Build dedicated to-do list from email content
 - **Save content**: URLs, tweet ideas, networking opportunities (future)
@@ -152,9 +157,14 @@ AI-powered email processing system with specialized analyzers that:
 > **Note:** Inbox consolidated from 8→5 tabs (March 2026): Insights/News/Links merged into
 > Discoveries tab, Ideas moved to Tasks page. See `docs/DECISIONS.md` (#24-26) for rationale.
 
-> **Note:** Tasks page redesigned (March 2026): 6→4 tabs (Triage, Board, Projects, Library)
+> **Note:** Tasks page redesigned (March 2026): 6->4 tabs (Triage, Board, Projects, Library)
 > with Triage as default entry point. Queries optimized with Supabase foreign key joins.
 > See `docs/DECISIONS.md` (#27-29) for rationale.
+
+> **Note:** Taxonomy v2 (March 2026): Categories expanded from 13 to 20, email types simplified
+> from 9 to 6, timeliness JSONB column added, 5-dimension scoring with surface_priority,
+> smart views API, timeliness cron job. See `docs/DECISIONS.md` (#31) and
+> `docs/INBOX_CATEGORY_TAXONOMY_PLAN.md` for details.
 
 ## Design Principles
 1. **Modular First**: Every component standalone and replaceable
@@ -173,7 +183,7 @@ These decisions were made after careful analysis and should guide all implementa
 |----------|--------|-----------|
 | **AI Model** | GPT-4.1-mini only | Best value (~$3-5/month), optimized for function calling, 1M context |
 | **No AI Fallback** | Single model | Fallback adds complexity without proportional benefit |
-| **Categories** | Life-bucket system (13 categories) | Categories represent what part of life the email touches (work, family, admin, info) - REFACTORED Jan 2026, notifications added Feb 2026 |
+| **Categories** | Life-bucket system (20 categories — Taxonomy v2) | 20 categories representing what part of life the email touches — expanded Mar 2026 from 13; see DECISIONS.md #31 |
 | **Client Tracking** | Via `contact_id` + `is_client` flag on contacts | Clients merged into contacts table (Feb 2026); `client_id` deprecated |
 | **Events** | Label-based (`has_event`) | Events are no longer a category - detected via labels, can appear in any life-bucket |
 | **Urgency** | Score-based (1-10) | No separate "action_required" category; urgency tracked via score across all categories |

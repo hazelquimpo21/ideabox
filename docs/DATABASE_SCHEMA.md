@@ -1,7 +1,7 @@
 # IdeaBox - Database Schema (Supabase/PostgreSQL)
 
-> **Last Updated:** March 2, 2026
-> **Source of Truth:** `scripts/migration-*.sql` (migrations 001-044)
+> **Last Updated:** March 4, 2026
+> **Source of Truth:** `scripts/migration-*.sql` (migrations 001-045)
 > **TypeScript Types:** `src/types/database.ts`
 
 ## Schema Overview
@@ -406,7 +406,7 @@ CREATE TABLE emails (
   additional_categories TEXT[],  -- Up to 2 secondary life-bucket categories
 
   -- Email type & AI brief (migration 037)
-  email_type TEXT,       -- personal, transactional, newsletter, notification, promo, cold_outreach, needs_response, fyi, automated
+  email_type TEXT,       -- Taxonomy v2 (6 values): needs_response, personal, newsletter, automated, marketing, fyi
   ai_brief TEXT,         -- Dense structured summary for downstream AI batch-summarization
 
   -- Relations
@@ -420,6 +420,14 @@ CREATE TABLE emails (
 
   -- Golden nugget count (migration 044)
   golden_nugget_count INTEGER DEFAULT 0, -- Count of golden nuggets from content digest
+
+  -- Taxonomy v2 columns (migration 045)
+  timeliness JSONB,                     -- {nature, relevant_date, late_after, expires, perishable}
+  importance_score REAL,                -- 0.0-1.0 (computed by scoring engine)
+  action_score REAL,                    -- 0.0-1.0 (computed by scoring engine)
+  cognitive_load REAL,                  -- 0.0-1.0 (computed by scoring engine)
+  missability_score REAL,               -- 0.0-1.0 (computed by scoring engine)
+  surface_priority REAL,               -- 0.0-1.0 composite (importance * 0.25 + urgency * 0.25 + action * 0.25 + missability * 0.25)
 
   -- Review queue tracking (migration 033)
   reviewed_at TIMESTAMPTZ,              -- When user last scanned in daily review queue
@@ -441,33 +449,43 @@ CREATE TABLE emails (
   UNIQUE(user_id, gmail_id)
 );
 
--- Category CHECK constraint (migration 018, re-added in 028, updated Feb 2026)
+-- Category CHECK constraint (Taxonomy v2, migration 045 — 20 categories)
 ALTER TABLE emails ADD CONSTRAINT emails_category_check CHECK (
   category IS NULL OR category IN (
-    'clients', 'work', 'personal_friends_family', 'family',
-    'finance', 'travel', 'shopping', 'local',
-    'newsletters_creator', 'newsletters_industry',
-    'news_politics', 'product_updates', 'notifications'
+    'clients', 'work', 'job_search',
+    'personal', 'family', 'parenting',
+    'health', 'finance', 'billing',
+    'travel', 'shopping', 'deals',
+    'local', 'civic', 'sports',
+    'news', 'politics', 'newsletters', 'product_updates',
+    'notifications'
   )
 );
 ```
 
-#### Life-Bucket Categories (13 values)
+#### Life-Bucket Categories (Taxonomy v2 — 20 values, March 2026)
 | Group | Category | Description |
 |-------|----------|-------------|
-| Work & Business | `clients` | Direct client correspondence, project work |
-| Work & Business | `work` | Team, industry, professional |
-| Family & Personal | `personal_friends_family` | Social, relationships |
-| Family & Personal | `family` | School emails, kid activities, medical, appointments |
-| Life Admin | `finance` | Bills, banking, receipts |
-| Life Admin | `travel` | Flights, hotels, bookings |
-| Life Admin | `shopping` | Orders, shipping, deals |
-| Life Admin | `local` | Community events, local orgs |
-| Information | `newsletters_creator` | Substacks, individual creator newsletters |
-| Information | `newsletters_industry` | Industry digests, company newsletters |
-| Information | `news_politics` | News outlets, political |
+| Professional | `clients` | Direct client correspondence, project work |
+| Professional | `work` | Team, industry, professional |
+| Professional | `job_search` | Applications, recruiters, interviews, offers |
+| People | `personal` | Friends, social relationships, adult hobbies/clubs |
+| People | `family` | Family relationships |
+| People | `parenting` | Kids: school, childcare, pediatrician, extracurriculars |
+| Life Admin | `health` | Medical, dental, prescriptions, insurance EOBs, vet |
+| Life Admin | `finance` | Banking, investments, tax, financial planning |
+| Life Admin | `billing` | Receipts, subscriptions, autopay, bills, payment failures |
+| Lifestyle | `travel` | Flights, hotels, bookings, trip planning |
+| Lifestyle | `shopping` | Orders, shipping, returns, tracking |
+| Lifestyle | `deals` | Sales, discounts, coupons, limited-time offers |
+| Community | `local` | Community, neighborhood, local businesses/events |
+| Community | `civic` | Government, council, school board, HOA, voting |
+| Community | `sports` | Fan sports: scores, fantasy leagues, team updates |
+| Information | `news` | News outlets, current events, breaking news |
+| Information | `politics` | Political news, campaigns, policy |
+| Information | `newsletters` | Substacks, digests, curated content |
 | Information | `product_updates` | SaaS tools, tech products |
-| Transient | `notifications` | Verification codes, OTPs, login alerts, password resets |
+| System | `notifications` | Verification codes, OTPs, login alerts, password resets |
 
 ### email_analyses
 AI analyzer outputs stored as JSONB for flexibility.

@@ -15,7 +15,7 @@
  *
  * - FIXED: "Restore" (unarchive) now sets `is_archived: false` to actually
  *   move the email back to the inbox. Previously it changed the category
- *   to 'personal_friends_family', which didn't unarchive.
+ *   to 'personal', which didn't unarchive.
  *
  * - FIXED: "Delete" button now performs a real Supabase delete (hard delete)
  *   with a clear confirmation dialog. Previously it called archive on an
@@ -88,7 +88,7 @@ function formatRelativeTime(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
-/** Badge display config for all 12 life-bucket categories. */
+/** Badge display config for all 20 life-bucket categories. */
 function getCategoryBadge(category: EmailCategory | null) {
   const map: Record<
     string,
@@ -108,19 +108,39 @@ function getCategoryBadge(category: EmailCategory | null) {
       label: 'Work',
       icon: <Mail className="h-3 w-3" />,
     },
+    job_search: {
+      variant: 'default',
+      label: 'Job Search',
+      icon: <Mail className="h-3 w-3" />,
+    },
+    personal: {
+      variant: 'outline',
+      label: 'Personal',
+      icon: <Mail className="h-3 w-3" />,
+    },
     family: {
       variant: 'default',
       label: 'Family',
       icon: <Calendar className="h-3 w-3" />,
     },
-    personal_friends_family: {
-      variant: 'outline',
-      label: 'Personal',
+    parenting: {
+      variant: 'default',
+      label: 'Parenting',
+      icon: <Calendar className="h-3 w-3" />,
+    },
+    health: {
+      variant: 'secondary',
+      label: 'Health',
       icon: <Mail className="h-3 w-3" />,
     },
     finance: {
       variant: 'secondary',
       label: 'Finance',
+      icon: <Mail className="h-3 w-3" />,
+    },
+    billing: {
+      variant: 'secondary',
+      label: 'Billing',
       icon: <Mail className="h-3 w-3" />,
     },
     travel: {
@@ -133,30 +153,50 @@ function getCategoryBadge(category: EmailCategory | null) {
       label: 'Shopping',
       icon: <Tag className="h-3 w-3" />,
     },
+    deals: {
+      variant: 'outline',
+      label: 'Deals',
+      icon: <Tag className="h-3 w-3" />,
+    },
     local: {
       variant: 'default',
       label: 'Local',
       icon: <Calendar className="h-3 w-3" />,
     },
-    newsletters_creator: {
-      variant: 'secondary',
-      label: 'Newsletter',
-      icon: <Newspaper className="h-3 w-3" />,
+    civic: {
+      variant: 'default',
+      label: 'Civic',
+      icon: <Mail className="h-3 w-3" />,
     },
-    newsletters_industry: {
-      variant: 'secondary',
-      label: 'Industry Newsletter',
-      icon: <Newspaper className="h-3 w-3" />,
+    sports: {
+      variant: 'outline',
+      label: 'Sports',
+      icon: <Mail className="h-3 w-3" />,
     },
-    news_politics: {
+    news: {
       variant: 'secondary',
       label: 'News',
+      icon: <Newspaper className="h-3 w-3" />,
+    },
+    politics: {
+      variant: 'secondary',
+      label: 'Politics',
+      icon: <Newspaper className="h-3 w-3" />,
+    },
+    newsletters: {
+      variant: 'secondary',
+      label: 'Newsletter',
       icon: <Newspaper className="h-3 w-3" />,
     },
     product_updates: {
       variant: 'outline',
       label: 'Updates',
       icon: <Archive className="h-3 w-3" />,
+    },
+    notifications: {
+      variant: 'outline',
+      label: 'Notification',
+      icon: <Mail className="h-3 w-3" />,
     },
   };
   return (
@@ -173,8 +213,8 @@ const ARCHIVE_CATEGORIES = [
   { value: 'all', label: 'All' },
   { value: 'clients', label: 'Client' },
   { value: 'work', label: 'Work' },
-  { value: 'newsletters_creator', label: 'Newsletters' },
-  { value: 'news_politics', label: 'News' },
+  { value: 'newsletters', label: 'Newsletters' },
+  { value: 'news', label: 'News' },
   { value: 'product_updates', label: 'Updates' },
   { value: 'shopping', label: 'Shopping' },
 ];
@@ -466,7 +506,7 @@ export function ArchiveContent({
   // otherwise fall back to full-page navigation.
   // @see INBOX_PERFORMANCE_AUDIT.md — P0-A
   const handleEmailClick = (email: Email) => {
-    const category = email.category || 'personal_friends_family';
+    const category = email.category || 'personal';
     if (onEmailSelect) {
       logger.info('Opening archived email in modal', {
         emailId: email.id,

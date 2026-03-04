@@ -491,24 +491,35 @@ const API_BASE_URL = 'https://api.example.com';
 const DEFAULT_TIMEZONE = 'America/Chicago';
 
 // Enums: PascalCase
-// REFACTORED (Jan 2026): Life-bucket categories - what part of life the email touches
+// TAXONOMY V2 (Mar 2026): Life-bucket categories - what part of life the email touches (20 categories)
 enum EmailCategory {
-  // Work & Business
+  // Professional
   Clients = 'clients',
   Work = 'work',
-  // Family & Personal
-  PersonalFriendsFamily = 'personal_friends_family',
+  JobSearch = 'job_search',
+  // People
+  Personal = 'personal',           // was personal_friends_family
   Family = 'family',
+  Parenting = 'parenting',
   // Life Admin
+  Health = 'health',
   Finance = 'finance',
+  Billing = 'billing',
+  // Lifestyle
   Travel = 'travel',
   Shopping = 'shopping',
+  Deals = 'deals',
+  // Community
   Local = 'local',
+  Civic = 'civic',
+  Sports = 'sports',
   // Information
-  NewslettersCreator = 'newsletters_creator',
-  NewslettersIndustry = 'newsletters_industry',
-  NewsPolitics = 'news_politics',
+  News = 'news',                   // was part of news_politics
+  Politics = 'politics',           // was part of news_politics
+  Newsletters = 'newsletters',     // merged newsletters_creator + newsletters_industry
   ProductUpdates = 'product_updates',
+  // System
+  Notifications = 'notifications',
 }
 ```
 

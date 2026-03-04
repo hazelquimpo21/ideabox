@@ -55,18 +55,26 @@ interface CategoryIntelligenceResponse {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const VALID_CATEGORIES: EmailCategory[] = [
-  'newsletters_creator',
-  'newsletters_industry',
-  'news_politics',
-  'product_updates',
-  'local',
-  'shopping',
-  'travel',
-  'finance',
-  'family',
   'clients',
   'work',
-  'personal_friends_family',
+  'job_search',
+  'personal',
+  'family',
+  'parenting',
+  'health',
+  'finance',
+  'billing',
+  'travel',
+  'shopping',
+  'deals',
+  'local',
+  'civic',
+  'sports',
+  'news',
+  'politics',
+  'newsletters',
+  'product_updates',
+  'notifications',
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

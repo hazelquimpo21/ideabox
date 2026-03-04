@@ -13,7 +13,7 @@
 |------|----------|-----------|
 | AI Model | GPT-4.1-mini only | Best cost/capability ratio, ~$3-5/month |
 | AI Fallback | None | Adds complexity without proportional benefit |
-| Categories | Life-bucket focused (13 types) | Refactored Jan 2026 from action to life-bucket, notifications added Feb 2026 |
+| Categories | Life-bucket focused (20 types — Taxonomy v2) | Expanded Mar 2026 from 13 to 20 categories; see Decision #31 |
 | Background Jobs | Supabase pg_cron + Edge Functions | Already using Supabase; Vercel Cron too limited |
 | Gmail Labels | Sync to Gmail | Users see categories in Gmail UI |
 | Failed Analysis | Mark unanalyzable; manual retry clears error | Auto-syncs skip failures; manual retry resets state |
@@ -83,38 +83,48 @@ Monthly: ~$9.00
 
 **Decision:** Primary category per email, focused on "what part of life this email touches." Emails can also have up to 2 additional categories (Feb 2026).
 
-**Current Categories (13 life-buckets):**
-| Category | Description |
-|----------|-------------|
-| `clients` | Direct client correspondence, project work |
-| `work` | Team, industry, professional (not direct clients) |
-| `personal_friends_family` | Social, relationships, personal correspondence |
-| `family` | School emails, kid activities, health, appointments, logistics |
-| `finance` | Bills, banking, investments, receipts |
-| `travel` | Flights, hotels, bookings, trip info |
-| `shopping` | Orders, shipping, deals, retail |
-| `local` | Community events, neighborhood, local orgs |
-| `newsletters_creator` | Substacks, digests, curated content |
-| `newsletters_industry` | Industry newsletters, professional digests |
-| `news_politics` | News outlets, political updates |
-| `product_updates` | Tech products, SaaS tools you use |
-| `notifications` | Verification codes, OTPs, login alerts, password resets |
+**Current Categories (Taxonomy v2 — 20 life-buckets, March 2026):**
+| Group | Category | Description |
+|-------|----------|-------------|
+| Professional | `clients` | Direct client correspondence, project work |
+| Professional | `work` | Team, industry, professional (not direct clients) |
+| Professional | `job_search` | Applications, recruiters, interviews, offers |
+| People | `personal` | Friends, social relationships, adult hobbies/clubs |
+| People | `family` | Family relationships |
+| People | `parenting` | Kids: school, childcare, pediatrician, extracurriculars |
+| Life Admin | `health` | Medical, dental, prescriptions, insurance EOBs, vet |
+| Life Admin | `finance` | Banking, investments, tax, financial planning |
+| Life Admin | `billing` | Receipts, subscriptions, autopay, bills, payment failures |
+| Lifestyle | `travel` | Flights, hotels, bookings, trip planning |
+| Lifestyle | `shopping` | Orders, shipping, returns, tracking |
+| Lifestyle | `deals` | Sales, discounts, coupons, limited-time offers |
+| Community | `local` | Community, neighborhood, local businesses/events |
+| Community | `civic` | Government, council, school board, HOA, voting |
+| Community | `sports` | Fan sports: scores, fantasy leagues, team updates |
+| Information | `news` | News outlets, current events, breaking news |
+| Information | `politics` | Political news, campaigns, policy |
+| Information | `newsletters` | Substacks, digests, curated content |
+| Information | `product_updates` | Tech products, SaaS tools you use |
+| System | `notifications` | Verification codes, OTPs, login alerts, password resets |
 
 **Legacy Categories (DEPRECATED):**
 | Old Category | Mapped To | Notes |
 |--------------|-----------|-------|
 | `action_required` | `clients` | Most action items are client/work related |
 | `event` | `local` | Events detected via `has_event` label now |
-| `newsletter` | `newsletters_creator` | Direct mapping |
+| `newsletter` | `newsletters` | Direct mapping |
 | `promo` | `shopping` | Promotional emails are shopping-related |
 | `admin` | `finance` | Admin emails often relate to accounts/billing |
-| `personal` | `personal_friends_family` | Direct mapping |
-| `noise` | `newsletters_industry` | Low-priority content treated as newsletter |
+| `noise` | `newsletters` | Low-priority content treated as newsletter |
 | `client_pipeline` | `clients` | Renamed for clarity |
 | `business_work_general` | `work` | Renamed for clarity |
 | `family_kids_school` | `family` | Merged into single family category |
 | `family_health_appointments` | `family` | Merged into single family category |
-| `newsletters_general` | `newsletters_creator` | Split into creator/industry |
+| `newsletters_general` | `newsletters` | Originally split into creator/industry, now merged back |
+| `personal_friends_family` | `personal` | Renamed in Taxonomy v2 (Mar 2026) |
+| `newsletters_creator` | `newsletters` | Merged in Taxonomy v2 (Mar 2026) |
+| `newsletters_industry` | `newsletters` | Merged in Taxonomy v2 (Mar 2026) |
+| `news_politics` | `news` | Split into `news` + `politics` in Taxonomy v2 (Mar 2026) |
 
 **Migration:** See `supabase/migrations/028_category_cleanup_and_cache_clear.sql`
 
@@ -130,18 +140,22 @@ Monthly: ~$9.00
 **Schema Impact:**
 ```sql
 -- emails table
-category TEXT,                    -- One of the 13 life-bucket categories (primary)
+category TEXT,                    -- One of the 20 life-bucket categories (Taxonomy v2)
 additional_categories TEXT[],     -- Up to 2 secondary categories (Feb 2026)
 client_id UUID,                   -- relationship to clients table (NOT a category)
 topics TEXT[],                    -- extracted topics for additional context
+timeliness JSONB,                 -- {nature, relevant_date, late_after, expires, perishable} (Taxonomy v2)
 
--- CHECK constraint enforces valid category values (updated Feb 2026)
+-- CHECK constraint enforces valid category values (Taxonomy v2, Mar 2026)
 CONSTRAINT emails_category_check CHECK (
   category IS NULL OR category IN (
-    'clients', 'work', 'personal_friends_family', 'family',
-    'finance', 'travel', 'shopping', 'local',
-    'newsletters_creator', 'newsletters_industry',
-    'news_politics', 'product_updates', 'notifications')
+    'clients', 'work', 'job_search',
+    'personal', 'family', 'parenting',
+    'health', 'finance', 'billing',
+    'travel', 'shopping', 'deals',
+    'local', 'civic', 'sports',
+    'news', 'politics', 'newsletters', 'product_updates',
+    'notifications')
 )
 ```
 
@@ -244,20 +258,28 @@ function truncateBody(body: string, maxChars = 16000): string {
 - Minimal additional API cost (one modify call per email)
 - Can be disabled via `ENABLE_GMAIL_LABEL_SYNC=false`
 
-**Labels Created (updated Feb 2026 for life-bucket categories):**
+**Labels Created (updated Mar 2026 for Taxonomy v2 — 20 categories):**
 ```
 IdeaBox/clients
 IdeaBox/work
-IdeaBox/personal_friends_family
+IdeaBox/job_search
+IdeaBox/personal
 IdeaBox/family
+IdeaBox/parenting
+IdeaBox/health
 IdeaBox/finance
+IdeaBox/billing
 IdeaBox/travel
 IdeaBox/shopping
+IdeaBox/deals
 IdeaBox/local
-IdeaBox/newsletters_creator
-IdeaBox/newsletters_industry
-IdeaBox/news_politics
+IdeaBox/civic
+IdeaBox/sports
+IdeaBox/news
+IdeaBox/politics
+IdeaBox/newsletters
 IdeaBox/product_updates
+IdeaBox/notifications
 ```
 
 ---
@@ -805,6 +827,35 @@ When making new architectural decisions, document them here using this template:
 
 ---
 
+### 31. Taxonomy v2: 20 Categories, Timeliness, Multi-Dimensional Scoring (March 2026)
+
+**Decision:** Expand the category taxonomy from 13 to 20 life-bucket categories, add a structured `timeliness` JSONB column, simplify email types from 9 to 6, and introduce 5-dimension scoring with a composite `surface_priority`.
+
+**Alternatives Considered:**
+- Keep 13 categories and add sub-categories (adds query complexity without clearer separation)
+- Use tags instead of categories for new concepts like health, parenting, billing (tags lack the routing/view semantics categories provide)
+- Keep 9 email types (redundancy between transactional/notification/automated caused classifier confusion)
+
+**Rationale:**
+- **20 categories** solve real classification gaps: `parenting` vs `family` (kids' school emails are distinct from adult family), `health` (medical is not finance), `billing` (receipts are not investment statements), `deals` (sales promotions are not shopping orders), `civic` (government is not local community), `sports` (fan content is distinct from news), `job_search` (career emails are not generic work)
+- **Timeliness object** (`{nature, relevant_date, late_after, expires, perishable}`) enables time-aware surfacing: auto-archive expired emails, escalate approaching deadlines, build smart views (today/upcoming/expiring/reading-list)
+- **6 email types** reduce classifier confusion: `transactional` and `notification` were ambiguous (is a shipping confirmation transactional or notification?), both now map to `automated`; `promo` and `cold_outreach` both map to `marketing`
+- **5 scoring dimensions** (`importance_score`, `urgency_score`, `action_score`, `cognitive_load`, `missability_score`) plus composite `surface_priority` enable nuanced priority sorting that accounts for both "how important?" and "how time-sensitive?" independently
+- **Smart views API** (`/api/emails/smart-views?view=today|upcoming|expiring|reading-list|high-priority|needs-action`) surfaces emails by temporal relevance rather than just category
+
+**Impact:**
+- Migration 045: New CHECK constraint (20 categories), `timeliness` JSONB column, 5 scoring columns, `email_type` constraint updated, indexes on `surface_priority`, timeliness fields
+- Category data migration: `personal_friends_family` -> `personal`, `newsletters_creator`/`newsletters_industry` -> `newsletters`, `news_politics` -> `news`
+- Email type migration: `transactional`/`notification` -> `automated`, `promo`/`cold_outreach` -> `marketing`
+- Categorizer prompt updated for 20 categories + timeliness extraction
+- New `scoring-engine.ts` (pure computation, no AI calls)
+- New `timeliness-actions.ts` cron job (auto-archive expired, escalate late, decay stale perishables)
+- New UI components: `TimelinessIcon`, `EmailTypeIcon`, `ScoreBadge`
+- Smart views API routes for temporal surfacing
+- See `INBOX_CATEGORY_TAXONOMY_PLAN.md` for full implementation plan
+
+---
+
 ## Change Log
 
 | Date | Decision | Changed By |
@@ -821,3 +872,4 @@ When making new architectural decisions, document them here using this template:
 | Mar 2026 | QuickAcceptPopover (2-step promote), Board project color stripes, Done auto-collapse, column quick-add | Claude (tasks redesign phase 2) |
 | Mar 2026 | Query optimization (field selection + Supabase joins), smarter triage badge, snooze persistence, AllItemsContent deprecation | Claude (tasks redesign phase 3) |
 | Mar 2026 | Idea Spark refinement: solopreneur focus, 0-3 ideas, smarter gating, new types | Claude (idea spark overhaul) |
+| Mar 2026 | Taxonomy v2: 20 categories, timeliness JSONB, 6 email types, 5-dimension scoring, smart views, timeliness cron | Claude (taxonomy v2) |

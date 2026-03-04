@@ -34,19 +34,26 @@ import type { AnalyzerConfig as BaseAnalyzerConfig } from '@/config/analyzers';
  * - category=finance + email_type=transactional (bank receipt)
  * - category=clients + email_type=needs_response (client asking a question)
  * - category=shopping + email_type=promo (sale alert from a store)
- * - category=newsletters_creator + email_type=newsletter (Substack post)
+ * - category=newsletters + email_type=newsletter (Substack post)
  * - category=notifications + email_type=automated (2FA code)
  */
+/**
+ * Email type classification — simplified to 6 values in Taxonomy v2 (Mar 2026).
+ *
+ * Category answers "what area of life?" (finance, clients, family).
+ * Email type answers "what kind of communication is this?"
+ *
+ * Migration from old values:
+ * - transactional, notification → automated
+ * - promo, cold_outreach → marketing
+ */
 export const EMAIL_TYPES = [
-  'personal',        // Direct human-to-human correspondence
-  'transactional',   // Receipts, confirmations, shipping updates, account alerts
-  'newsletter',      // Newsletters, digests, content roundups
-  'notification',    // App notifications, social media alerts, system notices
-  'promo',           // Marketing, sales, deals, upsells
-  'cold_outreach',   // Unsolicited outreach — sales, PR, link exchange, fake awards
   'needs_response',  // Someone is waiting for a reply from the user
+  'personal',        // Direct human-to-human correspondence
+  'newsletter',      // Newsletters, digests, content roundups
   'fyi',             // Informational — worth knowing but no action needed
-  'automated',       // Machine-generated — verification codes, cron alerts, CI/CD
+  'automated',       // Machine-generated — receipts, 2FA, alerts, notifications, shipping
+  'marketing',       // Promotional, sales, deals, cold outreach, upsells
 ] as const;
 
 export type EmailType = typeof EMAIL_TYPES[number];
@@ -169,6 +176,12 @@ export const EMAIL_LABELS = [
   'industry_news',         // Industry updates
   'job_opportunity',       // Job/career related
 
+  // Timeliness (NEW Mar 2026 — Taxonomy v2)
+  'invited',               // Personally/directly invited — social weight, someone expects an answer
+  'confirmation',          // Booking/order/appointment confirmed — reference material
+  'has_tickets',           // Contains tickets, passes, QR codes — need this document later
+  'deadline',              // Something expires or is due by a date
+
   // Noise Detection (NEW Feb 2026)
   'sales_pitch',           // Cold sales email ("Let me show you our platform...")
   'webinar_invite',        // Generic webinar/event marketing (not relevant industry events)
@@ -178,6 +191,16 @@ export const EMAIL_LABELS = [
 ] as const;
 
 export type EmailLabel = typeof EMAIL_LABELS[number];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TIMELINESS (NEW Mar 2026 — Taxonomy v2)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Re-export timeliness types from discovery.ts (single source of truth).
+ */
+export type { TimelinessNature, Timeliness } from '@/types/discovery';
+export { TIMELINESS_NATURES } from '@/types/discovery';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DATE TYPES (for DateExtractor)
@@ -514,9 +537,14 @@ export interface CategorizationData {
    * Primary email category (LIFE BUCKET).
    * What area of the user's life does this email touch?
    *
-   * Categories: newsletters_creator, newsletters_industry, news_politics,
-   * product_updates, local, shopping, travel, finance, family,
-   * clients, work, personal_friends_family, other
+   * 20 categories (Taxonomy v2, Mar 2026):
+   * Professional: clients, work, job_search
+   * People: personal, family, parenting
+   * Life Admin: health, finance, billing
+   * Lifestyle: travel, shopping, deals
+   * Community: local, civic, sports
+   * Information: news, politics, newsletters, product_updates
+   * System: notifications
    */
   category: EmailCategory;
 
@@ -603,7 +631,7 @@ export interface CategorizationData {
    * Examples:
    * - A client email about a dinner → primary: 'clients', additional: ['local']
    * - A family member's school newsletter → primary: 'family', additional: ['local']
-   * - A finance newsletter with shopping deals → primary: 'newsletters_industry', additional: ['finance', 'shopping']
+   * - A finance newsletter with shopping deals → primary: 'newsletters', additional: ['finance', 'shopping']
    *
    * Maximum 2 additional categories. Only include if genuinely relevant.
    * The email will show up in inbox views for ALL its categories.
@@ -612,17 +640,14 @@ export interface CategorizationData {
 
   /**
    * Email type — the NATURE of the communication, orthogonal to category.
-   * NEW (Feb 2026): Answers "what kind of email is this?" not "what life area?"
+   * NEW (Feb 2026), SIMPLIFIED (Mar 2026): 6 types.
    *
-   * - 'personal': Direct human correspondence
-   * - 'transactional': Receipts, confirmations, shipping updates
-   * - 'newsletter': Newsletters, digests, content roundups
-   * - 'notification': App notifications, social media alerts
-   * - 'promo': Marketing, sales, deals
-   * - 'cold_outreach': Unsolicited sales, PR, fake awards
    * - 'needs_response': Someone is waiting for a reply
-   * - 'fyi': Informational, no action needed
-   * - 'automated': Machine-generated codes, alerts
+   * - 'personal': Direct human-to-human correspondence
+   * - 'newsletter': Content/digest delivery
+   * - 'automated': Machine-generated (receipts, alerts, 2FA, notifications)
+   * - 'marketing': Promotional, sales, deals, cold outreach
+   * - 'fyi': Informational — worth knowing but no action needed
    */
   emailType: EmailType;
 
@@ -643,6 +668,23 @@ export interface CategorizationData {
    * context, and whether it needs attention — without reading the full email.
    */
   aiBrief: string;
+
+  /**
+   * Timeliness — the email's relationship to time.
+   * NEW (Mar 2026): Taxonomy v2 — captures temporal nature, dates, and perishability.
+   *
+   * - nature: How this email relates to time (ephemeral, today, upcoming, asap, reference, evergreen)
+   * - relevant_date: When the thing itself happens (ISO date, optional)
+   * - late_after: Consequence threshold / soft deadline (ISO date, optional)
+   * - expires: Hard cutoff, no action possible after (ISO date, optional)
+   * - perishable: True if worthless after its moment
+   *
+   * Examples:
+   * - Verification code: { nature: "ephemeral", perishable: true }
+   * - Flight March 20: { nature: "upcoming", relevant_date: "2026-03-20", perishable: false }
+   * - "40% off ends Friday": { nature: "upcoming", expires: "2026-03-07", perishable: true }
+   */
+  timeliness?: Timeliness;
 }
 
 /**

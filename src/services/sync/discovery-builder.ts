@@ -237,16 +237,22 @@ export class DiscoveryBuilderService {
     const categoryOrder: EmailCategory[] = [
       'clients',                      // Direct client work - highest priority
       'work',                         // Professional/work emails
-      'family',                       // Family, kids, school, health, appointments
-      'finance',                      // Bills, banking, payments
+      'personal',                     // Friends, social, hobbies
+      'family',                       // Family relationships
+      'parenting',                    // Kids: school, activities, tutors
+      'health',                       // Medical, dental, prescriptions
+      'finance',                      // Banking, investments, tax
+      'billing',                      // Receipts, subscriptions, bills
       'travel',                       // Flights, hotels, trips
-      'shopping',                     // Orders, shipping, deals
+      'shopping',                     // Orders, shipping, returns
+      'deals',                        // Sales, discounts, coupons
       'local',                        // Community, local events
-      'personal_friends_family',      // Friends, family, social
-      'newsletters_creator',          // Substacks, digests
-      'newsletters_industry',         // Industry newsletters
-      'news_politics',                // News outlets, political
-      'product_updates',              // Tech products, SaaS updates
+      'civic',                        // Government, HOA, voting
+      'sports',                       // Fan sports, fantasy leagues
+      'news',                         // News outlets, current events
+      'politics',                     // Political news, campaigns
+      'newsletters',                  // Substacks, digests
+      'product_updates',              // SaaS tools, release notes
 
 
     ];

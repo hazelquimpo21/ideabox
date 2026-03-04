@@ -134,9 +134,9 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 
 ## Phase 1 Analyzers
 
-### 1. Categorizer Analyzer (ENHANCED Jan 2026, Feb 2026)
+### 1. Categorizer Analyzer (ENHANCED Jan 2026, Feb 2026, TAXONOMY V2 Mar 2026)
 
-**Purpose:** Classify email into life buckets + tag email type + assess signal quality + determine reply worthiness + detect noise + generate summary + generate AI brief + suggest quick action + assign additional categories
+**Purpose:** Classify email into life buckets + tag email type + assess signal quality + determine reply worthiness + detect noise + generate summary + generate AI brief + suggest quick action + assign additional categories + extract timeliness
 
 > **TONE (Feb 2026):** Summaries are written like a helpful assistant who doesn't waste the user's time — one line, no fluff.
 
@@ -145,14 +145,18 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 **ENHANCED (Feb 2026):**
 - `signal_strength`: How important is this email? (high/medium/low/noise)
 - `reply_worthiness`: Should the user reply? (must_reply/should_reply/optional_reply/no_reply)
-- `email_type`: What kind of communication is this? (personal/transactional/newsletter/notification/promo/cold_outreach/needs_response/fyi/automated) — orthogonal to category
 - `ai_brief`: Dense, structured summary for downstream AI batch-summarization (not for humans). Format: "IMPORTANCE | From WHO (relationship) | What about | Action needed | Key context"
 - `labels` now include noise-type labels: `sales_pitch`, `webinar_invite`, `fake_recognition`, `mass_outreach`, `promotional`
 - `additional_categories`: Up to 2 secondary life buckets (email appears in multiple inbox views)
-- `notifications` category: Verification codes, OTPs, login alerts, password resets
 - Summary tone refined: concise, direct, no fluff — "Sarah from Acme needs your review on Q1 proposal by Friday"
-- 13 categories total (12 original + notifications)
 - Low-confidence categorizations (< 0.5) now logged as warnings for prompt quality monitoring
+
+**TAXONOMY V2 (Mar 2026):**
+- **20 categories** (expanded from 13): Added `job_search`, `parenting`, `health`, `billing`, `deals`, `civic`, `sports`; renamed `personal_friends_family` → `personal`; merged `newsletters_creator` + `newsletters_industry` → `newsletters`; split `news_politics` → `news` + `politics`
+- **email_type simplified** from 9 to 6 values: `needs_response`, `personal`, `newsletter`, `automated`, `marketing`, `fyi` (removed: transactional, notification, promo, cold_outreach — merged into automated and marketing)
+- **timeliness** JSONB output: `{nature, relevant_date, late_after, expires, perishable}` — extracted by categorizer alongside category
+- **New labels**: `invited`, `confirmation`, `has_tickets`, `deadline`
+- 5 scoring dimensions computed post-analysis: `importance_score`, `urgency_score`, `action_score`, `cognitive_load`, `missability_score`, `surface_priority`
 
 **Function Schema:**
 ```typescript
@@ -165,14 +169,23 @@ async analyze(email: Email): Promise<AnalyzerResult> {
       category: {
         type: 'string',
         enum: [
-          // LIFE-BUCKET CATEGORIES (13 values, including notifications)
-          'clients', 'work',
-          'family', 'personal_friends_family',
-          'finance', 'travel', 'shopping', 'local',
-          'newsletters_creator', 'newsletters_industry', 'news_politics', 'product_updates',
+          // LIFE-BUCKET CATEGORIES (20 values — Taxonomy v2, March 2026)
+          // Professional
+          'clients', 'work', 'job_search',
+          // People
+          'personal', 'family', 'parenting',
+          // Life Admin
+          'health', 'finance', 'billing',
+          // Lifestyle
+          'travel', 'shopping', 'deals',
+          // Community
+          'local', 'civic', 'sports',
+          // Information
+          'news', 'politics', 'newsletters', 'product_updates',
+          // System
           'notifications',
         ],
-        description: 'Primary life-bucket category',
+        description: 'Primary life-bucket category (20 categories)',
       },
       labels: {
         type: 'array',
@@ -195,6 +208,8 @@ async analyze(email: Email): Promise<AnalyzerResult> {
             'has_event', 'has_multiple_events',
             // NOISE LABELS (NEW Feb 2026)
             'sales_pitch', 'webinar_invite', 'fake_recognition', 'mass_outreach', 'promotional',
+            // TIMELINESS LABELS (NEW Mar 2026 — Taxonomy v2)
+            'invited', 'confirmation', 'has_tickets', 'deadline',
           ],
         },
         maxItems: 5,
@@ -237,22 +252,34 @@ async analyze(email: Email): Promise<AnalyzerResult> {
       },
       additional_categories: {
         type: 'array',
-        items: { type: 'string', enum: ['clients', 'work', 'family', 'personal_friends_family', 'finance', 'travel', 'shopping', 'local', 'newsletters_creator', 'newsletters_industry', 'news_politics', 'product_updates', 'notifications'] },
+        items: { type: 'string', enum: ['clients', 'work', 'job_search', 'personal', 'family', 'parenting', 'health', 'finance', 'billing', 'travel', 'shopping', 'deals', 'local', 'civic', 'sports', 'news', 'politics', 'newsletters', 'product_updates', 'notifications'] },
         maxItems: 2,
         description: 'Up to 2 secondary life-bucket categories. Email appears under these categories in addition to the primary. Only include when genuinely relevant.',
       },
       // NEW FIELDS (Feb 2026)
       email_type: {
         type: 'string',
-        enum: ['personal', 'transactional', 'newsletter', 'notification', 'promo', 'cold_outreach', 'needs_response', 'fyi', 'automated'],
-        description: 'Nature of the communication — orthogonal to category',
+        enum: ['needs_response', 'personal', 'newsletter', 'automated', 'marketing', 'fyi'],
+        description: 'Nature of the communication — orthogonal to category (Taxonomy v2: simplified from 9 to 6 values; transactional/notification merged into automated, promo/cold_outreach merged into marketing)',
+      },
+      timeliness: {
+        type: 'object',
+        description: 'Time-sensitivity assessment (Taxonomy v2, March 2026)',
+        properties: {
+          nature: { type: 'string', enum: ['ephemeral', 'today', 'upcoming', 'asap', 'reference', 'evergreen'] },
+          relevant_date: { type: 'string', description: 'ISO date — the event/flight/meeting itself' },
+          late_after: { type: 'string', description: 'ISO date — consequence threshold (bill due, RSVP deadline)' },
+          expires: { type: 'string', description: 'ISO date — hard cutoff (sale ends, 2FA expires)' },
+          perishable: { type: 'boolean', description: 'Worthless after its moment?' },
+        },
+        required: ['nature', 'perishable'],
       },
       ai_brief: {
         type: 'string',
         description: 'Dense, structured summary for downstream AI. Format: "IMPORTANCE | From WHO (relationship) | What about | Action needed | Key context"',
       },
     },
-    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action', 'email_type', 'ai_brief'],
+    required: ['category', 'labels', 'signal_strength', 'reply_worthiness', 'confidence', 'reasoning', 'summary', 'quick_action', 'email_type', 'ai_brief', 'timeliness'],
   },
 }
 ```
@@ -1384,7 +1411,7 @@ const result = senderTypeDetector.detect({
 
 **When It Runs:** PHASE 2 (conditional). Uses higher temperature (0.7) for creative output. **Skipped for:**
 - `signal_strength = 'noise'` or `'low'` (background noise, generic promos)
-- `email_type = 'automated'`, `'notification'`, or `'transactional'` (receipts, codes, alerts)
+- `email_type = 'automated'` (receipts, codes, alerts — includes former `notification` and `transactional` types, merged in Taxonomy v2)
 - `category = 'notifications'` (password resets, 2FA, login alerts)
 - Estimated skip rate: ~60% of emails (was ~30% before Mar 2026 refinement)
 

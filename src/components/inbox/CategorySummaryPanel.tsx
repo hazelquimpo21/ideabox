@@ -27,11 +27,12 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * Categories are organized into four groups matching the filter bar order:
- *   1. Work — clients, work
- *   2. Personal — personal_friends_family, family
- *   3. Life Admin — finance, travel, shopping, local
- *   4. Information — newsletters_creator, newsletters_industry, news_politics, product_updates
- *   5. Other — other
+ *   1. Professional — clients, work, job_search
+ *   2. People — personal, family, parenting
+ *   3. Life Admin — health, finance, billing
+ *   4. Lifestyle — travel, shopping, deals
+ *   5. Community — local, civic, sports
+ *   6. Information — news, politics, newsletters, product_updates
  *
  * Groups with zero emails are hidden entirely.
  *
@@ -79,22 +80,34 @@ interface CategoryGroup {
   categories: EmailCategory[];
 }
 
+/**
+ * Category groups for the summary panel — Taxonomy v2 (Mar 2026).
+ * Groups the 20 categories into logical sections for visual overview.
+ */
 const CATEGORY_GROUPS: CategoryGroup[] = [
   {
-    label: 'Work',
-    categories: ['clients', 'work'],
+    label: 'Professional',
+    categories: ['clients', 'work', 'job_search'],
   },
   {
-    label: 'Personal',
-    categories: ['personal_friends_family', 'family'],
+    label: 'People',
+    categories: ['personal', 'family', 'parenting'],
   },
   {
     label: 'Life Admin',
-    categories: ['finance', 'travel', 'shopping', 'local'],
+    categories: ['health', 'finance', 'billing'],
+  },
+  {
+    label: 'Lifestyle',
+    categories: ['travel', 'shopping', 'deals'],
+  },
+  {
+    label: 'Community',
+    categories: ['local', 'civic', 'sports'],
   },
   {
     label: 'Information',
-    categories: ['newsletters_creator', 'newsletters_industry', 'news_politics', 'product_updates'],
+    categories: ['news', 'politics', 'newsletters', 'product_updates'],
   },
 ];
 

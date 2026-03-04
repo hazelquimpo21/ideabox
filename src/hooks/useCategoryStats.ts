@@ -22,8 +22,8 @@
  * const { stats } = useCategoryStats();
  *
  * // Access counts
- * stats.newsletters_creator.count      // Total emails
- * stats.newsletters_creator.unreadCount // Unread emails
+ * stats.newsletters.count      // Total emails
+ * stats.newsletters.unreadCount // Unread emails
  * ```
  *
  * @module hooks/useCategoryStats
@@ -209,7 +209,7 @@ export function useCategoryStats(): UseCategoryStatsReturn {
         // Every email must have a category — normalize any missing/invalid ones
         const category: EmailCategory = (rawCategory && rawCategory in newStats)
           ? rawCategory as EmailCategory
-          : 'personal_friends_family';
+          : 'personal';
 
         newStats[category].count++;
         totalCount++;

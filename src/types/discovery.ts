@@ -15,54 +15,138 @@
 // =============================================================================
 
 /**
- * All possible email categories in IdeaBox.
- * Categories are life-bucket focused (what part of life this email touches).
+ * All possible email categories in IdeaBox (20 life-bucket categories).
+ * Categories represent different areas of the user's life, not actions.
  *
  * REFACTORED (Jan 2026): Changed from action-focused to life-bucket categories.
  * REFACTORED (Feb 2026): Renamed client_pipeline→clients, business_work_general→work,
  *   merged family_kids_school+family_health_appointments→family,
  *   split newsletters_general→newsletters_creator+newsletters_industry.
+ * REFACTORED (Mar 2026 — Taxonomy v2): Expanded from 13 → 20 categories.
+ *   Renamed: personal_friends_family→personal
+ *   Split: news_politics→news+politics, family→family+parenting+health
+ *   Merged: newsletters_creator+newsletters_industry→newsletters
+ *   New: job_search, parenting, health, billing, deals, civic, sports
  *
- * The AI analyzer uses human-eye inference to categorize - it considers sender
+ * The AI analyzer uses human-eye inference to categorize — it considers sender
  * context, domain patterns, and content to make smart categorization decisions.
  */
 export type EmailCategory =
-  | 'clients'                       // Direct client correspondence, project work
-  | 'work'                          // Team/internal, industry stuff, professional
-  | 'personal_friends_family'       // Social, relationships, personal correspondence
-  | 'family'                        // Kids, school, health, appointments, family scheduling
-  | 'finance'                       // Bills, banking, investments, receipts
-  | 'travel'                        // Flights, hotels, bookings, trip info
-  | 'shopping'                      // Orders, shipping, deals, retail
-  | 'local'                         // Community events, neighborhood, local orgs
-  | 'newsletters_creator'           // Substacks, personal blogs, creator content
-  | 'newsletters_industry'          // Tech/biz digests, industry roundups, curated content
-  | 'news_politics'                 // News outlets, political updates
-  | 'product_updates'               // Tech products, SaaS tools, subscriptions you use
-  | 'notifications';                // Verification codes, OTPs, login alerts, password resets, system alerts
+  // ── Work & Professional ──────────────────────────────────────────────────
+  | 'clients'           // Direct client work, billable relationships
+  | 'work'              // Professional non-client (team, internal, industry)
+  | 'job_search'        // Applications, recruiters, interviews, offers
+  // ── People & Relationships ───────────────────────────────────────────────
+  | 'personal'          // Friends, social relationships, adult hobbies/clubs
+  | 'family'            // Family relationships, personal family matters
+  | 'parenting'         // Kids: school, childcare, pediatrician, extracurriculars, tutors
+  // ── Life Admin ───────────────────────────────────────────────────────────
+  | 'health'            // Medical, dental, prescriptions, insurance EOBs, vet
+  | 'finance'           // Banking, investments, tax, financial planning
+  | 'billing'           // Receipts, subscriptions, autopay, bills, payment failures
+  | 'travel'            // Flights, hotels, bookings, trip planning
+  | 'shopping'          // Orders, shipping, returns, tracking
+  | 'deals'             // Sales, discounts, coupons, limited-time offers
+  // ── Community & Civic ────────────────────────────────────────────────────
+  | 'local'             // Community, neighborhood, local businesses/events
+  | 'civic'             // Government, council, school board, HOA, voting
+  | 'sports'            // Fan sports: scores, fantasy, team updates (NOT kids sports)
+  // ── Information ──────────────────────────────────────────────────────────
+  | 'news'              // News outlets, current events, breaking news
+  | 'politics'          // Political news, campaigns, policy
+  | 'newsletters'       // Substacks, digests, curated content
+  | 'product_updates'   // SaaS tools, release notes, changelogs
+  // ── System ───────────────────────────────────────────────────────────────
+  | 'notifications';    // Verification codes, OTPs, 2FA, login alerts
 
 /**
  * Array of all valid email categories.
- * Single source of truth - use this for validation and iteration.
+ * Single source of truth — use this for validation and iteration.
  *
  * ADDED (Jan 2026): For Discover-first architecture.
- * Use this instead of hardcoding category lists elsewhere.
+ * EXPANDED (Mar 2026): 13 → 20 categories.
  */
 export const EMAIL_CATEGORIES: EmailCategory[] = [
   'clients',
   'work',
-  'personal_friends_family',
+  'job_search',
+  'personal',
   'family',
+  'parenting',
+  'health',
   'finance',
+  'billing',
   'travel',
   'shopping',
+  'deals',
   'local',
-  'newsletters_creator',
-  'newsletters_industry',
-  'news_politics',
+  'civic',
+  'sports',
+  'news',
+  'politics',
+  'newsletters',
   'product_updates',
   'notifications',
 ] as const;
+
+/**
+ * Timeliness nature values — how the email relates to time.
+ *
+ * This is a key dimension of the taxonomy v2 scoring system.
+ * Each email has a temporal character that determines how urgently
+ * it should be surfaced and when it becomes stale.
+ *
+ * @since March 2026 — Taxonomy v2
+ */
+export const TIMELINESS_NATURES = [
+  'ephemeral',   // Relevant for minutes (2FA codes, OTPs)
+  'today',       // Relevant today, stale soon (daily news, scores, daily deals)
+  'upcoming',    // Points to a future moment (events, flights, deadlines)
+  'asap',        // Needs action now, not tied to a moment (payment failed, approval needed)
+  'reference',   // File it, retrieve later (receipts, confirmations, tickets)
+  'evergreen',   // No time pressure (newsletter essays, product updates, longform)
+] as const;
+
+export type TimelinessNature = typeof TIMELINESS_NATURES[number];
+
+/**
+ * Timeliness object — captures an email's relationship to time.
+ *
+ * This is orthogonal to category and email_type. An email can be
+ * in any category and have any timeliness nature.
+ *
+ * The three date fields represent distinct temporal boundaries:
+ * - relevant_date: When the thing itself happens (event, flight, meeting)
+ * - late_after: When you cross a consequence threshold (bill due, RSVP soft deadline)
+ * - expires: When no action is possible (sale ends, 2FA code expires, registration closes)
+ *
+ * @example
+ * // Wedding RSVP
+ * { nature: 'upcoming', relevant_date: '2026-03-28', late_after: '2026-03-10', expires: '2026-03-10', perishable: false }
+ *
+ * // 2FA code
+ * { nature: 'ephemeral', perishable: true }
+ *
+ * // Newsletter essay
+ * { nature: 'evergreen', perishable: false }
+ *
+ * // Bill due
+ * { nature: 'upcoming', late_after: '2026-03-18', perishable: false }
+ *
+ * @since March 2026 — Taxonomy v2
+ */
+export interface Timeliness {
+  /** The email's temporal character */
+  nature: TimelinessNature;
+  /** ISO date — when the thing itself happens (event, flight, meeting) */
+  relevant_date?: string | null;
+  /** ISO date — consequence threshold (bill due, RSVP soft deadline) */
+  late_after?: string | null;
+  /** ISO date — hard cutoff (sale ends, 2FA expires, registration closes) */
+  expires?: string | null;
+  /** Whether this email becomes worthless after its moment */
+  perishable: boolean;
+}
 
 /**
  * Set of valid email categories for O(1) lookup.
@@ -104,18 +188,22 @@ export const LEGACY_CATEGORY_MAP: Record<string, EmailCategory> = {
   // Jan 2026 legacy (action-focused categories)
   'action_required': 'clients',
   'event': 'local',
-  'newsletter': 'newsletters_creator',
-  'promo': 'shopping',
-  'promotional': 'shopping',
+  'newsletter': 'newsletters',
+  'promo': 'deals',
+  'promotional': 'deals',
   'admin': 'finance',
-  'personal': 'personal_friends_family',
   'noise': 'product_updates',
   // Feb 2026 legacy (renamed/merged/split categories)
   'client_pipeline': 'clients',
   'business_work_general': 'work',
-  'family_kids_school': 'family',
-  'family_health_appointments': 'family',
-  'newsletters_general': 'newsletters_creator',
+  'family_kids_school': 'parenting',
+  'family_health_appointments': 'health',
+  'newsletters_general': 'newsletters',
+  // Mar 2026 legacy (taxonomy v2 renames/merges/splits)
+  'personal_friends_family': 'personal',
+  'news_politics': 'news',
+  'newsletters_creator': 'newsletters',
+  'newsletters_industry': 'newsletters',
 } as const;
 
 /**
@@ -149,13 +237,13 @@ export const LEGACY_CATEGORIES_SET = new Set<string>(Object.keys(LEGACY_CATEGORY
  * ```typescript
  * normalizeCategory('clients')          // → 'clients' (valid current)
  * normalizeCategory('client_pipeline')  // → 'clients' (legacy mapped)
- * normalizeCategory('unknown_value')    // → 'personal_friends_family' (unrecognized)
- * normalizeCategory(null)               // → 'personal_friends_family' (missing)
+ * normalizeCategory('unknown_value')    // → 'personal' (unrecognized)
+ * normalizeCategory(null)               // → 'personal' (missing)
  * ```
  */
 export function normalizeCategory(category: string | null | undefined): EmailCategory {
   if (!category) {
-    return 'personal_friends_family';
+    return 'personal';
   }
 
   // Check if it's already a valid new category
@@ -168,8 +256,8 @@ export function normalizeCategory(category: string | null | undefined): EmailCat
     return LEGACY_CATEGORY_MAP[category as LegacyCategory];
   }
 
-  // Unknown category - every email must have a real category
-  return 'personal_friends_family';
+  // Unknown category — default to personal
+  return 'personal';
 }
 
 /**
@@ -207,6 +295,7 @@ export interface CategoryDisplayConfig {
  * REFACTORED (Jan 2026): Updated for life-bucket categories.
  */
 export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
+  // ── Work & Professional ──────────────────────────────────────────────────
   clients: {
     label: 'Clients',
     icon: '💼',
@@ -221,82 +310,136 @@ export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
     bgColor: 'bg-violet-50',
     description: 'Team, industry, and professional emails',
   },
-  personal_friends_family: {
+  job_search: {
+    label: 'Job Search',
+    icon: '🔍',
+    color: 'text-lime-700',
+    bgColor: 'bg-lime-50',
+    description: 'Applications, recruiters, interviews, and offers',
+  },
+  // ── People & Relationships ───────────────────────────────────────────────
+  personal: {
     label: 'Personal',
     icon: '👥',
     color: 'text-pink-600',
     bgColor: 'bg-pink-50',
-    description: 'Friends, family, and personal correspondence',
+    description: 'Friends, social relationships, adult hobbies and clubs',
   },
   family: {
     label: 'Family',
-    icon: '👨‍👩‍👧‍👦',
+    icon: '🏠',
     color: 'text-amber-600',
     bgColor: 'bg-amber-50',
-    description: 'Kids, school, health, appointments, family scheduling',
+    description: 'Family relationships and personal family matters',
+  },
+  parenting: {
+    label: 'Parenting',
+    icon: '👶',
+    color: 'text-rose-600',
+    bgColor: 'bg-rose-50',
+    description: 'Kids: school, childcare, pediatrician, extracurriculars, tutors',
+  },
+  // ── Life Admin ───────────────────────────────────────────────────────────
+  health: {
+    label: 'Health',
+    icon: '❤️‍🩹',
+    color: 'text-red-600',
+    bgColor: 'bg-red-50',
+    description: 'Medical, dental, prescriptions, insurance EOBs, vet',
   },
   finance: {
     label: 'Finance',
-    icon: '💰',
+    icon: '📈',
     color: 'text-green-700',
     bgColor: 'bg-green-50',
-    description: 'Bills, banking, investments, and receipts',
+    description: 'Banking, investments, tax, financial planning',
+  },
+  billing: {
+    label: 'Billing',
+    icon: '🧾',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-50',
+    description: 'Receipts, subscriptions, autopay, bills, payment failures',
   },
   travel: {
     label: 'Travel',
     icon: '✈️',
     color: 'text-sky-600',
     bgColor: 'bg-sky-50',
-    description: 'Flights, hotels, bookings, and trip info',
+    description: 'Flights, hotels, bookings, and trip planning',
   },
   shopping: {
     label: 'Shopping',
     icon: '🛒',
     color: 'text-orange-600',
     bgColor: 'bg-orange-50',
-    description: 'Orders, shipping, deals, and retail',
+    description: 'Orders, shipping, returns, and tracking',
   },
+  deals: {
+    label: 'Deals',
+    icon: '🏷️',
+    color: 'text-fuchsia-600',
+    bgColor: 'bg-fuchsia-50',
+    description: 'Sales, discounts, coupons, limited-time offers',
+  },
+  // ── Community & Civic ────────────────────────────────────────────────────
   local: {
     label: 'Local',
     icon: '📍',
     color: 'text-teal-600',
     bgColor: 'bg-teal-50',
-    description: 'Community events, neighborhood, local orgs',
+    description: 'Community events, neighborhood, local businesses',
   },
-  newsletters_creator: {
-    label: 'Creator Newsletters',
+  civic: {
+    label: 'Civic',
+    icon: '🏛️',
+    color: 'text-stone-700',
+    bgColor: 'bg-stone-100',
+    description: 'Government, council, school board, HOA, voting',
+  },
+  sports: {
+    label: 'Sports',
+    icon: '🏆',
+    color: 'text-yellow-600',
+    bgColor: 'bg-yellow-50',
+    description: 'Fan sports: scores, fantasy, team updates',
+  },
+  // ── Information ──────────────────────────────────────────────────────────
+  news: {
+    label: 'News',
+    icon: '📰',
+    color: 'text-slate-700',
+    bgColor: 'bg-slate-100',
+    description: 'News outlets, current events, breaking news',
+  },
+  politics: {
+    label: 'Politics',
+    icon: '🗳️',
+    color: 'text-zinc-700',
+    bgColor: 'bg-zinc-100',
+    description: 'Political news, campaigns, policy',
+  },
+  newsletters: {
+    label: 'Newsletters',
     icon: '✍️',
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-50',
-    description: 'Substacks, personal blogs, and creator content',
-  },
-  newsletters_industry: {
-    label: 'Industry Digests',
-    icon: '📰',
-    color: 'text-cyan-600',
-    bgColor: 'bg-cyan-50',
-    description: 'Tech/business digests and industry roundups',
-  },
-  news_politics: {
-    label: 'News & Politics',
-    icon: '🗞️',
-    color: 'text-slate-700',
-    bgColor: 'bg-slate-100',
-    description: 'News outlets and political updates',
+    description: 'Substacks, digests, and curated content',
   },
   product_updates: {
     label: 'Product Updates',
     icon: '📦',
     color: 'text-indigo-600',
     bgColor: 'bg-indigo-50',
-    description: 'Tech products and services you subscribe to',
+    description: 'SaaS tools, release notes, changelogs',
   },
+  // ── System ───────────────────────────────────────────────────────────────
   notifications: {
     label: 'Notifications',
     icon: '🔔',
     color: 'text-gray-500',
     bgColor: 'bg-gray-50',
-    description: 'Verification codes, login alerts, password resets, system notifications',
+    description: 'Verification codes, login alerts, 2FA, system notifications',
   },
 };
 
@@ -320,15 +463,22 @@ export const CATEGORY_DISPLAY: Record<EmailCategory, CategoryDisplayConfig> = {
 export const CATEGORY_SHORT_LABELS: Record<EmailCategory, string> = {
   clients: 'Client',
   work: 'Work',
-  personal_friends_family: 'Personal',
+  job_search: 'Jobs',
+  personal: 'Personal',
   family: 'Family',
+  parenting: 'Parenting',
+  health: 'Health',
   finance: 'Finance',
+  billing: 'Billing',
   travel: 'Travel',
   shopping: 'Shopping',
+  deals: 'Deals',
   local: 'Local',
-  newsletters_creator: 'Creator',
-  newsletters_industry: 'Industry',
-  news_politics: 'News',
+  civic: 'Civic',
+  sports: 'Sports',
+  news: 'News',
+  politics: 'Politics',
+  newsletters: 'Newsletter',
   product_updates: 'Updates',
   notifications: 'Alerts',
 };
@@ -340,15 +490,22 @@ export const CATEGORY_SHORT_LABELS: Record<EmailCategory, string> = {
 export const CATEGORY_SHORT_LABELS_PLURAL: Record<EmailCategory, string> = {
   clients: 'Clients',
   work: 'Work',
-  personal_friends_family: 'Personal',
+  job_search: 'Jobs',
+  personal: 'Personal',
   family: 'Family',
+  parenting: 'Parenting',
+  health: 'Health',
   finance: 'Finance',
+  billing: 'Billing',
   travel: 'Travel',
   shopping: 'Shopping',
+  deals: 'Deals',
   local: 'Local',
-  newsletters_creator: 'Creator',
-  newsletters_industry: 'Industry',
-  news_politics: 'News',
+  civic: 'Civic',
+  sports: 'Sports',
+  news: 'News',
+  politics: 'Politics',
+  newsletters: 'Newsletters',
   product_updates: 'Updates',
   notifications: 'Alerts',
 };
@@ -360,15 +517,22 @@ export const CATEGORY_SHORT_LABELS_PLURAL: Record<EmailCategory, string> = {
 export const CATEGORY_ACCENT_COLORS: Record<EmailCategory, string> = {
   clients: 'bg-blue-500',
   work: 'bg-violet-500',
-  personal_friends_family: 'bg-pink-500',
+  job_search: 'bg-lime-500',
+  personal: 'bg-pink-500',
   family: 'bg-amber-500',
+  parenting: 'bg-rose-500',
+  health: 'bg-red-500',
   finance: 'bg-green-600',
+  billing: 'bg-emerald-500',
   travel: 'bg-sky-500',
   shopping: 'bg-orange-500',
+  deals: 'bg-fuchsia-500',
   local: 'bg-teal-500',
-  newsletters_creator: 'bg-emerald-500',
-  newsletters_industry: 'bg-cyan-500',
-  news_politics: 'bg-slate-500',
+  civic: 'bg-stone-500',
+  sports: 'bg-yellow-500',
+  news: 'bg-slate-500',
+  politics: 'bg-zinc-500',
+  newsletters: 'bg-emerald-500',
   product_updates: 'bg-indigo-500',
   notifications: 'bg-gray-400',
 };
@@ -381,15 +545,22 @@ export const CATEGORY_ACCENT_COLORS: Record<EmailCategory, string> = {
 export const CATEGORY_BADGE_COLORS: Record<EmailCategory, string> = {
   clients: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300',
   work: 'bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300',
-  personal_friends_family: 'bg-pink-50 text-pink-700 dark:bg-pink-950/30 dark:text-pink-300',
+  job_search: 'bg-lime-50 text-lime-700 dark:bg-lime-950/30 dark:text-lime-300',
+  personal: 'bg-pink-50 text-pink-700 dark:bg-pink-950/30 dark:text-pink-300',
   family: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300',
+  parenting: 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300',
+  health: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300',
   finance: 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300',
+  billing: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300',
   travel: 'bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300',
   shopping: 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300',
+  deals: 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/30 dark:text-fuchsia-300',
   local: 'bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-300',
-  newsletters_creator: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300',
-  newsletters_industry: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300',
-  news_politics: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300',
+  civic: 'bg-stone-100 text-stone-700 dark:bg-stone-900/30 dark:text-stone-300',
+  sports: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-300',
+  news: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300',
+  politics: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300',
+  newsletters: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300',
   product_updates: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300',
   notifications: 'bg-gray-50 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400',
 };
@@ -398,19 +569,36 @@ export const CATEGORY_BADGE_COLORS: Record<EmailCategory, string> = {
  * Ordered category list for display in filter bars and sidebars.
  * Grouped: Work → Personal → Life Admin → Information.
  */
+/**
+ * Ordered category list for display in filter bars and sidebars.
+ * Grouped: Work → People → Life Admin → Community → Information → System.
+ */
 export const CATEGORIES_DISPLAY_ORDER: EmailCategory[] = [
+  // Work & Professional
   'clients',
   'work',
-  'personal_friends_family',
+  'job_search',
+  // People & Relationships
+  'personal',
   'family',
+  'parenting',
+  // Life Admin
+  'health',
   'finance',
+  'billing',
   'travel',
   'shopping',
+  'deals',
+  // Community & Civic
   'local',
-  'newsletters_creator',
-  'newsletters_industry',
-  'news_politics',
+  'civic',
+  'sports',
+  // Information
+  'news',
+  'politics',
+  'newsletters',
   'product_updates',
+  // System
   'notifications',
 ];
 

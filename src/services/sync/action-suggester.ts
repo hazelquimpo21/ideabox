@@ -3,7 +3,7 @@
  *
  * Generates suggested quick actions based on email analysis results.
  * These suggestions help users take immediate action after initial sync:
- * - Archive bulk categories (shopping, newsletters_creator)
+ * - Archive bulk categories (shopping, newsletters, deals)
  * - View urgent items in clients
  * - Add suggested clients
  * - Review detected events (now in 'local' category)
@@ -13,7 +13,7 @@
  * REFACTORED (Jan 2026): Updated for life-bucket categories.
  * - action_required → clients (urgent items via urgency score)
  * - event → local (events detected via has_event label)
- * - promo/noise → shopping/newsletters_creator
+ * - promo/noise → deals/newsletters
  *
  * @module services/sync/action-suggester
  * @see docs/DISCOVERY_DASHBOARD_PLAN.md
@@ -249,22 +249,22 @@ export class ActionSuggesterService {
   /**
    * Generate "archive category" actions for low-value categories.
    *
-   * REFACTORED (Jan 2026): Updated for life-bucket categories.
-   * - promo → shopping (but only suggest archive for clearly promotional content)
-   * - noise → newsletters_creator (suggest archive for high-volume newsletters)
-   * - news_politics and product_updates are also archiveable
+   * REFACTORED (Mar 2026): Updated for Taxonomy v2 — 20 categories.
+   * Archiveable categories are informational ones that pile up.
    */
   private generateArchiveActions(categories: CategorySummary[]): SuggestedAction[] {
     const actions: SuggestedAction[] = [];
 
     // ─────────────────────────────────────────────────────────────────────────
     // Categories that are candidates for bulk archive
-    // REFACTORED (Jan 2026): Updated to new life-bucket categories
+    // Updated Mar 2026: Taxonomy v2 categories
     // These are typically informational and safe to archive in bulk
     // ─────────────────────────────────────────────────────────────────────────
     const archiveableCategories: EmailCategory[] = [
-      'newsletters_creator',  // Substacks, digests - often pile up
-      'news_politics',        // News updates - time-sensitive, archive old ones
+      'newsletters',          // Substacks, digests - often pile up
+      'news',                 // News updates - time-sensitive, archive old ones
+      'politics',             // Political updates - archive old ones
+      'deals',                // Promotions, sales - time-sensitive, archive expired
       'product_updates',      // SaaS updates - usually low priority
     ];
 
@@ -352,19 +352,28 @@ export class ActionSuggesterService {
     // Human-friendly labels for each category
     // REFACTORED (Jan 2026): Updated to new life-bucket categories
     // ─────────────────────────────────────────────────────────────────────────
-    const categoryLabels: Record<EmailCategory, string> = {
-      newsletters_creator: 'newsletter',
-      newsletters_industry: 'industry newsletter',
-      news_politics: 'news',
-      product_updates: 'product update',
-      local: 'local',
-      shopping: 'shopping',
-      travel: 'travel',
-      finance: 'finance',
-      family: 'family',
+    // Updated Mar 2026: Taxonomy v2 — 20 categories
+    const categoryLabels: Partial<Record<EmailCategory, string>> = {
       clients: 'client',
       work: 'work',
-      personal_friends_family: 'personal',
+      job_search: 'job search',
+      personal: 'personal',
+      family: 'family',
+      parenting: 'parenting',
+      health: 'health',
+      finance: 'finance',
+      billing: 'billing',
+      travel: 'travel',
+      shopping: 'shopping',
+      deals: 'deals',
+      local: 'local',
+      civic: 'civic',
+      sports: 'sports',
+      news: 'news',
+      politics: 'politics',
+      newsletters: 'newsletter',
+      product_updates: 'product update',
+      notifications: 'notification',
     };
 
     const categoryLabel = categoryLabels[category] || category;
@@ -388,11 +397,14 @@ export class ActionSuggesterService {
     // Category-specific descriptions for archive actions
     // REFACTORED (Jan 2026): Updated to new life-bucket categories
     // ─────────────────────────────────────────────────────────────────────────
+    // Updated Mar 2026: Taxonomy v2
     const descriptions: Partial<Record<EmailCategory, string>> = {
-      newsletters_creator: 'Newsletters and digests safe to archive',
-      news_politics: 'News updates that can be archived',
+      newsletters: 'Newsletters and digests safe to archive',
+      news: 'News updates that can be archived',
+      politics: 'Political updates that can be archived',
+      deals: 'Promotions and sales that have likely expired',
       product_updates: 'Product and service updates',
-      shopping: 'Promotional and shopping emails',
+      shopping: 'Shopping and order notification emails',
     };
 
     // If we have top senders, show them
