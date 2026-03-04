@@ -26,6 +26,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmailDetail } from '@/components/email/EmailDetail';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger, logDiscover } from '@/lib/utils/logger';
+import { useEmailAnalysis } from '@/hooks/useEmailAnalysis';
+import { useExtractedDates } from '@/hooks/useExtractedDates';
 import {
   type EmailCategory,
   CATEGORY_DISPLAY,
@@ -56,6 +58,15 @@ export default function InboxEmailDetailPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+
+  // ─── Hoisted analysis hooks — fire in parallel with email fetch ────────────
+  const {
+    analysis,
+    isLoading: isLoadingAnalysis,
+    refetch: refetchAnalysis,
+  } = useEmailAnalysis(emailId);
+
+  const { dates: extractedDates } = useExtractedDates({ emailId });
 
   // ─── Fetch Email ────────────────────────────────────────────────────────────
 
@@ -194,6 +205,7 @@ export default function InboxEmailDetailPage() {
       }
 
       await fetchEmail();
+      await refetchAnalysis();
     } catch (err) {
       logger.error('Failed to analyze', { error: String(err) });
     } finally {
@@ -309,6 +321,10 @@ export default function InboxEmailDetailPage() {
           onToggleRead={handleToggleRead}
           onAnalyze={handleAnalyze}
           isAnalyzing={isAnalyzing}
+          analysis={analysis}
+          isLoadingAnalysis={isLoadingAnalysis}
+          extractedDates={extractedDates}
+          refetchAnalysis={refetchAnalysis}
         />
       </div>
 
