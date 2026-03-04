@@ -108,46 +108,60 @@ Focus on dates that represent commitments, deadlines, or upcoming things:
    - Response deadlines: "Please reply by Friday"
    - Task deadlines: "The proposal is due January 30"
    - Submission deadlines: "Applications close Feb 15"
+   - Registration deadlines: "Register by Jan 20"
+   - Early bird pricing deadlines: "Early bird ends Aug 1"
+   - RSVP deadlines: "RSVP by Friday"
 
-2. PAYMENT_DUE
+2. EVENT
+   - Conferences: "Join us at TechConf March 17-19"
+   - Summits: "Leadership Summit on April 5"
+   - Webinars: "Free webinar this Thursday at 2pm"
+   - Meetups: "Community meetup next Tuesday"
+   - Workshops: "3-day workshop starting June 1"
+   - Any gathering with a specific date you might attend
+   - Use end_date for multi-day events
+   - Include the organizer in related_entity if mentioned
+
+3. PAYMENT_DUE
    - Invoice due dates: "Payment due: January 30, 2026"
    - Bill reminders: "Your bill of $142.67 is due next week"
    - Subscription charges: "Your card will be charged on the 15th"
 
-3. EXPIRATION
+4. EXPIRATION
    - Subscription ends: "Your trial expires February 28"
    - Offer expiration: "This discount ends midnight Sunday"
    - Access expiration: "Your access expires in 7 days"
+   - Membership closing: "Pausing membership openings tomorrow"
 
-4. APPOINTMENT
+5. APPOINTMENT
    - Confirmed appointments: "Your appointment is Thursday at 2pm"
    - Scheduled calls: "Our call is set for Monday 10am"
    - Reservations: "Your reservation is confirmed for 7pm Friday"
 
-5. FOLLOW_UP
+6. FOLLOW_UP
    - Suggested reconnects: "Let's touch base in Q2"
    - Check-in reminders: "I'll follow up next week"
    - Future discussions: "We should revisit this in March"
 
-6. BIRTHDAY
+7. BIRTHDAY
    - Direct mentions: "My birthday is March 12"
    - Birthday emails: "Happy birthday! Your special day is coming up"
    - Party invites: "Birthday party for Sarah on the 15th"
 
-7. ANNIVERSARY
+8. ANNIVERSARY
    - Work anniversaries: "Your 1-year anniversary with us"
    - Membership anniversaries: "Thank you for 5 years"
 
-8. RECURRING
+9. RECURRING
    - Regular meetings: "Our weekly standup"
    - Periodic events: "Monthly newsletter"
    - Only flag as recurring if explicitly mentioned
 
-9. REMINDER
-   - General reminders: "Don't forget about next week"
-   - Action reminders: "Remember to submit by Friday"
+10. REMINDER
+    - General reminders: "Don't forget about next week"
+    - Action reminders: "Remember to submit by Friday"
 
-10. OTHER
+11. OTHER
     - Any other date that seems important to surface
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -175,13 +189,11 @@ WHAT NOT TO EXTRACT
 - The email's sent date
 - Vague references without specific dates: "sometime soon", "eventually"
 - Historical dates: "We met last year"
-- Event dates/times themselves (those are handled by the EventDetector)
 
-IMPORTANT: Even in event invitation emails, DO extract:
-- Registration deadlines ("Register by Jan 20")
-- Early bird pricing deadlines ("Early bird ends Aug 1")
-- RSVP deadlines ("RSVP by Friday")
-These are DEADLINES, not event dates — they belong here as date_type "deadline".
+IMPORTANT: An email does NOT have to be primarily about events to contain
+event dates. Scan the ENTIRE email including P.S. sections, footers, and
+asides. Newsletters, opinion pieces, and personal emails often mention
+upcoming events, summits, webinars, or meetups in passing — extract those.
 
 ═══════════════════════════════════════════════════════════════════════════════
 OUTPUT GUIDANCE

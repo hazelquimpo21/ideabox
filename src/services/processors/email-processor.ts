@@ -423,26 +423,27 @@ export class EmailProcessor {
     const hasMultipleEventsLabel = categorizationResult.success &&
       categorizationResult.data.labels?.includes('has_multiple_events');
 
+    // Extract links from ContentDigest for event link resolution
+    const eventLinks = contentDigestResult.success
+      ? contentDigestResult.data.links?.map(l => ({ url: l.url, type: l.type, title: l.title }))
+      : undefined;
+
     if (hasEventLabel && hasMultipleEventsLabel && this.multiEventDetector.isEnabled()) {
       // Multi-event path: extract all events from the email
-      // Pass links from ContentDigest for optional link resolution
-      const links = contentDigestResult.success
-        ? contentDigestResult.data.links?.map(l => ({ url: l.url, type: l.type, title: l.title }))
-        : undefined;
-
       logger.debug('Running MultiEventDetector (has_event + has_multiple_events labels)', {
         emailId: emailInput.id,
         category: categorizationResult.data.category,
-        linkCount: links?.length ?? 0,
+        linkCount: eventLinks?.length ?? 0,
       });
-      multiEventResult = await this.runMultiEventDetector(emailInput, enrichedContext, links);
+      multiEventResult = await this.runMultiEventDetector(emailInput, enrichedContext, eventLinks);
     } else if (hasEventLabel && this.eventDetector.isEnabled()) {
-      // Single event path (existing behavior)
+      // Single event path — now also resolves links for additional context
       logger.debug('Running EventDetector (has_event label detected)', {
         emailId: emailInput.id,
         category: categorizationResult.data.category,
+        linkCount: eventLinks?.length ?? 0,
       });
-      eventResult = await this.runEventDetector(emailInput, enrichedContext);
+      eventResult = await this.runEventDetector(emailInput, enrichedContext, eventLinks);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -998,21 +999,24 @@ export class EmailProcessor {
    * Runs the EventDetector analyzer.
    *
    * This is a CONDITIONAL analyzer - only runs when:
-   * 1. Categorizer returns category === 'event'
+   * 1. Categorizer applies `has_event` label
    * 2. EventDetector is enabled in config
    *
-   * Running conditionally saves tokens since events are ~5-10% of emails.
+   * ENHANCED (Mar 2026): Now accepts optional links for resolution,
+   * so events with signup/registration links get richer extraction.
    */
   private async runEventDetector(
     email: EmailInput,
-    context: UserContext
+    context: UserContext,
+    links?: Array<{ url: string; type?: string; title?: string }>
   ): Promise<EventDetectionResult> {
     logger.debug('Running EventDetector (conditional analyzer)', {
       emailId: email.id,
+      linkCount: links?.length ?? 0,
     });
 
     try {
-      return await this.eventDetector.analyze(email, context);
+      return await this.eventDetector.analyze(email, context, links);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
