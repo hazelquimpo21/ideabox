@@ -734,13 +734,17 @@ export class EmailProcessor {
 
         // Save event(s) to extracted_dates with duplicate detection
         // ENHANCED (Feb 2026): Supports both single and multi-event results
+        // FIX (Mar 2026): Handle fallback when multi-event detector returns
+        // hasMultipleEvents=false but still has events in the array. Previously
+        // these events were silently dropped because eventResult was never set.
         if (
           multiEventResult &&
           multiEventResult.success &&
-          multiEventResult.data.hasMultipleEvents &&
           multiEventResult.data.events.length > 0
         ) {
           // Multi-event path: save each event with dedup
+          // Works whether hasMultipleEvents is true (many events) or false (AI
+          // disagreed with categorizer but still extracted event(s))
           await this.saveMultipleEventsToExtractedDates(
             context.userId,
             emailInput.id,
@@ -1974,7 +1978,8 @@ export class EmailProcessor {
     userId: string,
     emailId: string,
     contactId: string | null,
-    eventData: EventDetectionResult['data']
+    eventData: EventDetectionResult['data'],
+    options?: { extractedBy?: string; skipDuplicateCheck?: boolean }
   ): Promise<void> {
     // Skip if no event or no date
     if (!eventData.hasEvent || !eventData.eventDate) {
@@ -2065,7 +2070,7 @@ export class EmailProcessor {
         is_recurring: false, // EventDetector doesn't detect recurrence
         confidence: eventData.confidence,
         priority_score: priorityScore,
-        extracted_by: 'event_detector',
+        extracted_by: options?.extractedBy ?? 'event_detector',
         event_metadata: eventMetadata,
       };
 
@@ -2073,57 +2078,61 @@ export class EmailProcessor {
       // DUPLICATE DETECTION (NEW Feb 2026)
       // Check if this event already exists from a different email
       // If duplicate: update existing with a one-line note instead of creating new
+      // FIX (Mar 2026): Skip when called from saveMultipleEventsToExtractedDates
+      // which already handles dedup, avoiding redundant DB queries.
       // ─────────────────────────────────────────────────────────────────────────
-      const duplicate = await this.findDuplicateEvent(
-        userId,
-        eventData.eventDate,
-        eventData.eventTitle,
-        eventData.organizer
-      );
-
-      if (duplicate) {
-        // Found a duplicate — update existing event with a note
-        const updateNote = this.generateUpdateNote(
-          duplicate.event_metadata as Record<string, unknown> | null,
-          eventData,
-          emailId
+      if (!options?.skipDuplicateCheck) {
+        const duplicate = await this.findDuplicateEvent(
+          userId,
+          eventData.eventDate,
+          eventData.eventTitle,
+          eventData.organizer
         );
 
-        const existingMetadata = (duplicate.event_metadata ?? {}) as Record<string, unknown>;
-        const existingUpdates = (existingMetadata.updates ?? []) as Array<Record<string, unknown>>;
+        if (duplicate) {
+          // Found a duplicate — update existing event with a note
+          const updateNote = this.generateUpdateNote(
+            duplicate.event_metadata as Record<string, unknown> | null,
+            eventData,
+            emailId
+          );
 
-        const updatedMetadata = {
-          ...existingMetadata,
-          updates: [
-            ...existingUpdates,
-            {
-              date: new Date().toISOString().split('T')[0],
-              source_email_id: emailId,
-              note: updateNote,
-            },
-          ],
-        };
+          const existingMetadata = (duplicate.event_metadata ?? {}) as Record<string, unknown>;
+          const existingUpdates = (existingMetadata.updates ?? []) as Array<Record<string, unknown>>;
 
-        const { error: updateError } = await supabase
-          .from('extracted_dates')
-          .update({ event_metadata: updatedMetadata })
-          .eq('id', duplicate.id);
+          const updatedMetadata = {
+            ...existingMetadata,
+            updates: [
+              ...existingUpdates,
+              {
+                date: new Date().toISOString().split('T')[0],
+                source_email_id: emailId,
+                note: updateNote,
+              },
+            ],
+          };
 
-        if (updateError) {
-          logger.warn('Failed to update duplicate event', {
-            emailId,
-            existingEventId: duplicate.id,
-            error: updateError.message,
-          });
-        } else {
-          logger.info('Duplicate event detected — updated existing', {
-            emailId,
-            existingEventId: duplicate.id,
-            existingTitle: duplicate.title?.substring(0, 40),
-            updateNote,
-          });
+          const { error: updateError } = await supabase
+            .from('extracted_dates')
+            .update({ event_metadata: updatedMetadata })
+            .eq('id', duplicate.id);
+
+          if (updateError) {
+            logger.warn('Failed to update duplicate event', {
+              emailId,
+              existingEventId: duplicate.id,
+              error: updateError.message,
+            });
+          } else {
+            logger.info('Duplicate event detected — updated existing', {
+              emailId,
+              existingEventId: duplicate.id,
+              existingTitle: duplicate.title?.substring(0, 40),
+              updateNote,
+            });
+          }
+          return;
         }
-        return;
       }
 
       // ─────────────────────────────────────────────────────────────────────────
@@ -2151,6 +2160,64 @@ export class EmailProcessor {
           locality: eventData.eventLocality ?? 'unknown',
           isKeyDate: eventData.isKeyDate ?? false,
         });
+      }
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // REGISTRATION DEADLINE as separate timeline entry (NEW Mar 2026)
+      // When an event has a registration deadline, save it as a separate
+      // 'deadline' record so it appears on the Hub/Timeline independently.
+      // Users can then see "RSVP by Jan 23" as its own timeline item.
+      // Skip if the event itself IS the deadline (isKeyDate + deadline type).
+      // ─────────────────────────────────────────────────────────────────────────
+      if (
+        eventData.registrationDeadline &&
+        dateType === 'event' && // Only for full events, not if already a deadline
+        eventData.registrationDeadline !== eventData.eventDate // Don't duplicate same-day
+      ) {
+        const deadlineTitle = `Registration deadline: ${eventData.eventTitle}`;
+        const { error: deadlineError } = await supabase
+          .from('extracted_dates')
+          .upsert(
+            {
+              user_id: userId,
+              email_id: emailId,
+              contact_id: contactId,
+              date_type: 'deadline',
+              date: eventData.registrationDeadline,
+              title: deadlineTitle,
+              description: `RSVP/register by this date for: ${eventData.eventTitle}`,
+              related_entity: eventData.organizer ?? null,
+              is_recurring: false,
+              confidence: eventData.confidence,
+              priority_score: 7, // Deadlines are urgent
+              extracted_by: options?.extractedBy ?? 'event_detector',
+              event_metadata: {
+                isKeyDate: true,
+                keyDateType: 'registration_deadline',
+                rsvpUrl: eventData.rsvpUrl ?? null,
+                parentEventDate: eventData.eventDate,
+                parentEventTitle: eventData.eventTitle,
+              },
+            },
+            {
+              onConflict: 'email_id,date_type,date,title',
+              ignoreDuplicates: true, // Don't overwrite if already exists
+            }
+          );
+
+        if (deadlineError) {
+          logger.debug('Failed to save registration deadline (non-fatal)', {
+            emailId,
+            deadline: eventData.registrationDeadline,
+            error: deadlineError.message,
+          });
+        } else {
+          logger.info('Registration deadline saved as separate entry', {
+            emailId,
+            deadline: eventData.registrationDeadline,
+            forEvent: eventData.eventTitle.substring(0, 40),
+          });
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -2239,10 +2306,12 @@ export class EmailProcessor {
         }
 
         // Save as new event using the single-event method
+        // skipDuplicateCheck: dedup already handled above in this loop
+        // extractedBy: correctly attribute to multi_event_detector
         await this.saveEventToExtractedDates(userId, emailId, contactId, {
           ...eventData,
           hasEvent: true,
-        });
+        }, { extractedBy: 'multi_event_detector', skipDuplicateCheck: true });
         saved++;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -2288,13 +2357,15 @@ export class EmailProcessor {
     try {
       const supabase = await createServerClient();
 
-      // Query events on the same date for this user
+      // Query events AND deadlines on the same date for this user
+      // FIX (Mar 2026): Previously only checked date_type='event', missing deadline
+      // duplicates. Now checks both 'event' and 'deadline' types.
       const { data: existingEvents, error } = await supabase
         .from('extracted_dates')
         .select('id, title, event_metadata, related_entity')
         .eq('user_id', userId)
         .eq('date', eventDate)
-        .eq('date_type', 'event')
+        .in('date_type', ['event', 'deadline'])
         .eq('is_hidden', false);
 
       if (error || !existingEvents || existingEvents.length === 0) {
@@ -2321,13 +2392,21 @@ export class EmailProcessor {
           return existing;
         }
 
-        // Check 3: Same organizer + same date (covers renamed events)
+        // Check 3: Same organizer + same date + titles share words (covers renamed events)
+        // FIX (Mar 2026): Previously organizer + date alone was enough, which caused
+        // false positives (e.g., same org hosting morning workshop AND evening meetup).
+        // Now requires at least one shared significant word between titles.
         if (
           organizer &&
           existing.related_entity &&
           this.normalizeTitle(organizer) === this.normalizeTitle(existing.related_entity)
         ) {
-          return existing;
+          const newWords = new Set(normalizedNewTitle.split(' ').filter(w => w.length > 3));
+          const existingWords = normalizedExistingTitle.split(' ').filter(w => w.length > 3);
+          const hasSharedWord = existingWords.some(w => newWords.has(w));
+          if (hasSharedWord) {
+            return existing;
+          }
         }
       }
 
