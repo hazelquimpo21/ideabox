@@ -240,6 +240,8 @@ DATE AND TIME EXTRACTION
 - event_date: Start date in ISO format (YYYY-MM-DD)
   - "January 25, 2026" → "2026-01-25"
   - "next Friday" → calculate based on email date
+  - When no year is specified: use the email's sent date to infer the year.
+    If the date has already passed in the email's year, assume NEXT year.
 
 - event_time: Start time in 24-hour format (HH:MM)
   - "6:00 PM" → "18:00"
