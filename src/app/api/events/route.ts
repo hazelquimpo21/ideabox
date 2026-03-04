@@ -127,6 +127,9 @@ interface EventResponse {
 /**
  * Event metadata from EventDetector.
  * This structure matches what EventDetector stores in email_analyses.event_detection.
+ *
+ * ENHANCED (March 2026): Added relevanceScore and whyAttend for smarter
+ * event recommendations that help users decide which events to attend.
  */
 interface EventMetadata {
   locality?: 'local' | 'out_of_town' | 'virtual';
@@ -140,6 +143,10 @@ interface EventMetadata {
   additionalDetails?: string;
   eventSummary?: string;
   keyPoints?: string[];
+  /** How likely the user is to attend (0-10). Higher = more relevant. */
+  relevanceScore?: number;
+  /** One-sentence personalized explanation of why user might attend. */
+  whyAttend?: string | null;
 }
 
 /**
@@ -165,6 +172,10 @@ interface EventDetectionData {
   event_summary?: string;
   key_points?: string[];
   confidence?: number;
+  /** Relevance score (0-10) from EventDetector. NEW March 2026. */
+  relevance_score?: number;
+  /** Why the user might attend. NEW March 2026. */
+  why_attend?: string | null;
 }
 
 /**
@@ -226,6 +237,9 @@ function buildEventResponse(
     additionalDetails: eventDetection.additional_details,
     eventSummary: eventDetection.event_summary,
     keyPoints: eventDetection.key_points,
+    // Relevance scoring (NEW March 2026) — passed through from EventDetector
+    relevanceScore: eventDetection.relevance_score,
+    whyAttend: eventDetection.why_attend,
   };
 
   // For multi-event rows, append index to make IDs unique
@@ -242,7 +256,11 @@ function buildEventResponse(
     end_date: eventDetection.event_end_date || null,
     end_time: eventDetection.event_end_time || null,
     date_type: 'event',
-    priority_score: 5,
+    // Use relevance score to boost priority when available (March 2026).
+    // Relevance 0-10 maps to priority 1-10 with a floor of 3 for detected events.
+    priority_score: eventDetection.relevance_score != null
+      ? Math.max(3, Math.round(eventDetection.relevance_score))
+      : 5,
     is_acknowledged: false,
     event_metadata: eventMetadata,
     emails: {

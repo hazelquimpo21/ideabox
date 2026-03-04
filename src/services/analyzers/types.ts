@@ -951,6 +951,36 @@ export interface EventDetectionData {
    * Confidence in the event extraction (0-1).
    */
   confidence: number;
+
+  /**
+   * Relevance score (0-10) estimating how likely the user is to attend/care.
+   *
+   * NEW (March 2026): Helps surface events the user would actually want to go to.
+   * Based on: locality (local > out_of_town), cost (free > expensive), user interests
+   * match, sender relationship (VIP/direct > broadcast), and event type (personal
+   * invite > mass marketing).
+   *
+   * Scoring guide:
+   * - 8-10: Highly relevant — local, free/low-cost, matches interests, from known contact
+   * - 5-7:  Moderately relevant — some interest match, reasonable effort to attend
+   * - 2-4:  Low relevance — out of town, expensive, or weak interest match
+   * - 0-1:  Noise — generic marketing events, no interest match
+   */
+  relevanceScore?: number;
+
+  /**
+   * Short explanation of why this event might be interesting to the user.
+   *
+   * NEW (March 2026): One sentence personalized to the user's interests/context.
+   * Written in second person, as if a personal assistant is making a recommendation.
+   *
+   * Examples:
+   * - "Matches your interest in AI/ML and it's free and local."
+   * - "Your VIP contact Sarah is organizing this — good networking opportunity."
+   * - "You're into web development and this covers React best practices."
+   * - null (if no strong reason found)
+   */
+  whyAttend?: string | null;
 }
 
 /**
