@@ -97,7 +97,9 @@ User's location: ${userLocation}
 YOUR MISSION
 ═══════════════════════════════════════════════════════════════════════════════
 
-This email contains MULTIPLE events or dates. Extract EACH ONE as a separate event.
+This email was flagged as containing MULTIPLE events or dates. Extract EACH ONE as a separate event in the "events" array.
+
+IMPORTANT: Even if you only find ONE event after analysis, still put it in the events array. Do NOT return an empty events array — always include whatever events you find.
 
 Common patterns:
 - Newsletter with "upcoming events" section listing several events
@@ -113,6 +115,16 @@ For recurring events (e.g., "Every Tuesday 6-8pm, Jan 7 through Mar 11"):
 - Example: "Pottery Class - Jan 7", "Pottery Class - Jan 14", etc.
 
 Extract up to ${MAX_EVENTS_PER_EMAIL} events. If there are more, extract the ${MAX_EVENTS_PER_EMAIL} most important/nearest ones.
+
+═══════════════════════════════════════════════════════════════════════════════
+DATE INFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+When a date is mentioned without a year (e.g., "January 15", "March 3"):
+- Use the email's sent date to infer the year
+- If the date has already passed in the email's year, assume NEXT year
+- "next Friday" → calculate from the email's sent date
+- Always output dates as YYYY-MM-DD
 
 ═══════════════════════════════════════════════════════════════════════════════
 EVENT LOCALITY
