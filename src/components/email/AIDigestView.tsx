@@ -111,6 +111,28 @@ export const AIDigestView = React.memo(function AIDigestView({
     }
   }, [email.id]);
 
+  // Merge extracted dates from hook + analysis (must be before early returns — Rules of Hooks)
+  const dates = analysis?.dateExtraction;
+  const allDates = React.useMemo(() => {
+    if (extractedDates && extractedDates.length > 0) {
+      return extractedDates.map(d => ({
+        title: d.title,
+        date: d.date,
+        time: d.event_time || undefined,
+        dateType: d.date_type || 'other',
+      }));
+    }
+    if (dates?.hasDates && dates.dates.length > 0) {
+      return dates.dates.map(d => ({
+        title: d.title,
+        date: d.date,
+        time: d.time,
+        dateType: d.dateType,
+      }));
+    }
+    return [];
+  }, [extractedDates, dates]);
+
   // ── Not analyzed ───────────────────────────────────────────────────────────
   if (!email.analyzed_at) {
     return (
@@ -186,7 +208,6 @@ export const AIDigestView = React.memo(function AIDigestView({
   const digest = analysis.contentDigest;
   const actions = analysis.actionExtraction;
   const nuggets = digest?.goldenNuggets;
-  const dates = analysis.dateExtraction;
   const event = analysis.eventDetection;
   const news = analysis.newsBrief;
   const inferredIdeaType = email.category
@@ -194,27 +215,6 @@ export const AIDigestView = React.memo(function AIDigestView({
     : 'learning';
 
   const signalDot = cat?.signalStrength ? SIGNAL_COLORS[cat.signalStrength] : null;
-
-  // Merge extracted dates from hook + analysis
-  const allDates = React.useMemo(() => {
-    if (extractedDates && extractedDates.length > 0) {
-      return extractedDates.map(d => ({
-        title: d.title,
-        date: d.date,
-        time: d.event_time || undefined,
-        dateType: d.date_type || 'other',
-      }));
-    }
-    if (dates?.hasDates && dates.dates.length > 0) {
-      return dates.dates.map(d => ({
-        title: d.title,
-        date: d.date,
-        time: d.time,
-        dateType: d.dateType,
-      }));
-    }
-    return [];
-  }, [extractedDates, dates]);
 
   return (
     <div className="px-6 py-5 space-y-4">
