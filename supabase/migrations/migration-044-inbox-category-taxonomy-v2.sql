@@ -186,14 +186,16 @@ END $$;
 --   promo         → marketing
 --   cold_outreach → marketing
 
--- Migrate old email_type values first
+-- Drop the old constraint FIRST so we can write new email_type values
+ALTER TABLE emails DROP CONSTRAINT IF EXISTS emails_email_type_check;
+
+-- Migrate old email_type values
 UPDATE emails SET email_type = 'automated' WHERE email_type = 'transactional';
 UPDATE emails SET email_type = 'automated' WHERE email_type = 'notification';
 UPDATE emails SET email_type = 'marketing' WHERE email_type = 'promo';
 UPDATE emails SET email_type = 'marketing' WHERE email_type = 'cold_outreach';
 
--- Drop and recreate the constraint
-ALTER TABLE emails DROP CONSTRAINT IF EXISTS emails_email_type_check;
+-- Add the new constraint with 6 values
 ALTER TABLE emails ADD CONSTRAINT emails_email_type_check CHECK (
   email_type IS NULL OR email_type IN (
     'needs_response',  -- Someone is waiting for a reply
