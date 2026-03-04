@@ -57,6 +57,8 @@ import type {
   EventLocationType,
   EventLocality,
   KeyDateType,
+  EventType,
+  CommitmentLevel,
   EmailInput,
   UserContext,
 } from './types';
@@ -73,6 +75,15 @@ const FUNCTION_DESCRIPTION =
 const LOCATION_TYPES = ['in_person', 'virtual', 'hybrid', 'unknown'] as const;
 const EVENT_LOCALITIES = ['local', 'out_of_town', 'virtual'] as const;
 const KEY_DATE_TYPES = ['registration_deadline', 'open_house', 'deadline', 'release_date', 'other'] as const;
+
+const EVENT_TYPES = [
+  'meeting', 'appointment', 'social', 'community', 'class_workshop',
+  'conference', 'performance', 'sports_event', 'webinar', 'civic',
+  'religious', 'fundraiser', 'deadline', 'release', 'travel',
+  'payment', 'birthday_anniversary', 'other',
+] as const;
+
+const COMMITMENT_LEVELS = ['confirmed', 'invited', 'suggested', 'fyi'] as const;
 
 /** Max events to extract per email (cost control) */
 const MAX_EVENTS_PER_EMAIL = 10;
@@ -153,6 +164,31 @@ FULL EVENT (is_key_date = false): Something you attend (meetup, class, conferenc
 KEY DATE (is_key_date = true): Important date but not attended (registration deadline, release date)
 
 ═══════════════════════════════════════════════════════════════════════════════
+EVENT TYPE TAXONOMY — classify each event
+═══════════════════════════════════════════════════════════════════════════════
+
+For each event, set event_type to ONE of:
+meeting, appointment, social, community, class_workshop, conference, performance,
+sports_event, webinar, civic, religious, fundraiser, deadline, release, travel,
+payment, birthday_anniversary, other
+
+Use "webinar" for any mass-marketed online presentation.
+Use "meeting" only for meetings where the user is a direct participant.
+
+═══════════════════════════════════════════════════════════════════════════════
+COMMITMENT LEVEL — per event
+═══════════════════════════════════════════════════════════════════════════════
+
+For each event, infer commitment_level:
+- "confirmed": User is registered, has tickets, booking confirmed
+- "invited": Personally invited, RSVP expected from user
+- "suggested": AI thinks user might care (default)
+- "fyi": Newsletter listing, mass broadcast, informational only
+
+CRITICAL for multi-event emails: Most events from newsletters and roundups
+should be "fyi". Only use "suggested" if there's a real signal the user cares.
+
+═══════════════════════════════════════════════════════════════════════════════
 PER-EVENT FIELDS
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -165,6 +201,8 @@ For each event extract:
 - location_type: in_person / virtual / hybrid / unknown
 - event_locality: local / out_of_town / virtual
 - location: Address or video link
+- event_type: From taxonomy above (REQUIRED)
+- commitment_level: From commitment rules above (REQUIRED)
 - rsvp_required: Whether RSVP needed
 - rsvp_url: Registration link if provided
 - registration_deadline: RSVP deadline (YYYY-MM-DD)
@@ -188,17 +226,23 @@ IMPORTANT NOTES
 - Each event needs at minimum: title and date
 
 ═══════════════════════════════════════════════════════════════════════════════
-RELEVANCE SCORE (0-10) — PER EVENT (NEW!)
+RELEVANCE SCORE (0-10) — PER EVENT
 ═══════════════════════════════════════════════════════════════════════════════
 
-For EACH event, score how likely the user is to attend (0-10):
-- Local + free + matches interests → 8-10
-- Virtual + relevant topic → 6-7
-- Out of town or expensive → 2-4
-- Generic marketing/no interest match → 0-1
+For EACH event, score how likely the user is to attend (0-10).
+Commitment level is the STRONGEST signal:
+
+- confirmed/invited events: Start at 7-8 base
+- suggested events: Start at 4-5 base, adjust from there
+- fyi events: Start at 1-2 base — most FYI events score LOW
+
+Then adjust for: locality (+2 local, +1 virtual), cost (+1 free, -1 expensive),
+interest match (+2 strong, +1 tangential), sender (+2 VIP, +1 subscribed org).
+
+WEBINAR PENALTY: Webinars from marketing emails should score 0-2 unless there's
+a strong interest match. Most webinars are never attended.
 
 Also provide a one-sentence "why_attend" for events scoring >= 5.
-Example: "Matches your interest in web development and it's free and local."
 Set why_attend to null for events scoring < 5.`;
 
 }
@@ -297,19 +341,31 @@ const EVENT_ITEM_SCHEMA = {
       maximum: 1,
       description: 'Confidence in this event extraction (0-1)',
     },
-    // Relevance scoring (NEW March 2026)
+    // Event type taxonomy (NEW March 2026)
+    event_type: {
+      type: 'string',
+      enum: EVENT_TYPES as unknown as string[],
+      description: 'What kind of event: meeting, social, community, webinar, conference, etc.',
+    },
+    // Commitment level (NEW March 2026)
+    commitment_level: {
+      type: 'string',
+      enum: COMMITMENT_LEVELS as unknown as string[],
+      description: 'User relationship: confirmed, invited, suggested, fyi',
+    },
+    // Relevance scoring (March 2026)
     relevance_score: {
       type: 'number',
       minimum: 0,
       maximum: 10,
-      description: 'How likely the user is to attend (0-10). 8-10 = highly relevant, 5-7 = moderate, 0-4 = low.',
+      description: 'How likely the user is to attend (0-10). 8-10 = confirmed/invited, 5-7 = moderate, 0-4 = low/fyi.',
     },
     why_attend: {
       type: 'string',
       description: 'One sentence explaining why this event might interest the user. Null if relevance < 5.',
     },
   },
-  required: ['event_title', 'event_date', 'location_type', 'rsvp_required', 'is_key_date', 'confidence', 'event_summary', 'relevance_score'],
+  required: ['event_title', 'event_date', 'location_type', 'rsvp_required', 'is_key_date', 'confidence', 'event_summary', 'event_type', 'commitment_level', 'relevance_score'],
 };
 
 const FUNCTION_SCHEMA: FunctionSchema = {
@@ -518,6 +574,8 @@ export class MultiEventDetectorAnalyzer extends BaseAnalyzer<MultiEventDetection
       isKeyDate: Boolean(rawData.is_key_date),
       keyDateType: rawData.key_date_type as KeyDateType | undefined,
       confidence: (rawData.confidence as number) || 0.5,
+      eventType: (rawData.event_type as EventType) || 'other',
+      commitmentLevel: (rawData.commitment_level as CommitmentLevel) || 'fyi',
       relevanceScore: rawData.relevance_score as number | undefined,
       whyAttend: rawData.why_attend as string | null | undefined,
     };

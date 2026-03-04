@@ -72,6 +72,7 @@
 import * as React from 'react';
 import { useAuth } from '@/lib/auth';
 import { createLogger } from '@/lib/utils/logger';
+import type { EventType, CommitmentLevel } from '@/services/analyzers/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -123,6 +124,16 @@ export interface EventMetadata {
   /** Key points about the event */
   keyPoints?: string[] | null;
   /**
+   * Structured event type classification.
+   * NEW (March 2026): What kind of event (meeting, social, webinar, etc.)
+   */
+  eventType?: EventType;
+  /**
+   * Commitment level — user's relationship to this event.
+   * NEW (March 2026): confirmed, invited, suggested, or fyi.
+   */
+  commitmentLevel?: CommitmentLevel;
+  /**
    * Relevance score (0-10) estimating how likely the user is to attend.
    * NEW (March 2026): Higher = more relevant based on locality, cost,
    * interest match, and sender relationship.
@@ -133,6 +144,11 @@ export interface EventMetadata {
    * NEW (March 2026): Personalized to user's interests and context.
    */
   whyAttend?: string | null;
+  /**
+   * Composite weight (0.0-1.0) combining all signals for ranking.
+   * NEW (March 2026): Used for sorting within time groups.
+   */
+  compositeWeight?: number;
 }
 
 /**
@@ -395,6 +411,30 @@ function groupEventsByPeriod(events: EventData[]): GroupedEvents {
       grouped.later.push(event);
     }
   }
+
+  // Sort within each group by commitment tier → composite weight → date
+  const sortByRelevance = (a: EventData, b: EventData) => {
+    // Primary: commitment tier (confirmed first)
+    const TIER_ORDER: Record<string, number> = { confirmed: 0, invited: 1, suggested: 2, fyi: 3 };
+    const aTier = TIER_ORDER[a.event_metadata?.commitmentLevel || 'suggested'] ?? 2;
+    const bTier = TIER_ORDER[b.event_metadata?.commitmentLevel || 'suggested'] ?? 2;
+    if (aTier !== bTier) return aTier - bTier;
+
+    // Secondary: composite weight (higher first)
+    const aWeight = a.event_metadata?.compositeWeight ?? 0.5;
+    const bWeight = b.event_metadata?.compositeWeight ?? 0.5;
+    if (aWeight !== bWeight) return bWeight - aWeight;
+
+    // Tertiary: date (sooner first)
+    return a.date.localeCompare(b.date);
+  };
+
+  grouped.overdue.sort(sortByRelevance);
+  grouped.today.sort(sortByRelevance);
+  grouped.tomorrow.sort(sortByRelevance);
+  grouped.thisWeek.sort(sortByRelevance);
+  grouped.nextWeek.sort(sortByRelevance);
+  grouped.later.sort(sortByRelevance);
 
   logger.debug('Events grouped by period', {
     overdue: grouped.overdue.length,

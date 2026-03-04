@@ -88,6 +88,8 @@ import type {
   EventLocationType,
   EventLocality,
   KeyDateType,
+  EventType,
+  CommitmentLevel,
   EmailInput,
   UserContext,
 } from './types';
@@ -126,6 +128,23 @@ const EVENT_LOCALITIES = ['local', 'out_of_town', 'virtual'] as const;
  * NEW (Jan 2026): Things like registration deadlines, open houses.
  */
 const KEY_DATE_TYPES = ['registration_deadline', 'open_house', 'deadline', 'release_date', 'other'] as const;
+
+/**
+ * Valid event types — what KIND of event is this?
+ * NEW (Mar 2026): Structured taxonomy for filtering and preference learning.
+ */
+const EVENT_TYPES = [
+  'meeting', 'appointment', 'social', 'community', 'class_workshop',
+  'conference', 'performance', 'sports_event', 'webinar', 'civic',
+  'religious', 'fundraiser', 'deadline', 'release', 'travel',
+  'payment', 'birthday_anniversary', 'other',
+] as const;
+
+/**
+ * Commitment levels — the user's relationship to this event.
+ * NEW (Mar 2026): AI-inferred from email signals, user can override.
+ */
+const COMMITMENT_LEVELS = ['confirmed', 'invited', 'suggested', 'fyi'] as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
@@ -301,43 +320,98 @@ OTHER DETAILS
 - additional_details: Parking, dress code, what to bring
 
 ═══════════════════════════════════════════════════════════════════════════════
-RELEVANCE SCORE (0-10) — "Would the user actually go to this?" (NEW!)
+EVENT TYPE TAXONOMY (NEW! — classify every event)
+═══════════════════════════════════════════════════════════════════════════════
+
+Classify the event into ONE of these types:
+
+- "meeting": Scheduled meeting with specific people (team standup, 1:1, client call, board meeting)
+- "appointment": Scheduled personal service (doctor, dentist, haircut, parent-teacher conference)
+- "social": Social gathering with people you know (dinner party, birthday, game night, reunion)
+- "community": Local community event (neighborhood meetup, farmers market, local workshop)
+- "class_workshop": Educational/skill-building (pottery class, yoga, coding bootcamp, cooking class)
+- "conference": Multi-session professional event (tech conference, industry summit, trade show)
+- "performance": Arts/entertainment (concert, theater, comedy show, gallery opening, movie screening)
+- "sports_event": Sporting event — watching or playing (game, match, tournament, rec league)
+- "webinar": Online presentation/broadcast (marketing webinar, product demo, "free masterclass")
+- "civic": Government/institutional (city council, school board, HOA, town hall, public hearing)
+- "religious": Faith/spiritual (service, holiday observance, study group)
+- "fundraiser": Charity/benefit (gala, charity run, auction, volunteer day)
+- "deadline": Date by which something must happen (registration closes, application due)
+- "release": Something launches (product launch, ticket on-sale, book release)
+- "travel": Travel-related date (flight, hotel check-in, trip departure)
+- "payment": Financial due date (bill due, subscription renewal, tax deadline)
+- "birthday_anniversary": Personal milestone (birthday, anniversary, memorial)
+- "other": Doesn't fit above
+
+IMPORTANT: Use "webinar" for any online broadcast presentation, especially mass-marketed ones.
+Use "meeting" only for meetings where the user is a direct participant.
+
+═══════════════════════════════════════════════════════════════════════════════
+COMMITMENT LEVEL — "Is the user going, invited, or just hearing about it?"
+═══════════════════════════════════════════════════════════════════════════════
+
+Infer the user's commitment level from email signals:
+
+- "confirmed": Email contains booking confirmation, tickets, "you're registered",
+  "your reservation", payment receipt for an event, or ICS attachment the user accepted.
+  The user IS going.
+
+- "invited": Direct personal invitation with RSVP request, meeting invite addressed
+  TO the user (not a mailing list), or specific "you're invited" language from
+  someone who knows the user. The user is EXPECTED to respond.
+
+- "suggested": Default for most detected events. The AI thinks this might interest
+  the user based on their context, but there's no personal invitation or confirmation.
+
+- "fyi": Newsletter event roundups, mass webinar marketing, "upcoming events in your area"
+  from organizations, civic meeting announcements, generic broadcast invites.
+  Informational only — the user is just being made aware.
+
+CRITICAL: Be honest about commitment level! Most events from newsletters and
+marketing emails should be "fyi", not "suggested". Reserve "suggested" for events
+where there's a real signal the user would care (matches interests + local + relevant).
+
+═══════════════════════════════════════════════════════════════════════════════
+RELEVANCE SCORE (0-10) — "Would the user actually go to this?"
 ═══════════════════════════════════════════════════════════════════════════════
 
 Score how likely the user is to ATTEND or CARE about this event.
 Consider these factors (in order of importance):
 
-1. LOCALITY (biggest factor):
-   - Local (in/near ${userLocation}): +3 points base
-   - Virtual: +2 points base (easy to attend)
-   - Out of town: +0 points (requires travel commitment)
+1. COMMITMENT LEVEL (strongest signal):
+   - confirmed/invited: Start at 7-8 base (they're expected!)
+   - suggested: Start at 4-5 base, adjust from there
+   - fyi: Start at 1-2 base — most FYI events score low
 
-2. COST BARRIER:
-   - Free: +2 points
-   - Low cost (<$50): +1 point
+2. LOCALITY:
+   - Local (in/near ${userLocation}): +2 points
+   - Virtual: +1 point (easy but less engaging)
+   - Out of town: +0 points (requires travel)
+
+3. COST BARRIER:
+   - Free: +1 point
    - Expensive (>$100): -1 point
 
-3. INTEREST MATCH:
+4. INTEREST MATCH:
    - Matches user's stated interests or industry: +2 points
    - Tangentially related: +1 point
    - No clear match: +0 points
 
-4. SENDER RELATIONSHIP:
+5. SENDER RELATIONSHIP:
    - From VIP contact or known person: +2 points
    - From organization user subscribes to: +1 point
    - Generic marketing/mass email: +0 points
 
-5. EVENT TYPE:
-   - Personal invite / small gathering: +1 point
-   - Community/networking event: +1 point
-   - Large generic conference: +0 points
-   - Marketing webinar: -1 point
+6. EVENT TYPE PENALTY:
+   - "webinar" from marketing email: -2 points (these are almost never attended)
+   - "civic" meeting: -1 point (unless user has civic interests)
 
-EXAMPLES:
-- Local free tech meetup matching user's interests → 8-9
-- Virtual webinar from trusted source on relevant topic → 6-7
-- Out-of-town conference, expensive, weak interest match → 2-3
-- Generic marketing webinar, no interest match → 0-1
+SCORE CALIBRATION:
+- 8-10: User is confirmed/invited, or local+free+strong interest match
+- 5-7: Moderate — real interest match but some friction (cost, distance)
+- 2-4: Low — weak match, FYI level, or significant barriers
+- 0-1: Noise — generic marketing, no match, user won't care
 
 ═══════════════════════════════════════════════════════════════════════════════
 WHY ATTEND (one sentence — REQUIRED for relevance_score >= 5)
@@ -508,12 +582,26 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'Confidence in the extraction accuracy (0-1)',
       },
 
+      // Event type taxonomy (NEW March 2026)
+      event_type: {
+        type: 'string',
+        enum: EVENT_TYPES as unknown as string[],
+        description: 'What kind of event: meeting, appointment, social, community, class_workshop, conference, performance, sports_event, webinar, civic, religious, fundraiser, deadline, release, travel, payment, birthday_anniversary, other',
+      },
+
+      // Commitment level (NEW March 2026)
+      commitment_level: {
+        type: 'string',
+        enum: COMMITMENT_LEVELS as unknown as string[],
+        description: 'User relationship to event: confirmed (registered/has tickets), invited (personally invited), suggested (AI thinks relevant), fyi (informational/mass broadcast)',
+      },
+
       // Relevance score (NEW March 2026)
       relevance_score: {
         type: 'number',
         minimum: 0,
         maximum: 10,
-        description: 'How likely the user is to attend (0-10). 8-10 = highly relevant (local, free, matches interests), 5-7 = moderate, 2-4 = low, 0-1 = noise.',
+        description: 'How likely the user is to attend (0-10). 8-10 = confirmed/invited or strong match, 5-7 = moderate, 2-4 = low/fyi, 0-1 = noise.',
       },
 
       // Why attend (NEW March 2026)
@@ -522,7 +610,7 @@ const FUNCTION_SCHEMA: FunctionSchema = {
         description: 'One sentence explaining why this event might interest the user, personalized to their context. Example: "Matches your interest in AI and it\'s local and free." Null if no strong reason.',
       },
     },
-    required: ['has_event', 'is_key_date', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence', 'event_summary', 'key_points', 'relevance_score'],
+    required: ['has_event', 'is_key_date', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence', 'event_summary', 'key_points', 'event_type', 'commitment_level', 'relevance_score'],
   },
 };
 
@@ -785,6 +873,10 @@ export class EventDetectorAnalyzer extends BaseAnalyzer<EventDetectionData> {
 
       // Confidence
       confidence: (rawData.confidence as number) || 0.5,
+
+      // Event type taxonomy (NEW March 2026)
+      eventType: (rawData.event_type as EventType) || 'other',
+      commitmentLevel: (rawData.commitment_level as CommitmentLevel) || 'suggested',
 
       // Relevance scoring (NEW March 2026)
       relevanceScore: rawData.relevance_score as number | undefined,

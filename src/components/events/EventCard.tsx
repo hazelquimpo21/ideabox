@@ -240,6 +240,80 @@ function KeyDateTypeBadge({ metadata }: { metadata: EventMetadata | null }) {
 }
 
 /**
+ * Event type badge component.
+ * Shows what kind of event this is (Meeting, Social, Webinar, etc.)
+ * NEW (March 2026): Part of the event taxonomy system.
+ */
+function EventTypeBadge({ metadata }: { metadata: EventMetadata | null }) {
+  const eventType = metadata?.eventType;
+  if (!eventType || eventType === 'other') return null;
+
+  const labelMap: Record<string, { label: string; className: string }> = {
+    meeting:              { label: 'Meeting',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+    appointment:          { label: 'Appt',       className: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' },
+    social:               { label: 'Social',     className: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' },
+    community:            { label: 'Community',  className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+    class_workshop:       { label: 'Class',      className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' },
+    conference:           { label: 'Conference', className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
+    performance:          { label: 'Show',       className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
+    sports_event:         { label: 'Sports',     className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+    webinar:              { label: 'Webinar',    className: 'bg-gray-100 text-gray-500 dark:bg-gray-800/30 dark:text-gray-400' },
+    civic:                { label: 'Civic',      className: 'bg-slate-100 text-slate-600 dark:bg-slate-800/30 dark:text-slate-400' },
+    religious:            { label: 'Service',    className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
+    fundraiser:           { label: 'Fundraiser', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+    deadline:             { label: 'Deadline',   className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+    release:              { label: 'Release',    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' },
+    travel:               { label: 'Travel',     className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300' },
+    payment:              { label: 'Payment',    className: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
+    birthday_anniversary: { label: 'Birthday',   className: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' },
+  };
+
+  const config = labelMap[eventType];
+  if (!config) return null;
+
+  return (
+    <Badge variant="outline" className={`text-xs border-0 ${config.className}`}>
+      {config.label}
+    </Badge>
+  );
+}
+
+/**
+ * Commitment badge component.
+ * Shows the user's commitment level (Confirmed, Invited, FYI).
+ * "Suggested" is the default and doesn't show a badge to reduce visual noise.
+ * NEW (March 2026): Part of the commitment tier system.
+ */
+function CommitmentBadge({ metadata }: { metadata: EventMetadata | null }) {
+  const level = metadata?.commitmentLevel;
+  if (!level || level === 'suggested') return null; // default = no badge
+
+  const config: Record<string, { label: string; className: string }> = {
+    confirmed: {
+      label: 'Going',
+      className: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 font-medium',
+    },
+    invited: {
+      label: 'Invited',
+      className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    },
+    fyi: {
+      label: 'FYI',
+      className: 'bg-gray-100 text-gray-500 dark:bg-gray-800/30 dark:text-gray-400',
+    },
+  };
+
+  const c = config[level];
+  if (!c) return null;
+
+  return (
+    <Badge variant="outline" className={`text-xs border-0 ${c.className}`}>
+      {c.label}
+    </Badge>
+  );
+}
+
+/**
  * Date/time display component.
  * Shows formatted date with optional time and relative indicator.
  * Times are stored in the event's timezone and displayed as-is.
@@ -478,8 +552,10 @@ function CompactEventCard({
               </p>
             </div>
 
-            {/* Locality badge, key date badge, and chevron */}
+            {/* Badges and chevron */}
             <div className="flex items-center gap-1 shrink-0">
+              <CommitmentBadge metadata={getEventMetadata(event)} />
+              <EventTypeBadge metadata={getEventMetadata(event)} />
               <KeyDateTypeBadge metadata={getEventMetadata(event)} />
               <LocalityBadge locality={locality} />
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -732,8 +808,15 @@ export function EventCard({
                   {event.title}
                 </h3>
 
-                {/* Description if available */}
-                {event.description && (
+                {/* Why attend — personalized reason from AI */}
+                {getEventMetadata(event)?.whyAttend && (
+                  <p className="text-sm text-blue-600 dark:text-blue-400 mt-1 italic">
+                    {getEventMetadata(event)!.whyAttend}
+                  </p>
+                )}
+
+                {/* Description if available (hidden if whyAttend is shown) */}
+                {!getEventMetadata(event)?.whyAttend && event.description && (
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                     {event.description}
                   </p>
@@ -774,6 +857,8 @@ export function EventCard({
                 showRelative={!isToday}
               />
               <div className="flex items-center gap-1">
+                <CommitmentBadge metadata={getEventMetadata(event)} />
+                <EventTypeBadge metadata={getEventMetadata(event)} />
                 <KeyDateTypeBadge metadata={getEventMetadata(event)} />
                 <LocalityBadge locality={getLocality(event)} />
               </div>
