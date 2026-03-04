@@ -488,6 +488,7 @@ export class MultiEventDetectorAnalyzer extends BaseAnalyzer<MultiEventDetection
   /**
    * Normalizes a single event from the AI response.
    * Same logic as EventDetector.normalizeResponse but for individual events.
+   * FIXED (Mar 2026): Added relevanceScore and whyAttend.
    */
   private normalizeEvent(rawData: Record<string, unknown>): EventDetectionData {
     let eventLocality = rawData.event_locality as EventLocality | undefined;
@@ -517,6 +518,8 @@ export class MultiEventDetectorAnalyzer extends BaseAnalyzer<MultiEventDetection
       isKeyDate: Boolean(rawData.is_key_date),
       keyDateType: rawData.key_date_type as KeyDateType | undefined,
       confidence: (rawData.confidence as number) || 0.5,
+      relevanceScore: rawData.relevance_score as number | undefined,
+      whyAttend: rawData.why_attend as string | null | undefined,
     };
   }
 }
