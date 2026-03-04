@@ -175,7 +175,13 @@ WHAT NOT TO EXTRACT
 - The email's sent date
 - Vague references without specific dates: "sometime soon", "eventually"
 - Historical dates: "We met last year"
-- Event invitations (those are handled by the EventDetector)
+- Event dates/times themselves (those are handled by the EventDetector)
+
+IMPORTANT: Even in event invitation emails, DO extract:
+- Registration deadlines ("Register by Jan 20")
+- Early bird pricing deadlines ("Early bird ends Aug 1")
+- RSVP deadlines ("RSVP by Friday")
+These are DEADLINES, not event dates — they belong here as date_type "deadline".
 
 ═══════════════════════════════════════════════════════════════════════════════
 OUTPUT GUIDANCE

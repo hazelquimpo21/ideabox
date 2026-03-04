@@ -1729,15 +1729,20 @@ export class EmailProcessor {
           }
         : null,
 
-      // Event detection
+      // Event detection (FIXED Mar 2026: persist ALL extracted fields including
+      // eventEndDate, eventLocality, eventSummary, keyPoints, isKeyDate,
+      // keyDateType, relevanceScore, whyAttend — previously omitted, causing
+      // the email detail view and events API to show incomplete data)
       event_detection: analysis.eventDetection
         ? {
             has_event: analysis.eventDetection.hasEvent,
             event_title: analysis.eventDetection.eventTitle,
             event_date: analysis.eventDetection.eventDate,
             event_time: analysis.eventDetection.eventTime,
+            event_end_date: analysis.eventDetection.eventEndDate,
             event_end_time: analysis.eventDetection.eventEndTime,
             location_type: analysis.eventDetection.locationType,
+            event_locality: analysis.eventDetection.eventLocality,
             location: analysis.eventDetection.location,
             registration_deadline: analysis.eventDetection.registrationDeadline,
             rsvp_required: analysis.eventDetection.rsvpRequired,
@@ -1745,11 +1750,19 @@ export class EmailProcessor {
             organizer: analysis.eventDetection.organizer,
             cost: analysis.eventDetection.cost,
             additional_details: analysis.eventDetection.additionalDetails,
+            event_summary: analysis.eventDetection.eventSummary,
+            key_points: analysis.eventDetection.keyPoints,
+            is_key_date: analysis.eventDetection.isKeyDate,
+            key_date_type: analysis.eventDetection.keyDateType,
+            relevance_score: analysis.eventDetection.relevanceScore,
+            why_attend: analysis.eventDetection.whyAttend,
             confidence: analysis.eventDetection.confidence,
           }
         : null,
 
       // Multi-event detection (migration 035 adds the column)
+      // FIXED (Mar 2026): Added missing is_key_date, key_date_type,
+      // relevance_score, why_attend per event
       multi_event_detection: analysis.multiEventDetection
         ? {
             has_multiple_events: analysis.multiEventDetection.hasMultipleEvents,
@@ -1772,6 +1785,10 @@ export class EmailProcessor {
               additional_details: event.additionalDetails,
               event_summary: event.eventSummary,
               key_points: event.keyPoints,
+              is_key_date: event.isKeyDate,
+              key_date_type: event.keyDateType,
+              relevance_score: event.relevanceScore,
+              why_attend: event.whyAttend,
               confidence: event.confidence,
             })),
             source_description: analysis.multiEventDetection.sourceDescription,

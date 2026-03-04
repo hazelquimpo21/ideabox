@@ -209,6 +209,7 @@ export const AIDigestView = React.memo(function AIDigestView({
   const actions = analysis.actionExtraction;
   const nuggets = digest?.goldenNuggets;
   const event = analysis.eventDetection;
+  const multiEvent = analysis.multiEventDetection;
   const news = analysis.newsBrief;
   const inferredIdeaType = email.category
     ? (CATEGORY_TO_IDEA_TYPE[email.category] || 'learning')
@@ -401,7 +402,25 @@ export const AIDigestView = React.memo(function AIDigestView({
       )}
 
       {/* ── Event details ─────────────────────────────────────────────────── */}
-      {event?.hasEvent && (
+      {/* Show all events: multi-event emails show each event card,
+          single-event emails show the single EventDetailsCard */}
+      {multiEvent?.hasMultipleEvents && multiEvent.events.length > 0 ? (
+        <div className="-mx-6 space-y-2">
+          {multiEvent.sourceDescription && (
+            <p className="mx-6 text-xs text-muted-foreground font-medium uppercase tracking-wider">
+              {multiEvent.sourceDescription} ({multiEvent.events.length} events)
+            </p>
+          )}
+          {multiEvent.events.map((evt, index) => (
+            <EventDetailsCard
+              key={`me-${index}`}
+              event={evt}
+              emailSubject={email.subject || undefined}
+              description={email.snippet || undefined}
+            />
+          ))}
+        </div>
+      ) : event?.hasEvent ? (
         <div className="-mx-6">
           <EventDetailsCard
             event={event}
@@ -409,7 +428,7 @@ export const AIDigestView = React.memo(function AIDigestView({
             description={email.snippet || undefined}
           />
         </div>
-      )}
+      ) : null}
 
       {/* ── News brief headlines ──────────────────────────────────────────── */}
       {news?.hasNews && news.newsItems.length > 0 && (

@@ -331,6 +331,7 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
   }
 
   // Normalize event detection (only present for event-categorized emails)
+  // FIXED (Mar 2026): Added missing eventEndDate, eventLocality, isKeyDate, keyDateType
   if (raw.event_detection) {
     const event = raw.event_detection as Record<string, unknown>;
     normalized.eventDetection = {
@@ -338,8 +339,10 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       eventTitle: (event.event_title as string) || (event.eventTitle as string) || 'Untitled Event',
       eventDate: (event.event_date as string) || (event.eventDate as string) || '',
       eventTime: (event.event_time as string) || (event.eventTime as string),
+      eventEndDate: (event.event_end_date as string) || (event.eventEndDate as string),
       eventEndTime: (event.event_end_time as string) || (event.eventEndTime as string),
       locationType: ((event.location_type as string) || (event.locationType as string) || 'unknown') as 'in_person' | 'virtual' | 'hybrid' | 'unknown',
+      eventLocality: ((event.event_locality as string) || (event.eventLocality as string) || undefined) as EventDetectionResult['eventLocality'],
       location: (event.location as string),
       registrationDeadline: (event.registration_deadline as string) || (event.registrationDeadline as string),
       rsvpRequired: (event.rsvp_required as boolean) || (event.rsvpRequired as boolean) || false,
@@ -347,9 +350,10 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
       organizer: (event.organizer as string),
       cost: (event.cost as string),
       additionalDetails: (event.additional_details as string) || (event.additionalDetails as string),
-      // Assistant-style summary and key points (NEW Jan 2026)
       eventSummary: (event.event_summary as string) || (event.eventSummary as string),
       keyPoints: (event.key_points as string[]) || (event.keyPoints as string[]),
+      isKeyDate: (event.is_key_date as boolean) || (event.isKeyDate as boolean) || undefined,
+      keyDateType: ((event.key_date_type as string) || (event.keyDateType as string) || undefined) as EventDetectionResult['keyDateType'],
       confidence: (event.confidence as number) || 0,
     };
   }
@@ -424,6 +428,10 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
   }
 
   // Normalize multi-event detection
+  // FIXED (Mar 2026): Added all missing per-event fields (eventEndDate,
+  // eventLocality, registrationDeadline, additionalDetails, eventSummary,
+  // keyPoints, isKeyDate, keyDateType) so calendar and detail views show
+  // complete data for every event extracted from multi-event emails
   if (raw.multi_event_detection || (raw as Record<string, unknown>).multiEventDetection) {
     const multi = (raw.multi_event_detection || (raw as Record<string, unknown>).multiEventDetection) as Record<string, unknown>;
     const rawEvents = (multi.events as Array<Record<string, unknown>>) || [];
@@ -435,13 +443,21 @@ function normalizeAnalysis(raw: EmailAnalysis): NormalizedAnalysis {
         eventTitle: (event.event_title as string) || (event.eventTitle as string) || 'Untitled Event',
         eventDate: (event.event_date as string) || (event.eventDate as string) || '',
         eventTime: (event.event_time as string) || (event.eventTime as string),
+        eventEndDate: (event.event_end_date as string) || (event.eventEndDate as string),
         eventEndTime: (event.event_end_time as string) || (event.eventEndTime as string),
         locationType: ((event.location_type as string) || (event.locationType as string) || 'unknown') as EventDetectionResult['locationType'],
+        eventLocality: ((event.event_locality as string) || (event.eventLocality as string) || undefined) as EventDetectionResult['eventLocality'],
         location: (event.location as string),
+        registrationDeadline: (event.registration_deadline as string) || (event.registrationDeadline as string),
         rsvpRequired: (event.rsvp_required as boolean) || (event.rsvpRequired as boolean) || false,
         rsvpUrl: (event.rsvp_url as string) || (event.rsvpUrl as string),
         organizer: (event.organizer as string),
         cost: (event.cost as string),
+        additionalDetails: (event.additional_details as string) || (event.additionalDetails as string),
+        eventSummary: (event.event_summary as string) || (event.eventSummary as string),
+        keyPoints: (event.key_points as string[]) || (event.keyPoints as string[]),
+        isKeyDate: (event.is_key_date as boolean) || (event.isKeyDate as boolean) || undefined,
+        keyDateType: ((event.key_date_type as string) || (event.keyDateType as string) || undefined) as EventDetectionResult['keyDateType'],
         confidence: (event.confidence as number) || 0.5,
       })),
       sourceDescription: (multi.source_description as string) || (multi.sourceDescription as string) || undefined,

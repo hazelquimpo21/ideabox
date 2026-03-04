@@ -280,6 +280,10 @@ function buildEventResponse(
  * Transforms raw database row into EventResponse(s).
  * ENHANCED (Feb 2026): Now handles multi_event_detection — a single email
  * can produce multiple EventResponse objects.
+ * FIXED (Mar 2026): Removed bad fallback that created ghost events from
+ * email metadata when no event_detection data existed. Also fixed potential
+ * duplicates when multi_event_detection has events but hasMultipleEvents=false
+ * (AI disagreed with categorizer but still extracted events).
  *
  * @param row - Raw database row from the query
  * @returns Array of normalized event response objects (usually 1, but may be many)
@@ -290,23 +294,22 @@ function transformToEventResponses(row: any): EventResponse[] {
   const categorization: CategorizationData | null = row.email_analyses?.categorization;
 
   // Multi-event path: one email → multiple events
-  if (multiEventDetection?.has_multiple_events && multiEventDetection.events?.length > 0) {
+  // Check events array length regardless of has_multiple_events flag — the AI may
+  // have set has_multiple_events=false but still populated events (fallback case)
+  if (multiEventDetection?.events?.length > 0) {
     return multiEventDetection.events.map((event, index) =>
       buildEventResponse(row, event, categorization, `me${index}`)
     );
   }
 
-  // Single event path (existing behavior)
-  if (eventDetection) {
+  // Single event path
+  if (eventDetection?.has_event && eventDetection.event_date) {
     return [buildEventResponse(row, eventDetection, categorization)];
   }
 
-  // Fallback: no event detection data, create minimal event from email metadata
-  return [buildEventResponse(row, {
-    has_event: true,
-    event_title: row.subject,
-    event_date: row.date?.split('T')[0],
-  }, categorization)];
+  // No usable event data — skip this row entirely instead of creating a
+  // ghost event from email metadata (which has no actual event date/title)
+  return [];
 }
 
 /**
@@ -506,6 +509,17 @@ export async function GET(request: NextRequest) {
       .flatMap(transformToEventResponses)
       // Filter out events without valid dates
       .filter(event => event.date && event.date !== 'Invalid Date');
+
+    // Deduplicate events with the same title + date from the same email
+    // This handles cases where old data has events in both event_detection
+    // and multi_event_detection columns for the same email
+    const seen = new Set<string>();
+    events = events.filter(event => {
+      const key = `${event.email_id}|${event.date}|${event.title.toLowerCase().trim()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
     // Apply date range filters on the actual event date
     if (from) {
