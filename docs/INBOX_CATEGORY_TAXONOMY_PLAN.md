@@ -1,5 +1,11 @@
 # Inbox Category Taxonomy v2 — Implementation Plan
 
+> **STATUS: IMPLEMENTED (March 2026)**
+> This plan has been implemented. The 20-category taxonomy, timeliness JSONB column,
+> 5-dimension scoring, smart views API, and timeliness cron job are all live.
+> See `DATABASE_SCHEMA.md` for current schema, `AI_ANALYZER_SYSTEM.md` for analyzer details,
+> and `DECISIONS.md` (#31) for the architectural decision record.
+
 ## Overview
 
 A complete overhaul of IdeaBox's email classification system, expanding from 13 categories to 20 life-bucket categories, introducing a structured `timeliness` object, multi-dimensional scoring algorithms (importance, urgency, action, cognitive load, missability), and custom SVG icons for all taxonomy objects.

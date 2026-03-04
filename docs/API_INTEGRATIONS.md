@@ -663,7 +663,7 @@ export interface FunctionSchema {
   };
 }
 
-// Example: Email categorization (UPDATED Feb 2026 for life-bucket categories)
+// Example: Email categorization (UPDATED Mar 2026 for Taxonomy v2 — 20 categories)
 export const CATEGORIZE_FUNCTION: FunctionSchema = {
   name: 'categorize_email',
   description: 'Categorizes an email into one primary life-bucket category',
@@ -673,26 +673,22 @@ export const CATEGORIZE_FUNCTION: FunctionSchema = {
       category: {
         type: 'string',
         enum: [
-          // Work & Business
-          'clients',
-          'work',
-          // Family & Personal
-          'personal_friends_family',
-          'family',
+          // Professional
+          'clients', 'work', 'job_search',
+          // People
+          'personal', 'family', 'parenting',
           // Life Admin
-          'finance',
-          'travel',
-          'shopping',
-          'local',
+          'health', 'finance', 'billing',
+          // Lifestyle
+          'travel', 'shopping', 'deals',
+          // Community
+          'local', 'civic', 'sports',
           // Information
-          'newsletters_creator',
-          'newsletters_industry',
-          'news_politics',
-          'product_updates',
-          // Transient
+          'news', 'politics', 'newsletters', 'product_updates',
+          // System
           'notifications',
         ],
-        description: 'Primary life-bucket category for this email (13 categories)',
+        description: 'Primary life-bucket category for this email (20 categories — Taxonomy v2)',
       },
       confidence: {
         type: 'number',

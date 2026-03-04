@@ -1,7 +1,7 @@
 # IdeaBox - Implementation Status
 
-> **Last Updated:** March 3, 2026
-> **Database Migrations:** 001-044 (in `scripts/migration-*.sql`)
+> **Last Updated:** March 4, 2026
+> **Database Migrations:** 001-045 (in `scripts/migration-*.sql`)
 
 ## What's Built
 
@@ -16,7 +16,7 @@
 
 ### AI Analysis Pipeline
 - **14 analyzers** via EmailProcessor (Phase 1 parallel + Phase 2 conditional):
-  - Categorizer (13 life-bucket categories + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection)
+  - Categorizer (20 life-bucket categories [Taxonomy v2] + summary + quick_action + labels + signal_strength + reply_worthiness + noise detection + timeliness extraction)
   - Content Digest (gist, key points, links, golden nuggets [7 types incl. remember_this + sales_opportunity], email style ideas)
   - Action Extractor (multi-action support, urgency scoring, tightened for real tasks with new types: pay, submit, register, book)
   - Client Tagger (fuzzy matching, relationship signals)
@@ -25,7 +25,7 @@
   - **Multi-Event Detector** (NEW Feb 2026): Extracts up to 10 events from a single email — handles course schedules, event roundups, newsletter event sections. Runs INSTEAD OF EventDetector when both `has_event` and `has_multiple_events` labels present. Optional link resolution for additional context.
   - Contact Enricher (company, job title, relationship from signatures)
   - Sender Type Detector (direct vs broadcast classification)
-  - **Idea Spark** (Feb 2026, REFINED Mar 2026): Generates 0-3 creative ideas per email (solopreneur focus). Smarter gating skips low-signal, automated, notification, and transactional emails. New types: tweet_draft, learning, tool_to_try, place_to_visit. Can return 0 ideas when email isn't idea-worthy.
+  - **Idea Spark** (Feb 2026, REFINED Mar 2026): Generates 0-3 creative ideas per email (solopreneur focus). Smarter gating skips low-signal and automated emails (Taxonomy v2 merged notification/transactional into automated). New types: tweet_draft, learning, tool_to_try, place_to_visit. Can return 0 ideas when email isn't idea-worthy.
   - **Insight Extractor** (NEW Feb 2026): Synthesizes interesting ideas, tips, frameworks from newsletter/substantive content — "what's worth knowing"
   - **News Brief** (NEW Feb 2026): Extracts factual news items (launches, announcements, changes) from news/digest emails — "what happened"
   - **Link Analyzer** (NEW Feb 2026): Deep URL intelligence — enriches links from emails with priority scoring (must_read/worth_reading/reference/skip), topic tagging, save-worthiness, and expiration detection based on user context. Saves to `email_analyses.url_extraction` JSONB; user-promoted links persist to `saved_links` table.
@@ -36,6 +36,10 @@
 - Noise detection labels (sales_pitch, webinar_invite, fake_recognition, mass_outreach, promotional)
 - Action extractor noise rejection (cold outreach, fake awards never generate actions)
 - **Hard noise gate** (NEW Feb 2026): Emails with signal_strength = 'low' or 'noise' never create action records
+- **Scoring Engine** (NEW Mar 2026): Pure-computation scoring after analyzers — 5 dimensions (importance, urgency, action, cognitive load, missability) plus composite surface_priority
+- **Timeliness Extraction** (NEW Mar 2026): Categorizer outputs timeliness JSONB (nature, relevant_date, late_after, expires, perishable) for time-aware surfacing
+- **Smart Views API** (NEW Mar 2026): `/api/emails/smart-views?view=today|upcoming|expiring|reading-list|high-priority|needs-action`
+- **Timeliness Cron Job** (NEW Mar 2026): Hourly job auto-archives expired emails, escalates approaching deadlines, decays stale perishables
 - **Two-tier task system** (NEW Feb 2026): Review Queue for scan-worthy emails + Real Tasks for concrete actions
 - **Email Summaries** (NEW Feb 2026): AI-synthesized narrative digests. Summary generator service gathers threads/actions/dates/ideas/news, clusters by thread, synthesizes with GPT-4.1-mini into conversational headlines + themed sections. Staleness tracking via `user_summary_state` table. Lazy generation (user visit) + eager batch job (`generateSummariesForStaleUsers`). 1-hour minimum interval. Full history browsable at `/summaries`.
 
@@ -61,7 +65,7 @@ The app uses a 5-item sidebar navigation (redesigned Feb 2026):
 | **Contacts** | `/contacts` | Tabbed contacts — All, Clients, Personal, Subscriptions |
 | | `/contacts/[id]` | Contact detail (CRM-style with emails, actions, events, notes) |
 | **Calendar** | `/calendar` | Unified calendar: list/grid views, merged events + extracted dates, type filters |
-| **Tasks** | `/tasks` | 6 tabs — Projects, All Items, Inbox Tasks, Ideas, Campaigns, Templates |
+| **Tasks** | `/tasks` | 4 tabs — Triage, Board, Projects, Library (redesigned Mar 2026 from 6 tabs) |
 | | `/tasks/campaigns/new` | Create new campaign |
 | | `/tasks/campaigns/[id]` | Campaign detail |
 | **Summaries** | `/summaries` | Browsable history of AI-synthesized email summaries, grouped by date |
@@ -175,3 +179,4 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 | Tasks Page Redesign Phase 3 | Mar 2026 | **Query optimization**: `useActions` and `useProjectItems` now use field-specific `select()` + Supabase foreign key joins (`emails!email_id(...)` / `emails!source_email_id(...)`) — eliminates second email enrichment query per hook (~6 KB savings, 1 fewer network round-trip each). **Smarter triage badge**: `useSidebarBadges` triageCount now subtracts promoted actions (those with `source_action_id` in `project_items`) so accepted items no longer inflate the badge. **Snooze persistence**: `useTriageItems` snoozed items now persist to `localStorage` (`ideabox_triage_snoozed` key) — survive page refresh, expired snoozes cleaned up on mount. **AllItemsContent deprecated**: `@deprecated` JSDoc comment added, removed from barrel export (`src/components/projects/index.ts`); file kept for rollback safety until April 2026. **IdeaSparksCard link fix**: "View all" now links to `/tasks` (Triage default) instead of `/tasks?tab=ideas` (legacy redirect). |
 | Idea Spark Refinement | Mar 2026 | **Solopreneur-focused idea generation**: IdeaSparkAnalyzer rewritten for 0-3 ideas (was always 3). Smarter gating skips low-signal + automated/notification/transactional email types + notifications category (~60% skip rate, was ~30%). New idea types: `tweet_draft` (replaces `social_post`), `learning` (replaces `hobby`), `tool_to_try`, `place_to_visit`. Removed `shopping`. Legacy type mapping in analyzer normalizer + UI. Prompt rewritten with solopreneur framing, removed "SPECIAL CASES" that forced bad ideas on spam/receipts. `skip_reason` field for when model returns 0 ideas. EmailDetail idea badges now colored + styled (was plain text). Nugget-to-idea type mapping updated. UI components (IdeaSparksCard, IdeasFeed) updated with new type configs + icons + legacy fallbacks. Migration 043 updates `email_ideas.idea_type` CHECK constraint. Cost reduction: ~$0.60/month (was ~$1.05). |
 | Email Detail Redesign Phase 3 | Mar 2026 | **Deferred loading + caching + polish**: `enabled` option added to `useProjects` + `useProjectItems` hooks (skip fetch when false). SmartCaptureBar deferred into collapsible section — saves 2 Supabase queries per modal open. Module-level analysis cache (`Map<string, NormalizedAnalysis>`) with stale-while-revalidate — reopening same email shows analysis instantly, background refetch silently updates. JSON comparison prevents unnecessary re-renders when revalidation returns same data. Removed state-clearing timeout on modal close (email data persists for instant re-open). AISummaryBar made sticky (`sticky top-0 z-10 bg-background/95 backdrop-blur-sm shadow-sm`). CollapsibleAnalysisSection gains `onToggle` callback + fade-in animation on expand. All analysis sections verified to have null guards for empty data. |
+| Taxonomy v2 | Mar 2026 | **Category expansion**: 13 -> 20 life-bucket categories. New: `job_search`, `parenting`, `health`, `billing`, `deals`, `civic`, `sports`. Renamed: `personal_friends_family` -> `personal`. Merged: `newsletters_creator` + `newsletters_industry` -> `newsletters`. Split: `news_politics` -> `news` + `politics`. **Email types simplified**: 9 -> 6 values (`needs_response`, `personal`, `newsletter`, `automated`, `marketing`, `fyi`). Removed: `transactional`, `notification`, `promo`, `cold_outreach` (merged into `automated` and `marketing`). **Timeliness**: New JSONB column `{nature, relevant_date, late_after, expires, perishable}` for time-aware surfacing. **5-dimension scoring**: `importance_score`, `urgency_score`, `action_score`, `cognitive_load`, `missability_score`, `surface_priority` (composite). **Smart views API**: `/api/emails/smart-views?view=today|upcoming|expiring|reading-list|high-priority|needs-action`. **Timeliness cron job**: Auto-archive expired, escalate late, decay stale perishables. **New UI components**: `TimelinessIcon`, `EmailTypeIcon`, `ScoreBadge`. Migration 045. |
