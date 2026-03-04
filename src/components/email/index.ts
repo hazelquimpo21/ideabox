@@ -33,3 +33,6 @@ export type { SyncStatusBannerProps, SyncStatus, SyncStatusInfo } from './SyncSt
 
 export { SmartCaptureBar, default as SmartCaptureBarDefault } from './SmartCaptureBar';
 export type { SmartCaptureBarProps } from './SmartCaptureBar';
+
+export { AIDigestView } from './AIDigestView';
+export type { AIDigestViewProps } from './AIDigestView';

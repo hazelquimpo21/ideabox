@@ -1,28 +1,27 @@
 /**
  * Email Detail Component
  *
- * Displays the full content of a selected email with rich AI analysis.
- * Used in a slide-out panel from the email list.
+ * AI-first email detail view. The AI digest (gist, key points, actions,
+ * nuggets, dates) is the primary content. The original email body is in a
+ * collapsible below the digest. Deep-dive analysis sections follow.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * ARCHITECTURE (Phase 2 Redesign — March 2026)
+ * ARCHITECTURE (Phase 2 — March 2026)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Data flow: EmailDetailModal (hooks) → EmailDetail (layout) → AnalysisSummary → sections
+ * Data flow: EmailDetailModal (hooks) → EmailDetail (layout) → AIDigestView / AnalysisSummary
  *
- * - useEmailAnalysis and useExtractedDates are hoisted to EmailDetailModal so
- *   they fire in parallel with the email fetch (no more request waterfall).
- * - This component receives analysis/extractedDates/refetchAnalysis as props.
- * - AISummaryBar renders between subject and body for at-a-glance insights.
- * - AnalysisSummary is extracted to its own file. Each analysis section is an
- *   independent, collapsible, memoized component under analysis/.
+ * Render order:
+ *   EmailHeader → EmailSubject → AIDigestView → CollapsibleEmailBody → AnalysisSummary
  *
- * Render order: EmailHeader → EmailSubject → AISummaryBar → EmailBody → AnalysisSummary
+ * Performance:
+ *   - Email body is lazy-rendered (only mounted on first expand).
+ *   - AIDigestView and AnalysisSummary are memoized.
+ *   - No new data fetching — everything comes from props.
  *
  * @module components/email/EmailDetail
- * @see EmailDetailModal — data boundary (hook calls live there)
- * @see AISummaryBar — compact summary bar above email body
- * @see AnalysisSummary — orchestrator for analysis sections
+ * @see AIDigestView — tier-1 editorial AI digest
+ * @see AnalysisSummary — tier-2 deep-dive sections
  */
 
 'use client';
@@ -31,7 +30,7 @@ import * as React from 'react';
 import { Button, Badge } from '@/components/ui';
 import type { NormalizedAnalysis } from '@/hooks/useEmailAnalysis';
 import type { ExtractedDate } from '@/hooks/useExtractedDates';
-import { AISummaryBar } from './AISummaryBar';
+import { AIDigestView } from './AIDigestView';
 import { AnalysisSummary } from './AnalysisSummary';
 import { getCategoryBadge } from './analysis/helpers';
 import {
@@ -42,6 +41,7 @@ import {
   MailOpen,
   Clock,
   ExternalLink,
+  ChevronDown,
 } from 'lucide-react';
 import type { Email } from '@/types/database';
 
@@ -175,7 +175,7 @@ function EmailBody({ email }: { email: Email }) {
   const hasHtml = email.body_html && email.body_html.trim().length > 0;
   const hasText = email.body_text && email.body_text.trim().length > 0;
 
-  // Hide broken images (e.g. favicon 404s embedded in email HTML) to suppress console noise
+  // Hide broken images
   React.useEffect(() => {
     if (!htmlRef.current) return;
     const imgs = htmlRef.current.querySelectorAll('img');
@@ -215,6 +215,59 @@ function EmailBody({ email }: { email: Email }) {
   );
 }
 
+/**
+ * Collapsible wrapper for the email body.
+ * Lazy-renders: EmailBody is only mounted on first expand, then kept mounted.
+ */
+function CollapsibleEmailBody({
+  email,
+  defaultOpen = false,
+}: {
+  email: Email;
+  defaultOpen?: boolean;
+}) {
+  const [isOpen, setIsOpen] = React.useState(defaultOpen);
+  const everOpened = React.useRef(defaultOpen);
+
+  const handleToggle = React.useCallback(() => {
+    setIsOpen(prev => {
+      const next = !prev;
+      if (next) everOpened.current = true;
+      return next;
+    });
+  }, []);
+
+  return (
+    <div className="border-t border-border">
+      <button
+        type="button"
+        className="flex items-center gap-2 w-full px-6 py-3 text-sm hover:bg-muted/50 transition-colors cursor-pointer"
+        onClick={handleToggle}
+      >
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+        <span className="font-medium">Original email</span>
+        {!isOpen && email.snippet && (
+          <span className="text-muted-foreground truncate text-xs ml-1">
+            {email.snippet.substring(0, 80)}...
+          </span>
+        )}
+      </button>
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}
+      >
+        <div className={`overflow-hidden transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
+          {everOpened.current && <EmailBody email={email} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -249,6 +302,9 @@ export function EmailDetail({
     );
   }
 
+  // Show email body expanded when there's no analysis to display
+  const hasAnalysis = !!email.analyzed_at && !!analysis;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <EmailHeader
@@ -260,24 +316,29 @@ export function EmailDetail({
       />
       <div className="flex-1 overflow-y-auto">
         <EmailSubject email={email} />
-        {/* AI Summary Bar — above the body */}
-        <div className="px-6 pb-2">
-          <AISummaryBar
-            email={email}
-            analysis={analysis ?? null}
-            isLoading={isLoadingAnalysis ?? false}
-          />
-        </div>
-        <EmailBody email={email} />
-        <AnalysisSummary
+
+        {/* AI Digest — the primary content */}
+        <AIDigestView
           email={email}
-          onAnalyze={onAnalyze}
-          isAnalyzing={isAnalyzing}
           analysis={analysis}
           isLoadingAnalysis={isLoadingAnalysis}
           extractedDates={extractedDates}
+          onAnalyze={onAnalyze}
+          isAnalyzing={isAnalyzing}
           refetchAnalysis={refetchAnalysis}
         />
+
+        {/* Original email — collapsible, collapsed when AI digest is shown */}
+        <CollapsibleEmailBody email={email} defaultOpen={!hasAnalysis} />
+
+        {/* Deep-dive analysis sections */}
+        {hasAnalysis && (
+          <AnalysisSummary
+            email={email}
+            analysis={analysis}
+          />
+        )}
+
         {email.gmail_id && (
           <div className="px-6 py-4 border-t border-border">
             <a
