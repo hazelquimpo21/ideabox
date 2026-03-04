@@ -1,8 +1,9 @@
 # Event Suggestion Weighting & Taxonomy Refinement Plan
 
-> **STATUS: PROPOSAL (March 2026)**
-> Ideas and implementation plan for smarter event ranking, user feedback loops,
-> and a more robust event taxonomy.
+> **STATUS: PHASES 1-3 IMPLEMENTED (March 2026)**
+> Phases 1-3 (event taxonomy, commitment tiers, composite weight) are live.
+> Phases 4-5 (preference learning, UI filters) remain future work.
+> See `DECISIONS.md` (#32) for the architectural decision record.
 
 ---
 
@@ -403,35 +404,35 @@ These already exist — the composite weight should read directly from them rath
 
 ## Part 8: Implementation Order
 
-### Phase 1: Event Taxonomy (Low risk, high value)
-1. Add `eventType` field to EventDetector and MultiEventDetector output schemas
-2. Update detector prompts to classify event type
-3. Add `eventType` to EventMetadata interface and DB schema
-4. Display event type badges on EventCard
-5. Add event type filters to events page
+### Phase 1: Event Taxonomy — IMPLEMENTED
+1. ~~Add `eventType` field to EventDetector and MultiEventDetector output schemas~~
+2. ~~Update detector prompts to classify event type~~
+3. ~~Add `eventType` to EventMetadata interface and DB schema~~
+4. ~~Display event type badges on EventCard~~
+5. Add event type filters to events page *(deferred to Phase 5)*
 
-### Phase 2: Commitment Tiers (Medium complexity)
-1. Add `commitmentLevel` to event detection output
-2. Update detector prompts with commitment inference rules
-3. Add "Going" and "Not for me" buttons to EventCard
-4. Sort events within time groups by commitment → weight
-5. Update EventCard visual treatment per commitment tier
+### Phase 2: Commitment Tiers — IMPLEMENTED
+1. ~~Add `commitmentLevel` to event detection output~~
+2. ~~Update detector prompts with commitment inference rules~~
+3. Add "Going" and "Not for me" buttons to EventCard *(deferred to Phase 5)*
+4. ~~Sort events within time groups by commitment → weight~~
+5. ~~Update EventCard visual treatment per commitment tier~~
 
-### Phase 3: Composite Weight (Backend focus)
-1. Create `computeCompositeWeight()` function
-2. Wire it into the event API response
-3. Sort events by compositeWeight within time groups
-4. Add relevance bar/indicator to EventCard
-5. Bridge event weight → email surface_priority
+### Phase 3: Composite Weight — IMPLEMENTED
+1. ~~Create `computeCompositeWeight()` function~~
+2. ~~Wire it into the event API response~~
+3. ~~Sort events by compositeWeight within time groups~~
+4. ~~Add whyAttend text display to EventCard~~
+5. Bridge event weight → email surface_priority *(deferred)*
 
-### Phase 4: Preference Learning (Feedback loop)
+### Phase 4: Preference Learning — FUTURE
 1. Create `user_event_preferences` table
 2. Add preference update logic to event state API
 3. Implement behavior weight calculation
 4. Feed behavior weight into composite weight
 5. Add "Teach Me" prompt after repeated dismissals
 
-### Phase 5: UI Polish
+### Phase 5: UI Polish — FUTURE
 1. Event type filter bar
 2. Commitment filter
 3. "Why this event" tooltips

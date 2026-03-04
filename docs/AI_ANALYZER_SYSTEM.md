@@ -157,6 +157,7 @@ async analyze(email: Email): Promise<AnalyzerResult> {
 - **timeliness** JSONB output: `{nature, relevant_date, late_after, expires, perishable}` — extracted by categorizer alongside category
 - **New labels**: `invited`, `confirmation`, `has_tickets`, `deadline`
 - 5 scoring dimensions computed post-analysis: `importance_score`, `urgency_score`, `action_score`, `cognitive_load`, `missability_score`, `surface_priority`
+- **Event Composite Weight** (NEW Mar 2026): `computeCompositeWeight()` in `services/events/composite-weight.ts` combines 6 signals into 0.0–1.0 score for event ranking: base type weight (0.15), commitment boost (0.20), AI relevance (0.25), sender weight (0.15), temporal urgency (0.10), behavior weight (0.15 — placeholder for future preference learning). Events sorted by commitment tier → composite weight → date.
 
 **Function Schema:**
 ```typescript
@@ -1051,15 +1052,21 @@ this.log('error', 'API call failed', {
 });
 ```
 
-### 4. Event Detector Analyzer (ENHANCED Jan 2026)
+### 4. Event Detector Analyzer (ENHANCED Jan 2026, Mar 2026)
 
-**Purpose:** Extract rich event details for calendar integration
+**Purpose:** Extract rich event details for calendar integration, with event type taxonomy, commitment inference, and relevance scoring
 
 **When It Runs:** ONLY when Categorizer includes `has_event` in labels array (conditional execution saves tokens)
 
 > **IMPORTANT (Jan 2026 Refactor):** Events are NO LONGER a category. Events can appear in ANY life-bucket
 > category (local, family, travel, etc.) and are detected via the `has_event` label.
 > This allows proper categorization of WHERE the event fits in your life while still extracting event details.
+
+**ENHANCED (March 2026) — Event Suggestion Weighting:**
+- **Event Type Taxonomy**: 18 structured types (`meeting`, `appointment`, `social`, `community`, `class_workshop`, `conference`, `performance`, `sports_event`, `webinar`, `civic`, `religious`, `fundraiser`, `deadline`, `release`, `travel`, `payment`, `birthday_anniversary`, `other`). Each type has a default importance weight (appointments=0.95, meetings=0.9, down to webinars=0.25).
+- **Commitment Level**: AI-inferred relationship to event (`confirmed`, `invited`, `suggested`, `fyi`). Inference rules: booking confirmation → confirmed; personal RSVP invite → invited; newsletter listing → fyi; default → suggested.
+- **Recalibrated Relevance Scoring**: Commitment level is now the strongest signal (confirmed starts at 7-8, fyi at 1-2). Webinars from marketing emails get -2 penalty. Previous scoring was too generous with locality+free boosts.
+- **Composite Weight**: A downstream `computeCompositeWeight()` in `services/events/composite-weight.ts` combines 6 signals into a 0.0–1.0 score for UI ranking.
 
 **Function Schema:**
 ```typescript
@@ -1070,24 +1077,32 @@ this.log('error', 'API call failed', {
     type: 'object',
     properties: {
       has_event: { type: 'boolean' },
-      event_title: { type: 'string', description: 'Name of the event' },
+      is_key_date: { type: 'boolean' },
+      event_title: { type: 'string' },
       event_date: { type: 'string', description: 'ISO date (YYYY-MM-DD)' },
       event_time: { type: 'string', description: '24-hour time (HH:MM)' },
-      event_end_time: { type: 'string', description: 'End time if known' },
-      location_type: {
-        type: 'string',
-        enum: ['in_person', 'virtual', 'hybrid', 'unknown'],
-      },
-      location: { type: 'string', description: 'Physical address or video link' },
-      registration_deadline: { type: 'string', description: 'RSVP deadline (ISO date)' },
+      event_end_time: { type: 'string' },
+      event_end_date: { type: 'string' },
+      location_type: { type: 'string', enum: ['in_person', 'virtual', 'hybrid', 'unknown'] },
+      event_locality: { type: 'string', enum: ['local', 'out_of_town', 'virtual'] },
+      location: { type: 'string' },
+      registration_deadline: { type: 'string' },
       rsvp_required: { type: 'boolean' },
-      rsvp_url: { type: 'string', description: 'Registration URL' },
-      organizer: { type: 'string', description: 'Who is hosting' },
-      cost: { type: 'string', description: 'Price info (e.g., "Free", "$25")' },
-      additional_details: { type: 'string', description: 'Parking, dress code, etc.' },
+      rsvp_url: { type: 'string' },
+      organizer: { type: 'string' },
+      cost: { type: 'string' },
+      additional_details: { type: 'string' },
+      event_summary: { type: 'string' },
+      key_points: { type: 'array', items: { type: 'string' }, maxItems: 4 },
+      key_date_type: { type: 'string', enum: ['registration_deadline', 'open_house', 'deadline', 'release_date', 'other'] },
       confidence: { type: 'number', minimum: 0, maximum: 1 },
+      // NEW March 2026
+      event_type: { type: 'string', enum: ['meeting', 'appointment', 'social', 'community', 'class_workshop', 'conference', 'performance', 'sports_event', 'webinar', 'civic', 'religious', 'fundraiser', 'deadline', 'release', 'travel', 'payment', 'birthday_anniversary', 'other'] },
+      commitment_level: { type: 'string', enum: ['confirmed', 'invited', 'suggested', 'fyi'] },
+      relevance_score: { type: 'number', minimum: 0, maximum: 10 },
+      why_attend: { type: 'string' },
     },
-    required: ['has_event', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence'],
+    required: ['has_event', 'is_key_date', 'event_title', 'event_date', 'location_type', 'rsvp_required', 'confidence', 'event_summary', 'key_points', 'event_type', 'commitment_level', 'relevance_score'],
   },
 }
 ```
@@ -1096,17 +1111,23 @@ this.log('error', 'API call failed', {
 ```json
 {
   "has_event": true,
+  "is_key_date": false,
   "event_title": "Milwaukee Tech Meetup: AI in Production",
   "event_date": "2026-01-25",
   "event_time": "18:00",
   "event_end_time": "20:00",
   "location_type": "in_person",
+  "event_locality": "local",
   "location": "123 Main St, Milwaukee, WI 53211",
   "registration_deadline": "2026-01-23",
   "rsvp_required": true,
   "rsvp_url": "https://mketech.org/rsvp",
   "organizer": "MKE Tech Community",
   "cost": "Free",
+  "event_type": "community",
+  "commitment_level": "suggested",
+  "relevance_score": 8,
+  "why_attend": "Matches your interest in AI/ML and it's free and local in Milwaukee.",
   "confidence": 0.95
 }
 ```
@@ -1115,9 +1136,9 @@ this.log('error', 'API call failed', {
 
 ---
 
-### 4b. Multi-Event Detector Analyzer (NEW Feb 2026)
+### 4b. Multi-Event Detector Analyzer (NEW Feb 2026, ENHANCED Mar 2026)
 
-**Purpose:** Extract multiple events from a single email — course schedules, event roundups, newsletter event sections
+**Purpose:** Extract multiple events from a single email — course schedules, event roundups, newsletter event sections. Now includes event type taxonomy, commitment inference, and per-event relevance scoring.
 
 > The existing EventDetector handles single events well. This analyzer branches off to handle the multi-event case, extracting up to 10 events from a single email.
 
@@ -1133,6 +1154,8 @@ this.log('error', 'API call failed', {
 **Link Resolution:**
 Optionally resolves links from the email (via ContentDigest) to find additional event details. Useful when emails say "see our full calendar" with a link to a page listing all events.
 
+**ENHANCED (March 2026):** Each event in the array now includes `event_type`, `commitment_level`, `relevance_score`, and `why_attend` — same fields as the single EventDetector. Default commitment is `fyi` (since multi-event emails are typically newsletters/roundups). Webinar penalty guidance added to scoring.
+
 **Function Schema:**
 ```typescript
 {
@@ -1141,22 +1164,16 @@ Optionally resolves links from the email (via ContentDigest) to find additional 
   parameters: {
     type: 'object',
     properties: {
-      has_multiple_events: {
-        type: 'boolean',
-        description: 'Whether multiple events were found',
-      },
-      event_count: {
-        type: 'number',
-        description: 'Number of events extracted',
-      },
+      has_multiple_events: { type: 'boolean' },
+      event_count: { type: 'number' },
       events: {
         type: 'array',
         items: {
           type: 'object',
           properties: {
             event_title: { type: 'string' },
-            event_date: { type: 'string', description: 'YYYY-MM-DD' },
-            event_time: { type: 'string', description: 'HH:MM 24-hour' },
+            event_date: { type: 'string' },
+            event_time: { type: 'string' },
             event_end_date: { type: 'string' },
             event_end_time: { type: 'string' },
             location_type: { type: 'string', enum: ['in_person', 'virtual', 'hybrid', 'unknown'] },
@@ -1173,15 +1190,17 @@ Optionally resolves links from the email (via ContentDigest) to find additional 
             is_key_date: { type: 'boolean' },
             key_date_type: { type: 'string', enum: ['registration_deadline', 'open_house', 'deadline', 'release_date', 'other'] },
             confidence: { type: 'number', minimum: 0, maximum: 1 },
+            // NEW March 2026
+            event_type: { type: 'string', enum: ['meeting', 'appointment', 'social', 'community', ...] },
+            commitment_level: { type: 'string', enum: ['confirmed', 'invited', 'suggested', 'fyi'] },
+            relevance_score: { type: 'number', minimum: 0, maximum: 10 },
+            why_attend: { type: 'string' },
           },
-          required: ['event_title', 'event_date', 'location_type', 'rsvp_required', 'is_key_date', 'confidence', 'event_summary'],
+          required: ['event_title', 'event_date', 'location_type', 'rsvp_required', 'is_key_date', 'confidence', 'event_summary', 'event_type', 'commitment_level', 'relevance_score'],
         },
         maxItems: 10,
       },
-      source_description: {
-        type: 'string',
-        description: 'Description of event source format (e.g., "Community event roundup")',
-      },
+      source_description: { type: 'string' },
       confidence: { type: 'number', minimum: 0, maximum: 1 },
     },
     required: ['has_multiple_events', 'event_count', 'events', 'confidence'],

@@ -170,7 +170,9 @@ src/
       news-brief.ts             # Factual news extraction (NEW Feb 2026)
       link-analyzer.ts          # Deep URL intelligence from email content (NEW Feb 2026)
       link-resolver.ts          # URL expansion for context (NEW Feb 2026)
-      types.ts                  # Analyzer result types
+      types.ts                  # Analyzer result types (EventType, CommitmentLevel, scoring weights)
+    events/
+      composite-weight.ts       # Event composite weight calculator (6-signal ranking, NEW Mar 2026)
     processors/
       email-processor.ts        # Orchestrates all analyzers
       batch-processor.ts        # Batch processing

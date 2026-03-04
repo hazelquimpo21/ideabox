@@ -500,7 +500,7 @@ CREATE TABLE email_analyses (
   categorization JSONB,       -- {category, labels, signal_strength, reply_worthiness, email_type, ai_brief, confidence, reasoning, topics, summary, quick_action, additional_categories}
   action_extraction JSONB,    -- {has_action, actions[], urgency_score} (supports multi-action)
   client_tagging JSONB,       -- {client_match, client_id, client_name, confidence, relationship_signal}
-  event_detection JSONB,      -- {has_event, event_title, event_date, event_locality, ...}
+  event_detection JSONB,      -- {has_event, event_title, event_date, event_locality, event_type, commitment_level, relevance_score, why_attend, ...}
   url_extraction JSONB,       -- {has_links, links[], summary, confidence} — Deep URL intelligence from LinkAnalyzer (migration 042)
   content_opportunity JSONB,  -- Future
   content_digest JSONB,       -- {gist, key_points, links, content_type, golden_nuggets, email_style_ideas} (migration 025, enhanced Feb 2026)
@@ -509,7 +509,7 @@ CREATE TABLE email_analyses (
   idea_sparks JSONB,          -- {has_ideas, ideas[{idea, type, relevance, confidence}], skip_reason?, confidence} (migration 033, types updated 043)
   insight_extraction JSONB,   -- {has_insights, insights[{insight, type, topics[], confidence}], confidence} (migration 034)
   news_brief JSONB,           -- {has_news, news_items[{headline, detail, topics[], date_mentioned, confidence}], confidence} (migration 034)
-  multi_event_detection JSONB, -- {has_events, events[{event_title, event_date, event_time, location, ...}]} max 10 (migration 035)
+  multi_event_detection JSONB, -- {has_events, events[{event_title, event_date, event_time, location, event_type, commitment_level, relevance_score, why_attend, ...}]} max 10 (migration 035, enhanced Mar 2026)
 
   analyzer_version TEXT DEFAULT '1.0',
   tokens_used INTEGER,

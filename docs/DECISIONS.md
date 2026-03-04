@@ -46,6 +46,7 @@
 | Email Traceability | Clickable links + gist preview | Users need to see and navigate to the email that spawned an item |
 | Quick Accept | 2-step popover replaces 6-step dialog | Fitts's Law: minimize motor cost for most frequent triage action |
 | Query Optimization | Field selection + Supabase joins | Eliminates second round-trip, reduces payload ~6 KB per hook |
+| Event Weighting | 18-type taxonomy + 4-tier commitment + composite weight | Events need structured classification + ranking, not just flat date lists; see Decision #32 |
 
 ---
 
@@ -854,6 +855,32 @@ When making new architectural decisions, document them here using this template:
 - Smart views API routes for temporal surfacing
 - See `INBOX_CATEGORY_TAXONOMY_PLAN.md` for full implementation plan
 
+### 32. Event Suggestion Weighting: Taxonomy, Commitment, Composite Weight (March 2026)
+
+**Decision:** Add structured event type taxonomy (18 types), commitment level inference (4 tiers), and composite weight scoring (6 signals) to the event detection pipeline.
+
+**Alternatives Considered:**
+- Use relevanceScore (0-10) alone for ranking (single score can't distinguish "confirmed dinner" from "interesting webinar" — both could score 7)
+- Add user-facing priority slider per event (too much friction, users won't use it)
+- Only filter by category (too coarse — "local" events include both farmers markets and city council meetings)
+- Let the categorizer handle event classification (categorizer already outputs 20+ fields, adding event-specific taxonomy there would bloat the prompt and increase cost for all emails, not just events)
+
+**Rationale:**
+- **18 event types** solve the "all events look equal" problem. A team standup, a marketing webinar, and a pottery class are fundamentally different. Types enable filtering (show only social events), preference learning (user dismisses every webinar), and default weighting (meetings=0.9, webinars=0.25).
+- **4 commitment tiers** capture "is the user going?" — the strongest signal for ranking. A confirmed booking should always appear above a newsletter FYI. AI infers from email signals (booking confirmation → confirmed, personal invite → invited, newsletter listing → fyi). User actions can upgrade/downgrade (save to calendar → calendar tier, dismiss → dismissed).
+- **Composite weight (6 signals)** replaces flat date sorting within time groups. Components: base type weight (0.15), commitment boost (0.20), AI relevance score (0.25), sender weight (0.15), temporal urgency (0.10), behavior weight (0.15 — placeholder for Phase 4 preference learning). Sort order: commitment tier → compositeWeight → date.
+- **Webinar scoring recalibrated** — previous prompt scored webinars too generously (locality=virtual +2, free +2, tangential interest +1 = score 5). Now: webinar type penalty -2, fyi commitment starts at 1-2 base. Marketing webinars properly score 0-2.
+
+**Impact:**
+- `types.ts`: New `EventType`, `CommitmentLevel` types with `EVENT_TYPE_WEIGHTS` and `COMMITMENT_BOOSTS` constants
+- `event-detector.ts`: Updated prompt with taxonomy section, commitment inference rules, recalibrated scoring. New required output fields: `event_type`, `commitment_level`
+- `multi-event-detector.ts`: Same additions, commitment defaults to `fyi` for newsletter events
+- `services/events/composite-weight.ts`: New module — `computeCompositeWeight()` + `computeCompositeWeightBreakdown()` + `compareEvents()` sort comparator
+- `api/events/route.ts`: Computes compositeWeight in `buildEventResponse()`, passes through eventType + commitmentLevel in EventMetadata
+- `hooks/useEvents.ts`: Sorts within time groups by commitment tier → compositeWeight → date
+- `components/events/EventCard.tsx`: New `EventTypeBadge` (18 colored badges), `CommitmentBadge` (Going/Invited/FYI), `whyAttend` text display
+- Future (Phase 4): `user_event_preferences` table for behavior weight. Future (Phase 5): event type filters, "Teach Me" prompts
+
 ---
 
 ## Change Log
@@ -873,3 +900,4 @@ When making new architectural decisions, document them here using this template:
 | Mar 2026 | Query optimization (field selection + Supabase joins), smarter triage badge, snooze persistence, AllItemsContent deprecation | Claude (tasks redesign phase 3) |
 | Mar 2026 | Idea Spark refinement: solopreneur focus, 0-3 ideas, smarter gating, new types | Claude (idea spark overhaul) |
 | Mar 2026 | Taxonomy v2: 20 categories, timeliness JSONB, 6 email types, 5-dimension scoring, smart views, timeliness cron | Claude (taxonomy v2) |
+| Mar 2026 | Event suggestion weighting: 18-type taxonomy, 4-tier commitment, composite weight (6 signals), recalibrated relevance scoring | Claude (event weighting) |
