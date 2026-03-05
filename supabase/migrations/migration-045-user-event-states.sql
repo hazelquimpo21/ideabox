@@ -52,17 +52,23 @@ COMMENT ON TABLE user_event_states IS
 
 ALTER TABLE user_event_states ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS user_event_states_select ON user_event_states
+-- Drop policies first (safe if they don't exist)
+DROP POLICY IF EXISTS user_event_states_select ON user_event_states;
+DROP POLICY IF EXISTS user_event_states_insert ON user_event_states;
+DROP POLICY IF EXISTS user_event_states_update ON user_event_states;
+DROP POLICY IF EXISTS user_event_states_delete ON user_event_states;
+
+CREATE POLICY user_event_states_select ON user_event_states
   FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS user_event_states_insert ON user_event_states
+CREATE POLICY user_event_states_insert ON user_event_states
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS user_event_states_update ON user_event_states
+CREATE POLICY user_event_states_update ON user_event_states
   FOR UPDATE USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS user_event_states_delete ON user_event_states
+CREATE POLICY user_event_states_delete ON user_event_states
   FOR DELETE USING (auth.uid() = user_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────
