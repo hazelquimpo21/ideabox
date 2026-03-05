@@ -30,7 +30,6 @@
  *
  * @module components/email/EmailDetailModal
  * @since February 2026 — Inbox Performance Audit P0-A
- * @see INBOX_PERFORMANCE_AUDIT.md
  */
 
 'use client';

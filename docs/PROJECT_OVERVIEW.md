@@ -164,7 +164,7 @@ AI-powered email processing system with specialized analyzers that:
 > **Note:** Taxonomy v2 (March 2026): Categories expanded from 13 to 20, email types simplified
 > from 9 to 6, timeliness JSONB column added, 5-dimension scoring with surface_priority,
 > smart views API, timeliness cron job. See `docs/DECISIONS.md` (#31) and
-> `docs/INBOX_CATEGORY_TAXONOMY_PLAN.md` for details.
+> `docs/DECISIONS.md` (#31) for details.
 
 > **Note:** Event Suggestion Weighting (March 2026): 18-type event taxonomy (meeting, social,
 > webinar, community, etc.), 4-tier commitment inference (confirmed/invited/suggested/fyi),

@@ -2,8 +2,7 @@
  * Board Content Component
  *
  * Kanban-first board view for all project items across projects.
- * Fork of AllItemsContent with the TriageTray removed (triage is its
- * own tab now) and the default view mode set to kanban.
+ * Default view mode is kanban (triage has its own tab).
  *
  * Supports list and kanban views, filtering by type, status, source,
  * overdue, and completed visibility. Includes search, StatsCards,

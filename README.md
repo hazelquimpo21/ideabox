@@ -37,9 +37,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | [Coding Standards](docs/CODING_STANDARDS.md) | 400-line file limit, conventions |
 | [Decisions](docs/DECISIONS.md) | Architectural decision log |
 | [API Integrations](docs/API_INTEGRATIONS.md) | Gmail, Google People, OpenAI integration details |
-| [Inbox Performance Audit](docs/INBOX_PERFORMANCE_AUDIT.md) | Inbox performance findings and fixes |
-| [UI Field Audit](docs/UI_FIELD_AUDIT.md) | AI analyzer data surfacing audit |
 | [Email Sync Research](docs/EMAIL_SYNC_RESEARCH.md) | Email sync activation options and deployment |
+| [Event Suggestion Weighting](docs/EVENT_SUGGESTION_WEIGHTING_PLAN.md) | Event taxonomy, commitment tiers, composite weight (Phases 4-5 roadmap) |
 
 ## Project Structure
 

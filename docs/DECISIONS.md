@@ -853,7 +853,7 @@ When making new architectural decisions, document them here using this template:
 - New `timeliness-actions.ts` cron job (auto-archive expired, escalate late, decay stale perishables)
 - New UI components: `TimelinessIcon`, `EmailTypeIcon`, `ScoreBadge`
 - Smart views API routes for temporal surfacing
-- See `INBOX_CATEGORY_TAXONOMY_PLAN.md` for full implementation plan
+- See `IMPLEMENTATION_STATUS.md` (Taxonomy v2 session) for implementation details
 
 ### 32. Event Suggestion Weighting: Taxonomy, Commitment, Composite Weight (March 2026)
 

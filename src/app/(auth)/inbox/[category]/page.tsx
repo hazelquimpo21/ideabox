@@ -17,7 +17,6 @@
  *
  * @module app/(auth)/inbox/[category]/page
  * @since February 2026
- * @see INBOX_PERFORMANCE_AUDIT.md — P1-A
  */
 
 'use client';

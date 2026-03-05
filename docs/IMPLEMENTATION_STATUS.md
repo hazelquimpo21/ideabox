@@ -137,6 +137,13 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Projects Phase 4: drag-and-drop reordering, project templates, Gantt-style timeline view
 - **Event Suggestion Weighting Phase 4**: Preference learning system — `user_event_preferences` table, exponential moving average from dismiss/save patterns, behavior weight fed into composite scoring (see `EVENT_SUGGESTION_WEIGHTING_PLAN.md`)
 - **Event Suggestion Weighting Phase 5**: UI enhancements — event type filter bar, commitment filter, "Teach Me" prompts (auto-minimize after repeated dismissals), compact cards for low-relevance events
+- **Performance**: Full SWR/React Query cache for all hooks (useEmails, useContacts, etc.) — analysis cache partially done (module-level stale-while-revalidate)
+- **Performance**: SQL aggregation for inbox stats (`/api/emails/stats` endpoint with `GROUP BY category` SQL, replaces JS-side computation in useEmails)
+- **Performance**: Consolidate 3 date formatting functions into shared `src/lib/utils/date.ts`
+- **UI Audit**: Home page email type breakdown in daily briefing summary
+- **UI Audit**: Confidence-based visual affordances (fade low-confidence gist, "?" badge for categorization < 0.5)
+- **UI Audit**: Email thread intelligence (aggregate insights across thread)
+- **UI Audit**: Export/share capabilities (nuggets, insights, links → Notion/Obsidian/markdown)
 
 ### Known Issues
 - `urgency_score` and `relationship_signal` exist in TypeScript types for `emails` table but have **no database migration** — reads will return null. Need a migration to add these columns if denormalization is desired.

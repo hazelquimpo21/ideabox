@@ -182,7 +182,6 @@ function getUrgencyStyle(score: number | null | undefined): {
  * changes (e.g., toggling a star). Without memo, any parent state change
  * re-renders all 15-50 EmailCards in the list.
  *
- * @see INBOX_PERFORMANCE_AUDIT.md — P3
  */
 export const EmailCard = React.memo(function EmailCard({
   email,
