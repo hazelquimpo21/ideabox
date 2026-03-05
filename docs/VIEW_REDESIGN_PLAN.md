@@ -101,17 +101,44 @@ Currently, inbox rows can accumulate too many badges (category + priority + time
 
 The priority score, full timeliness label, sender type, signal strength are all **available on hover/tooltip** but not visible in the default row.
 
-### 2d. Card Elevation System
+### 2d. Card Redesign
 
-Three levels of visual weight for cards:
+The current `Card` component (`src/components/ui/card.tsx`) is vanilla shadcn — a single visual weight with no built-in variants, no accent support, and no hover behavior. Every consumer hacks in `className="cursor-pointer hover:shadow-md transition-shadow"` individually. This is the root of visual inconsistency across views.
 
-| Level | Use | Style |
-|-------|-----|-------|
-| **Flat** | Background sections, completed items | `bg-muted/50 border-0` |
-| **Raised** | Default cards, list items | `bg-card border shadow-sm` |
-| **Elevated** | Active/focused items, the "Now" card | `bg-card border shadow-md ring-1 ring-primary/10` |
+**Upgrade the Card component itself** to support elevation and accent as first-class props:
 
-Hover adds one level: Flat → Raised appearance, Raised → subtle shadow increase (`shadow-sm → shadow`), Elevated stays.
+```tsx
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  elevation?: 'flat' | 'raised' | 'elevated';  // default: 'raised'
+  accent?: string;           // timeliness color class, e.g. 'amber-500'
+  accentPosition?: 'left' | 'top';  // default: 'left'
+  interactive?: boolean;     // adds hover elevation bump + cursor
+}
+```
+
+**Three elevation levels:**
+
+| Level | Use | Base Style | Hover (when interactive) |
+|-------|-----|------------|--------------------------|
+| **Flat** | Background sections, completed items, muted context | `bg-muted/50 border-0 shadow-none` | `hover:bg-muted/80 hover:shadow-sm` |
+| **Raised** | Default cards, list items, most content | `bg-card border shadow-sm` | `hover:shadow` (subtle bump) |
+| **Elevated** | Active/focused items, the "Now" card, modals | `bg-card border shadow-md ring-1 ring-primary/10` | No change (already prominent) |
+
+**Accent border:** When `accent` is set, renders a 3px colored left border (or top border). This replaces ad-hoc `border-l-4 border-amber-500` scattered across components. The accent color comes from the timeliness system (§2a).
+
+**Interactive behavior:** When `interactive` is true, the card:
+- Gets `cursor-pointer`
+- Gains `transition-shadow duration-200`
+- Bumps one elevation level on hover (Flat → Raised feel, Raised → shadow bump)
+- Gets `focus-visible:ring-2 ring-primary` for keyboard navigation
+
+**Migration:** Update all existing Card usages to use props instead of className hacks. This is a gradual process — the component remains backward-compatible (className still works).
+
+**CardTitle adjustment:** Currently `text-2xl` which is too large for most card contexts. Change default to `text-lg font-semibold`. Page-level titles should use their own heading elements, not CardTitle.
+
+**CardHeader padding:** Currently `p-6` which creates excessive whitespace on compact cards. Change to `p-4 pb-2` for tighter defaults. Consumers can override via className.
+
+**CardContent padding:** Currently `p-6 pt-0`. Change to `p-4 pt-0` to match tighter header.
 
 ---
 
@@ -800,22 +827,24 @@ Before starting any phase, run a dead code check:
 **Goal:** Build shared infrastructure, redesign Home to the Trifecta layout.
 
 **Steps:**
-1. Create `src/components/ui/tooltip.tsx` (Radix-based, 3 tiers)
-2. Create `src/lib/utils/timeliness.ts` (color utility)
-3. Create `src/lib/utils/animations.ts` (entrance helpers, useAnimatedNumber)
-4. Add new keyframes to `globals.css`
-5. Create `src/components/shared/EmptyState.tsx`
-6. Create `src/components/shared/StatCard.tsx`
-7. Refactor `DailyBriefingHeader.tsx` (personalized greeting)
-8. Create `NowCard.tsx` (top priority item)
-9. Refactor `TodaySchedule.tsx` → `TodayCard.tsx` (timeline format)
-10. Create `ThisWeekCard.tsx` (stat cluster)
-11. Create `CollapsibleSection.tsx`
-12. Refactor Home page layout to Trifecta + collapsible below-fold
-13. Delete removed Home components (EmailSummaryCard, InsightsCard, etc.)
-14. Test all empty states
+1. Install `@radix-ui/react-tooltip` and create `src/components/ui/tooltip.tsx` (Radix-based, 3 tiers)
+2. Upgrade `src/components/ui/card.tsx` — add `elevation`, `accent`, `interactive` props; tighten padding defaults (§2d)
+3. Create `src/lib/utils/timeliness.ts` (color utility)
+4. Create `src/lib/utils/animations.ts` (entrance helpers, useAnimatedNumber)
+5. Add new keyframes to `globals.css`
+6. Create `src/components/shared/EmptyState.tsx`
+7. Create `src/components/shared/StatCard.tsx` (uses upgraded Card internally)
+8. Create `src/components/shared/CollapsibleSection.tsx`
+9. Refactor `DailyBriefingHeader.tsx` (personalized greeting)
+10. Create `NowCard.tsx` (single top-priority item from useHubPriorities)
+11. Refactor `TodaySchedule.tsx` → `TodayCard.tsx` (timeline format)
+12. Create `ThisWeekCard.tsx` (stat cluster)
+13. Refactor Home page layout to Trifecta + collapsible below-fold
+14. Delete removed Home components (EmailSummaryCard, InsightsCard, etc.)
+15. Update remaining Home components to use Card elevation/accent props (remove className hacks)
+16. Test all empty states, verify no TypeScript errors, run build
 
-**Verification:** Home page loads with 3 cards above fold, collapsible sections below. Tooltips work. Animations are smooth. Empty states display correctly.
+**Verification:** Home page loads with 3 cards above fold, collapsible sections below. Cards use elevation props consistently. Tooltips work. Animations are smooth. Empty states display correctly. `npm run build` passes.
 
 ### Phase 2: Inbox Polish (1 session)
 
