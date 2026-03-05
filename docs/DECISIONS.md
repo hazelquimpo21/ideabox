@@ -47,6 +47,8 @@
 | Quick Accept | 2-step popover replaces 6-step dialog | Fitts's Law: minimize motor cost for most frequent triage action |
 | Query Optimization | Field selection + Supabase joins | Eliminates second round-trip, reduces payload ~6 KB per hook |
 | Event Weighting | 18-type taxonomy + 4-tier commitment + composite weight | Events need structured classification + ranking, not just flat date lists; see Decision #32 |
+| View Redesign Phase 1 | Shared infra + Trifecta home layout | Tooltip, Card elevation, timeliness utility, animation utils — reused across all phases; see Decision #33 |
+| View Redesign Phase 2 | Inbox polish: component extraction + timeliness rows | InboxFeed 682→264 lines, 7 extracted components, sparklines, hover actions; see Decision #34 |
 
 ---
 
@@ -881,6 +883,46 @@ When making new architectural decisions, document them here using this template:
 - `components/events/EventCard.tsx`: New `EventTypeBadge` (18 colored badges), `CommitmentBadge` (Going/Invited/FYI), `whyAttend` text display
 - Future (Phase 4): `user_event_preferences` table for behavior weight. Future (Phase 5): event type filters, "Teach Me" prompts
 
+### 33. View Redesign Phase 1: Shared Infrastructure + Trifecta Home (March 2026)
+
+**Decision:** Build reusable UI infrastructure (tooltip, card variants, timeliness utility, animations) and redesign the Home page into a "Trifecta" layout before touching Inbox or Calendar.
+
+**Alternatives Considered:**
+- Per-view ad-hoc styling (each phase creates its own helpers)
+- Full design system overhaul (too large for scope)
+
+**Rationale:**
+- Shared utilities (tooltip, card elevation/accent, timeliness colors) are reused by Inbox and Calendar phases — building them first avoids duplication
+- The Trifecta layout (NowCard, TodayCard, ThisWeekCard above fold + CollapsibleSections below) replaced a cluttered 10-widget page
+- 6 components deleted (EmailSummaryCard, InsightsCard, NewsBriefCard, SavedLinksCard, StyleInspirationCard, SummaryItemCapture) — net -607 lines
+
+**Implementation:** See `docs/prompts/PHASE_1_PROMPT.md` for full prompt. 28 files changed, 1565 insertions, 2172 deletions.
+
+### 34. View Redesign Phase 2: Inbox Polish — Component Extraction + Timeliness Rows (March 2026)
+
+**Decision:** Break the monolithic InboxFeed (682 lines) into composable pieces, add timeliness-driven visual language to email rows, and consolidate the Discoveries tab.
+
+**Alternatives Considered:**
+- Keep InboxFeed monolithic but add features inline (faster but unmaintainable)
+- Full inbox rewrite from scratch (risky, breaks existing patterns)
+
+**Rationale:**
+- InboxFeed was the largest component in the app — extracting EmailList, InboxSearchBar, InboxEmptyState, EmailHoverActions, EmailRowIndicators, CategorySparkline, and DiscoveryItem made each piece testable and reusable
+- Timeliness left borders (via `getTimelinessAccent()`) give instant visual scanning cues without adding badges
+- Badge cascade (star + one contextual indicator, max 2 per row) reduced visual noise
+- Hover action tray (Archive/Star/Snooze) moved actions off-screen until needed
+- PriorityEmailList groups by reply_worthiness (must/should/optional) with CollapsibleSection — more actionable than flat score list
+- Category sparklines (7-day inline SVG) give at-a-glance volume trends without a dedicated chart library
+- DiscoveryItem unified 4 separate feed components (InsightsFeed, NewsFeed, LinksFeed, IdeasFeed) into one — legacy feeds kept for backward compat
+
+**Implementation:**
+- 15 Phase 2 inbox components created/refactored
+- All files under 400 lines (largest: CategoryIcon at 394)
+- React.memo on InboxEmailRow, InboxEmailCard, DiscoveryItem, PriorityRow
+- useMemo for sparkline computation, priority grouping, filtering
+- useCallback on all handlers passed as props
+- See `docs/prompts/PHASE_2_PROMPT.md` for full prompt
+
 ---
 
 ## Change Log
@@ -901,3 +943,5 @@ When making new architectural decisions, document them here using this template:
 | Mar 2026 | Idea Spark refinement: solopreneur focus, 0-3 ideas, smarter gating, new types | Claude (idea spark overhaul) |
 | Mar 2026 | Taxonomy v2: 20 categories, timeliness JSONB, 6 email types, 5-dimension scoring, smart views, timeliness cron | Claude (taxonomy v2) |
 | Mar 2026 | Event suggestion weighting: 18-type taxonomy, 4-tier commitment, composite weight (6 signals), recalibrated relevance scoring | Claude (event weighting) |
+| Mar 2026 | View Redesign Phase 1: Shared infra (tooltip, card, timeliness, animations) + Trifecta home layout | Claude (view redesign phase 1) |
+| Mar 2026 | View Redesign Phase 2: Inbox polish — InboxFeed breakup (682→264 lines), 7 extracted components, timeliness rows, sparklines, hover actions | Claude (view redesign phase 2) |

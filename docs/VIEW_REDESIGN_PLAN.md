@@ -835,24 +835,26 @@ Before starting any phase, run a dead code check:
 - ActiveProjectsWidget O(n) optimization, IdeaSparksCard config slimmed, DailyReviewCard ActionIcon extraction
 - TypeScript clean, all files under 400 lines
 
-### Phase 2: Inbox Polish (1 session)
+### Phase 2: Inbox Polish (1 session) — ✅ COMPLETE
 
 **Goal:** Timeliness-driven rows, hover actions, InboxFeed breakup.
 
-**Steps:**
-1. Break `InboxFeed.tsx` into 5 smaller components
-2. Refactor `InboxEmailRow.tsx` with timeliness border, simplified indicators
-3. Create `EmailHoverActions.tsx` (slide-in tray)
-4. Create `EmailRowIndicators.tsx` (badge decision logic)
-5. Refactor `InboxEmailCard.tsx` (gist display, action buttons)
-6. Add sparklines to `CategorySummaryPanel.tsx`
-7. Create Supabase RPC `get_category_sparklines`
-8. Refactor `PriorityEmailList.tsx` (group by reply_worthiness, score breakdown tooltips)
-9. Consolidate Discoveries tab: create `DiscoveryItem.tsx`, delete 4 separate feeds
-10. Add keyboard shortcut hints to search bar
-11. Refactor `CategoryOverview.tsx` (avatar clusters, sparklines)
-
-**Verification:** Inbox rows have timeliness borders. Hover reveals action tray. Priority tab groups by reply type. Discoveries tab is unified. No file > 400 lines.
+**Completed March 2026.** 15 Phase 2 inbox components created/refactored:
+- InboxFeed broken from 682→264 lines (orchestrator only) with 7 extracted components: EmailList, InboxSearchBar, InboxEmptyState, EmailHoverActions, EmailRowIndicators, CategorySparkline, DiscoveryItem
+- Email rows have timeliness left border via `getTimelinessAccent()`
+- Hover action tray slides in from right (Archive/Star/Snooze)
+- Badge cascade: star + one contextual indicator (must_reply → nuggets → broadcast → category), max 2 per row
+- InboxEmailCard shows gist + timeliness accent, action buttons wired with useCallback
+- PriorityEmailList groups by reply_worthiness (must/should/optional) with CollapsibleSection + score breakdown tooltips
+- Category sparklines (7-day inline SVG) in CategorySummaryPanel
+- CategoryOverview enhanced with avatar clusters + sparklines
+- DiscoveryItem unified component for insights/news/links (legacy feeds kept for backward compat)
+- ⌘K keyboard shortcut hint in search bar (desktop only)
+- InboxSummaryBanner refactored to use StatCard (168 lines)
+- CategoryIcon simplified to config-object pattern (394 lines, SVG icons irreducible)
+- React.memo on InboxEmailRow, InboxEmailCard, DiscoveryItem, PriorityRow
+- useMemo for sparklines, priority grouping, filtering; useCallback on all handlers
+- All files under 400 lines, file-level JSDoc on every file
 
 ### Phase 3: Calendar Redesign (1 session)
 
