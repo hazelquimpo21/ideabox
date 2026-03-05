@@ -856,23 +856,27 @@ Before starting any phase, run a dead code check:
 - useMemo for sparklines, priority grouping, filtering; useCallback on all handlers
 - All files under 400 lines, file-level JSDoc on every file
 
-### Phase 3: Calendar Redesign (1 session)
+### Phase 3: Calendar Redesign (1 session) — ✅ COMPLETE
 
 **Goal:** Timeline list view, heat map grid, birthday delight.
 
-**Steps:**
-1. Create `TimelineView.tsx`, `TimelineItem.tsx`, `TimelineGroup.tsx`
-2. Create `CalendarGrid.tsx`, `CalendarDayCell.tsx`, `CalendarDayExpansion.tsx`
-3. Create `RsvpBadge.tsx` (countdown logic)
-4. Refactor `CalendarStats.tsx` (3 StatCards with animated numbers)
-5. Implement timeline list view with sticky date headers
-6. Implement calendar grid heat map
-7. Implement inline expansion (both list and grid)
-8. Add birthday delight animation
-9. Add overdue section with red background strip
-10. Wire up event type colors consistently
-
-**Verification:** Calendar list view shows timeline. Grid shows heat map. Clicking a day expands inline. Birthdays animate. Overdue items are unmissable.
+**Completed March 2026.** 14 files changed, 1729 insertions, 1179 deletions. 10 new components + 3 refactored:
+- `event-colors.ts` utility: unified event type → color/shape mapping (circle for events, diamond for deadlines/payments) with Lucide icons per §2b
+- `types.ts`: `CalendarItem` unified type + `mergeToCalendarItems()` merging EventData + ExtractedDate + `groupByTimePeriod()` for timeline groups
+- `RsvpBadge`: 4-tier urgency countdown (>48h muted, 24-48h amber, <24h red pulsing, past strikethrough) with info tooltip
+- `TimelineGroup`: sticky date group headers with overdue red background strip (`bg-red-50 dark:bg-red-950/30`)
+- `TimelineItem`: vertical timeline with colored dots (circle/diamond by type), inline expansion, birthday confetti-pop on mount, RSVP badge, lazy expansion via hasExpanded ref. Wrapped in React.memo
+- `TimelineView`: groups items by 6 time periods (Overdue → Later), staggered entrance animation with hasMounted guard, empty state, expansion management (one at a time)
+- `CalendarDayCell`: heat map intensity (4 levels by item count), up to 3 type dots, today ring (`ring-2 ring-primary`), tooltip with count breakdown. Wrapped in React.memo
+- `CalendarDayExpansion`: accordion row below grid week with item list, type dots, compact EventActions
+- `CalendarGrid`: month navigation, 7-column grid with week rows, day expansion below selected week, date-fns for calendar math, itemsByDate indexed with useMemo, color legend
+- `EventActions`: extracted action buttons with compact (icon-only + tooltips) and full (text + icon) modes, snooze dropdown with presets
+- `CalendarStats` refactored: 5 hand-rolled stat cards → 3 `StatCard` components with smart subtitles (today: next-up item, week: busiest day, overdue: oldest item)
+- Calendar page refactored: 1,234 → 297 lines thin orchestrator. Merged data via `mergeToCalendarItems()`, type filter pills, view toggle, URL params preserved (?view=, ?type=, ?highlight=)
+- Barrel exports updated with all 9 new component exports + CalendarItem type
+- All files under 400 lines, file-level JSDoc on every file
+- useMemo for data grouping, heat map computation, stat calculations; useCallback on all handlers
+- Also fixed pre-existing duplicate export in `priority-reassessment.ts`
 
 ### Phase 4: Delight & Polish (1 session)
 

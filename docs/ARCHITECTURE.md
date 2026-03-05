@@ -202,10 +202,10 @@ src/
     campaigns/                  # CampaignsContent (extracted from old campaigns page)
     templates/                  # TemplatesContent (extracted from old templates page)
     contacts/                   # ContactsTabs, PromoteToClientDialog
-    calendar/                   # CalendarStats
+    calendar/                   # CalendarStats, TimelineView, TimelineItem, TimelineGroup, CalendarGrid, CalendarDayCell, CalendarDayExpansion, EventActions, RsvpBadge, types.ts (Phase 3 Mar 2026)
     tasks/                      # TasksTabs (4 tabs: Triage, Board, Projects, Library)
     projects/                   # ProjectCard, ProjectItemRow, BoardContent, TriageContent, TriageTray, CreateItemDialog, PromoteActionDialog, QuickAcceptPopover (AllItemsContent deprecated Mar 2026)
-    shared/                     # PriorityCard (shared across pages)
+    shared/                     # PriorityCard, EmptyState, StatCard, CollapsibleSection (Phase 1 Mar 2026)
     discover/                   # DiscoverContent, CategoryCardGrid, ClientInsights, QuickActions, FailureSummary (wired to retry API)
     categories/                 # Category view (EmailCard, intelligence bar)
     layout/                     # Navbar, Sidebar, PageHeader
