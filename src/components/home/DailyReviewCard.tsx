@@ -70,6 +70,13 @@ const ACTION_ICONS: Record<string, React.ElementType> = {
   save: Bookmark,
 };
 
+/** Small helper to render action icons without React.createElement in JSX */
+function ActionIcon({ type }: { type: string }) {
+  const Icon = ACTION_ICONS[type];
+  if (!Icon) return null;
+  return <Icon className="h-3 w-3 text-muted-foreground" title={type.replace(/_/g, ' ')} />;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -119,7 +126,7 @@ function formatRelativeDate(dateStr: string): string {
  */
 function formatSender(name: string | null, email: string): string {
   if (name) return name;
-  return email.split('@')[0];
+  return email.split('@')[0] ?? email;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -249,22 +256,19 @@ export function DailyReviewCard({
                     )}
 
                     {/* Quick action icon */}
-                    {email.quick_action && ACTION_ICONS[email.quick_action] &&
-                      React.createElement(ACTION_ICONS[email.quick_action], {
-                        className: 'h-3 w-3 text-muted-foreground',
-                        title: email.quick_action.replace(/_/g, ' '),
-                      })
-                    }
+                    {email.quick_action && ACTION_ICONS[email.quick_action] && (
+                      <ActionIcon type={email.quick_action} />
+                    )}
 
                     {/* Signal indicators */}
                     {email.signal_strength === 'high' && (
-                      <Signal className="h-3 w-3 text-emerald-500" title="High signal" />
+                      <span title="High signal"><Signal className="h-3 w-3 text-emerald-500" /></span>
                     )}
                     {(email.reply_worthiness === 'must_reply' || email.reply_worthiness === 'should_reply') && (
-                      <Reply className="h-3 w-3 text-orange-500" title="Needs reply" />
+                      <span title="Needs reply"><Reply className="h-3 w-3 text-orange-500" /></span>
                     )}
                     {email.gist && (
-                      <Lightbulb className="h-3 w-3 text-amber-400" title="Has idea sparks" />
+                      <span title="Has idea sparks"><Lightbulb className="h-3 w-3 text-amber-400" /></span>
                     )}
                   </div>
                   {/* Gist/summary if available */}

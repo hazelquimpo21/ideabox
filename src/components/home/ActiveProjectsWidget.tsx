@@ -4,34 +4,33 @@
  * Home page widget showing the user's active projects with
  * completion progress. Includes a "View all" link to the Tasks page.
  *
+ * Performance fix (March 2026): pre-compute all project counts in a single
+ * pass with useMemo instead of calling getItemCounts per project in .map().
+ *
  * @module components/home/ActiveProjectsWidget
  * @since February 2026
  */
 
 'use client';
 
+import * as React from 'react';
 import Link from 'next/link';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  Badge,
   Button,
   Skeleton,
 } from '@/components/ui';
 import { ProjectDateRange } from '@/components/projects/ProjectDateRange';
-import {
-  FolderKanban,
-  ArrowRight,
-  Lightbulb,
-  CheckSquare,
-  Repeat,
-} from 'lucide-react';
+import { FolderKanban, ArrowRight } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import type { Project, ProjectItem } from '@/types/database';
 
 const logger = createLogger('ActiveProjectsWidget');
+
+const DEFAULT_PROJECT_COLOR = '#6b7280';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -43,15 +42,10 @@ export interface ActiveProjectsWidgetProps {
   isLoading: boolean;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function getItemCounts(projectId: string, items: ProjectItem[]) {
-  const projectItems = items.filter((i) => i.project_id === projectId);
-  const completed = projectItems.filter((i) => i.status === 'completed').length;
-  const total = projectItems.length;
-  return { total, completed, percent: total > 0 ? Math.round((completed / total) * 100) : 0 };
+interface ProjectCounts {
+  total: number;
+  completed: number;
+  percent: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -65,15 +59,43 @@ export function ActiveProjectsWidget({
 }: ActiveProjectsWidgetProps) {
   logger.debug('Rendering ActiveProjectsWidget', { projectCount: projects.length, isLoading });
 
-  const activeProjects = projects
-    .filter((p) => p.status === 'active')
-    .slice(0, 4);
+  const activeProjects = React.useMemo(
+    () => projects.filter((p) => p.status === 'active').slice(0, 4),
+    [projects]
+  );
+
+  // Pre-compute counts for ALL projects in a single pass — O(n) instead of O(n*m)
+  const countsMap = React.useMemo(() => {
+    const map = new Map<string, ProjectCounts>();
+    const totals = new Map<string, number>();
+    const completed = new Map<string, number>();
+
+    for (const item of items) {
+      const pid = item.project_id;
+      if (!pid) continue;
+      totals.set(pid, (totals.get(pid) || 0) + 1);
+      if (item.status === 'completed') {
+        completed.set(pid, (completed.get(pid) || 0) + 1);
+      }
+    }
+
+    for (const [pid, total] of totals) {
+      const comp = completed.get(pid) || 0;
+      map.set(pid, {
+        total,
+        completed: comp,
+        percent: total > 0 ? Math.round((comp / total) * 100) : 0,
+      });
+    }
+
+    return map;
+  }, [items]);
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
             <FolderKanban className="h-5 w-5 text-indigo-500" />
             Active Projects
           </CardTitle>
@@ -105,18 +127,17 @@ export function ActiveProjectsWidget({
         ) : (
           <div className="space-y-3">
             {activeProjects.map((project) => {
-              const counts = getItemCounts(project.id, items);
+              const counts = countsMap.get(project.id) || { total: 0, completed: 0, percent: 0 };
+              const color = project.color || DEFAULT_PROJECT_COLOR;
               return (
                 <div
                   key={project.id}
                   className="flex items-start gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-muted/50 transition-colors"
                 >
-                  {/* Color stripe */}
                   <div
                     className="w-1 h-8 rounded-full shrink-0 mt-0.5"
-                    style={{ backgroundColor: project.color || '#6b7280' }}
+                    style={{ backgroundColor: color }}
                   />
-
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{project.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
@@ -133,15 +154,11 @@ export function ActiveProjectsWidget({
                         compact
                       />
                     </div>
-                    {/* Mini progress bar */}
                     {counts.total > 0 && (
                       <div className="h-1 bg-muted rounded-full overflow-hidden mt-1.5 w-full">
                         <div
                           className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${counts.percent}%`,
-                            backgroundColor: project.color || '#6b7280',
-                          }}
+                          style={{ width: `${counts.percent}%`, backgroundColor: color }}
                         />
                       </div>
                     )}
