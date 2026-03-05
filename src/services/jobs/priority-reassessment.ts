@@ -632,5 +632,4 @@ function calculatePriority(
 
 export {
   calculatePriority,
-  PRIORITY_CONFIG,
 };
