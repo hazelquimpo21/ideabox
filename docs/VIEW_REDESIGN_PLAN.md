@@ -822,29 +822,18 @@ Before starting any phase, run a dead code check:
 
 ## 10. Phased Implementation
 
-### Phase 1: Foundation + Home (1 session)
+### Phase 1: Foundation + Home (1 session) — ✅ COMPLETE
 
 **Goal:** Build shared infrastructure, redesign Home to the Trifecta layout.
 
-**Steps:**
-1. Install `@radix-ui/react-tooltip` and create `src/components/ui/tooltip.tsx` (Radix-based, 3 tiers)
-2. Upgrade `src/components/ui/card.tsx` — add `elevation`, `accent`, `interactive` props; tighten padding defaults (§2d)
-3. Create `src/lib/utils/timeliness.ts` (color utility)
-4. Create `src/lib/utils/animations.ts` (entrance helpers, useAnimatedNumber)
-5. Add new keyframes to `globals.css`
-6. Create `src/components/shared/EmptyState.tsx`
-7. Create `src/components/shared/StatCard.tsx` (uses upgraded Card internally)
-8. Create `src/components/shared/CollapsibleSection.tsx`
-9. Refactor `DailyBriefingHeader.tsx` (personalized greeting)
-10. Create `NowCard.tsx` (single top-priority item from useHubPriorities)
-11. Refactor `TodaySchedule.tsx` → `TodayCard.tsx` (timeline format)
-12. Create `ThisWeekCard.tsx` (stat cluster)
-13. Refactor Home page layout to Trifecta + collapsible below-fold
-14. Delete removed Home components (EmailSummaryCard, InsightsCard, etc.)
-15. Update remaining Home components to use Card elevation/accent props (remove className hacks)
-16. Test all empty states, verify no TypeScript errors, run build
-
-**Verification:** Home page loads with 3 cards above fold, collapsible sections below. Cards use elevation props consistently. Tooltips work. Animations are smooth. Empty states display correctly. `npm run build` passes.
+**Completed March 2026.** 28 files changed, 1565 insertions, 2172 deletions. All 16 steps done:
+- Radix tooltip (3-tier), Card elevation/accent/interactive, timeliness utility, animation utilities
+- EmptyState, StatCard, CollapsibleSection shared components
+- NowCard, TodayCard, ThisWeekCard (Trifecta layout)
+- Home page restructured: Trifecta above fold, 4 CollapsibleSections below
+- 6 components deleted (EmailSummaryCard, InsightsCard, NewsBriefCard, SavedLinksCard, StyleInspirationCard, SummaryItemCapture)
+- ActiveProjectsWidget O(n) optimization, IdeaSparksCard config slimmed, DailyReviewCard ActionIcon extraction
+- TypeScript clean, all files under 400 lines
 
 ### Phase 2: Inbox Polish (1 session)
 
