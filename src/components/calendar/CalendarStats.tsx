@@ -1,146 +1,138 @@
 /**
- * Calendar Stats Banner Component
+ * CalendarStats — smart stats banner with 3 StatCard components.
+ * Implements §6a from VIEW_REDESIGN_PLAN.md (Phase 3 redesign).
  *
- * Displays merged statistics from both Events and Timeline data sources.
- * Shows counts for upcoming events, overdue deadlines, birthdays this month,
- * and other key metrics in a grid layout.
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * DATA SOURCES
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * - Event stats: from useEvents().stats (total, today, thisWeek, maybe, saved)
- * - Date stats: from useExtractedDates().stats (total, overdue, pending, acknowledged)
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * USAGE
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * ```tsx
- * <CalendarStats
- *   eventStats={eventStats}
- *   dateStats={dateStats}
- * />
- * ```
+ * Shows Today (with next-up subtitle), This Week (with busiest day),
+ * and Overdue (with oldest item) as animated stat cards.
  *
  * @module components/calendar/CalendarStats
- * @since February 2026 — Phase 2 Navigation Redesign
+ * @since February 2026 — Phase 2, refactored March 2026 — Phase 3
  */
 
 'use client';
 
-import {
-  Card,
-  CardContent,
-} from '@/components/ui';
-import {
-  Calendar,
-  CalendarCheck,
-  CalendarDays,
-  AlertTriangle,
-  Clock,
-  Check,
-  CalendarClock,
-} from 'lucide-react';
+import * as React from 'react';
+import { StatCard } from '@/components/shared/StatCard';
 import { createLogger } from '@/lib/utils/logger';
-import type { EventStats } from '@/hooks/useEvents';
-import type { DateStats } from '@/hooks/useExtractedDates';
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOGGER
-// ═══════════════════════════════════════════════════════════════════════════════
+import type { CalendarItem } from './types';
 
 const logger = createLogger('CalendarStats');
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════════════════════════
-
 export interface CalendarStatsProps {
-  /** Event statistics from useEvents */
-  eventStats: EventStats;
-  /** Date statistics from useExtractedDates */
-  dateStats: DateStats;
+  items: CalendarItem[];
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════════
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/**
- * Calendar Stats Banner — merged statistics from events and timeline.
- *
- * Shows key metrics in a responsive grid: total items, today's count,
- * this week, overdue, and pending items.
- */
-export function CalendarStats({ eventStats, dateStats }: CalendarStatsProps) {
-  logger.debug('Rendering CalendarStats', { eventStats, dateStats });
+export function CalendarStats({ items }: CalendarStatsProps) {
+  const stats = React.useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
 
-  const totalItems = eventStats.total + dateStats.total;
-  const todayCount = eventStats.today;
-  const overdueCount = dateStats.overdue;
-  const pendingCount = dateStats.pending;
+    // End of this week (upcoming Sunday)
+    const endOfWeek = new Date(now);
+    endOfWeek.setDate(endOfWeek.getDate() + (7 - endOfWeek.getDay()));
+    const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
+
+    const todayItems: CalendarItem[] = [];
+    const weekItems: CalendarItem[] = [];
+    const overdueItems: CalendarItem[] = [];
+
+    for (const item of items) {
+      const d = item.dateString;
+      if (d < todayStr && !item.isAcknowledged) {
+        overdueItems.push(item);
+      }
+      if (d === todayStr) {
+        todayItems.push(item);
+      }
+      if (d >= todayStr && d <= endOfWeekStr) {
+        weekItems.push(item);
+      }
+    }
+
+    // Today subtitle: find next upcoming item by time
+    let todaySubtitle = 'All clear';
+    if (todayItems.length > 0) {
+      const nowTime = now.toTimeString().slice(0, 5);
+      const upcoming = todayItems
+        .filter((i) => i.time && i.time > nowTime)
+        .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+      if (upcoming.length > 0) {
+        todaySubtitle = `Next: ${upcoming[0]!.title.slice(0, 25)}`;
+      } else {
+        todaySubtitle = `${todayItems.length} item${todayItems.length > 1 ? 's' : ''} today`;
+      }
+    }
+
+    // Week subtitle: find the day of week with the most items
+    let weekSubtitle = '';
+    if (weekItems.length > 0) {
+      const dayCounts: Record<number, number> = {};
+      for (const item of weekItems) {
+        const dayOfWeek = item.date.getDay();
+        dayCounts[dayOfWeek] = (dayCounts[dayOfWeek] || 0) + 1;
+      }
+      let busiestDay = 0;
+      let busiestCount = 0;
+      for (const [day, count] of Object.entries(dayCounts)) {
+        if (count > busiestCount) {
+          busiestDay = Number(day);
+          busiestCount = count;
+        }
+      }
+      weekSubtitle = `Busiest: ${DAY_NAMES[busiestDay]} (${busiestCount})`;
+    }
+
+    // Overdue subtitle: show the oldest overdue item
+    let overdueSubtitle = 'None';
+    if (overdueItems.length > 0) {
+      const oldest = overdueItems.sort(
+        (a, b) => a.dateString.localeCompare(b.dateString)
+      )[0]!;
+      const daysAgo = Math.floor(
+        (now.getTime() - oldest.date.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const titleSnippet = oldest.title.length > 20
+        ? oldest.title.slice(0, 20) + '…'
+        : oldest.title;
+      overdueSubtitle = `${titleSnippet} (${daysAgo}d ago)`;
+    }
+
+    logger.debug('Calendar stats', {
+      today: todayItems.length,
+      thisWeek: weekItems.length,
+      overdue: overdueItems.length,
+    });
+
+    return {
+      todayCount: todayItems.length,
+      todaySubtitle,
+      weekCount: weekItems.length,
+      weekSubtitle,
+      overdueCount: overdueItems.length,
+      overdueSubtitle,
+    };
+  }, [items]);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-      {/* Total Items */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <CalendarClock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-2xl font-bold">{totalItems}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Total Items</p>
-        </CardContent>
-      </Card>
-
-      {/* Today */}
-      <Card className={todayCount > 0 ? 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20' : ''}>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <CalendarCheck className={`h-4 w-4 ${todayCount > 0 ? 'text-green-500' : 'text-muted-foreground'}`} />
-            <span className={`text-2xl font-bold ${todayCount > 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
-              {todayCount}
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Today</p>
-        </CardContent>
-      </Card>
-
-      {/* This Week */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-blue-500" />
-            <span className="text-2xl font-bold">{eventStats.thisWeek}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">This Week</p>
-        </CardContent>
-      </Card>
-
-      {/* Overdue */}
-      <Card className={overdueCount > 0 ? 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20' : ''}>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className={`h-4 w-4 ${overdueCount > 0 ? 'text-red-500' : 'text-muted-foreground'}`} />
-            <span className={`text-2xl font-bold ${overdueCount > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
-              {overdueCount}
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Overdue</p>
-        </CardContent>
-      </Card>
-
-      {/* Pending */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-orange-500" />
-            <span className="text-2xl font-bold">{pendingCount}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Pending</p>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <StatCard
+        label="Today"
+        value={stats.todayCount}
+        subtitle={stats.todaySubtitle}
+      />
+      <StatCard
+        label="This Week"
+        value={stats.weekCount}
+        subtitle={stats.weekSubtitle}
+      />
+      <StatCard
+        label="Overdue"
+        value={stats.overdueCount}
+        subtitle={stats.overdueSubtitle}
+        className={stats.overdueCount > 0 ? 'bg-red-50/80 dark:bg-red-950/20' : undefined}
+      />
     </div>
   );
 }

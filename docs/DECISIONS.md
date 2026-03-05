@@ -49,6 +49,7 @@
 | Event Weighting | 18-type taxonomy + 4-tier commitment + composite weight | Events need structured classification + ranking, not just flat date lists; see Decision #32 |
 | View Redesign Phase 1 | Shared infra + Trifecta home layout | Tooltip, Card elevation, timeliness utility, animation utils — reused across all phases; see Decision #33 |
 | View Redesign Phase 2 | Inbox polish: component extraction + timeliness rows | InboxFeed 682→264 lines, 7 extracted components, sparklines, hover actions; see Decision #34 |
+| View Redesign Phase 3 | Calendar redesign: timeline + heat map + RSVP badges | Calendar page 1234→297 lines, 10 new components, unified CalendarItem type; see Decision #35 |
 
 ---
 
@@ -923,6 +924,32 @@ When making new architectural decisions, document them here using this template:
 - useCallback on all handlers passed as props
 - See `docs/prompts/PHASE_2_PROMPT.md` for full prompt
 
+### 35. View Redesign Phase 3: Calendar Redesign — Timeline + Heat Map + RSVP Badges (March 2026)
+
+**Decision:** Break the monolithic Calendar page (1,234 lines) into a thin orchestrator with extracted timeline, grid, and action components. Introduce a unified `CalendarItem` type to merge both data sources, and add event type color/shape consistency across all views.
+
+**Alternatives Considered:**
+- Keep the page monolithic but add timeline features inline (unmaintainable at 1,234 lines)
+- Create a separate timeline page instead of refactoring (fragments user experience)
+- Use a third-party calendar library (unnecessary weight, limits customization)
+
+**Rationale:**
+- Calendar page was the second largest file in the codebase — extracting TimelineView, CalendarGrid, CalendarStats, EventActions, RsvpBadge, and type utilities made each piece focused and testable
+- Unified `CalendarItem` type normalizes EventData (from useEvents) and ExtractedDate (from useExtractedDates) into one shape, eliminating parallel rendering paths
+- Event type color map (§2b) uses circle shapes for general events and diamond shapes for deadlines/payments — visual distinction without reading labels
+- Heat map intensity on calendar grid cells provides at-a-glance density awareness (4 levels)
+- Birthday items get `confetti-pop` animation on first mount only (hasMounted ref guard)
+- RSVP badges show 4 urgency tiers computed from deadline proximity
+- Timeline groups items by time period (Overdue first with red strip) with vertical line + colored dots
+- Inline expansion (no modals) for both timeline items and calendar day cells preserves spatial context
+
+**Implementation:**
+- 10 new components + 3 refactored, 14 files changed, 1729 insertions, 1179 deletions
+- Calendar page: 1,234 → 297 lines
+- React.memo on TimelineItem and CalendarDayCell (list items)
+- useMemo for data grouping, heat map, stat calculations; useCallback on all handlers
+- See `docs/prompts/PHASE_3_PROMPT.md` for full prompt
+
 ---
 
 ## Change Log
@@ -945,3 +972,4 @@ When making new architectural decisions, document them here using this template:
 | Mar 2026 | Event suggestion weighting: 18-type taxonomy, 4-tier commitment, composite weight (6 signals), recalibrated relevance scoring | Claude (event weighting) |
 | Mar 2026 | View Redesign Phase 1: Shared infra (tooltip, card, timeliness, animations) + Trifecta home layout | Claude (view redesign phase 1) |
 | Mar 2026 | View Redesign Phase 2: Inbox polish — InboxFeed breakup (682→264 lines), 7 extracted components, timeliness rows, sparklines, hover actions | Claude (view redesign phase 2) |
+| Mar 2026 | View Redesign Phase 3: Calendar redesign — timeline view, heat map grid, RSVP badges, birthday delight, calendar page 1234→297 lines | Claude (view redesign phase 3) |
