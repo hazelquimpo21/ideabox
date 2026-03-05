@@ -16,10 +16,20 @@ export { CategoryIcon } from './CategoryIcon';
 export { SenderLogo } from './SenderLogo';
 export { PriorityEmailList } from './PriorityEmailList';
 export { InboxSummaryBanner } from './InboxSummaryBanner';
-// Phase 2 additions
 export { InboxFilterBar } from './InboxFilterBar';
+export { FeedControls } from './FeedControls';
+
+// Phase 2 — extracted components
+export { EmailList } from './EmailList';
+export { InboxSearchBar } from './InboxSearchBar';
+export { InboxEmptyState } from './InboxEmptyState';
+export { EmailHoverActions } from './EmailHoverActions';
+export { EmailRowIndicators } from './EmailRowIndicators';
+export { DiscoveryItem } from './DiscoveryItem';
+export { CategorySparkline } from './CategorySparkline';
+
+// Legacy feed exports — kept for backward compatibility
 export { IdeasFeed } from './IdeasFeed';
 export { InsightsFeed } from './InsightsFeed';
 export { NewsFeed } from './NewsFeed';
 export { LinksFeed } from './LinksFeed';
-export { FeedControls } from './FeedControls';

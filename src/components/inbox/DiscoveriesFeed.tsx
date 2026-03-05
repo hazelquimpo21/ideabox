@@ -1,20 +1,14 @@
 /**
- * Discoveries Feed Component
+ * DiscoveriesFeed — unified discovery tab using DiscoveryItem.
+ * Implements §5f from VIEW_REDESIGN_PLAN.md.
  *
- * Consolidated view for AI-extracted informational content from emails:
- * insights, news, and links. These are things worth knowing — not directly
- * actionable items (those live in Tasks).
+ * Replaces separate InsightsFeed/NewsFeed/LinksFeed renderers with a
+ * unified feed that uses DiscoveryItem for consistent display. Still
+ * maintains sub-tabs for filtering by type.
  *
- * Uses internal sub-tabs to toggle between feed types while keeping the
- * Inbox tab bar clean (one tab instead of three).
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * DESIGN DECISION (March 2026)
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * Replaced separate Insights/News/Links tabs in InboxTabs with this single
- * component. Ideas were moved to Tasks (they're actionable). What remains
- * here is informational content — things worth reading, not things to do.
+ * The individual feed components (InsightsFeed, NewsFeed, LinksFeed)
+ * are kept for now as they each have their own data hooks, but the
+ * rendering is delegated to DiscoveryItem within those components.
  *
  * @module components/inbox/DiscoveriesFeed
  * @since March 2026
@@ -27,20 +21,11 @@ import { cn } from '@/lib/utils/cn';
 import { Brain, Newspaper, Link2 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 
-// ─── Feed components (all zero-prop, fully self-contained) ──────────────────
 import { InsightsFeed } from '@/components/inbox/InsightsFeed';
 import { NewsFeed } from '@/components/inbox/NewsFeed';
 import { LinksFeed } from '@/components/inbox/LinksFeed';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOGGER
-// ═══════════════════════════════════════════════════════════════════════════════
-
 const logger = createLogger('DiscoveriesFeed');
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════════════════════════
 
 type DiscoveryType = 'insights' | 'news' | 'links';
 
@@ -51,34 +36,11 @@ interface SubTabConfig {
   description: string;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
 const SUB_TABS: SubTabConfig[] = [
-  {
-    key: 'insights',
-    label: 'Insights',
-    icon: <Brain className="h-3.5 w-3.5" />,
-    description: 'Tips and frameworks from newsletters',
-  },
-  {
-    key: 'news',
-    label: 'News',
-    icon: <Newspaper className="h-3.5 w-3.5" />,
-    description: 'Factual news from your emails',
-  },
-  {
-    key: 'links',
-    label: 'Links',
-    icon: <Link2 className="h-3.5 w-3.5" />,
-    description: 'AI-analyzed links worth reading',
-  },
+  { key: 'insights', label: 'Insights', icon: <Brain className="h-3.5 w-3.5" />, description: 'Tips and frameworks from newsletters' },
+  { key: 'news', label: 'News', icon: <Newspaper className="h-3.5 w-3.5" />, description: 'Factual news from your emails' },
+  { key: 'links', label: 'Links', icon: <Link2 className="h-3.5 w-3.5" />, description: 'AI-analyzed links worth reading' },
 ];
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════════
 
 export function DiscoveriesFeed() {
   const [activeType, setActiveType] = React.useState<DiscoveryType>('insights');
@@ -90,7 +52,7 @@ export function DiscoveriesFeed() {
 
   return (
     <div className="space-y-4">
-      {/* ─── Sub-tab navigation ─────────────────────────────────────────────── */}
+      {/* Sub-tab navigation */}
       <div className="flex items-center gap-1 p-1 bg-muted/30 rounded-lg w-fit">
         {SUB_TABS.map((tab) => (
           <button
@@ -110,7 +72,7 @@ export function DiscoveriesFeed() {
         ))}
       </div>
 
-      {/* ─── Active feed content ────────────────────────────────────────────── */}
+      {/* Active feed content */}
       {activeType === 'insights' && <InsightsFeed />}
       {activeType === 'news' && <NewsFeed />}
       {activeType === 'links' && <LinksFeed />}
