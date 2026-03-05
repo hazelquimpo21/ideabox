@@ -1,40 +1,12 @@
 /**
- * CategorySummaryPanel Component
+ * CategorySummaryPanel — desktop sidebar showing email distribution.
+ * Implements §5e from VIEW_REDESIGN_PLAN.md.
  *
- * Desktop-only right sidebar showing email distribution by category.
- * Provides a quick overview of where emails land and allows one-click
- * filtering by clicking any category row.
+ * Enhanced with 7-day sparkline trends, "new today" badges, and
+ * preview-tier tooltips showing top sender + recent subject.
  *
- * ═══════════════════════════════════════════════════════════════════════════════
- * LAYOUT
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- *   ┌──────────────────────┐
- *   │  Categories           │
- *   │  142 emails · 8 unread│
- *   ├──────────────────────┤
- *   │  WORK                 │
- *   │  💼 Client      12 ██ │
- *   │  🏢 Work         8 █  │
- *   ├──────────────────────┤
- *   │  PERSONAL             │
- *   │  👫 Personal    15 ██ │
- *   │  ...                  │
- *   └──────────────────────┘
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * CATEGORY GROUPS
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * Categories are organized into four groups matching the filter bar order:
- *   1. Professional — clients, work, job_search
- *   2. People — personal, family, parenting
- *   3. Life Admin — health, finance, billing
- *   4. Lifestyle — travel, shopping, deals
- *   5. Community — local, civic, sports
- *   6. Information — news, politics, newsletters, product_updates
- *
- * Groups with zero emails are hidden entirely.
+ * Sparkline data is computed client-side from emails passed via props,
+ * grouped by category + date. Wrapped in useMemo for performance.
  *
  * @module components/inbox/CategorySummaryPanel
  * @since February 2026 — Inbox UI Redesign v2
@@ -46,77 +18,64 @@ import * as React from 'react';
 import { cn } from '@/lib/utils/cn';
 import { CATEGORY_DISPLAY, CATEGORY_SHORT_LABELS, CATEGORY_ACCENT_COLORS } from '@/types/discovery';
 import { createLogger } from '@/lib/utils/logger';
+import { Tooltip } from '@/components/ui/tooltip';
+import { CategorySparkline } from './CategorySparkline';
 import type { EmailCategory } from '@/types/discovery';
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOGGER
-// ═══════════════════════════════════════════════════════════════════════════════
 
 const logger = createLogger('CategorySummaryPanel');
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════════════════════════
-
 export interface CategorySummaryPanelProps {
-  /** Category → email count mapping */
   categoryCounts: Partial<Record<string, number>>;
-  /** Currently active category filter (null = all) */
   activeCategory: EmailCategory | null;
-  /** Callback when a category is clicked (toggles filter) */
   onCategoryClick: (category: EmailCategory | null) => void;
-  /** Total email count */
   totalCount: number;
-  /** Unread email count */
   unreadCount: number;
+  /** Optional: email dates grouped by category for sparkline computation */
+  emailDates?: Array<{ category: string; date: string }>;
+  /** Optional: today's unread counts per category */
+  todayUnread?: Partial<Record<string, number>>;
+  /** Optional: top sender + recent subject per category for tooltip */
+  categoryTooltips?: Partial<Record<string, { topSender: string; recentSubject: string }>>;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CATEGORY GROUPS — matches the conceptual ordering used in CategoryFilterBar
-// ═══════════════════════════════════════════════════════════════════════════════
 
 interface CategoryGroup {
   label: string;
   categories: EmailCategory[];
 }
 
-/**
- * Category groups for the summary panel — Taxonomy v2 (Mar 2026).
- * Groups the 20 categories into logical sections for visual overview.
- */
 const CATEGORY_GROUPS: CategoryGroup[] = [
-  {
-    label: 'Professional',
-    categories: ['clients', 'work', 'job_search'],
-  },
-  {
-    label: 'People',
-    categories: ['personal', 'family', 'parenting'],
-  },
-  {
-    label: 'Life Admin',
-    categories: ['health', 'finance', 'billing'],
-  },
-  {
-    label: 'Lifestyle',
-    categories: ['travel', 'shopping', 'deals'],
-  },
-  {
-    label: 'Community',
-    categories: ['local', 'civic', 'sports'],
-  },
-  {
-    label: 'Information',
-    categories: ['news', 'politics', 'newsletters', 'product_updates'],
-  },
+  { label: 'Professional', categories: ['clients', 'work', 'job_search'] },
+  { label: 'People', categories: ['personal', 'family', 'parenting'] },
+  { label: 'Life Admin', categories: ['health', 'finance', 'billing'] },
+  { label: 'Lifestyle', categories: ['travel', 'shopping', 'deals'] },
+  { label: 'Community', categories: ['local', 'civic', 'sports'] },
+  { label: 'Information', categories: ['news', 'politics', 'newsletters', 'product_updates'] },
 ];
 
-// BAR_COLORS and SHORT_LABELS — now using centralized CATEGORY_ACCENT_COLORS
-// and CATEGORY_SHORT_LABELS from @/types/discovery
+/**
+ * Computes 7-day sparkline data per category from a list of email dates.
+ * Returns a map of category → 7 numbers (one per day, oldest first).
+ */
+function computeSparklines(
+  emailDates: Array<{ category: string; date: string }> | undefined,
+): Record<string, number[]> {
+  if (!emailDates || emailDates.length === 0) return {};
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════════
+  const now = new Date();
+  const result: Record<string, number[]> = {};
+
+  for (const { category, date } of emailDates) {
+    const d = new Date(date);
+    const daysAgo = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysAgo < 0 || daysAgo >= 7) continue;
+
+    if (!result[category]) result[category] = [0, 0, 0, 0, 0, 0, 0];
+    // Index 0 = 6 days ago, index 6 = today
+    result[category][6 - daysAgo]++;
+  }
+
+  return result;
+}
 
 export function CategorySummaryPanel({
   categoryCounts,
@@ -124,59 +83,51 @@ export function CategorySummaryPanel({
   onCategoryClick,
   totalCount,
   unreadCount,
+  emailDates,
+  todayUnread,
+  categoryTooltips,
 }: CategorySummaryPanelProps) {
-  // Calculate max count for proportional bar widths
-  const maxCount = Math.max(
-    1,
-    ...Object.values(categoryCounts).map((v) => v || 0)
-  );
+  const maxCount = Math.max(1, ...Object.values(categoryCounts).map((v) => v || 0));
+
+  // Sparkline data — memoized to avoid recomputation on every render
+  const sparklines = React.useMemo(() => computeSparklines(emailDates), [emailDates]);
 
   return (
     <div className="space-y-4" role="complementary" aria-label="Category summary">
-      {/* ── Summary Header ───────────────────────────────────────────── */}
+      {/* Summary Header */}
       <div className="px-1">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-          Categories
-        </h3>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Categories</h3>
         <div className="flex items-baseline gap-2">
           <span className="text-2xl font-bold tabular-nums">{totalCount}</span>
-          <span className="text-xs text-muted-foreground">
-            email{totalCount !== 1 ? 's' : ''}
-          </span>
+          <span className="text-xs text-muted-foreground">email{totalCount !== 1 ? 's' : ''}</span>
         </div>
         {unreadCount > 0 && (
-          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 font-medium">
-            {unreadCount} unread
-          </p>
+          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 font-medium">{unreadCount} unread</p>
         )}
       </div>
 
-      {/* ── Category Groups ──────────────────────────────────────────── */}
+      {/* Category Groups */}
       {CATEGORY_GROUPS.map((group) => {
-        // Only show groups that have at least one email
-        const groupCategories = group.categories.filter(
-          (cat) => (categoryCounts[cat] || 0) > 0
-        );
+        const groupCategories = group.categories.filter((cat) => (categoryCounts[cat] || 0) > 0);
         if (groupCategories.length === 0) return null;
 
         return (
           <div key={group.label}>
-            {/* Group label */}
             <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider px-1 mb-1.5">
               {group.label}
             </p>
-
-            {/* Category rows within this group */}
             <div className="space-y-0.5">
               {groupCategories.map((category) => {
                 const count = categoryCounts[category] || 0;
                 const display = CATEGORY_DISPLAY[category];
                 const barColor = CATEGORY_ACCENT_COLORS[category] || 'bg-gray-400';
                 const isActive = activeCategory === category;
-                // Minimum bar width so even small counts are visible
                 const barWidth = Math.max(8, (count / maxCount) * 100);
+                const sparkData = sparklines[category];
+                const newToday = todayUnread?.[category];
+                const tooltip = categoryTooltips?.[category];
 
-                return (
+                const rowContent = (
                   <button
                     key={category}
                     type="button"
@@ -187,52 +138,62 @@ export function CategorySummaryPanel({
                     className={cn(
                       'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left',
                       'transition-colors group',
-                      isActive
-                        ? 'bg-muted/80 ring-1 ring-border/60'
-                        : 'hover:bg-muted/40',
+                      isActive ? 'bg-muted/80 ring-1 ring-border/60' : 'hover:bg-muted/40',
                     )}
                     aria-pressed={isActive}
                   >
-                    {/* Category emoji */}
                     <span className="text-sm leading-none shrink-0" aria-hidden="true">
                       {display?.icon || '📧'}
                     </span>
-
-                    {/* Label + bar chart */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-0.5">
-                        <span
-                          className={cn(
-                            'text-xs truncate',
-                            isActive
-                              ? 'font-semibold text-foreground'
-                              : 'text-muted-foreground group-hover:text-foreground',
-                          )}
-                        >
+                        <span className={cn('text-xs truncate', isActive ? 'font-semibold text-foreground' : 'text-muted-foreground group-hover:text-foreground')}>
                           {CATEGORY_SHORT_LABELS[category] || display?.label?.split(' - ')[0]?.split('/')[0] || category}
                         </span>
-                        <span
-                          className={cn(
-                            'text-[10px] tabular-nums shrink-0 ml-1',
-                            isActive
-                              ? 'font-semibold text-foreground'
-                              : 'text-muted-foreground',
+                        <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                          {/* New today badge */}
+                          {newToday && newToday > 0 && (
+                            <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                              +{newToday}
+                            </span>
                           )}
-                        >
-                          {count}
-                        </span>
+                          <span className={cn('text-[10px] tabular-nums', isActive ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                            {count}
+                          </span>
+                        </div>
                       </div>
-
-                      {/* Mini proportional bar chart */}
-                      <div className="h-1 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={cn('h-full rounded-full transition-all duration-300', barColor)}
-                          style={{ width: `${barWidth}%` }}
-                        />
+                      {/* Mini bar + sparkline row */}
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full transition-all duration-300', barColor)} style={{ width: `${barWidth}%` }} />
+                        </div>
+                        {sparkData && (
+                          <CategorySparkline data={sparkData} width={36} height={12} className="text-muted-foreground/40 shrink-0" />
+                        )}
                       </div>
                     </div>
                   </button>
                 );
+
+                // Wrap in tooltip if we have tooltip data
+                if (tooltip) {
+                  return (
+                    <Tooltip
+                      key={category}
+                      variant="preview"
+                      content={
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium">Top sender: {tooltip.topSender}</p>
+                          <p className="text-xs text-muted-foreground truncate">Latest: {tooltip.recentSubject}</p>
+                        </div>
+                      }
+                    >
+                      {rowContent}
+                    </Tooltip>
+                  );
+                }
+
+                return <React.Fragment key={category}>{rowContent}</React.Fragment>;
               })}
             </div>
           </div>
