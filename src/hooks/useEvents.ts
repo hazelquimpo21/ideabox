@@ -720,36 +720,36 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsReturn {
   const fetchEventStates = React.useCallback(async (eventIds: string[]) => {
     if (eventIds.length === 0) return;
 
-    logger.debug('Fetching states for events', { count: eventIds.length });
+    logger.debug('Batch fetching states for events', { count: eventIds.length });
 
-    const newStatesMap = new Map<string, EventState[]>();
+    try {
+      // Single batch request instead of N+1 individual fetches
+      const response = await fetch(`/api/events/states?ids=${eventIds.join(',')}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
 
-    // Fetch states for each event
-    // In a real implementation, we might batch this into a single API call
-    const statePromises = eventIds.map(async (eventId) => {
-      try {
-        const response = await fetch(`/api/events/${eventId}/state`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.data?.states) {
-            newStatesMap.set(eventId, data.data.states);
+      const data = await response.json();
+      if (data.success && data.data) {
+        const newStatesMap = new Map<string, EventState[]>();
+        for (const [eventId, states] of Object.entries(data.data)) {
+          if (Array.isArray(states) && states.length > 0) {
+            newStatesMap.set(eventId, states as EventState[]);
           }
         }
-      } catch (err) {
-        logger.warn('Failed to fetch states for event', {
-          eventId: eventId.substring(0, 8),
-          error: err instanceof Error ? err.message : 'Unknown error',
+        setEventStatesMap(newStatesMap);
+
+        logger.debug('Event states batch fetched', {
+          eventsWithStates: newStatesMap.size,
         });
       }
-    });
-
-    await Promise.all(statePromises);
-
-    setEventStatesMap(newStatesMap);
-
-    logger.debug('Event states fetched', {
-      eventsWithStates: newStatesMap.size,
-    });
+    } catch (err) {
+      logger.warn('Failed to batch fetch event states', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+      // Don't fail the whole events fetch — just proceed without states
+      setEventStatesMap(new Map());
+    }
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────

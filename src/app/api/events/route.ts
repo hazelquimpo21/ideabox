@@ -63,6 +63,10 @@ import {
 } from '@/lib/api/utils';
 import { createLogger } from '@/lib/utils/logger';
 import { computeCompositeWeight } from '@/services/events/composite-weight';
+import {
+  fetchUserPreferences,
+  type PreferenceCache,
+} from '@/services/events/preference-learning';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -232,11 +236,18 @@ function buildEventResponse(
   row: any,
   eventDetection: EventDetectionData,
   categorization: CategorizationData | null,
-  idSuffix?: string
+  idSuffix?: string,
+  preferenceCache?: PreferenceCache
 ): EventResponse {
   const eventDate = eventDetection.event_date || row.date?.split('T')[0] || getToday();
 
+  // Extract sender domain for preference lookups
+  const senderDomain = row.sender_email
+    ? row.sender_email.split('@')[1]
+    : undefined;
+
   // Compute composite weight for sorting/ranking (NEW March 2026)
+  // Now includes behavior weight from preference learning (Phase 4)
   const compositeWeightResult = computeCompositeWeight({
     eventType: eventDetection.event_type,
     commitmentLevel: eventDetection.commitment_level,
@@ -246,6 +257,9 @@ function buildEventResponse(
     hasPriorExchange: false, // TODO: wire up prior exchange check
     eventDate: eventDetection.event_date,
     rsvpDeadline: eventDetection.registration_deadline,
+    preferenceCache,
+    senderDomain,
+    emailCategory: categorization?.category,
   });
 
   const eventMetadata: EventMetadata | null = {
@@ -316,7 +330,7 @@ function buildEventResponse(
  * @param row - Raw database row from the query
  * @returns Array of normalized event response objects (usually 1, but may be many)
  */
-function transformToEventResponses(row: any): EventResponse[] {
+function transformToEventResponses(row: any, preferenceCache?: PreferenceCache): EventResponse[] {
   const eventDetection: EventDetectionData | null = row.email_analyses?.event_detection;
   const multiEventDetection: MultiEventDetectionData | null = row.email_analyses?.multi_event_detection;
   const categorization: CategorizationData | null = row.email_analyses?.categorization;
@@ -326,13 +340,13 @@ function transformToEventResponses(row: any): EventResponse[] {
   // have set has_multiple_events=false but still populated events (fallback case)
   if (multiEventDetection?.events?.length > 0) {
     return multiEventDetection.events.map((event, index) =>
-      buildEventResponse(row, event, categorization, `me${index}`)
+      buildEventResponse(row, event, categorization, `me${index}`, preferenceCache)
     );
   }
 
   // Single event path
   if (eventDetection?.has_event && eventDetection.event_date) {
-    return [buildEventResponse(row, eventDetection, categorization)];
+    return [buildEventResponse(row, eventDetection, categorization, undefined, preferenceCache)];
   }
 
   // No usable event data — skip this row entirely instead of creating a
@@ -526,6 +540,14 @@ export async function GET(request: NextRequest) {
     logger.debug('Raw query returned', { rowCount: data?.length || 0, totalCount: count });
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // Step 6b: Fetch user preferences for personalized ranking (Phase 4)
+    //
+    // Single query that loads all preferences into memory. Passed to
+    // buildEventResponse() so composite weight includes behavior signal.
+    // ─────────────────────────────────────────────────────────────────────────────
+    const preferenceCache = await fetchUserPreferences(supabase, user.id);
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Step 7: Transform and filter results
     //
     // Transform raw database rows into EventResponse format and apply
@@ -534,7 +556,7 @@ export async function GET(request: NextRequest) {
     const today = getToday();
 
     let events: EventResponse[] = (data || [])
-      .flatMap(transformToEventResponses)
+      .flatMap(row => transformToEventResponses(row, preferenceCache))
       // Filter out events without valid dates
       .filter(event => event.date && event.date !== 'Invalid Date');
 

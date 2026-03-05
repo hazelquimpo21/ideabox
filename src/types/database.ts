@@ -1190,6 +1190,7 @@ export interface Database {
           user_id: string;
           email_id: string;
           state: 'dismissed' | 'maybe' | 'saved_to_calendar';
+          event_index: number | null;
           notes: string | null;
           created_at: string;
           updated_at: string;
@@ -1199,11 +1200,39 @@ export interface Database {
           user_id: string;
           email_id: string;
           state: 'dismissed' | 'maybe' | 'saved_to_calendar';
+          event_index?: number | null;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['user_event_states']['Insert']>;
+      };
+      user_event_preferences: {
+        Row: {
+          id: string;
+          user_id: string;
+          preference_type: 'event_type' | 'sender_domain' | 'category' | 'keyword';
+          preference_key: string;
+          preference_score: number;
+          positive_count: number;
+          negative_count: number;
+          total_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          preference_type: 'event_type' | 'sender_domain' | 'category' | 'keyword';
+          preference_key: string;
+          preference_score?: number;
+          positive_count?: number;
+          negative_count?: number;
+          total_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['user_event_preferences']['Insert']>;
       };
       email_templates: {
         Row: {

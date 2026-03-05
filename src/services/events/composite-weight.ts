@@ -47,6 +47,11 @@ import {
   type EventType,
   type CommitmentLevel,
 } from '@/services/analyzers/types';
+import {
+  getBehaviorWeightFromPreferences,
+  type PreferenceCache,
+  type EventSignals,
+} from '@/services/events/preference-learning';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -74,6 +79,12 @@ export interface CompositeWeightInput {
   rsvpDeadline?: string;
   /** User is dismissed this event */
   isDismissed?: boolean;
+  /** User's preference cache (from fetchUserPreferences). Enables personalized ranking. */
+  preferenceCache?: PreferenceCache;
+  /** Sender domain (e.g., 'meetup.com') for preference lookups */
+  senderDomain?: string;
+  /** Email category (e.g., 'community', 'work') for preference lookups */
+  emailCategory?: string;
 }
 
 /**
@@ -189,20 +200,25 @@ function dateProximityToUrgency(daysLeft: number): number {
 }
 
 /**
- * Behavior weight — placeholder for preference learning (Phase 4).
+ * Behavior weight from preference learning (Phase 4).
  *
- * In the future, this will read from user_event_preferences to adjust
- * weight based on accumulated dismiss/save patterns per event type,
- * sender domain, and category.
+ * When a preferenceCache is provided, calculates personalized weight based on
+ * accumulated dismiss/save patterns for the event's type, sender domain,
+ * and email category. Without a cache, returns neutral 0.5.
  *
- * For now, returns a neutral 0.5 (no preference signal).
+ * @param input - Composite weight input with optional preferenceCache
+ * @returns Behavior weight (0.0–1.0), 0.5 = neutral
  */
-function getBehaviorWeight(_input: CompositeWeightInput): number {
-  // TODO (Phase 4): Replace with preference learning lookup
-  // const typeScore = getPreferenceScore(userId, 'event_type', input.eventType);
-  // const domainScore = getPreferenceScore(userId, 'sender_domain', senderDomain);
-  // return normalize(typeScore) * 0.7 + normalize(domainScore) * 0.3;
-  return 0.5;
+function getBehaviorWeight(input: CompositeWeightInput): number {
+  if (!input.preferenceCache) return 0.5;
+
+  const signals: EventSignals = {
+    eventType: input.eventType,
+    senderDomain: input.senderDomain,
+    emailCategory: input.emailCategory,
+  };
+
+  return getBehaviorWeightFromPreferences(input.preferenceCache, signals);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
