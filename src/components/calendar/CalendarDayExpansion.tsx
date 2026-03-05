@@ -10,7 +10,6 @@
 
 'use client';
 
-import * as React from 'react';
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
@@ -34,10 +33,6 @@ export function CalendarDayExpansion({
   onSaveToCalendar,
   onClose,
 }: CalendarDayExpansionProps) {
-  // Lazy mount guard
-  const hasExpanded = React.useRef(false);
-  hasExpanded.current = true;
-
   return (
     <div className="col-span-7 border rounded-lg p-4 bg-card mb-2">
       {/* Header */}
