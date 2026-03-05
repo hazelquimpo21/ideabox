@@ -16,6 +16,7 @@ import * as React from 'react';
 import { Archive, Star, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { Tooltip } from '@/components/ui/tooltip';
+import { ShortcutHint } from '@/components/shared/ShortcutHint';
 
 export interface EmailHoverActionsProps {
   emailId: string;
@@ -46,7 +47,7 @@ export const EmailHoverActions = React.memo(function EmailHoverActions({
         'transition-transform duration-200 ease-out',
       )}
     >
-      <Tooltip content="Archive" variant="info">
+      <Tooltip content="Archive (E)" variant="info">
         <button
           type="button"
           onClick={(e) => handleClick(e, onArchive)}
@@ -54,10 +55,11 @@ export const EmailHoverActions = React.memo(function EmailHoverActions({
           aria-label="Archive"
         >
           <Archive className="h-4 w-4" />
+          <ShortcutHint keys={['E']} className="ml-0.5" />
         </button>
       </Tooltip>
 
-      <Tooltip content={isStarred ? 'Unstar' : 'Star'} variant="info">
+      <Tooltip content={`${isStarred ? 'Unstar' : 'Star'} (S)`} variant="info">
         <button
           type="button"
           onClick={(e) => handleClick(e, onStar)}
@@ -72,6 +74,7 @@ export const EmailHoverActions = React.memo(function EmailHoverActions({
                 : 'text-muted-foreground hover:text-yellow-400',
             )}
           />
+          <ShortcutHint keys={['S']} className="ml-0.5" />
         </button>
       </Tooltip>
 

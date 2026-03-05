@@ -14,6 +14,7 @@
 import * as React from 'react';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui';
+import { staggeredEntrance } from '@/lib/utils/animations';
 import { InboxEmailRow } from './InboxEmailRow';
 import { InboxEmailCard } from './InboxEmailCard';
 import type { Email } from '@/types/database';
@@ -51,38 +52,57 @@ export function EmailList({
 }: EmailListProps) {
   const showCategory = !activeCategory;
 
-  const renderSection = (emails: Email[]) => {
+  // Stagger animation guard — only animate on initial mount, not on data refetch
+  const hasMounted = React.useRef(false);
+  React.useEffect(() => { hasMounted.current = true; }, []);
+
+  const renderSection = (emails: Email[], startIndex = 0) => {
     if (viewMode === 'cards') {
       return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {emails.map((email) => (
-            <InboxEmailCard
-              key={email.id}
-              email={email}
-              onClick={onEmailClick}
-              onToggleStar={onToggleStar}
-              showCategory={showCategory}
-              accountMap={accountMap}
-              thumbnailUrl={thumbnails?.get(email.id) || null}
-            />
-          ))}
+          {emails.map((email, i) => {
+            const idx = startIndex + i;
+            // Cap stagger at item 6 — items 7+ appear instantly
+            const entrance = !hasMounted.current && idx < 7
+              ? staggeredEntrance(idx)
+              : { className: '', style: {} as React.CSSProperties };
+            return (
+              <div key={email.id} className={entrance.className} style={entrance.style}>
+                <InboxEmailCard
+                  email={email}
+                  onClick={onEmailClick}
+                  onToggleStar={onToggleStar}
+                  showCategory={showCategory}
+                  accountMap={accountMap}
+                  thumbnailUrl={thumbnails?.get(email.id) || null}
+                />
+              </div>
+            );
+          })}
         </div>
       );
     }
 
     return (
       <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-        {emails.map((email) => (
-          <InboxEmailRow
-            key={email.id}
-            email={email}
-            onClick={onEmailClick}
-            onToggleStar={onToggleStar}
-            onUpdate={onUpdateEmail}
-            showCategory={showCategory}
-            accountMap={accountMap}
-          />
-        ))}
+        {emails.map((email, i) => {
+          const idx = startIndex + i;
+          const entrance = !hasMounted.current && idx < 7
+            ? staggeredEntrance(idx)
+            : { className: '', style: {} as React.CSSProperties };
+          return (
+            <div key={email.id} className={entrance.className} style={entrance.style}>
+              <InboxEmailRow
+                email={email}
+                onClick={onEmailClick}
+                onToggleStar={onToggleStar}
+                onUpdate={onUpdateEmail}
+                showCategory={showCategory}
+                accountMap={accountMap}
+              />
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -110,7 +130,7 @@ export function EmailList({
               {priorityEmails.length}
             </span>
           </div>
-          {renderSection(priorityEmails)}
+          {renderSection(priorityEmails, 0)}
         </div>
       )}
 
@@ -127,7 +147,7 @@ export function EmailList({
               </span>
             </div>
           )}
-          {renderSection(recentEmails)}
+          {renderSection(recentEmails, priorityEmails.length)}
 
           {hasMore && onLoadMore && (
             <div className="flex justify-center pt-4">

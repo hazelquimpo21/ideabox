@@ -19,6 +19,7 @@ import { AlertTriangle, RefreshCw, ArrowRight, Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { createClient } from '@/lib/supabase/client';
 import { createLogger } from '@/lib/utils/logger';
+import { staggeredEntrance } from '@/lib/utils/animations';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Tooltip } from '@/components/ui/tooltip';
 import { EmailHoverCard } from '@/components/email/EmailHoverCard';
@@ -129,6 +130,7 @@ const PriorityRow = React.memo(function PriorityRow({
   if (onEmailSelect) {
     return (
       <button type="button" onClick={() => onEmailSelect(email)}
+        data-email-row data-email-id={email.id}
         className="flex items-center gap-3 p-3 border-b border-border/40 hover:bg-muted/30 transition-colors last:border-b-0 w-full text-left">
         {content}
       </button>
@@ -137,6 +139,7 @@ const PriorityRow = React.memo(function PriorityRow({
 
   return (
     <Link href={`/inbox/${email.category || 'personal'}/${email.id}?from=priority`}
+      data-email-row data-email-id={email.id}
       className="flex items-center gap-3 p-3 border-b border-border/40 hover:bg-muted/30 transition-colors last:border-b-0">
       {content}
     </Link>
@@ -148,6 +151,10 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
   const supabase = React.useMemo(() => createClient(), []);
+
+  // Stagger animation guard — only animate on initial mount
+  const hasMounted = React.useRef(false);
+  React.useEffect(() => { hasMounted.current = true; }, []);
 
   const fetchEmails = React.useCallback(async () => {
     logger.start('Fetching priority-ranked emails', { limit: MAX_EMAILS });
@@ -251,25 +258,29 @@ export function PriorityEmailList({ onEmailSelect }: { onEmailSelect?: (email: P
       </div>
 
       <div className="space-y-2">
-        {REPLY_GROUPS.map(({ key, label, accent }) => {
+        {REPLY_GROUPS.map(({ key, label, accent }, groupIdx) => {
           const groupEmails = groups[key];
           if (!groupEmails || groupEmails.length === 0) return null;
+          const entrance = !hasMounted.current
+            ? staggeredEntrance(groupIdx)
+            : { className: '', style: {} as React.CSSProperties };
           return (
-            <CollapsibleSection
-              key={key}
-              title={label}
-              count={groupEmails.length}
-              defaultOpen={key === 'must_reply' || key === 'should_reply'}
-              className={accent}
-            >
-              <Card className="overflow-hidden">
-                <CardContent className="p-0">
-                  {groupEmails.map((email) => (
-                    <PriorityRow key={email.id} email={email} onEmailSelect={onEmailSelect} />
-                  ))}
-                </CardContent>
-              </Card>
-            </CollapsibleSection>
+            <div key={key} className={entrance.className} style={entrance.style}>
+              <CollapsibleSection
+                title={label}
+                count={groupEmails.length}
+                defaultOpen={key === 'must_reply' || key === 'should_reply'}
+                className={accent}
+              >
+                <Card className="overflow-hidden">
+                  <CardContent className="p-0">
+                    {groupEmails.map((email) => (
+                      <PriorityRow key={email.id} email={email} onEmailSelect={onEmailSelect} />
+                    ))}
+                  </CardContent>
+                </Card>
+              </CollapsibleSection>
+            </div>
           );
         })}
       </div>

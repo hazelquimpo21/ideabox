@@ -295,3 +295,10 @@ export type {
   UseProjectItemsReturn,
   ProjectItemStats,
 } from './useProjectItems';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS (Phase 4 — March 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { useKeyboardShortcuts, getShortcutDefinitions } from './useKeyboardShortcuts';
+export type { ShortcutConfig } from './useKeyboardShortcuts';

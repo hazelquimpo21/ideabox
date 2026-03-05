@@ -76,6 +76,17 @@ export function TimelineView({
     });
   }, []);
 
+  // ─── Dismiss Animation (Phase 4) ─────────────────────────────────────
+  const [exitingId, setExitingId] = React.useState<string | null>(null);
+
+  const handleDismissWithAnimation = React.useCallback((id: string) => {
+    setExitingId(id);
+    setTimeout(() => {
+      onDismiss?.(id);
+      setExitingId(null);
+    }, 200);
+  }, [onDismiss]);
+
   // Scroll to highlighted item once loaded
   React.useEffect(() => {
     if (highlightedItemId) {
@@ -125,14 +136,14 @@ export function TimelineView({
                 return (
                   <div
                     key={item.id}
-                    className={entrance.className}
+                    className={`${entrance.className} ${exitingId === item.id ? 'animate-slide-out-down' : ''}`}
                     style={entrance.style}
                   >
                     <TimelineItem
                       item={item}
                       isExpanded={expandedId === item.id}
                       onToggle={() => handleToggle(item.id)}
-                      onDismiss={onDismiss}
+                      onDismiss={handleDismissWithAnimation}
                       onSaveToCalendar={onSaveToCalendar}
                       onSnooze={onSnooze}
                     />

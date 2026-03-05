@@ -4,19 +4,23 @@
  *
  * Shows a time-aware greeting, a single summary sentence
  * ("N things need you today." or "Your desk is clear."),
- * and the date in smaller muted text.
+ * the date in smaller muted text, and an optional streak indicator.
  *
  * The old 3-stat badges (priorities, events, tasks) are removed —
  * they're now represented by the Trifecta cards.
  *
  * @module components/home/DailyBriefingHeader
  * @since February 2026 — Phase 2, updated March 2026 — Phase 1 Redesign
+ * @updated March 2026 — Phase 4: streak indicator
  */
 
 'use client';
 
+import { useMemo } from 'react';
 import { Skeleton } from '@/components/ui';
+import { Tooltip } from '@/components/ui/tooltip';
 import { createLogger } from '@/lib/utils/logger';
+import { calculateStreak } from '@/lib/utils/streak';
 
 const logger = createLogger('DailyBriefingHeader');
 
@@ -31,6 +35,10 @@ export interface DailyBriefingHeaderProps {
   actionCount: number;
   /** Whether data is still loading */
   isLoading: boolean;
+  /** YYYY-MM-DD dates where user reviewed emails */
+  reviewedDates?: string[];
+  /** YYYY-MM-DD dates where user completed tasks */
+  taskCompletedDates?: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -61,10 +69,20 @@ export function DailyBriefingHeader({
   userName,
   actionCount,
   isLoading,
+  reviewedDates = [],
+  taskCompletedDates = [],
 }: DailyBriefingHeaderProps) {
   const greeting = getGreeting();
 
-  logger.debug('Rendering DailyBriefingHeader', { userName, actionCount, isLoading });
+  // Streak computation cached via useMemo (Phase 4 perf requirement)
+  const streak = useMemo(
+    () => calculateStreak(reviewedDates, taskCompletedDates),
+    [reviewedDates, taskCompletedDates],
+  );
+
+  if (streak.display) {
+    logger.debug('Streak shown', { days: streak.currentStreak, emoji: streak.emoji });
+  }
 
   return (
     <div className="mb-6">
@@ -75,14 +93,26 @@ export function DailyBriefingHeader({
         </>
       ) : (
         <>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {greeting}, {userName || 'there'}.{' '}
-            <span className="text-muted-foreground font-normal">
-              {actionCount > 0
-                ? `${actionCount} ${actionCount === 1 ? 'thing needs' : 'things need'} you today.`
-                : 'Your desk is clear.'}
-            </span>
-          </h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-2xl font-bold tracking-tight">
+              {greeting}, {userName || 'there'}.{' '}
+              <span className="text-muted-foreground font-normal">
+                {actionCount > 0
+                  ? `${actionCount} ${actionCount === 1 ? 'thing needs' : 'things need'} you today.`
+                  : 'Your desk is clear.'}
+              </span>
+            </h1>
+
+            {/* Streak indicator — only visible for 3+ day streaks */}
+            {streak.display && (
+              <Tooltip variant="info" content={`${streak.currentStreak} consecutive weekdays of activity`}>
+                <span className="shrink-0 text-sm text-muted-foreground animate-fade-slide-up whitespace-nowrap">
+                  <span className="inline-block animate-pulse-once">{streak.emoji}</span>{' '}
+                  {streak.display}
+                </span>
+              </Tooltip>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">{getFormattedDate()}</p>
         </>
       )}
