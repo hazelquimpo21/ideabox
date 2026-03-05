@@ -1,54 +1,14 @@
 /**
- * 🃏 Card Component for IdeaBox
+ * Card Component for IdeaBox — upgraded with elevation, accent, and interactive props.
+ * Implements §2d from VIEW_REDESIGN_PLAN.md.
  *
- * A flexible card component with header, content, and footer sections.
- * Used for grouping related content throughout the application.
+ * Three elevation levels:
+ * - **Flat**: Background sections, completed items.
+ * - **Raised** (default): Default cards, list items.
+ * - **Elevated**: Active/focused, modals, top-priority items.
  *
- * ═══════════════════════════════════════════════════════════════════════════════
- * DESIGN PRINCIPLES
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * 1. Composable: Use Card, CardHeader, CardContent, CardFooter as needed
- * 2. Consistent spacing and borders throughout the app
- * 3. Semantic structure with proper heading hierarchy
- * 4. Works as clickable elements when needed
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * USAGE EXAMPLES
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * Basic card:
- * ```tsx
- * <Card>
- *   <CardHeader>
- *     <CardTitle>Card Title</CardTitle>
- *     <CardDescription>Card description goes here</CardDescription>
- *   </CardHeader>
- *   <CardContent>
- *     <p>Card content</p>
- *   </CardContent>
- *   <CardFooter>
- *     <Button>Action</Button>
- *   </CardFooter>
- * </Card>
- * ```
- *
- * Simple card:
- * ```tsx
- * <Card className="p-6">
- *   <p>Simple content without sections</p>
- * </Card>
- * ```
- *
- * Clickable card:
- * ```tsx
- * <Card
- *   className="cursor-pointer hover:shadow-md transition-shadow"
- *   onClick={handleClick}
- * >
- *   <CardContent>Click me!</CardContent>
- * </Card>
- * ```
+ * Accent border driven by timeliness color system (§2a).
+ * All new props are optional — existing usage is fully backwards compatible.
  *
  * @module components/ui/card
  */
@@ -57,43 +17,78 @@ import * as React from 'react';
 import { cn } from '@/lib/utils/cn';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ELEVATION STYLES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ELEVATION_STYLES = {
+  flat: 'bg-muted/50 border-0 shadow-none',
+  raised: 'bg-card border shadow-sm',
+  elevated: 'bg-card border shadow-md ring-1 ring-primary/10',
+} as const;
+
+const ELEVATION_HOVER = {
+  flat: 'hover:bg-muted/80 hover:shadow-sm',
+  raised: 'hover:shadow',
+  elevated: '', // Already prominent
+} as const;
+
+type CardElevation = keyof typeof ELEVATION_STYLES;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // CARD CONTAINER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Card container component.
- * Provides the outer wrapper with border and background.
- */
-const Card = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      'rounded-lg border bg-card text-card-foreground shadow-sm',
-      className
-    )}
-    {...props}
-  />
-));
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** Card elevation level — controls shadow and bg. Default: 'raised' */
+  elevation?: CardElevation;
+  /** Timeliness accent color, e.g. 'amber-500'. Renders as left or top border. */
+  accent?: string;
+  /** Accent border position. Default: 'left' */
+  accentPosition?: 'left' | 'top';
+  /** Adds hover elevation bump + cursor-pointer for clickable cards */
+  interactive?: boolean;
+}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, elevation = 'raised', accent, accentPosition = 'left', interactive, ...props }, ref) => {
+    // Build accent border class from the color name
+    const accentClass = accent
+      ? accentPosition === 'left'
+        ? `border-l-[3px] border-l-${accent}`
+        : `border-t-[3px] border-t-${accent}`
+      : '';
+
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'rounded-lg text-card-foreground transition-all duration-200',
+          ELEVATION_STYLES[elevation],
+          interactive && cn(
+            'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            ELEVATION_HOVER[elevation]
+          ),
+          accentClass,
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);
 Card.displayName = 'Card';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CARD HEADER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Card header section.
- * Contains the title and optional description.
- */
 const CardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex flex-col space-y-1.5 p-6', className)}
+    className={cn('flex flex-col space-y-1.5 p-4 pb-2', className)}
     {...props}
   />
 ));
@@ -103,10 +98,6 @@ CardHeader.displayName = 'CardHeader';
 // CARD TITLE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Card title component.
- * Renders as an h3 by default for proper heading hierarchy.
- */
 const CardTitle = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLHeadingElement>
@@ -114,7 +105,7 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      'text-2xl font-semibold leading-none tracking-tight',
+      'text-lg font-semibold leading-none tracking-tight',
       className
     )}
     {...props}
@@ -126,10 +117,6 @@ CardTitle.displayName = 'CardTitle';
 // CARD DESCRIPTION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Card description component.
- * Provides secondary text below the title.
- */
 const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
@@ -146,15 +133,11 @@ CardDescription.displayName = 'CardDescription';
 // CARD CONTENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Card content section.
- * Main area for card content.
- */
 const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+  <div ref={ref} className={cn('p-4 pt-0', className)} {...props} />
 ));
 CardContent.displayName = 'CardContent';
 
@@ -162,17 +145,13 @@ CardContent.displayName = 'CardContent';
 // CARD FOOTER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Card footer section.
- * Typically contains action buttons.
- */
 const CardFooter = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex items-center p-6 pt-0', className)}
+    className={cn('flex items-center p-4 pt-0', className)}
     {...props}
   />
 ));
@@ -190,3 +169,5 @@ export {
   CardDescription,
   CardContent,
 };
+
+export type { CardProps, CardElevation };

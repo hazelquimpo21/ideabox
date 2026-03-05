@@ -42,6 +42,7 @@ import {
   Checkbox,
 } from '@/components/ui';
 import { CheckSquare, ArrowRight, Clock, AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
 import type { Action } from '@/types/database';
 
@@ -202,7 +203,7 @@ export function PendingTasksList({
 
                       {/* Deadline */}
                       {task.deadline && (
-                        <span className={`inline-flex items-center gap-1 text-xs ${overdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground'}`}>
+                        <span className={cn('inline-flex items-center gap-1 text-xs', overdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground')}>
                           {overdue ? (
                             <AlertTriangle className="h-3 w-3" />
                           ) : (

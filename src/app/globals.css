@@ -141,6 +141,37 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  /* ─── Animation utilities (§3b VIEW_REDESIGN_PLAN.md) ─────────────────── */
+  .animate-fade-slide-up {
+    animation: fade-slide-up 0.3s ease-out forwards;
+  }
+  .animate-pulse-once {
+    animation: pulse-once 0.4s ease-in-out;
+  }
+  .animate-confetti-pop {
+    animation: confetti-pop 0.35s ease-out forwards;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ANIMATION KEYFRAMES (§7 VIEW_REDESIGN_PLAN.md)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@keyframes fade-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-once {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes confetti-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════

@@ -25,6 +25,7 @@ import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 
 import { Toaster } from '@/components/ui';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/lib/auth';
 import './globals.css';
 
@@ -151,11 +152,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <AuthProvider>
-          {/* Main content */}
-          {children}
+          <TooltipProvider delayDuration={300}>
+            {/* Main content */}
+            {children}
 
-          {/* Toast notifications (global) */}
-          <Toaster />
+            {/* Toast notifications (global) */}
+            <Toaster />
+          </TooltipProvider>
         </AuthProvider>
       </body>
     </html>

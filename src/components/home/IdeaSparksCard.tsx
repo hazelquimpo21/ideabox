@@ -86,108 +86,37 @@ export interface IdeaSparksCardProps {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Maps idea types to display labels, colors, and icons.
- * This determines how each idea category appears in the UI.
+ * Generates consistent badge className from a Tailwind color name.
+ * Reduces duplication — all 13 type entries now share one template.
  */
-const IDEA_TYPE_CONFIG: Record<string, {
-  label: string;
-  variant: 'default' | 'secondary' | 'outline' | 'destructive';
-  className: string;
-  icon: typeof Lightbulb;
-}> = {
-  // ── New types (Mar 2026) ──────────────────────────────────────────────────
-  tweet_draft: {
-    label: 'Tweet',
-    variant: 'default',
-    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-    icon: MessageCircle,
-  },
-  networking: {
-    label: 'Networking',
-    variant: 'default',
-    className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-    icon: Users,
-  },
-  business: {
-    label: 'Business',
-    variant: 'default',
-    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-    icon: Briefcase,
-  },
-  content_creation: {
-    label: 'Content',
-    variant: 'default',
-    className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-800',
-    icon: FileText,
-  },
-  learning: {
-    label: 'Learning',
-    variant: 'default',
-    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
-    icon: BookOpen,
-  },
-  tool_to_try: {
-    label: 'Tool',
-    variant: 'default',
-    className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 border-violet-200 dark:border-violet-800',
-    icon: Wrench,
-  },
-  place_to_visit: {
-    label: 'Place',
-    variant: 'default',
-    className: 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300 border-lime-200 dark:border-lime-800',
-    icon: Navigation,
-  },
-  date_night: {
-    label: 'Date Night',
-    variant: 'default',
-    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-    icon: Heart,
-  },
-  family_activity: {
-    label: 'Family',
-    variant: 'default',
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-    icon: Home,
-  },
-  personal_growth: {
-    label: 'Growth',
-    variant: 'default',
-    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
-    icon: TrendingUp,
-  },
-  community: {
-    label: 'Community',
-    variant: 'default',
-    className: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-200 dark:border-teal-800',
-    icon: MapPin,
-  },
-  // ── Legacy types (backward compat for existing data) ──────────────────────
-  social_post: {
-    label: 'Tweet',
-    variant: 'default',
-    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-    icon: Share2,
-  },
-  hobby: {
-    label: 'Learning',
-    variant: 'default',
-    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
-    icon: BookOpen,
-  },
+function ideaBadgeClass(color: string): string {
+  return `bg-${color}-100 text-${color}-700 dark:bg-${color}-900/30 dark:text-${color}-300 border-${color}-200 dark:border-${color}-800`;
+}
+
+/** Slim config — label + icon + base color. className is derived. */
+const IDEA_TYPE_CONFIG: Record<string, { label: string; icon: typeof Lightbulb; color: string }> = {
+  tweet_draft:      { label: 'Tweet',      icon: MessageCircle, color: 'blue' },
+  networking:       { label: 'Networking',  icon: Users,         color: 'purple' },
+  business:         { label: 'Business',    icon: Briefcase,     color: 'emerald' },
+  content_creation: { label: 'Content',     icon: FileText,      color: 'orange' },
+  learning:         { label: 'Learning',    icon: BookOpen,      color: 'cyan' },
+  tool_to_try:      { label: 'Tool',        icon: Wrench,        color: 'violet' },
+  place_to_visit:   { label: 'Place',       icon: Navigation,    color: 'lime' },
+  date_night:       { label: 'Date Night',  icon: Heart,         color: 'rose' },
+  family_activity:  { label: 'Family',      icon: Home,          color: 'amber' },
+  personal_growth:  { label: 'Growth',      icon: TrendingUp,    color: 'indigo' },
+  community:        { label: 'Community',   icon: MapPin,        color: 'teal' },
+  // Legacy types (backward compat)
+  social_post:      { label: 'Tweet',       icon: Share2,        color: 'blue' },
+  hobby:            { label: 'Learning',    icon: BookOpen,      color: 'cyan' },
 };
 
-/**
- * Gets the display config for an idea type.
- * Falls back to a generic style for unknown types.
- */
 function getTypeConfig(type: string) {
-  return IDEA_TYPE_CONFIG[type] || {
-    label: type.replace(/_/g, ' '),
-    variant: 'secondary' as const,
-    className: '',
-    icon: Lightbulb,
-  };
+  const config = IDEA_TYPE_CONFIG[type];
+  if (config) {
+    return { ...config, className: ideaBadgeClass(config.color) };
+  }
+  return { label: type.replace(/_/g, ' '), icon: Lightbulb, className: '', color: 'gray' };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -234,7 +163,7 @@ export function IdeaSparksCard({
             <Lightbulb className="h-5 w-5 text-amber-500" />
             Idea Sparks
           </CardTitle>
-          <Link href="/tasks">
+          <Link href="/inbox?tab=discoveries">
             <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
               View all
               <ArrowRight className="h-3 w-3" />
@@ -270,7 +199,7 @@ export function IdeaSparksCard({
 
               return (
                 <div
-                  key={`${idea.emailId}-${index}`}
+                  key={`${idea.emailId}-${idea.type}-${index}`}
                   className="group flex items-start gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-muted/50 transition-colors"
                 >
                   {/* Type badge */}
