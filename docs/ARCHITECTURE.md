@@ -149,7 +149,9 @@ src/
       campaigns/                # Campaign CRUD
       templates/                # Template CRUD
       actions/                  # Action/to-do CRUD
-      events/                   # Event CRUD
+      events/                   # Event CRUD + state management
+        [id]/state/             # Per-event state (dismiss/maybe/save) + preference learning side-effects
+        states/                 # Batch states endpoint (GET ?ids=id1,id2,...) — replaces N+1 pattern
     onboarding/                 # Multi-step onboarding wizard
     dev/                        # Development utilities
 
@@ -173,6 +175,7 @@ src/
       types.ts                  # Analyzer result types (EventType, CommitmentLevel, scoring weights)
     events/
       composite-weight.ts       # Event composite weight calculator (6-signal ranking, NEW Mar 2026)
+      preference-learning.ts    # Phase 4: EMA preference scoring from user actions + behavior weight calculation (NEW Mar 2026)
     processors/
       email-processor.ts        # Orchestrates all analyzers
       batch-processor.ts        # Batch processing

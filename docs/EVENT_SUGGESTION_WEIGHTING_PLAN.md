@@ -1,15 +1,24 @@
 # Event Suggestion Weighting — Future Roadmap
 
-> **Phases 1-3 are IMPLEMENTED** (March 2026). See `DECISIONS.md` (#32) for the architectural decision record.
-> This doc covers only the remaining future phases.
+> **Phases 1-4 (steps 1-4) are IMPLEMENTED** (March 2026). See `DECISIONS.md` (#32) for the architectural decision record.
 >
 > **What's live:** 18-type event taxonomy, 4-tier commitment inference (confirmed/invited/suggested/fyi),
-> composite weight algorithm (6 signals), EventCard badges + whyAttend display, sorting by commitment → weight → date.
-> See `src/services/events/composite-weight.ts`, `src/services/analyzers/types.ts` for implementation.
+> composite weight algorithm (6 signals), EventCard badges + whyAttend display, sorting by commitment → weight → date,
+> **preference learning** (count-aware EMA scoring from dismiss/maybe/save actions, personalized behavior weight).
+> See `src/services/events/composite-weight.ts`, `src/services/events/preference-learning.ts`, `src/services/analyzers/types.ts`.
 
 ---
 
-## Phase 4: Preference Learning
+## Phase 4: Preference Learning — IMPLEMENTED (March 2026)
+
+> **Status:** Steps 1-4 implemented. Step 5 ("Teach Me" prompts) deferred to Phase 5.
+>
+> **Key files:**
+> - `src/services/events/preference-learning.ts` — EMA scoring, preference read/write
+> - `src/app/api/events/[id]/state/route.ts` — fires preference updates on state changes
+> - `src/app/api/events/states/route.ts` — batch states endpoint (replaced N+1)
+> - `supabase/migrations/migration-045-user-event-states.sql` — user_event_states table + event_index
+> - `supabase/migrations/migration-046-user-event-preferences.sql` — user_event_preferences table
 
 ### `user_event_preferences` table
 
@@ -38,24 +47,27 @@ CREATE TABLE user_event_preferences (
 
 On user action (dismiss/maybe/save) via `/api/events/[id]/state`:
 - Update preferences for event_type, sender_domain, and source category
-- Use exponential moving average: `new_score = old_score * 0.9 + weight * 0.1`
+- Uses count-aware EMA: `alpha = max(0.1, 1 / (total_count + 1))` so early signals have more impact
+- `new_score = old_score * (1 - alpha) + action_weight * alpha`
 - Action weights: `saved_to_calendar=+1.0`, `maybe=+0.5`, `dismissed=-1.0`
+- Runs as fire-and-forget side-effect (does not block the state change response)
 
 ### Behavior weight calculation
 
 ```typescript
-function getBehaviorWeight(userId: string, event: EventData): number {
-  const typeScore = getPreferenceScore(userId, 'event_type', event.eventType) ?? 0;
-  const domainScore = getPreferenceScore(userId, 'sender_domain', senderDomain) ?? 0;
-  const categoryScore = getPreferenceScore(userId, 'category', sourceCategory) ?? 0;
+function getBehaviorWeightFromPreferences(cache: PreferenceCache, signals: EventSignals): number {
+  const typeScore = cache.get(`event_type:${signals.eventType}`) ?? 0;
+  const domainScore = cache.get(`sender_domain:${signals.senderDomain}`) ?? 0;
+  const categoryScore = cache.get(`category:${signals.emailCategory}`) ?? 0;
   const normalize = (s: number) => (s + 1) / 2;  // [-1,1] → [0,1]
   return normalize(typeScore) * 0.5 + normalize(domainScore) * 0.3 + normalize(categoryScore) * 0.2;
 }
 ```
 
-This replaces the placeholder `0.5` in `composite-weight.ts:getBehaviorWeight()`.
+Preferences are batch-fetched once per request via `fetchUserPreferences()` (single DB query),
+then passed as a `PreferenceCache` Map through the composite weight pipeline. No N+1 per-event lookups.
 
-### "Teach Me" prompts
+### "Teach Me" prompts (DEFERRED to Phase 5)
 
 After dismissing 3+ events of the same type, prompt:
 > "You've dismissed several webinar invites. Want me to auto-minimize future webinars?"
@@ -63,11 +75,11 @@ After dismissing 3+ events of the same type, prompt:
 Sets `preference_score` to -0.8 for that type.
 
 ### Steps
-1. Create `user_event_preferences` table (migration)
-2. Add preference update logic to event state API
-3. Implement behavior weight calculation in `composite-weight.ts`
-4. Feed behavior weight into composite weight (replace placeholder)
-5. Add "Teach Me" prompt after repeated dismissals
+1. ~~Create `user_event_preferences` table (migration)~~ — Done (migration 046)
+2. ~~Add preference update logic to event state API~~ — Done (fire-and-forget in POST state)
+3. ~~Implement behavior weight calculation in `composite-weight.ts`~~ — Done
+4. ~~Feed behavior weight into composite weight (replace placeholder)~~ — Done
+5. Add "Teach Me" prompt after repeated dismissals — Deferred to Phase 5
 
 ---
 
