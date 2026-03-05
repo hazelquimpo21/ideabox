@@ -77,10 +77,20 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
   const nature = getEmailTimelinessNature(email);
   const accent = getTimelinessAccent(nature);
 
-  const handleStarClick = (e: React.MouseEvent) => {
+  const handleStarClick = React.useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleStar?.(email);
-  };
+  }, [email, onToggleStar]);
+
+  const handleArchive = React.useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    logger.debug('Card archive action', { emailId: email.id });
+  }, [email.id]);
+
+  const handleSnooze = React.useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    logger.debug('Card snooze action', { emailId: email.id });
+  }, [email.id]);
 
   // Sender tooltip content — contact card preview
   const senderPreview = React.useMemo(() => (
@@ -157,13 +167,13 @@ export const InboxEmailCard = React.memo(function InboxEmailCard({
           )}
           <span className="flex-1" />
           <Tooltip content="Archive" variant="info">
-            <button type="button" onClick={(e) => { e.stopPropagation(); }}
+            <button type="button" onClick={handleArchive}
               className="p-1 rounded hover:bg-muted/80 transition-colors text-muted-foreground/50 hover:text-foreground">
               <Archive className="h-3.5 w-3.5" />
             </button>
           </Tooltip>
           <Tooltip content="Snooze" variant="info">
-            <button type="button" onClick={(e) => { e.stopPropagation(); }}
+            <button type="button" onClick={handleSnooze}
               className="p-1 rounded hover:bg-muted/80 transition-colors text-muted-foreground/50 hover:text-foreground">
               <Clock className="h-3.5 w-3.5" />
             </button>
