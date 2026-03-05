@@ -62,6 +62,7 @@ import {
   requireAuth,
 } from '@/lib/api/utils';
 import { createLogger } from '@/lib/utils/logger';
+import { computeCompositeWeight } from '@/services/events/composite-weight';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -143,10 +144,16 @@ interface EventMetadata {
   additionalDetails?: string;
   eventSummary?: string;
   keyPoints?: string[];
+  /** Structured event type: meeting, social, webinar, community, etc. */
+  eventType?: string;
+  /** Commitment level: confirmed, invited, suggested, fyi */
+  commitmentLevel?: string;
   /** How likely the user is to attend (0-10). Higher = more relevant. */
   relevanceScore?: number;
   /** One-sentence personalized explanation of why user might attend. */
   whyAttend?: string | null;
+  /** Composite weight (0.0-1.0) for ranking within time groups. */
+  compositeWeight?: number;
 }
 
 /**
@@ -172,6 +179,10 @@ interface EventDetectionData {
   event_summary?: string;
   key_points?: string[];
   confidence?: number;
+  /** Event type classification. NEW March 2026. */
+  event_type?: string;
+  /** Commitment level. NEW March 2026. */
+  commitment_level?: string;
   /** Relevance score (0-10) from EventDetector. NEW March 2026. */
   relevance_score?: number;
   /** Why the user might attend. NEW March 2026. */
@@ -225,6 +236,18 @@ function buildEventResponse(
 ): EventResponse {
   const eventDate = eventDetection.event_date || row.date?.split('T')[0] || getToday();
 
+  // Compute composite weight for sorting/ranking (NEW March 2026)
+  const compositeWeightResult = computeCompositeWeight({
+    eventType: eventDetection.event_type,
+    commitmentLevel: eventDetection.commitment_level,
+    relevanceScore: eventDetection.relevance_score,
+    isVipSender: row.contacts?.is_vip ?? false,
+    isKnownContact: !!row.contacts,
+    hasPriorExchange: false, // TODO: wire up prior exchange check
+    eventDate: eventDetection.event_date,
+    rsvpDeadline: eventDetection.registration_deadline,
+  });
+
   const eventMetadata: EventMetadata | null = {
     locality: eventDetection.event_locality || inferLocality(eventDetection),
     locationType: eventDetection.location_type,
@@ -237,9 +260,14 @@ function buildEventResponse(
     additionalDetails: eventDetection.additional_details,
     eventSummary: eventDetection.event_summary,
     keyPoints: eventDetection.key_points,
-    // Relevance scoring (NEW March 2026) — passed through from EventDetector
+    // Event taxonomy and commitment (NEW March 2026)
+    eventType: eventDetection.event_type,
+    commitmentLevel: eventDetection.commitment_level,
+    // Relevance scoring (March 2026) — passed through from EventDetector
     relevanceScore: eventDetection.relevance_score,
     whyAttend: eventDetection.why_attend,
+    // Composite weight for ranking
+    compositeWeight: compositeWeightResult,
   };
 
   // For multi-event rows, append index to make IDs unique

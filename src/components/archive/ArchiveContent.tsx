@@ -227,7 +227,6 @@ const ARCHIVE_CATEGORIES = [
  * Single archived email row. Memoized to prevent re-renders of all
  * rows when a single selection changes.
  *
- * @see INBOX_PERFORMANCE_AUDIT.md — P3
  */
 const ArchivedEmailItem = React.memo(function ArchivedEmailItem({
   email,
@@ -378,7 +377,6 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }) {
  * When `onEmailSelect` is provided, clicks open the email in a modal
  * instead of navigating to a full page.
  *
- * @see INBOX_PERFORMANCE_AUDIT.md — P0-A, P2-A
  */
 export function ArchiveContent({
   onEmailSelect,
@@ -396,7 +394,6 @@ export function ArchiveContent({
   // Use archivedOnly to filter server-side instead of fetching all emails
   // and filtering in JavaScript. Previously used includeArchived: true then
   // filtered client-side, which fetched ~100 non-archived emails to find ~10.
-  // @see INBOX_PERFORMANCE_AUDIT.md — P2-A
   const { emails, isLoading, error, refetch, updateEmail } = useEmails({
     limit: 100,
     category:
@@ -504,7 +501,6 @@ export function ArchiveContent({
 
   // Open email in modal when onEmailSelect is provided,
   // otherwise fall back to full-page navigation.
-  // @see INBOX_PERFORMANCE_AUDIT.md — P0-A
   const handleEmailClick = (email: Email) => {
     const category = email.category || 'personal';
     if (onEmailSelect) {
@@ -540,7 +536,6 @@ export function ArchiveContent({
   };
 
   // Batch unarchive: single DB call instead of N sequential calls.
-  // @see INBOX_PERFORMANCE_AUDIT.md — P2-B
   const handleBulkUnarchive = async () => {
     const ids = Array.from(selectedIds);
     logger.info('Bulk restoring emails', { count: ids.length });
@@ -566,7 +561,6 @@ export function ArchiveContent({
   };
 
   // Batch delete: single DB call instead of N sequential calls.
-  // @see INBOX_PERFORMANCE_AUDIT.md — P2-B
   const handleBulkDelete = async () => {
     if (
       !confirm(

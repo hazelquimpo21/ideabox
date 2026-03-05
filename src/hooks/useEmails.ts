@@ -58,7 +58,6 @@ const DEFAULT_LIMIT = 50;
  * NOTE: urgency_score, relationship_signal, golden_nugget_count are NOT
  * included — migrations 043/044 have not been applied to the database yet.
  *
- * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
  */
 const EMAIL_LIST_FIELDS = 'id, gmail_id, gmail_account_id, subject, sender_name, sender_email, date, snippet, category, additional_categories, is_read, is_starred, is_archived, quick_action, gist, summary, priority_score, key_points, topics, labels, analyzed_at, analysis_error, contact_id, signal_strength, reply_worthiness, email_type' as const;
 
@@ -90,7 +89,6 @@ export interface UseEmailsOptions {
    * When true, adds `.eq('is_archived', true)` to the query so
    * filtering happens server-side instead of in JavaScript.
    *
-   * @see INBOX_PERFORMANCE_AUDIT.md — P2-A
    */
   archivedOnly?: boolean;
   /** Only show unread emails */

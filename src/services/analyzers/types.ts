@@ -836,6 +836,104 @@ export type EventLocality = 'local' | 'out_of_town' | 'virtual' | null;
  */
 export type KeyDateType = 'registration_deadline' | 'open_house' | 'deadline' | 'release_date' | 'other';
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// EVENT TYPE TAXONOMY (NEW Mar 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Structured event type classification — what KIND of event is this?
+ *
+ * Orthogonal to email category (which answers "what area of life?").
+ * Event type answers "what kind of gathering/date is this?"
+ *
+ * This enables:
+ * - Filtering: "Show me only social events and community events"
+ * - Learning: "This user dismisses every webinar but saves every community event"
+ * - Smarter defaults: meetings get 0.9 weight, webinars get 0.25
+ */
+export const EVENT_TYPES = [
+  'meeting',              // Scheduled meeting with specific people (standup, 1:1, client call, board meeting)
+  'appointment',          // Scheduled personal service (doctor, dentist, haircut, car service)
+  'social',               // Social gathering with people you know (dinner party, birthday, game night)
+  'community',            // Local community event (neighborhood meetup, farmers market, workshop)
+  'class_workshop',       // Educational/skill-building (pottery class, yoga, coding bootcamp)
+  'conference',           // Multi-session professional event (tech conference, industry summit)
+  'performance',          // Arts/entertainment (concert, theater, comedy show, gallery opening)
+  'sports_event',         // Sporting event — watching or playing (game, tournament, rec league)
+  'webinar',              // Online presentation, usually broadcast (marketing webinar, product demo)
+  'civic',                // Government/institutional (city council, school board, HOA, town hall)
+  'religious',            // Faith/spiritual gathering (service, holiday observance, study group)
+  'fundraiser',           // Charity/benefit events (gala, charity run, auction, volunteer day)
+  'deadline',             // Date by which something must happen (registration closes, application due)
+  'release',              // Something launches/becomes available (product launch, ticket on-sale)
+  'travel',               // Travel-related date (flight, hotel check-in, trip departure)
+  'payment',              // Financial due date (bill due, subscription renewal, tax deadline)
+  'birthday_anniversary', // Personal milestone (birthday, anniversary, memorial)
+  'other',                // Doesn't fit above categories
+] as const;
+
+export type EventType = typeof EVENT_TYPES[number];
+
+/**
+ * Default importance weights by event type.
+ * Used as the baseTypeWeight component in composite scoring.
+ */
+export const EVENT_TYPE_WEIGHTS: Record<EventType, number> = {
+  appointment:          0.95,
+  meeting:              0.90,
+  travel:               0.95,
+  social:               0.85,
+  birthday_anniversary: 0.85,
+  payment:              0.80,
+  class_workshop:       0.75,
+  community:            0.70,
+  performance:          0.70,
+  deadline:             0.70,
+  sports_event:         0.65,
+  conference:           0.60,
+  religious:            0.60,
+  fundraiser:           0.50,
+  civic:                0.40,
+  release:              0.40,
+  webinar:              0.25,
+  other:                0.50,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMMITMENT LEVEL (NEW Mar 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Commitment level — the user's relationship to this event.
+ *
+ * AI-inferred initially from email signals, then overridden by user actions.
+ * Drives sort order within time groups and visual treatment.
+ *
+ * - confirmed: User has RSVP'd, has tickets, or email confirms registration
+ * - invited: Directly/personally invited, RSVP expected
+ * - suggested: AI thinks user might care (default for most detected events)
+ * - fyi: Informational — newsletter roundup, mass webinar, low relevance
+ */
+export const COMMITMENT_LEVELS = [
+  'confirmed',   // User registered, has tickets, booking confirmed
+  'invited',     // Personally invited, RSVP expected
+  'suggested',   // AI detected, user might care (default)
+  'fyi',         // Informational only — newsletter event listing, mass marketing
+] as const;
+
+export type CommitmentLevel = typeof COMMITMENT_LEVELS[number];
+
+/**
+ * Commitment level boost values for composite weight calculation.
+ * Higher = more prominent in the event list.
+ */
+export const COMMITMENT_BOOSTS: Record<CommitmentLevel, number> = {
+  confirmed: 1.0,
+  invited:   0.8,
+  suggested: 0.4,
+  fyi:       0.15,
+};
+
 /**
  * Result data from the event detector analyzer.
  *
@@ -993,6 +1091,30 @@ export interface EventDetectionData {
    * Confidence in the event extraction (0-1).
    */
   confidence: number;
+
+  /**
+   * Structured event type classification.
+   * NEW (March 2026): What kind of event is this?
+   *
+   * Examples:
+   * - "meeting" for a team standup or client call
+   * - "social" for a dinner party
+   * - "webinar" for a marketing webinar
+   * - "community" for a local meetup
+   * - "deadline" for a registration deadline
+   */
+  eventType?: EventType;
+
+  /**
+   * Commitment level — the user's relationship to this event.
+   * NEW (March 2026): AI-inferred from email signals.
+   *
+   * - "confirmed": Booking/registration confirmed, has tickets
+   * - "invited": Personally invited, RSVP expected
+   * - "suggested": AI thinks user might care (default)
+   * - "fyi": Informational only — newsletter listing, mass marketing
+   */
+  commitmentLevel?: CommitmentLevel;
 
   /**
    * Relevance score (0-10) estimating how likely the user is to attend/care.

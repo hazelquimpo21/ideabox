@@ -106,7 +106,6 @@ const EMPTY_RESULT: InitialSyncResponse = {
  *
  * @param onEmailSelect - When provided, email clicks from the CategoryModal
  *   open an EmailDetailModal instead of navigating to a full page.
- *   @see INBOX_PERFORMANCE_AUDIT.md — P0-A
  */
 export function DiscoverContent({
   onEmailSelect,
@@ -634,7 +633,6 @@ export function DiscoverContent({
         onEmailClick={(email) => {
           if (onEmailSelect) {
             // Open email in the shared EmailDetailModal (keeps inbox mounted)
-            // @see INBOX_PERFORMANCE_AUDIT.md — P0-A
             logger.info('Opening email from category modal in detail modal', {
               emailId: email.id,
               category: email.category,

@@ -36,7 +36,7 @@
  * Email categories (20 life-bucket focused).
  *
  * REFACTORED (Mar 2026 — Taxonomy v2): Expanded from 13 → 20 categories.
- * See docs/INBOX_CATEGORY_TAXONOMY_PLAN.md for full rationale.
+ * See docs/DECISIONS.md (#31) for full rationale.
  */
 export type EmailCategory =
   | 'clients'           // Direct client work, billable relationships

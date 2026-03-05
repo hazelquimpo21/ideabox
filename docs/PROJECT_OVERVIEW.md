@@ -31,7 +31,7 @@ AI-powered email processing system with specialized analyzers that:
 - **Save content**: URLs, tweet ideas, networking opportunities (future)
 - **Extract insights**: Synthesize ideas, tips, and frameworks from newsletters (implemented Feb 2026)
 - **Extract news**: Identify factual news items from email content (implemented Feb 2026)
-- **Detect events**: Auto-extract event details for calendar (implemented)
+- **Detect events**: Auto-extract event details for calendar (implemented). Event suggestion weighting (Mar 2026): 18-type event taxonomy, commitment inference, composite weight ranking, per-event relevance scoring
 - **Sync to Gmail**: Create IdeaBox labels in Gmail for visibility
 - **Learn continuously**: User preferences, client names, communication patterns
 - **Assess signal quality**: Classify email relevance (high/medium/low/noise) and reply worthiness (must_reply/should_reply/optional_reply/no_reply)
@@ -164,7 +164,13 @@ AI-powered email processing system with specialized analyzers that:
 > **Note:** Taxonomy v2 (March 2026): Categories expanded from 13 to 20, email types simplified
 > from 9 to 6, timeliness JSONB column added, 5-dimension scoring with surface_priority,
 > smart views API, timeliness cron job. See `docs/DECISIONS.md` (#31) and
-> `docs/INBOX_CATEGORY_TAXONOMY_PLAN.md` for details.
+> `docs/DECISIONS.md` (#31) for details.
+
+> **Note:** Event Suggestion Weighting (March 2026): 18-type event taxonomy (meeting, social,
+> webinar, community, etc.), 4-tier commitment inference (confirmed/invited/suggested/fyi),
+> composite weight scoring (6 signals), recalibrated relevance scoring with webinar penalty.
+> EventCard shows type badges, commitment badges, and personalized whyAttend text.
+> See `docs/DECISIONS.md` (#32) and `docs/EVENT_SUGGESTION_WEIGHTING_PLAN.md` for details.
 
 ## Design Principles
 1. **Modular First**: Every component standalone and replaceable

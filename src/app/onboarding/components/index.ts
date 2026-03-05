@@ -7,7 +7,6 @@
 export { OnboardingWizard } from './OnboardingWizard';
 export { WelcomeStep } from './WelcomeStep';
 export { AccountsStep } from './AccountsStep';
-export { ClientsStep } from './ClientsStep';
 export { SyncConfigStep } from './SyncConfigStep';
 
 // Re-export types

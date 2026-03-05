@@ -60,7 +60,6 @@ const MODAL_EMAIL_LIMIT = 15;
  * NOTE: urgency_score, relationship_signal, golden_nugget_count omitted —
  * migrations 043/044 have not been applied to the database yet.
  *
- * @see INBOX_PERFORMANCE_AUDIT.md — P0-B
  */
 const MODAL_LIST_FIELDS = 'id, gmail_id, subject, sender_name, sender_email, date, snippet, category, is_read, is_starred, is_archived, quick_action, gist, summary, key_points, topics, labels, analyzed_at, signal_strength, reply_worthiness, additional_categories, email_type' as const;
 
