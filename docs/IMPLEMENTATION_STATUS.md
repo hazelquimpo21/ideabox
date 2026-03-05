@@ -40,7 +40,7 @@
 - **Timeliness Extraction** (NEW Mar 2026): Categorizer outputs timeliness JSONB (nature, relevant_date, late_after, expires, perishable) for time-aware surfacing
 - **Smart Views API** (NEW Mar 2026): `/api/emails/smart-views?view=today|upcoming|expiring|reading-list|high-priority|needs-action`
 - **Timeliness Cron Job** (NEW Mar 2026): Hourly job auto-archives expired emails, escalates approaching deadlines, decays stale perishables
-- **Event Suggestion Weighting** (NEW Mar 2026): 18-type event taxonomy (meeting, social, webinar, community, etc.) with default importance weights. 4-tier commitment inference (confirmed/invited/suggested/fyi). Composite weight algorithm combining 6 signals (type weight, commitment, AI relevance, sender, temporal urgency, behavior placeholder). Events sorted by commitment tier → composite weight → date within time groups. EventCard shows type badges + commitment badges + whyAttend text.
+- **Event Suggestion Weighting** (NEW Mar 2026): 18-type event taxonomy (meeting, social, webinar, community, etc.) with default importance weights. 4-tier commitment inference (confirmed/invited/suggested/fyi). Composite weight algorithm combining 6 signals (type weight, commitment, AI relevance, sender, temporal urgency, behavior weight). Events sorted by commitment tier → composite weight → date within time groups. EventCard shows type badges + commitment badges + whyAttend text. **Phase 4 preference learning** (Mar 2026): `user_event_preferences` table with count-aware EMA scoring. Preferences updated as fire-and-forget side-effect on dismiss/maybe/save. Behavior weight uses event_type (50%), sender_domain (30%), category (20%). Batch states endpoint (`/api/events/states?ids=`) replaces N+1 pattern. See `src/services/events/preference-learning.ts`.
 - **Two-tier task system** (NEW Feb 2026): Review Queue for scan-worthy emails + Real Tasks for concrete actions
 - **Email Summaries** (NEW Feb 2026): AI-synthesized narrative digests. Summary generator service gathers threads/actions/dates/ideas/news, clusters by thread, synthesizes with GPT-4.1-mini into conversational headlines + themed sections. Staleness tracking via `user_summary_state` table. Lazy generation (user visit) + eager batch job (`generateSummariesForStaleUsers`). 1-hour minimum interval. Full history browsable at `/summaries`.
 
@@ -139,8 +139,8 @@ All old routes (`/hub`, `/discover`, `/actions`, `/events`, `/timeline`, `/clien
 - Category Intelligence Bar (API ready, UI pending)
 - Focus Mode for category view
 - Projects Phase 4: drag-and-drop reordering, project templates, Gantt-style timeline view
-- **Event Suggestion Weighting Phase 4**: Preference learning system — `user_event_preferences` table, exponential moving average from dismiss/save patterns, behavior weight fed into composite scoring (see `EVENT_SUGGESTION_WEIGHTING_PLAN.md`)
-- **Event Suggestion Weighting Phase 5**: UI enhancements — event type filter bar, commitment filter, "Teach Me" prompts (auto-minimize after repeated dismissals), compact cards for low-relevance events
+- ~~**Event Suggestion Weighting Phase 4**~~: **IMPLEMENTED** (Mar 2026) — preference learning system with count-aware EMA, batch states endpoint, behavior weight in composite scoring
+- **Event Suggestion Weighting Phase 5**: UI enhancements — event type filter bar, commitment filter, "Teach Me" prompts (auto-minimize after repeated dismissals), compact cards for low-relevance events, "Why this event" tooltips
 - **Performance**: Full SWR/React Query cache for all hooks (useEmails, useContacts, etc.) — analysis cache partially done (module-level stale-while-revalidate)
 - **Performance**: SQL aggregation for inbox stats (`/api/emails/stats` endpoint with `GROUP BY category` SQL, replaces JS-side computation in useEmails)
 - **Performance**: Consolidate 3 date formatting functions into shared `src/lib/utils/date.ts`

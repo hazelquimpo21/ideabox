@@ -29,6 +29,7 @@ auth.users (Supabase Auth)
   ├── email_summaries        # AI-synthesized narrative digests (NEW Feb 2026)
   ├── user_summary_state     # Summary staleness tracking (NEW Feb 2026)
   ├── user_event_states      # User decisions on events (dismiss/maybe/calendar)
+  ├── user_event_preferences # Accumulated preference scores for event ranking (NEW Mar 2026)
   ├── outbound_emails        # Sent/scheduled/draft outgoing emails
   │   └── email_open_events  # Tracking pixel hits
   ├── email_templates        # Reusable email templates with merge fields
@@ -842,12 +843,44 @@ CREATE TABLE user_event_states (
   email_id UUID NOT NULL REFERENCES emails(id) ON DELETE CASCADE,
 
   state TEXT NOT NULL CHECK (state IN ('dismissed', 'maybe', 'saved_to_calendar')),
+  -- For multi-event emails: which event within the email (0-indexed).
+  -- NULL = applies to the single event from this email.
+  event_index INT,
   notes TEXT,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-  UNIQUE(user_id, email_id, state)
+  UNIQUE(user_id, email_id, state, event_index)
+);
+```
+
+### user_event_preferences (NEW Mar 2026)
+Accumulated user preference scores for personalized event ranking (Phase 4).
+Scores range from -1.0 (strongly dislike) to +1.0 (strongly like).
+Fed by dismiss/maybe/save actions; read by `composite-weight.ts` `getBehaviorWeight()`.
+
+```sql
+CREATE TABLE user_event_preferences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  preference_type TEXT NOT NULL CHECK (preference_type IN (
+    'event_type',      -- e.g., key='webinar', score=-0.8
+    'sender_domain',   -- e.g., key='meetup.com', score=0.6
+    'category',        -- e.g., key='community', score=0.4
+    'keyword'          -- Reserved for future use
+  )),
+  preference_key TEXT NOT NULL,
+  preference_score REAL NOT NULL DEFAULT 0.0,  -- -1.0 to 1.0
+  positive_count INT NOT NULL DEFAULT 0,
+  negative_count INT NOT NULL DEFAULT 0,
+  total_count INT NOT NULL DEFAULT 0,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE(user_id, preference_type, preference_key)
 );
 ```
 
@@ -1192,7 +1225,7 @@ All tables have RLS enabled. Policy pattern:
 
 ---
 
-## Migration Files (001-044)
+## Migration Files (001-046)
 
 All migrations are in `scripts/migration-*.sql` (not `supabase/migrations/`).
 
@@ -1243,6 +1276,9 @@ All migrations are in `scripts/migration-*.sql` (not `supabase/migrations/`).
 | 042 | link-analysis.sql | saved_links table, enhanced url_extraction JSONB with priority scoring |
 | 043 | idea-types-update.sql | Update email_ideas.idea_type CHECK constraint: new types (tweet_draft, learning, tool_to_try, place_to_visit) + keep legacy types |
 | — | migrate-categories-feb2026.sql | Data migration: consolidate old categories to 13 life-bucket values |
+| 044 | inbox-category-taxonomy-v2.sql | Taxonomy v2: 20 categories, 6 email types, 5-dimension scoring, timeliness JSONB |
+| 045 | user-event-states.sql | user_event_states table + event_index for multi-event support + RLS |
+| 046 | user-event-preferences.sql | user_event_preferences table for Phase 4 preference learning + RLS |
 
 ---
 

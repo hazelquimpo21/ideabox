@@ -47,6 +47,7 @@
 | Quick Accept | 2-step popover replaces 6-step dialog | Fitts's Law: minimize motor cost for most frequent triage action |
 | Query Optimization | Field selection + Supabase joins | Eliminates second round-trip, reduces payload ~6 KB per hook |
 | Event Weighting | 18-type taxonomy + 4-tier commitment + composite weight | Events need structured classification + ranking, not just flat date lists; see Decision #32 |
+| Preference Learning | Count-aware EMA + batch fetch + fire-and-forget writes | Fast early convergence, no N+1 queries, non-blocking preference updates; see Decision #36 |
 | View Redesign Phase 1 | Shared infra + Trifecta home layout | Tooltip, Card elevation, timeliness utility, animation utils — reused across all phases; see Decision #33 |
 | View Redesign Phase 2 | Inbox polish: component extraction + timeliness rows | InboxFeed 682→264 lines, 7 extracted components, sparklines, hover actions; see Decision #34 |
 | View Redesign Phase 3 | Calendar redesign: timeline + heat map + RSVP badges | Calendar page 1234→297 lines, 10 new components, unified CalendarItem type; see Decision #35 |
@@ -972,6 +973,42 @@ When making new architectural decisions, document them here using this template:
 
 ---
 
+### Decision #36: Preference Learning — Count-Aware EMA + Batch Fetch + Fire-and-Forget Writes
+
+**Context:**
+Phase 4 of event weighting adds personalized ranking based on user dismiss/maybe/save patterns.
+Three key design decisions:
+
+1. **EMA decay rate:** The original plan used fixed `0.9/0.1` decay, but this converges too slowly (~23 actions to reach -0.9). A count-aware approach `alpha = max(0.1, 1/(total_count+1))` gives early signals high impact (alpha=0.5 for first action) and stabilizes over time (alpha=0.1 after 10 actions).
+
+2. **Preference reads:** Each event needs 3 preference lookups (event_type, sender_domain, category). With 100 events per page, that's 300 queries. Solution: batch-fetch ALL user preferences once per request (~50-100 rows) into an in-memory `PreferenceCache` Map, then do pure-computation lookups per event.
+
+3. **Preference writes:** Updating preferences on every dismiss/save adds 2-3 DB operations. These should NOT block the user action response. Solution: fire-and-forget async side-effect after the state insert succeeds. Failures are logged but don't affect the user experience.
+
+4. **Batch states endpoint:** The existing `useEvents` hook fetched states one-by-one (100 API calls for 100 events). New `GET /api/events/states?ids=...` endpoint returns all states in a single query.
+
+**Decision:**
+- Count-aware EMA for fast early convergence: `alpha = max(0.1, 1/(total_count+1))`
+- Action weights: `saved_to_calendar=+1.0`, `maybe=+0.5`, `dismissed=-1.0`
+- Behavior weight = event_type (50%) + sender_domain (30%) + category (20%), normalized from [-1,1] to [0,1]
+- Preferences batch-fetched once per request via `fetchUserPreferences()`, passed as `PreferenceCache`
+- Preference updates are fire-and-forget side-effects in `POST /api/events/[id]/state`
+- `user_event_states` table includes `event_index` column for multi-event email support
+- `user_event_preferences` table with RLS, composite unique constraint, auto-update trigger
+- "Teach Me" prompts deferred to Phase 5
+
+**Key files:**
+- `src/services/events/preference-learning.ts` — EMA scoring, batch read, behavior weight calculation
+- `src/services/events/composite-weight.ts` — `getBehaviorWeight()` now reads real preferences
+- `src/app/api/events/[id]/state/route.ts` — fires preference update side-effect
+- `src/app/api/events/states/route.ts` — batch states endpoint
+- `supabase/migrations/migration-045-user-event-states.sql`
+- `supabase/migrations/migration-046-user-event-preferences.sql`
+
+**Status:** Implemented (steps 1-4). "Teach Me" prompts deferred.
+
+---
+
 ## Change Log
 
 | Date | Decision | Changed By |
@@ -993,3 +1030,4 @@ When making new architectural decisions, document them here using this template:
 | Mar 2026 | View Redesign Phase 1: Shared infra (tooltip, card, timeliness, animations) + Trifecta home layout | Claude (view redesign phase 1) |
 | Mar 2026 | View Redesign Phase 2: Inbox polish — InboxFeed breakup (682→264 lines), 7 extracted components, timeliness rows, sparklines, hover actions | Claude (view redesign phase 2) |
 | Mar 2026 | View Redesign Phase 3: Calendar redesign — timeline view, heat map grid, RSVP badges, birthday delight, calendar page 1234→297 lines | Claude (view redesign phase 3) |
+| Mar 2026 | Phase 4 preference learning: count-aware EMA, batch states endpoint, fire-and-forget preference writes, behavior weight in composite scoring | Claude (preference learning) |

@@ -69,6 +69,10 @@ import {
   requireAuth,
 } from '@/lib/api/utils';
 import { createLogger } from '@/lib/utils/logger';
+import {
+  updatePreferencesFromAction,
+  type EventSignals,
+} from '@/services/events/preference-learning';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -434,7 +438,64 @@ export async function POST(
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Step 6: Return success response
+    // Step 6: Update preferences (fire-and-forget side-effect)
+    //
+    // Look up event metadata to extract signals (event_type, sender_domain,
+    // email category) and feed them into the preference learning system.
+    // Failures here should NOT block the state change response.
+    // ─────────────────────────────────────────────────────────────────────────────
+    const updatePrefs = async () => {
+      try {
+        // Fetch event metadata from the email's analysis
+        const { data: analysis } = await supabase
+          .from('email_analyses')
+          .select('event_detection, multi_event_detection, categorization')
+          .eq('email_id', eventId)
+          .single();
+
+        if (!analysis) return;
+
+        // Extract signals from the event detection data
+        const eventDetection = analysis.event_detection as any;
+        const multiEvent = analysis.multi_event_detection as any;
+        const categorization = analysis.categorization as any;
+
+        // Get event type — try multi-event first (if this is a specific event from a digest)
+        const eventType = eventDetection?.event_type
+          || multiEvent?.events?.[0]?.event_type
+          || undefined;
+
+        // Get sender domain from the email
+        const { data: email } = await supabase
+          .from('emails')
+          .select('sender_email')
+          .eq('id', eventId)
+          .single();
+
+        const senderDomain = email?.sender_email
+          ? email.sender_email.split('@')[1]
+          : undefined;
+
+        const signals: EventSignals = {
+          eventType,
+          senderDomain,
+          emailCategory: categorization?.category,
+        };
+
+        await updatePreferencesFromAction(supabase, user.id, state, signals);
+      } catch (err) {
+        logger.warn('Preference update side-effect failed', {
+          eventId: eventId.substring(0, 8),
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    };
+
+    // Fire and forget — don't await
+    updatePrefs();
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Step 7: Return success response
     // ─────────────────────────────────────────────────────────────────────────────
     const durationMs = Date.now() - startTime;
     logger.success('Event state added', {
