@@ -35,6 +35,7 @@ import {
   Brain,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
+import { ShortcutHint } from '@/components/shared/ShortcutHint';
 import type { HubPriorityItem } from '@/services/hub';
 
 const logger = createLogger('NowCard');
@@ -151,10 +152,7 @@ export function NowCard({ item, isLoading }: NowCardProps) {
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-amber-500" />
             Now
-            {/* Desktop keyboard hint */}
-            <span className="ml-auto hidden md:inline-flex text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
-              N
-            </span>
+            <ShortcutHint keys={['N']} className="ml-auto" />
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

@@ -39,6 +39,7 @@ import {
 import { TYPE_FILTER_OPTIONS } from '@/lib/utils/event-colors';
 import { mergeToCalendarItems } from '@/components/calendar/types';
 import { createLogger } from '@/lib/utils/logger';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const logger = createLogger('CalendarPage');
 
@@ -135,6 +136,38 @@ export default function CalendarPage() {
     logger.info('Snooze item', { itemId: id.substring(0, 8), until: untilStr });
     await snoozeDate(id, untilStr);
   }, [snoozeDate]);
+
+  // ─── Keyboard Navigation (Phase 4) ──────────────────────────────────────
+  const [selectedTimelineIdx, setSelectedTimelineIdx] = React.useState(-1);
+
+  const getTimelineButtons = React.useCallback((): HTMLElement[] => {
+    return Array.from(document.querySelectorAll<HTMLElement>('[id^="item-"] button'));
+  }, []);
+
+  const handleNextItem = React.useCallback(() => {
+    const btns = getTimelineButtons();
+    if (btns.length === 0) return;
+    const next = Math.min(selectedTimelineIdx + 1, btns.length - 1);
+    setSelectedTimelineIdx(next);
+    btns[next]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    btns[next]?.focus();
+    logger.debug('Keyboard nav', { direction: 'next', index: next });
+  }, [selectedTimelineIdx, getTimelineButtons]);
+
+  const handlePrevItem = React.useCallback(() => {
+    const btns = getTimelineButtons();
+    if (btns.length === 0) return;
+    const prev = Math.max(selectedTimelineIdx - 1, 0);
+    setSelectedTimelineIdx(prev);
+    btns[prev]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    btns[prev]?.focus();
+    logger.debug('Keyboard nav', { direction: 'prev', index: prev });
+  }, [selectedTimelineIdx, getTimelineButtons]);
+
+  useKeyboardShortcuts([
+    { key: 'j', handler: handleNextItem, description: 'Next item', view: 'calendar' },
+    { key: 'k', handler: handlePrevItem, description: 'Previous item', view: 'calendar' },
+  ]);
 
   return (
     <div>

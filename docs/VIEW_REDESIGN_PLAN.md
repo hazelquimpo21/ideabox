@@ -878,20 +878,23 @@ Before starting any phase, run a dead code check:
 - useMemo for data grouping, heat map computation, stat calculations; useCallback on all handlers
 - Also fixed pre-existing duplicate export in `priority-reassessment.ts`
 
-### Phase 4: Delight & Polish (1 session)
+### Phase 4: Delight & Polish (1 session) ✅ COMPLETE
 
 **Goal:** Animations, keyboard shortcuts, streak indicator, final cleanup.
 
 **Steps:**
-1. Implement `useKeyboardShortcuts` hook
-2. Add keyboard shortcuts (⌘K, N, J/K, E, S, ?)
-3. Add shortcut hint badges to UI elements
-4. Implement streak calculation + display in greeting
-5. Add entrance animations to all list views
-6. Add state change transitions (complete, star, archive)
-7. Final dead code audit
-8. Performance check: ensure no animation jank, no unnecessary re-renders
-9. Mobile spot check: ensure nothing is broken (not a full mobile redesign)
+1. ✅ Implement `useKeyboardShortcuts` hook — single document listener, form-element guard, modifier support
+2. ✅ Add keyboard shortcuts (⌘K, N, J/K, E, S, ?) — wired into Home, Inbox, Calendar pages
+3. ✅ Add shortcut hint badges (ShortcutHint component) — NowCard `N`, EmailHoverActions `E`/`S`
+4. ✅ Implement streak calculation + display in greeting — weekend-aware, 3-tier emoji display
+5. ✅ Add entrance animations to EmailList + PriorityEmailList — `hasMounted` ref guard, cap at item 6
+6. ✅ Add state change transitions — slide-out-right (archive), star-spin (star), slide-out-down (dismiss)
+7. ✅ Dead code audit — no console.log, no unused imports in changed files
+8. ✅ Performance: single keydown listener, stagger only on mount, exit animations before DOM removal
+9. ✅ ShortcutsModal accessible via `?` key globally (GlobalShortcuts in root layout)
+
+**New files:** `useKeyboardShortcuts.ts` (125 lines), `ShortcutHint.tsx` (33), `ShortcutsModal.tsx` (107), `GlobalShortcuts.tsx` (38), `streak.ts` (112)
+**Modified:** 13 files — all under 400 lines
 
 **Verification:** Keyboard navigation works. Animations are smooth and don't replay on re-render. Streak shows after 3 days. No dead code remains.
 

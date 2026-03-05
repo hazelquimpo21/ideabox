@@ -89,16 +89,30 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   const nature = getEmailTimelinessNature(email);
   const accent = getTimelinessAccent(nature);
 
+  // State change animation refs (Phase 4)
+  const rowRef = React.useRef<HTMLButtonElement>(null);
+  const [isStarAnimating, setIsStarAnimating] = React.useState(false);
+
   const handleStarClick = React.useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    setIsStarAnimating(true);
+    setTimeout(() => setIsStarAnimating(false), 200);
     onToggleStar?.(email);
   }, [email, onToggleStar]);
 
   const handleArchive = React.useCallback((id: string) => {
-    onUpdate?.(id, { is_archived: true });
+    // Play slide-out animation, then perform the actual archive
+    if (rowRef.current) {
+      rowRef.current.classList.add('animate-slide-out-right');
+      setTimeout(() => onUpdate?.(id, { is_archived: true }), 300);
+    } else {
+      onUpdate?.(id, { is_archived: true });
+    }
   }, [onUpdate]);
 
   const handleStar = React.useCallback((_id: string) => {
+    setIsStarAnimating(true);
+    setTimeout(() => setIsStarAnimating(false), 200);
     onToggleStar?.(email);
   }, [email, onToggleStar]);
 
@@ -108,7 +122,10 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
 
   return (
     <button
+      ref={rowRef}
       type="button"
+      data-email-row
+      data-email-id={email.id}
       onClick={() => onClick(email)}
       className={cn(
         'group relative w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
@@ -176,7 +193,10 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
           className="p-1 rounded hover:bg-muted/80 transition-colors shrink-0"
           aria-label="Star email"
         >
-          <Star className="h-4 w-4 text-muted-foreground/30 hover:text-yellow-400 transition-colors" />
+          <Star className={cn(
+            'h-4 w-4 text-muted-foreground/30 hover:text-yellow-400 transition-colors',
+            isStarAnimating && 'animate-star-spin',
+          )} />
         </button>
       )}
 

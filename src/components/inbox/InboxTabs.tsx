@@ -57,6 +57,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
 import { Inbox, TrendingUp, Archive, LayoutGrid, Sparkles } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import type { EmailCategory } from '@/types/discovery';
 import { EMAIL_CATEGORIES_SET } from '@/types/discovery';
 
@@ -208,6 +209,62 @@ export function InboxTabs() {
       setSelectedEmailCategory(null);
     }, 200);
   }, [selectedEmailId]);
+
+  // ─── Keyboard Navigation (Phase 4) ──────────────────────────────────────
+  const [selectedIndex, setSelectedIndex] = React.useState(-1);
+
+  /** Query all visible email row elements in the current tab. */
+  const getEmailRows = React.useCallback((): HTMLElement[] => {
+    return Array.from(document.querySelectorAll<HTMLElement>(
+      '[data-email-row]'
+    ));
+  }, []);
+
+  const handleNextEmail = React.useCallback(() => {
+    const rows = getEmailRows();
+    if (rows.length === 0) return;
+    const next = Math.min(selectedIndex + 1, rows.length - 1);
+    setSelectedIndex(next);
+    rows[next]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    rows[next]?.focus();
+    logger.debug('Keyboard nav', { direction: 'next', index: next });
+  }, [selectedIndex, getEmailRows]);
+
+  const handlePrevEmail = React.useCallback(() => {
+    const rows = getEmailRows();
+    if (rows.length === 0) return;
+    const prev = Math.max(selectedIndex - 1, 0);
+    setSelectedIndex(prev);
+    rows[prev]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    rows[prev]?.focus();
+    logger.debug('Keyboard nav', { direction: 'prev', index: prev });
+  }, [selectedIndex, getEmailRows]);
+
+  const handleArchiveShortcut = React.useCallback(() => {
+    const rows = getEmailRows();
+    const row = rows[selectedIndex];
+    if (!row) return;
+    const archiveBtn = row.querySelector<HTMLButtonElement>('[aria-label="Archive"]');
+    if (archiveBtn) archiveBtn.click();
+  }, [selectedIndex, getEmailRows]);
+
+  const handleStarShortcut = React.useCallback(() => {
+    const rows = getEmailRows();
+    const row = rows[selectedIndex];
+    if (!row) return;
+    const starBtn = row.querySelector<HTMLButtonElement>('[aria-label="Star"], [aria-label="Unstar"]');
+    if (starBtn) starBtn.click();
+  }, [selectedIndex, getEmailRows]);
+
+  useKeyboardShortcuts([
+    { key: 'j', handler: handleNextEmail, description: 'Next email', view: 'inbox' },
+    { key: 'k', handler: handlePrevEmail, description: 'Previous email', view: 'inbox' },
+    { key: 'e', handler: handleArchiveShortcut, description: 'Archive email', view: 'inbox' },
+    { key: 's', handler: handleStarShortcut, description: 'Star / unstar email', view: 'inbox' },
+  ]);
+
+  // Reset selection when switching tabs
+  React.useEffect(() => { setSelectedIndex(-1); }, [activeTab]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (

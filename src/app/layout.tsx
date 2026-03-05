@@ -26,6 +26,7 @@ import localFont from 'next/font/local';
 
 import { Toaster } from '@/components/ui';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { GlobalShortcuts } from '@/components/shared/GlobalShortcuts';
 import { AuthProvider } from '@/lib/auth';
 import './globals.css';
 
@@ -155,6 +156,9 @@ export default function RootLayout({
           <TooltipProvider delayDuration={300}>
             {/* Main content */}
             {children}
+
+            {/* Global keyboard shortcuts (Phase 4) */}
+            <GlobalShortcuts />
 
             {/* Toast notifications (global) */}
             <Toaster />

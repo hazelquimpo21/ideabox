@@ -952,6 +952,26 @@ When making new architectural decisions, document them here using this template:
 
 ---
 
+### Decision #36: View Redesign Phase 4 — Keyboard Shortcuts, Streak Gamification, Animations (March 2026)
+
+**Context:** Final polish phase of the 4-phase view redesign. Phases 1-3 built the component infrastructure, inbox, and calendar. Phase 4 adds delight layer: keyboard navigation, entrance/exit animations, and streak gamification.
+
+**Decision:**
+- **Keyboard shortcuts:** Single `useKeyboardShortcuts` hook with one document-level `keydown` listener (not per-shortcut). Form elements suppressed. `?` key opens ShortcutsModal globally via `GlobalShortcuts` in root layout.
+- **Navigation:** J/K in inbox (DOM-based via `data-email-row` attribute) and calendar (via `[id^="item-"]` selector). E/S for archive/star in inbox. N for top priority on home.
+- **Streak:** Weekend-aware calculation (Mon-Fri only). 3-tier display: 3-6 days (🔥), 7-13 (🔥🔥), 14+ (🔥🔥🔥). Hidden below 3. Wrapped in `useMemo` for perf.
+- **Animations:** Staggered entrance on EmailList/PriorityEmailList (capped at item 6, `hasMounted` ref guard). State transitions: `slide-out-right` (archive, 300ms), `star-spin` (star, 200ms), `slide-out-down` (calendar dismiss, 200ms). Exit animations complete before DOM removal via `setTimeout`.
+- **ShortcutHint:** Reusable `<kbd>` component, desktop-only via `hidden md:inline-flex`. Applied to NowCard and EmailHoverActions.
+
+**Alternatives considered:**
+- Per-component keyboard listeners → rejected (multiple listeners, no central management)
+- React context for keyboard state → rejected (too heavy for this use case, ref pattern is simpler)
+- Streak counting weekends → rejected (unfair to users who don't work weekends)
+
+**Status:** Implemented
+
+---
+
 ## Change Log
 
 | Date | Decision | Changed By |

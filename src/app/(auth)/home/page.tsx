@@ -43,6 +43,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { RefreshCw } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const logger = createLogger('HomePage');
 
@@ -100,6 +101,9 @@ export default function HomePage() {
     toggleComplete,
     stats: taskStats,
   } = useActions({ status: 'pending', sortBy: 'urgency', limit: 5 });
+
+  // ─── Completed Tasks (for streak calculation) ─────────────────────────────
+  const { actions: completedTasks } = useActions({ status: 'completed', limit: 30 });
 
   // ─── Idea Sparks ───────────────────────────────────────────────────────────
   const {
@@ -206,6 +210,41 @@ export default function HomePage() {
     [projects]
   );
 
+  // ─── Streak Data (Phase 4) ─────────────────────────────────────────────
+  const reviewedDates = React.useMemo(
+    () => reviewItems
+      .filter((item) => (item as Record<string, unknown>).reviewed_at)
+      .map((item) => String((item as Record<string, unknown>).reviewed_at).split('T')[0]!),
+    [reviewItems],
+  );
+
+  const taskCompletedDates = React.useMemo(
+    () => completedTasks
+      .filter((task) => task.completed_at)
+      .map((task) => String(task.completed_at).split('T')[0]!),
+    [completedTasks],
+  );
+
+  // ─── Keyboard Shortcuts (Phase 4) ──────────────────────────────────────
+  const topItem = priorityItems[0] || null;
+
+  const handleNowShortcut = React.useCallback(() => {
+    if (topItem?.href) {
+      logger.info('N shortcut: navigating to top priority', { href: topItem.href });
+      window.location.href = topItem.href;
+    }
+  }, [topItem]);
+
+  useKeyboardShortcuts([
+    {
+      key: 'n',
+      handler: handleNowShortcut,
+      description: 'Act on top priority',
+      view: 'home',
+      enabled: !!topItem,
+    },
+  ]);
+
   logger.debug('Home page state', {
     firstName,
     actionCount,
@@ -241,12 +280,14 @@ export default function HomePage() {
         userName={firstName}
         actionCount={actionCount}
         isLoading={isAnyLoading}
+        reviewedDates={reviewedDates}
+        taskCompletedDates={taskCompletedDates}
       />
 
       {/* Trifecta — always visible, 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <NowCard
-          item={priorityItems[0] || null}
+          item={topItem}
           isLoading={isPrioritiesLoading}
         />
         <TodayCard

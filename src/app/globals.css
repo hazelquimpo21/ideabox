@@ -152,6 +152,17 @@
   .animate-confetti-pop {
     animation: confetti-pop 0.35s ease-out forwards;
   }
+
+  /* ─── State Change Transitions (Phase 4) ───────────────────────────── */
+  .animate-slide-out-right {
+    animation: slide-out-right 0.3s ease-in forwards;
+  }
+  .animate-slide-out-down {
+    animation: slide-out-down 0.2s ease-in forwards;
+  }
+  .animate-star-spin {
+    animation: star-spin 0.2s ease-out;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -172,6 +183,22 @@
   0% { transform: scale(0.8); opacity: 0; }
   50% { transform: scale(1.1); }
   100% { transform: scale(1); opacity: 1; }
+}
+
+/* ─── State Change Transitions (Phase 4) ─────────────────────────────────── */
+@keyframes slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
+}
+
+@keyframes slide-out-down {
+  from { opacity: 1; transform: translateY(0); max-height: 100px; }
+  to { opacity: 0; transform: translateY(8px); max-height: 0; }
+}
+
+@keyframes star-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(72deg); }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
