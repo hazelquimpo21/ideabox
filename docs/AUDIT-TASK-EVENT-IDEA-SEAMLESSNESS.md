@@ -153,6 +153,14 @@ Allow "Add to project" from links, or create a task with the link URL embedded. 
 **Status:** NOT extracted at all. Gmail API returns attachment metadata but it's never parsed or stored.
 **Impact:** Users can't search for "emails with PDFs" or "emails with invoices."
 
+### 7.10 CC/BCC Recipients
+**Status:** Only primary `recipient_email` stored. CC/BCC lost during ingestion.
+**Impact:** Can't see "who else was on this email" — important for client threads and delegation context.
+
+### 7.11 Calendar Invite Data (.ics)
+**Status:** Gmail delivers structured .ics files with timezone-correct times, recurrence, and attendee lists. This structured data is ignored — EventDetector infers event details from body text instead.
+**Impact:** Event times may lack timezone accuracy; attendee lists lost; recurring events not detected.
+
 ---
 
 ## 8. The Connectivity Gap — Current State
@@ -256,7 +264,27 @@ ALTER TABLE project_items ADD COLUMN source_event_index INTEGER; -- for multi-ev
 
 ---
 
-## 12. Risk Assessment
+## 12. Additional Backend Findings (From Deep Dive)
+
+### CC/BCC Recipients Not Stored
+Only `recipient_email` (primary To) is stored. CC/BCC are lost during ingestion. This means you can't answer "who else was on this thread?" — relevant for client work and delegation.
+
+### Calendar Invitations (.ics) Not Parsed
+Gmail delivers calendar invites as .ics attachments. The EventDetector extracts event info from the email *body text*, but actual structured calendar data (with timezone-correct times, recurrence rules, attendee lists) is thrown away. This is a missed opportunity for high-fidelity event extraction.
+
+### Review Queue Is Just a Timestamp Field
+The "triage" concept for emails (as opposed to actions/ideas) is just `emails.reviewed_at` being NULL or not. There's no separate status, no "snoozed until" for emails themselves, and no connection to the triage queue in `TriageContent.tsx` which only shows actions + ideas.
+
+### Two Incomplete TODOs in Events API
+- `hasPriorExchange: false` — composite weight calculation hardcodes this instead of checking if user has prior email threads with the event sender
+- `inferLocality()` returns `undefined` for in-person events — needs `user_context.location_city` comparison to determine local vs out-of-town
+
+### Recurrence Engine Partially Built
+`project_items` has `recurrence_pattern` and `recurrence_config` (JSONB with dayOfWeek, dayOfMonth, interval, endDate), but the UI only exposes the pattern selector (daily/weekly/biweekly/monthly). The config details and actual recurrence generation aren't wired up.
+
+---
+
+## 13. Risk Assessment
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
