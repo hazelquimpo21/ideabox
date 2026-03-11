@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import { QuickAcceptPopover } from './QuickAcceptPopover';
+import { SourceChip } from '@/components/shared/SourceChip';
 import type { TriageItem } from '@/hooks/useTriageItems';
 import type { Project } from '@/types/database';
 
@@ -118,14 +119,11 @@ export function TriageDeadlineCard({ item, onAccept, onDismiss, onSnooze, projec
           )}
 
           {item.sourceEmailId && (
-            <Link
-              href={`/inbox?email=${item.sourceEmailId}`}
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-muted/60 hover:bg-muted hover:text-foreground transition-colors truncate max-w-[160px]"
-              title="View source email"
-            >
-              <Mail className="h-3 w-3 shrink-0" />
-              <span className="truncate">{item.sourceEmailSubject || item.sourceEmailSender || 'Source email'}</span>
-            </Link>
+            <SourceChip
+              type="email"
+              id={item.sourceEmailId}
+              label={item.sourceEmailSubject || item.sourceEmailSender || 'Source email'}
+            />
           )}
         </div>
       </div>
