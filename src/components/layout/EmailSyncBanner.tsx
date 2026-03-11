@@ -85,9 +85,11 @@ export function EmailSyncBanner() {
       if (!isMountedRef.current) return;
 
       if (!response.ok) {
-        // No active sync (404) or error — hide banner and stop polling
+        // No active sync (404) or error — hide banner and stop polling permanently
+        logger.debug('No active sync, hiding banner', { status: response.status });
         setIsVisible(false);
         stopPolling();
+        setIsDismissed(true); // Prevent re-mounting from restarting polls
         return;
       }
 
@@ -139,9 +141,18 @@ export function EmailSyncBanner() {
     }
   }, [stopPolling]);
 
-  // Start polling on mount
+  // Start polling on mount (only if not already dismissed this session)
   React.useEffect(() => {
     isMountedRef.current = true;
+
+    // Skip polling entirely if banner was already dismissed/completed this session
+    try {
+      if (sessionStorage.getItem(SESSION_KEY) === 'done') {
+        return;
+      }
+    } catch {
+      // sessionStorage unavailable — continue normally
+    }
 
     // Initial check
     fetchSyncStatus();
