@@ -364,6 +364,16 @@ export function EmailDetail({
   extractedDates,
   refetchAnalysis,
 }: EmailDetailProps) {
+  // Fetch contact data for sender info display (must be before early returns — React hooks rule)
+  const { contacts: matchedContacts } = useContacts({
+    search: email.sender_email,
+    sortBy: 'email_count',
+    sortOrder: 'desc',
+  });
+  const senderContact = matchedContacts.find(
+    (c) => c.email.toLowerCase() === email.sender_email.toLowerCase()
+  ) ?? null;
+
   if (isLoading) {
     return (
       <div className="p-6 animate-pulse">
@@ -378,16 +388,6 @@ export function EmailDetail({
       </div>
     );
   }
-
-  // Fetch contact data for sender info display
-  const { contacts: matchedContacts } = useContacts({
-    search: email.sender_email,
-    sortBy: 'email_count',
-    sortOrder: 'desc',
-  });
-  const senderContact = matchedContacts.find(
-    (c) => c.email.toLowerCase() === email.sender_email.toLowerCase()
-  ) ?? null;
 
   // Show email body expanded when there's no analysis to display
   const hasAnalysis = !!email.analyzed_at && !!analysis;

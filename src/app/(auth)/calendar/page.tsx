@@ -91,11 +91,14 @@ export default function CalendarPage() {
   const isLoading = isEventsLoading || isDatesLoading;
   const error = eventsError || datesError;
 
-  // Merge data into unified CalendarItem[] — filter events by type
+  // Merge data into unified CalendarItem[] — filter events by type.
+  // Filter out date_type='event' from extracted dates to avoid duplicates
+  // with events already coming from /api/events (EventDetector data).
   const mergedItems = React.useMemo(() => {
     const includeEvents = typeFilter === 'all' || typeFilter === 'event';
     const filteredEvents = includeEvents ? events : [];
-    return mergeToCalendarItems(filteredEvents, dates);
+    const nonEventDates = dates.filter((d) => d.date_type !== 'event');
+    return mergeToCalendarItems(filteredEvents, nonEventDates);
   }, [events, dates, typeFilter]);
 
   // Handlers

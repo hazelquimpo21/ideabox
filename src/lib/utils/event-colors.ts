@@ -19,6 +19,7 @@ import {
   ArrowRight,
   RefreshCw,
   Bell,
+  CalendarClock,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -78,7 +79,7 @@ const EVENT_TYPE_MAP: Record<string, EventTypeConfig> = {
     border: 'border-blue-500',
     shape: 'circle',
     label: 'Appointment',
-    icon: CalendarCheck,
+    icon: Calendar,
   },
   deadline: {
     color: 'red-500',
