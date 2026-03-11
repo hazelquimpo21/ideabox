@@ -35,6 +35,9 @@ import { getTimelinessAccent, type TimelinessNature } from '@/lib/utils/timeline
 import { cn } from '@/lib/utils/cn';
 import { AIDigestView } from './AIDigestView';
 import { AnalysisSummary } from './AnalysisSummary';
+import { RelatedItems } from '@/components/shared/RelatedItems';
+import { SourceChip } from '@/components/shared/SourceChip';
+import { useRelatedItems } from '@/hooks/useRelatedItems';
 import { getCategoryBadge } from './analysis/helpers';
 import {
   X,
@@ -374,6 +377,12 @@ export function EmailDetail({
     (c) => c.email.toLowerCase() === email.sender_email.toLowerCase()
   ) ?? null;
 
+  // Fetch related items for forward chips (tasks/events produced by this email)
+  const { items: relatedItems } = useRelatedItems({ emailId: email.id });
+  const forwardItems = relatedItems.filter(
+    (item) => item.type === 'task' || item.type === 'event' || item.type === 'idea'
+  );
+
   if (isLoading) {
     return (
       <div className="p-6 animate-pulse">
@@ -408,6 +417,21 @@ export function EmailDetail({
         {/* Timeliness banner — stale/expiring dates */}
         <TimelinessBanner email={email} />
 
+        {/* Forward chips — tasks/events produced from this email */}
+        {forwardItems.length > 0 && (
+          <div className="px-6 pt-3 flex items-center gap-2 flex-wrap">
+            {forwardItems.map((item) => (
+              <SourceChip
+                key={`${item.type}-${item.id}`}
+                type={item.type as 'task' | 'event' | 'idea'}
+                id={item.id}
+                label={item.title}
+                direction="forward"
+              />
+            ))}
+          </div>
+        )}
+
         {/* AI Digest — the primary content */}
         <AIDigestView
           email={email}
@@ -418,6 +442,9 @@ export function EmailDetail({
           isAnalyzing={isAnalyzing}
           refetchAnalysis={refetchAnalysis}
         />
+
+        {/* Related items — cross-entity navigation */}
+        <RelatedItems emailId={email.id} className="px-6" />
 
         {/* Original email — collapsible, collapsed when AI digest is shown */}
         <CollapsibleEmailBody email={email} defaultOpen={!hasAnalysis} />

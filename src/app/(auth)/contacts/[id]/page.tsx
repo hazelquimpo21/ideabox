@@ -65,6 +65,7 @@ import {
 } from 'lucide-react';
 import { PromoteToClientDialog } from '@/components/contacts';
 import { ContactIntelligenceCard } from '@/components/contacts/ContactIntelligenceCard';
+import { RelatedItems } from '@/components/shared/RelatedItems';
 import type { PromoteToClientData } from '@/components/contacts/PromoteToClientDialog';
 import {
   Button,
@@ -1091,6 +1092,11 @@ export default function ContactDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* Related Items — cross-entity navigation (Phase 2) */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      <RelatedItems contactId={contactId as string} />
 
       {/* ─────────────────────────────────────────────────────────────────────── */}
       {/* Notes Section */}

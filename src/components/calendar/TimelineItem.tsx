@@ -21,6 +21,7 @@ import { Cake, MapPin, Star, Sparkles } from 'lucide-react';
 import { RsvpBadge } from './RsvpBadge';
 import { EventActions } from './EventActions';
 import { DateItemExpanded } from './DateItemExpanded';
+import { RelatedItems } from '@/components/shared/RelatedItems';
 import type { CalendarItem } from './types';
 
 /** Date types that use the slim DateItemExpanded card instead of full event details. */
@@ -226,6 +227,11 @@ const TimelineItemInner = React.memo(function TimelineItemInner({
                   onSaveToCalendar={onSaveToCalendar}
                   onSnooze={onSnooze}
                 />
+
+                {/* Related items — cross-entity navigation */}
+                {item.sourceEmailId && (
+                  <RelatedItems emailId={item.sourceEmailId} />
+                )}
               </div>
             )
           )}
