@@ -30,6 +30,9 @@ import * as React from 'react';
 import { Button, Badge } from '@/components/ui';
 import type { NormalizedAnalysis } from '@/hooks/useEmailAnalysis';
 import type { ExtractedDate } from '@/hooks/useExtractedDates';
+import { useContacts, type Contact } from '@/hooks/useContacts';
+import { getTimelinessAccent, type TimelinessNature } from '@/lib/utils/timeliness';
+import { cn } from '@/lib/utils/cn';
 import { AIDigestView } from './AIDigestView';
 import { AnalysisSummary } from './AnalysisSummary';
 import { getCategoryBadge } from './analysis/helpers';
@@ -40,6 +43,7 @@ import {
   Mail,
   MailOpen,
   Clock,
+  AlertTriangle,
   ExternalLink,
   ChevronDown,
 } from 'lucide-react';
@@ -98,17 +102,29 @@ function sanitizeHtml(html: string): string {
 
 function EmailHeader({
   email,
+  contact,
   onStar,
   onArchive,
   onToggleRead,
   onClose,
 }: {
   email: Email;
+  contact?: Contact | null;
   onStar?: (id: string) => void;
   onArchive?: (id: string) => void;
   onToggleRead?: (id: string) => void;
   onClose?: () => void;
 }) {
+  // Build contact info line: "Product Manager at Acme Corp" or just one
+  const contactInfoLine = React.useMemo(() => {
+    if (!contact) return null;
+    const parts: string[] = [];
+    if (contact.job_title) parts.push(contact.job_title);
+    if (contact.company) parts.push(contact.company);
+    if (parts.length === 0) return null;
+    return parts.length === 2 ? `${parts[0]} at ${parts[1]}` : parts[0];
+  }, [contact]);
+
   return (
     <div className="flex items-start justify-between gap-4 p-6 border-b border-border bg-muted/30">
       <div className="flex-1 min-w-0">
@@ -121,6 +137,9 @@ function EmailHeader({
           <div className="min-w-0">
             <p className="font-medium truncate">{email.sender_name || email.sender_email}</p>
             <p className="text-sm text-muted-foreground truncate">{email.sender_email}</p>
+            {contactInfoLine && (
+              <p className="text-xs text-muted-foreground/70 truncate">{contactInfoLine}</p>
+            )}
           </div>
         </div>
       </div>
@@ -269,6 +288,64 @@ function CollapsibleEmailBody({
 }
 
 
+/**
+ * Timeliness banner — shows late_after/expires dates from email.timeliness JSONB.
+ * Past dates shown in red with past tense. Future dates in accent color.
+ */
+function TimelinessBanner({ email }: { email: Email }) {
+  const timeliness = email.timeliness as Record<string, unknown> | null;
+  if (!timeliness) return null;
+
+  const now = new Date();
+  const nature = (timeliness.nature as TimelinessNature) || 'reference';
+  const accent = getTimelinessAccent(nature);
+  const banners: Array<{ text: string; isPast: boolean }> = [];
+
+  if (timeliness.late_after && typeof timeliness.late_after === 'string') {
+    const date = new Date(timeliness.late_after);
+    const dateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    if (date < now) {
+      banners.push({ text: `This email became stale on ${dateStr}`, isPast: true });
+    } else {
+      banners.push({ text: `This email becomes stale after ${dateStr}`, isPast: false });
+    }
+  }
+
+  if (timeliness.expires && typeof timeliness.expires === 'string') {
+    const date = new Date(timeliness.expires);
+    const dateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    if (date < now) {
+      banners.push({ text: `Content expired on ${dateStr}`, isPast: true });
+    } else {
+      banners.push({ text: `Content expires ${dateStr}`, isPast: false });
+    }
+  }
+
+  if (banners.length === 0) return null;
+
+  return (
+    <div className="px-6 pt-3">
+      {banners.map((banner, i) => (
+        <div
+          key={i}
+          className={cn(
+            'inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border',
+            banner.isPast
+              ? 'bg-red-50 border-red-200 text-red-600 dark:bg-red-950/20 dark:border-red-800 dark:text-red-400'
+              : cn(accent.bg, accent.text, 'border-current/20'),
+          )}
+        >
+          {banner.isPast
+            ? <AlertTriangle className="h-3 w-3 shrink-0" />
+            : <Clock className="h-3 w-3 shrink-0" />
+          }
+          {banner.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -302,6 +379,16 @@ export function EmailDetail({
     );
   }
 
+  // Fetch contact data for sender info display
+  const { contacts: matchedContacts } = useContacts({
+    search: email.sender_email,
+    sortBy: 'email_count',
+    sortOrder: 'desc',
+  });
+  const senderContact = matchedContacts.find(
+    (c) => c.email.toLowerCase() === email.sender_email.toLowerCase()
+  ) ?? null;
+
   // Show email body expanded when there's no analysis to display
   const hasAnalysis = !!email.analyzed_at && !!analysis;
 
@@ -309,6 +396,7 @@ export function EmailDetail({
     <div className="flex flex-col h-full overflow-hidden">
       <EmailHeader
         email={email}
+        contact={senderContact}
         onStar={onStar}
         onArchive={onArchive}
         onToggleRead={onToggleRead}
@@ -316,6 +404,9 @@ export function EmailDetail({
       />
       <div className="flex-1 overflow-y-auto">
         <EmailSubject email={email} />
+
+        {/* Timeliness banner — stale/expiring dates */}
+        <TimelinessBanner email={email} />
 
         {/* AI Digest — the primary content */}
         <AIDigestView
