@@ -13,7 +13,6 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui';
 import { Tooltip } from '@/components/ui/tooltip';
 import {
@@ -46,6 +45,7 @@ export function EventActions({
   onDismiss,
   onSaveToCalendar,
   onSnooze,
+  onViewEmail,
   projects,
   compact = false,
 }: EventActionsProps) {
@@ -97,13 +97,16 @@ export function EventActions({
               </Button>
             </Tooltip>
           )}
-          {item.sourceEmailId && (
+          {item.sourceEmailId && onViewEmail && (
             <Tooltip variant="info" content="View Email">
-              <Link href={`/inbox?email=${item.sourceEmailId}`}>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <Mail className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => onViewEmail(item.sourceEmailId!)}
+              >
+                <Mail className="h-3.5 w-3.5" />
+              </Button>
             </Tooltip>
           )}
         </div>
@@ -164,13 +167,16 @@ export function EventActions({
             )}
           </div>
         )}
-        {item.sourceEmailId && (
-          <Link href={`/inbox?email=${item.sourceEmailId}`}>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Mail className="h-3.5 w-3.5" />
-              View Email
-            </Button>
-          </Link>
+        {item.sourceEmailId && onViewEmail && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => onViewEmail(item.sourceEmailId!)}
+          >
+            <Mail className="h-3.5 w-3.5" />
+            View Email
+          </Button>
         )}
       </div>
 
