@@ -54,7 +54,7 @@ const logger = createLogger('useActions');
  * Avoids `select('*')` to reduce payload size (~6KB savings).
  * @since March 2026 — Phase 3 query optimization
  */
-const TRIAGE_LIST_FIELDS = 'id, title, action_type, priority, urgency_score, deadline, email_id, status, created_at, completed_at, client_id';
+const TRIAGE_LIST_FIELDS = 'id, title, action_type, priority, urgency_score, deadline, email_id, status, created_at, completed_at, contact_id';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -244,7 +244,7 @@ export function useActions(options: UseActionsOptions = {}): UseActionsReturn {
 
       // Apply client filter
       if (clientId) {
-        query = query.eq('client_id', clientId);
+        query = query.eq('contact_id', clientId);
       }
 
       // Apply email filter

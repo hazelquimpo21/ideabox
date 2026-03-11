@@ -191,6 +191,15 @@ export function useInitialSyncProgress(
       if (!isMountedRef.current) return;
 
       if (!response.ok) {
+        // 404 means no active sync — stop polling permanently
+        if (response.status === 404) {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+            setIsPolling(false);
+          }
+          return;
+        }
         const errorText = await response.text();
         throw new Error(errorText || `HTTP ${response.status}`);
       }
