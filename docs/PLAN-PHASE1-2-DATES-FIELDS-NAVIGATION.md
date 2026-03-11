@@ -109,7 +109,9 @@ Two phases. Phase 1 is backend plumbing + the biggest UI wins. Phase 2 is the cr
 
 ---
 
-## Phase 2: Cross-Navigation & Remaining Polish
+## Phase 2: Cross-Navigation & Remaining Polish ✅ COMPLETED (March 2026)
+
+> **Implementation notes:** Phase 2 was implemented as 5 sub-tasks. **2A Related Items**: New `GET /api/related` endpoint with parallel queries (Promise.all + individual try/catch for partial results), `useRelatedItems` hook, `RelatedItems` + `RelatedItemRow` components using `CollapsibleSection`. Integrated in EmailDetail, TimelineItem expanded views, and contact detail page. **2B Source Chip**: Standardized `SourceChip` component with backward/forward direction support. Replaced inline source email links in TriageActionCard, TriageIdeaCard, TriageDeadlineCard, TriageEventCard, DateItemExpanded, and ProjectItemRow. Forward chips added to EmailDetail showing tasks/events produced from an email. **2C Create Task From Event**: Migration 047 adds `source_event_email_id` + `source_event_index` to project_items. `CreateTaskFromEventDialog` with auto-populated fields (title, due date, priority based on urgency, description with event details). Wired to DateItemExpanded, EventActions (new "Create task" button), and TriageEventCard. Zod schema updated. **2D Inbox TODOs**: Contact company in sender line via domain proxy (`getSenderCompanyProxy()` strips personal domains, capitalizes business domains). Must-read link indicator in EmailRowIndicators cascade with Link2 icon + count tooltip. **2E Writing Tips**: `WritingTips` component shows AI-generated subject/tone/CTA suggestions in compose flow, dismissible per-email via localStorage. Integrated in ComposeEmail with `emailStyleIdeas` prop.
 
 ### 2A. The "Related Items" Sidebar/Section
 
