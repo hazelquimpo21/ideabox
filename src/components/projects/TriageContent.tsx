@@ -2,15 +2,17 @@
  * Triage Content Component
  *
  * Full-width triage tab — the default tab of the Tasks page.
- * Displays a merged stream of pending email-extracted actions and
- * AI-generated idea sparks, sorted by urgency. Users can accept,
- * dismiss, or snooze items to work through their triage queue.
+ * Displays a merged stream of pending email-extracted actions,
+ * AI-generated idea sparks, upcoming deadlines, and events needing RSVP,
+ * sorted by urgency. Users can accept, dismiss, or snooze items to work
+ * through their triage queue.
  *
  * This is the standalone page version of triage; TriageTray.tsx
  * remains as the embeddable card version.
  *
  * @module components/projects/TriageContent
  * @since March 2026 — Phase 1 Tasks Page Redesign
+ * @updated March 2026 — Phase 4: Add deadline & event card types
  */
 
 'use client';
@@ -20,6 +22,8 @@ import { cn } from '@/lib/utils/cn';
 import { Skeleton } from '@/components/ui';
 import { TriageActionCard } from './TriageActionCard';
 import { TriageIdeaCard } from './TriageIdeaCard';
+import { TriageDeadlineCard } from './TriageDeadlineCard';
+import { TriageEventCard } from './TriageEventCard';
 import { TriageEmptyState } from './TriageEmptyState';
 import { PromoteActionDialog } from './PromoteActionDialog';
 import { useTriageItems, type TriageItem } from '@/hooks/useTriageItems';
@@ -29,6 +33,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { createLogger } from '@/lib/utils/logger';
 import type { ActionWithEmail } from '@/types/database';
 import type { IdeaItem } from '@/hooks/useIdeas';
+import type { ExtractedDate } from '@/hooks/useExtractedDates';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGGER
@@ -40,7 +45,7 @@ const logger = createLogger('TriageContent');
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type TriageFilter = 'all' | 'action' | 'idea';
+type TriageFilter = 'all' | 'action' | 'idea' | 'deadline' | 'event';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOADING SKELETON
@@ -72,9 +77,10 @@ function TriageSkeleton() {
 /**
  * TriageContent — full-width triage tab content for the Tasks page.
  *
- * Merges pending actions and idea sparks into a single sorted list.
- * Provides filter pills, accept/dismiss/snooze controls, and an
- * empty state when all items are triaged.
+ * Merges pending actions, idea sparks, upcoming deadlines, and events
+ * needing RSVP into a single sorted list. Provides filter pills,
+ * accept/dismiss/snooze controls, and an empty state when all items
+ * are triaged.
  *
  * @module components/projects/TriageContent
  * @since March 2026
@@ -95,6 +101,8 @@ export function TriageContent() {
       logger.info('Triage loaded', {
         actionCount: stats.actions,
         ideaCount: stats.ideas,
+        deadlineCount: stats.deadlines,
+        eventCount: stats.events,
         totalSuggestions: stats.total,
       });
     }
@@ -112,9 +120,10 @@ export function TriageContent() {
     logger.info('Item accepted (legacy)', { type: item.type, itemId: item.id });
     if (item.type === 'action') {
       setPromoteAction(item.raw as ActionWithEmail);
-    } else {
+    } else if (item.type === 'idea') {
       saveIdea(item.raw as IdeaItem);
     }
+    // For deadlines and events, handleAccept is a no-op in legacy mode
   }, [saveIdea]);
 
   /** Quick accept for actions — creates a project_item via the popover */
@@ -149,6 +158,38 @@ export function TriageContent() {
     dismissItem(item.id, 'idea');
   }, [createItem, saveIdea, dismissItem]);
 
+  /** Quick accept for deadlines — creates a task project_item with due date */
+  const handleQuickAcceptDeadline = React.useCallback(async (item: TriageItem, projectId: string, priority: string) => {
+    logger.info('Quick accept deadline', { itemId: item.id, projectId, priority });
+    const raw = item.raw as ExtractedDate;
+    await createItem({
+      title: item.title,
+      item_type: 'task',
+      status: 'pending',
+      priority,
+      project_id: projectId || undefined,
+      source_email_id: item.sourceEmailId || undefined,
+      due_date: raw.date,
+    });
+    dismissItem(item.id, 'deadline');
+  }, [createItem, dismissItem]);
+
+  /** Quick accept for events — creates a task project_item with event date */
+  const handleQuickAcceptEvent = React.useCallback(async (item: TriageItem, projectId: string, priority: string) => {
+    logger.info('Quick accept event', { itemId: item.id, projectId, priority });
+    const raw = item.raw as import('@/hooks/useEvents').EventData;
+    await createItem({
+      title: item.title,
+      item_type: 'task',
+      status: 'pending',
+      priority,
+      project_id: projectId || undefined,
+      source_email_id: item.sourceEmailId || undefined,
+      due_date: raw.date,
+    });
+    dismissItem(item.id, 'event');
+  }, [createItem, dismissItem]);
+
   /** Open full PromoteActionDialog as fallback from "More options..." */
   const handleFallbackToDialog = React.useCallback((item: TriageItem) => {
     logger.info('Fallback to dialog', { itemId: item.id });
@@ -182,16 +223,20 @@ export function TriageContent() {
             {' '}item{stats.total !== 1 ? 's' : ''} to triage
             {' '}&middot; {stats.actions} task{stats.actions !== 1 ? 's' : ''}
             {' '}&middot; {stats.ideas} idea{stats.ideas !== 1 ? 's' : ''}
+            {stats.deadlines > 0 && <>{' '}&middot; {stats.deadlines} deadline{stats.deadlines !== 1 ? 's' : ''}</>}
+            {stats.events > 0 && <>{' '}&middot; {stats.events} event{stats.events !== 1 ? 's' : ''}</>}
           </span>
         )}
       </div>
 
       {/* Filter pills */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         {([
           { key: 'all' as const, label: 'All', count: stats.total },
           { key: 'action' as const, label: 'Tasks', count: stats.actions },
           { key: 'idea' as const, label: 'Ideas', count: stats.ideas },
+          { key: 'deadline' as const, label: 'Deadlines', count: stats.deadlines },
+          { key: 'event' as const, label: 'Events', count: stats.events },
         ]).map((pill) => (
           <button
             key={pill.key}
@@ -215,30 +260,59 @@ export function TriageContent() {
         <TriageEmptyState />
       ) : (
         <div className="space-y-2">
-          {filteredItems.map((item) =>
-            item.type === 'action' ? (
-              <TriageActionCard
-                key={item.id}
-                item={item}
-                onAccept={handleAccept}
-                onDismiss={handleDismiss}
-                onSnooze={handleSnooze}
-                projects={projects}
-                onCreateItem={(projectId, priority) => handleQuickAcceptAction(item, projectId, priority)}
-                onFallbackToDialog={handleFallbackToDialog}
-              />
-            ) : (
-              <TriageIdeaCard
-                key={item.id}
-                item={item}
-                onAccept={handleAccept}
-                onDismiss={handleDismiss}
-                onSnooze={handleSnooze}
-                projects={projects}
-                onCreateItem={(projectId, priority) => handleQuickAcceptIdea(item, projectId, priority)}
-              />
-            )
-          )}
+          {filteredItems.map((item) => {
+            switch (item.type) {
+              case 'action':
+                return (
+                  <TriageActionCard
+                    key={item.id}
+                    item={item}
+                    onAccept={handleAccept}
+                    onDismiss={handleDismiss}
+                    onSnooze={handleSnooze}
+                    projects={projects}
+                    onCreateItem={(projectId, priority) => handleQuickAcceptAction(item, projectId, priority)}
+                    onFallbackToDialog={handleFallbackToDialog}
+                  />
+                );
+              case 'idea':
+                return (
+                  <TriageIdeaCard
+                    key={item.id}
+                    item={item}
+                    onAccept={handleAccept}
+                    onDismiss={handleDismiss}
+                    onSnooze={handleSnooze}
+                    projects={projects}
+                    onCreateItem={(projectId, priority) => handleQuickAcceptIdea(item, projectId, priority)}
+                  />
+                );
+              case 'deadline':
+                return (
+                  <TriageDeadlineCard
+                    key={item.id}
+                    item={item}
+                    onAccept={handleAccept}
+                    onDismiss={handleDismiss}
+                    onSnooze={handleSnooze}
+                    projects={projects}
+                    onCreateItem={(projectId, priority) => handleQuickAcceptDeadline(item, projectId, priority)}
+                  />
+                );
+              case 'event':
+                return (
+                  <TriageEventCard
+                    key={item.id}
+                    item={item}
+                    onAccept={handleAccept}
+                    onDismiss={handleDismiss}
+                    onSnooze={handleSnooze}
+                  />
+                );
+              default:
+                return null;
+            }
+          })}
         </div>
       )}
 

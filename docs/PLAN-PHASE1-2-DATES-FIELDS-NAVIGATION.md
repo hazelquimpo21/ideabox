@@ -16,7 +16,9 @@ Two phases. Phase 1 is backend plumbing + the biggest UI wins. Phase 2 is the cr
 
 ---
 
-## Phase 1: Extracted Dates + Hidden Fields (Backend & Quick UI Wins)
+## Phase 1: Extracted Dates + Hidden Fields ✅ COMPLETED (March 2026)
+
+> **Implementation notes:** Phase 1 was implemented in the frontend only — no backend API changes were needed because the existing `useExtractedDates()` hook and `useEvents()` hook already provided sufficient data. The calendar page already called both hooks and merged them via `mergeToCalendarItems()`; we added `date_type='event'` filtering to avoid duplicates. For triage, we added deadline and event sources directly to `useTriageItems` via existing hooks with date-range filters. Contact info in email detail uses `useContacts` with search rather than a new join, avoiding inbox query changes. Must-read link indicator and contact company on inbox rows deferred (marked TODO) until url_extraction and contacts data are available on the email row object.
 
 ### 1A. Bring Extracted Dates Into the Calendar Timeline
 

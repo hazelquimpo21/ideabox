@@ -1,9 +1,9 @@
 /**
  * useTriageItems Hook
  *
- * Composition hook that merges `useActions` + `useIdeas` into a unified
- * triage stream. Provides a normalized `TriageItem[]` array sorted by
- * urgency, with dismiss and snooze capabilities.
+ * Composition hook that merges `useActions` + `useIdeas` + `useExtractedDates`
+ * + `useEvents` into a unified triage stream. Provides a normalized
+ * `TriageItem[]` array sorted by urgency, with dismiss and snooze capabilities.
  *
  * This hook is the data source for the Triage tab (TriageContent) and
  * can also be used by the embeddable TriageTray component.
@@ -11,6 +11,7 @@
  * @module hooks/useTriageItems
  * @since March 2026 — Phase 1 Tasks Page Redesign
  * @updated March 2026 — Phase 3: Snooze persistence via localStorage
+ * @updated March 2026 — Phase 4: Add deadlines & events to triage stream
  */
 
 'use client';
@@ -18,6 +19,8 @@
 import * as React from 'react';
 import { useActions } from '@/hooks/useActions';
 import { useIdeas, type IdeaItem } from '@/hooks/useIdeas';
+import { useExtractedDates, type ExtractedDate } from '@/hooks/useExtractedDates';
+import { useEvents, type EventData } from '@/hooks/useEvents';
 import { createLogger } from '@/lib/utils/logger';
 import type { ActionWithEmail } from '@/types/database';
 
@@ -35,7 +38,7 @@ const SNOOZE_STORAGE_KEY = 'ideabox_triage_snoozed';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Normalized triage item — represents either an action or an idea
+ * Normalized triage item — represents an action, idea, deadline, or event
  * in a unified interface for rendering in the triage list.
  *
  * @module hooks/useTriageItems
@@ -43,7 +46,7 @@ const SNOOZE_STORAGE_KEY = 'ideabox_triage_snoozed';
  */
 export interface TriageItem {
   id: string;
-  type: 'action' | 'idea';
+  type: 'action' | 'idea' | 'deadline' | 'event';
   title: string;
   subtitle: string;
   urgency: number;
@@ -52,7 +55,7 @@ export interface TriageItem {
   sourceEmailSender?: string;
   deadline?: string;
   confidence?: number;
-  raw: ActionWithEmail | IdeaItem;
+  raw: ActionWithEmail | IdeaItem | ExtractedDate | EventData;
 }
 
 /**
@@ -65,14 +68,14 @@ export interface UseTriageItemsReturn {
   /** Merged and sorted triage items */
   items: TriageItem[];
   /** Counts for stats display */
-  stats: { total: number; actions: number; ideas: number };
+  stats: { total: number; actions: number; ideas: number; deadlines: number; events: number };
   /** Loading state from underlying hooks */
   isLoading: boolean;
-  /** Dismiss an item (local state for actions, API call for ideas) */
-  dismissItem: (id: string, type: 'action' | 'idea') => void;
+  /** Dismiss an item (local state for actions/deadlines/events, API call for ideas) */
+  dismissItem: (id: string, type: TriageItem['type']) => void;
   /** Snooze an item for N minutes (persisted to localStorage, survives refresh) */
-  snoozeItem: (id: string, type: 'action' | 'idea', minutes: number) => void;
-  /** Refetch both actions and ideas */
+  snoozeItem: (id: string, type: TriageItem['type'], minutes: number) => void;
+  /** Refetch all data sources */
   refetch: () => void;
 }
 
@@ -135,6 +138,66 @@ function ideaToTriageItem(idea: IdeaItem, index: number): TriageItem {
 }
 
 /**
+ * Normalize an ExtractedDate (deadline/payment_due/expiration) into a TriageItem.
+ * Urgency is based on proximity: today=10, tomorrow=8, 3 days=6, 7 days=4.
+ */
+function deadlineToTriageItem(date: ExtractedDate): TriageItem {
+  const now = new Date();
+  const dateObj = new Date(date.date + 'T00:00:00');
+  const diffDays = Math.ceil((dateObj.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  let urgency = 4;
+  if (diffDays <= 0) urgency = 10;
+  else if (diffDays <= 1) urgency = 8;
+  else if (diffDays <= 3) urgency = 6;
+
+  return {
+    id: `deadline-${date.id}`,
+    type: 'deadline',
+    title: date.title,
+    subtitle: date.date_type,
+    urgency,
+    sourceEmailId: date.email_id || undefined,
+    sourceEmailSubject: date.emails?.subject ?? undefined,
+    sourceEmailSender: date.emails?.sender_name ?? date.emails?.sender_email ?? undefined,
+    deadline: date.date,
+    raw: date,
+  };
+}
+
+/**
+ * Normalize an EventData into a TriageItem for triage.
+ * Urgency is based on RSVP deadline proximity, or event date if no RSVP deadline.
+ */
+function eventToTriageItem(event: EventData): TriageItem {
+  const now = new Date();
+  const rsvpDate = event.event_metadata?.rsvpDeadline
+    ? new Date(event.event_metadata.rsvpDeadline + 'T00:00:00')
+    : null;
+  const eventDate = new Date(event.date + 'T00:00:00');
+  const targetDate = rsvpDate || eventDate;
+  const diffDays = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  let urgency = 4;
+  if (diffDays <= 0) urgency = 10;
+  else if (diffDays <= 1) urgency = 8;
+  else if (diffDays <= 3) urgency = 6;
+
+  return {
+    id: `event-${event.id}`,
+    type: 'event',
+    title: event.title,
+    subtitle: 'Event',
+    urgency,
+    sourceEmailId: event.email_id ?? undefined,
+    sourceEmailSubject: event.emails?.subject ?? undefined,
+    sourceEmailSender: event.emails?.sender_name ?? event.emails?.sender_email ?? undefined,
+    deadline: event.date,
+    raw: event,
+  };
+}
+
+/**
  * Check if an action's deadline is in the past.
  */
 function isOverdue(deadline: string | undefined): boolean {
@@ -144,26 +207,32 @@ function isOverdue(deadline: string | undefined): boolean {
 
 /**
  * Sort triage items by:
- * 1. Overdue actions first
- * 2. Normalized urgency DESC
- * 3. Actions with deadlines float above ideas at equal urgency
+ * 1. Overdue items first (actions and deadlines)
+ * 2. Items with upcoming deadlines by date proximity
+ * 3. Normalized urgency DESC
+ * 4. Items with deadlines above items without
  */
 function sortTriageItems(a: TriageItem, b: TriageItem): number {
-  const aOverdue = a.type === 'action' && isOverdue(a.deadline);
-  const bOverdue = b.type === 'action' && isOverdue(b.deadline);
+  const aOverdue = (a.type === 'action' || a.type === 'deadline') && isOverdue(a.deadline);
+  const bOverdue = (b.type === 'action' || b.type === 'deadline') && isOverdue(b.deadline);
 
-  // Overdue actions float to top
+  // Overdue items float to top
   if (aOverdue && !bOverdue) return -1;
   if (!aOverdue && bOverdue) return 1;
 
   // Then by urgency DESC
   if (a.urgency !== b.urgency) return b.urgency - a.urgency;
 
-  // At equal urgency, actions with deadlines above ideas
-  const aHasDeadline = a.type === 'action' && !!a.deadline;
-  const bHasDeadline = b.type === 'action' && !!b.deadline;
+  // At equal urgency, items with deadlines float above those without
+  const aHasDeadline = !!a.deadline;
+  const bHasDeadline = !!b.deadline;
   if (aHasDeadline && !bHasDeadline) return -1;
   if (!aHasDeadline && bHasDeadline) return 1;
+
+  // Both have deadlines — sort by date proximity
+  if (aHasDeadline && bHasDeadline) {
+    return new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime();
+  }
 
   return 0;
 }
@@ -173,8 +242,9 @@ function sortTriageItems(a: TriageItem, b: TriageItem): number {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Composition hook that merges pending actions and idea sparks into a
- * unified, sorted triage stream with dismiss and snooze capabilities.
+ * Composition hook that merges pending actions, idea sparks, upcoming deadlines,
+ * and events needing RSVP into a unified, sorted triage stream with dismiss
+ * and snooze capabilities.
  *
  * @returns Merged triage items, stats, loading state, and action handlers
  *
@@ -187,6 +257,11 @@ function sortTriageItems(a: TriageItem, b: TriageItem): number {
  * @since March 2026
  */
 export function useTriageItems(): UseTriageItemsReturn {
+  // ─── Date range for deadline/event filtering ────────────────────────────────
+  const today = new Date().toISOString().split('T')[0]!;
+  const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    .toISOString().split('T')[0]!;
+
   // ─── Underlying hooks ───────────────────────────────────────────────────────
   const {
     actions,
@@ -200,6 +275,22 @@ export function useTriageItems(): UseTriageItemsReturn {
     dismissIdea,
     refetch: refetchIdeas,
   } = useIdeas({ limit: 20 });
+
+  const {
+    dates: extractedDates,
+    isLoading: datesLoading,
+    refetch: refetchDates,
+  } = useExtractedDates({
+    from: today,
+    to: sevenDaysFromNow,
+    isAcknowledged: false,
+  });
+
+  const {
+    events,
+    isLoading: eventsLoading,
+    refetch: refetchEvents,
+  } = useEvents({ includePast: false });
 
   // ─── Local state ────────────────────────────────────────────────────────────
   const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(new Set());
@@ -217,7 +308,7 @@ export function useTriageItems(): UseTriageItemsReturn {
     }
   });
 
-  const isLoading = actionsLoading || ideasLoading;
+  const isLoading = actionsLoading || ideasLoading || datesLoading || eventsLoading;
 
   // ─── Merge and sort items ───────────────────────────────────────────────────
   const now = Date.now();
@@ -230,7 +321,25 @@ export function useTriageItems(): UseTriageItemsReturn {
     .map((idea, i) => ideaToTriageItem(idea, i))
     .filter((item) => !dismissedIds.has(item.id));
 
-  const allItems = [...actionItems, ...ideaItems]
+  // Filter extracted dates to deadline/payment_due/expiration types only
+  const deadlineItems: TriageItem[] = extractedDates
+    .filter((d) => ['deadline', 'payment_due', 'expiration'].includes(d.date_type))
+    .map(deadlineToTriageItem)
+    .filter((item) => !dismissedIds.has(item.id));
+
+  // Filter events for those needing RSVP (commitment_level = 'invited') within 7 days
+  const eventItems: TriageItem[] = events
+    .filter((e) => {
+      const meta = e.event_metadata;
+      if (meta?.commitmentLevel !== 'invited') return false;
+      const eventDate = new Date(e.date + 'T00:00:00');
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      return eventDate.getTime() - now <= sevenDaysMs && eventDate.getTime() >= now - 24 * 60 * 60 * 1000;
+    })
+    .map(eventToTriageItem)
+    .filter((item) => !dismissedIds.has(item.id));
+
+  const allItems = [...actionItems, ...ideaItems, ...deadlineItems, ...eventItems]
     .filter((item) => {
       const snoozeExpiry = snoozedUntil.get(item.id);
       if (snoozeExpiry && now < snoozeExpiry) return false;
@@ -242,6 +351,8 @@ export function useTriageItems(): UseTriageItemsReturn {
     total: allItems.length,
     actions: allItems.filter((i) => i.type === 'action').length,
     ideas: allItems.filter((i) => i.type === 'idea').length,
+    deadlines: allItems.filter((i) => i.type === 'deadline').length,
+    events: allItems.filter((i) => i.type === 'event').length,
   };
 
   // Log on data load
@@ -250,6 +361,8 @@ export function useTriageItems(): UseTriageItemsReturn {
       logger.info('Triage items loaded', {
         actions: actionItems.length,
         ideas: ideaItems.length,
+        deadlines: deadlineItems.length,
+        events: eventItems.length,
         snoozed: snoozedUntil.size,
       });
     }
@@ -260,10 +373,10 @@ export function useTriageItems(): UseTriageItemsReturn {
 
   /**
    * Dismiss an item from the triage list.
-   * Actions: local state dismiss. Ideas: calls dismissIdea API.
+   * Actions/deadlines/events: local state dismiss. Ideas: calls dismissIdea API.
    */
   const dismissItem = React.useCallback(
-    (id: string, type: 'action' | 'idea') => {
+    (id: string, type: TriageItem['type']) => {
       logger.info('Item dismissed', { type, itemId: id });
       setDismissedIds((prev) => new Set([...prev, id]));
 
@@ -284,7 +397,7 @@ export function useTriageItems(): UseTriageItemsReturn {
    * Expired snoozes are cleaned up on mount.
    */
   const snoozeItem = React.useCallback(
-    (id: string, type: 'action' | 'idea', minutes: number) => {
+    (id: string, type: TriageItem['type'], minutes: number) => {
       const until = Date.now() + minutes * 60 * 1000;
       logger.info('Item snoozed', { type, itemId: id, snoozedUntil: new Date(until).toISOString() });
       setSnoozedUntil((prev) => {
@@ -299,13 +412,15 @@ export function useTriageItems(): UseTriageItemsReturn {
   );
 
   /**
-   * Refetch both underlying data sources.
+   * Refetch all underlying data sources.
    */
   const refetch = React.useCallback(() => {
     logger.info('Refetching triage items');
     refetchActions();
     refetchIdeas();
-  }, [refetchActions, refetchIdeas]);
+    refetchDates();
+    refetchEvents();
+  }, [refetchActions, refetchIdeas, refetchDates, refetchEvents]);
 
   return {
     items: allItems,

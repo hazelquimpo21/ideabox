@@ -68,6 +68,12 @@ export const EmailRowIndicators = React.memo(function EmailRowIndicators({
         </Tooltip>
       );
     }
+    // TODO: Add must-read link indicator here once url_extraction data
+    // is available on the email row object. The inbox feed query doesn't
+    // currently include email_analyses.url_extraction. When available:
+    // if (email.must_read_link_count > 0) show Link2 icon in blue
+    // with tooltip "X must-read link(s)".
+
     // Check for broadcast/newsletter sender type
     const isBroadcast = email.email_type === 'newsletter' || email.email_type === 'marketing';
     if (isBroadcast) {
