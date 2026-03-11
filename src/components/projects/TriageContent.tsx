@@ -307,6 +307,7 @@ export function TriageContent() {
                     onAccept={handleAccept}
                     onDismiss={handleDismiss}
                     onSnooze={handleSnooze}
+                    projects={projects}
                   />
                 );
               default:

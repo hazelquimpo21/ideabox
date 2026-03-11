@@ -27,6 +27,7 @@ import {
   Trash2,
   Mail,
 } from 'lucide-react';
+import { SourceChip } from '@/components/shared/SourceChip';
 import type { ProjectItemWithEmail, ProjectItemType } from '@/types/database';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -271,16 +272,11 @@ export function ProjectItemRow({ item, onToggleComplete, onDelete, onUpdate, pro
                with sender, subject, and a link back to the full email.
                ──────────────────────────────────────────────────────────── */}
           {item.source_email_id && (
-            <Link
-              href={`/inbox?email=${item.source_email_id}`}
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/50 hover:bg-muted hover:text-foreground transition-colors max-w-[280px]"
-              title={item.source_email_gist || item.source_email_subject || 'View source email'}
-            >
-              <Mail className="h-3 w-3 shrink-0 text-muted-foreground" />
-              <span className="truncate text-xs">
-                {item.source_email_subject || item.source_email_sender || 'Source email'}
-              </span>
-            </Link>
+            <SourceChip
+              type="email"
+              id={item.source_email_id}
+              label={item.source_email_subject || item.source_email_sender || 'Source email'}
+            />
           )}
 
           {/* ─── Email gist preview — shows AI summary of source email ── */}

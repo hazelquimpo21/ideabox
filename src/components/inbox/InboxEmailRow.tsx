@@ -106,9 +106,33 @@ function getTimelinessDateChip(email: Email): { label: string; type: 'warn' | 'd
   return null;
 }
 
-// TODO: Show contact company in sender line once contact join is available
-// on the inbox query (email.contacts?.company). Currently email.contact_id
-// exists but the inbox feed doesn't join to the contacts table.
+/**
+ * Extract a company-like name from the sender email domain.
+ * Strips common email providers (gmail, yahoo, etc.) and returns
+ * a capitalized domain name as a company proxy.
+ * Returns null for personal email domains.
+ */
+function getSenderCompanyProxy(email: string): string | null {
+  const domain = email.split('@')[1]?.toLowerCase();
+  if (!domain) return null;
+
+  // Skip common personal email providers — not useful as company names
+  const personalDomains = new Set([
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
+    'icloud.com', 'me.com', 'mac.com', 'live.com', 'msn.com',
+    'protonmail.com', 'proton.me', 'hey.com', 'fastmail.com',
+  ]);
+  if (personalDomains.has(domain)) return null;
+
+  // Extract company name from domain (e.g., "acme.com" → "Acme")
+  const parts = domain.split('.');
+  if (parts.length < 2) return null;
+  const name = parts[parts.length - 2]!;
+  if (name.length < 2) return null;
+
+  // Capitalize first letter
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
 
 export const InboxEmailRow = React.memo(function InboxEmailRow({
   email,
@@ -122,6 +146,8 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   const isUnread = !email.is_read;
   const senderName = email.sender_name || email.sender_email.split('@')[0];
   const senderDomain = email.sender_email.split('@')[1] || '';
+  // Company proxy from domain (Phase 2 — replaces TODO for contact join)
+  const senderCompany = getSenderCompanyProxy(email.sender_email);
   const gist = email.gist || email.summary || email.snippet;
   const timelinessChip = getTimelinessDateChip(email);
 
@@ -191,11 +217,15 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
           <span className={cn('text-sm truncate', isUnread ? 'font-semibold text-foreground' : 'text-foreground/80')}>
             {senderName}
           </span>
-          {senderDomain && (
+          {senderCompany ? (
+            <span className="text-xs text-muted-foreground/50 truncate hidden sm:inline">
+              {senderCompany}
+            </span>
+          ) : senderDomain ? (
             <span className="text-xs text-muted-foreground/50 truncate hidden sm:inline">
               {senderDomain}
             </span>
-          )}
+          ) : null}
           <span className="flex-1" />
           <span className="text-xs text-muted-foreground/70 shrink-0 tabular-nums">
             {formatSmartDate(email.date)}

@@ -693,6 +693,10 @@ export const projectItemCreateSchema = z.object({
   estimated_minutes: z.number().int().positive().optional(),
   source_action_id: uuidSchema.optional(),
   source_email_id: uuidSchema.optional(),
+  /** Email ID containing the source event (Phase 2: task from event) */
+  source_event_email_id: uuidSchema.optional(),
+  /** Event index within the email for multi-event emails */
+  source_event_index: z.number().int().min(0).optional(),
   contact_id: uuidSchema.nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   project_id: uuidSchema.nullable().optional(),

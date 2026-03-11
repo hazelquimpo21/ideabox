@@ -17,7 +17,7 @@
 'use client';
 
 import * as React from 'react';
-import { Star, Reply, Gem, Newspaper } from 'lucide-react';
+import { Star, Reply, Gem, Newspaper, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { Tooltip } from '@/components/ui/tooltip';
 import { CategoryIcon } from './CategoryIcon';
@@ -28,6 +28,8 @@ export interface EmailRowIndicatorsProps {
     is_starred?: boolean;
     reply_worthiness?: string | null;
     golden_nugget_count?: number;
+    /** Must-read link count from url_extraction analysis (Phase 2) */
+    must_read_link_count?: number;
     sender_type?: string | null;
     email_type?: string | null;
     category?: string | null;
@@ -68,11 +70,24 @@ export const EmailRowIndicators = React.memo(function EmailRowIndicators({
         </Tooltip>
       );
     }
-    // TODO: Add must-read link indicator here once url_extraction data
-    // is available on the email row object. The inbox feed query doesn't
-    // currently include email_analyses.url_extraction. When available:
-    // if (email.must_read_link_count > 0) show Link2 icon in blue
-    // with tooltip "X must-read link(s)".
+    // Must-read link indicator (Phase 2) — shown when url_extraction
+    // data includes must-read links. Field must be denormalized onto the
+    // email row object for performance (inbox is the most sensitive page).
+    if (email.must_read_link_count && email.must_read_link_count > 0) {
+      const linkLabel = email.must_read_link_count === 1
+        ? '1 must-read link'
+        : `${email.must_read_link_count} must-read links`;
+      return (
+        <Tooltip content={linkLabel} variant="info">
+          <span className="inline-flex items-center gap-0.5 text-blue-500">
+            <Link2 className="h-3.5 w-3.5" />
+            {email.must_read_link_count > 1 && (
+              <span className="text-[10px] font-medium">{email.must_read_link_count}</span>
+            )}
+          </span>
+        </Tooltip>
+      );
+    }
 
     // Check for broadcast/newsletter sender type
     const isBroadcast = email.email_type === 'newsletter' || email.email_type === 'marketing';
@@ -90,7 +105,7 @@ export const EmailRowIndicators = React.memo(function EmailRowIndicators({
       return <CategoryIcon category={email.category as EmailCategory} size="sm" />;
     }
     return null;
-  }, [email.reply_worthiness, email.golden_nugget_count, email.email_type, email.category]);
+  }, [email.reply_worthiness, email.golden_nugget_count, email.must_read_link_count, email.email_type, email.category]);
 
   return (
     <div className="flex items-center gap-1 shrink-0">

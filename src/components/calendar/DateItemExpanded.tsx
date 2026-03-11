@@ -1,7 +1,8 @@
 /**
  * DateItemExpanded — slim expanded card for non-event date types.
- * Shows title, date, description, source email link, and a placeholder
- * "Create task" button (to be wired up in Phase 2).
+ *
+ * Shows title, date, description, source email chip, and a "Create task"
+ * button that opens the CreateTaskFromEventDialog.
  *
  * Used by TimelineItem when the item's eventType is a non-event date type
  * (deadline, payment_due, expiration, follow_up, reminder, etc.).
@@ -13,11 +14,12 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui';
-import { Mail, ListTodo } from 'lucide-react';
+import { ListTodo } from 'lucide-react';
 import { getEventTypeConfig } from '@/lib/utils/event-colors';
 import { EventActions } from './EventActions';
+import { CreateTaskFromEventDialog } from './CreateTaskFromEventDialog';
+import { SourceChip } from '@/components/shared/SourceChip';
 import type { CalendarItem } from './types';
 import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
@@ -29,6 +31,8 @@ interface DateItemExpandedProps {
   onDismiss?: (id: string) => void;
   onSaveToCalendar?: (id: string) => void;
   onSnooze?: (id: string, until: Date) => void;
+  /** Available projects for the task creation dialog */
+  projects?: Array<{ id: string; name: string; color?: string | null }>;
 }
 
 export function DateItemExpanded({
@@ -36,12 +40,14 @@ export function DateItemExpanded({
   onDismiss,
   onSaveToCalendar,
   onSnooze,
+  projects,
 }: DateItemExpandedProps) {
   const config = getEventTypeConfig(item.eventType);
+  const [showCreateTask, setShowCreateTask] = React.useState(false);
 
   const handleCreateTask = React.useCallback(() => {
-    logger.info('Create task from date item (placeholder)', { itemId: item.id.substring(0, 8) });
-    // Phase 2: wire up task creation from date items
+    logger.info('Opening create task dialog from date item', { itemId: item.id.substring(0, 8) });
+    setShowCreateTask(true);
   }, [item.id]);
 
   return (
@@ -58,20 +64,16 @@ export function DateItemExpanded({
 
       {/* Source email chip */}
       {item.sourceEmailId && (
-        <Link
-          href={`/inbox?email=${item.sourceEmailId}`}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Mail className="h-3 w-3 shrink-0" />
-          <span className="truncate max-w-[200px]">
-            {item.sourceEmailSubject || item.sourceEmailSender || 'View email'}
-          </span>
-        </Link>
+        <SourceChip
+          type="email"
+          id={item.sourceEmailId}
+          label={item.sourceEmailSubject || item.sourceEmailSender || 'View email'}
+        />
       )}
 
       {/* Actions row */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Create task placeholder button */}
+        {/* Create task button — opens dialog */}
         <Button
           variant="outline"
           size="sm"
@@ -90,6 +92,14 @@ export function DateItemExpanded({
           onSnooze={onSnooze}
         />
       </div>
+
+      {/* Task creation dialog */}
+      <CreateTaskFromEventDialog
+        open={showCreateTask}
+        onOpenChange={setShowCreateTask}
+        item={item}
+        projects={projects}
+      />
     </div>
   );
 }
