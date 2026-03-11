@@ -230,9 +230,9 @@ export async function GET(request: Request) {
         .single();
 
       if (existingAccount) {
-        // Update existing account
+        // Update existing account with fresh credentials
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
+        const { error: updateError } = await (supabase as any)
           .from('gmail_accounts')
           .update({
             access_token: tokens.access_token,
@@ -240,9 +240,24 @@ export async function GET(request: Request) {
             token_expiry: tokenExpiry,
             display_name: profile.name || null,
             sync_enabled: true,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', existingAccount.id);
-        logger.success('Updated Gmail account via direct OAuth', { email: profile.email });
+
+        if (updateError) {
+          logger.error('Failed to update Gmail account credentials', {
+            email: profile.email,
+            accountId: existingAccount.id.substring(0, 8),
+            error: updateError.message,
+          });
+        } else {
+          logger.success('Refreshed Gmail account credentials via direct OAuth', {
+            email: profile.email,
+            accountId: existingAccount.id.substring(0, 8),
+            hasRefreshToken: !!tokens.refresh_token,
+            tokenExpiry,
+          });
+        }
       } else {
         // Insert new account
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
