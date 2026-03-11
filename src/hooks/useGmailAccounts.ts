@@ -252,15 +252,23 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
       }
 
       // Check for auth failures in recent sync logs
+      // Only consider failures that happened AFTER the account was last updated
+      // (re-adding credentials updates the account's updated_at timestamp)
       const { data: recentFailedLogs } = await supabase
         .from('sync_logs')
-        .select('gmail_account_id, error_message')
+        .select('gmail_account_id, error_message, started_at')
         .eq('user_id', user.id)
         .eq('status', 'failed')
         .order('started_at', { ascending: false })
         .limit(20);
 
-      // Build a set of account IDs with auth failures
+      // Build a map of account updated_at times for comparison
+      const accountUpdatedAt = new Map<string, string>();
+      for (const account of rawAccounts || []) {
+        accountUpdatedAt.set(account.id, account.updated_at);
+      }
+
+      // Build a set of account IDs with auth failures (only post-reconnect failures)
       const authFailedAccountIds = new Set<string>();
       if (recentFailedLogs) {
         for (const log of recentFailedLogs) {
@@ -269,7 +277,17 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
             log.error_message?.includes('invalid_client') ||
             log.error_message?.includes('access_denied')
           ) {
-            authFailedAccountIds.add(log.gmail_account_id);
+            // Only mark as failed if the failure happened AFTER the account was last updated
+            const accountUpdated = accountUpdatedAt.get(log.gmail_account_id);
+            if (!accountUpdated || new Date(log.started_at) > new Date(accountUpdated)) {
+              authFailedAccountIds.add(log.gmail_account_id);
+            } else {
+              logger.debug('Ignoring stale auth failure (before credential refresh)', {
+                accountId: log.gmail_account_id.substring(0, 8),
+                failedAt: log.started_at,
+                accountUpdatedAt: accountUpdated,
+              });
+            }
           }
         }
       }

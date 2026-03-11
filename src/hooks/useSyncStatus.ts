@@ -257,16 +257,17 @@ export function useSyncStatus(): UseSyncStatusReturn {
       }
 
       // Check for auth errors in recent sync logs
-      // Look for invalid_grant or similar auth failures across all accounts
+      // Only consider failures that happened AFTER the account was last updated
+      // (re-adding credentials updates the account's updated_at timestamp)
       const { data: authFailedLogs } = await supabase
         .from('sync_logs')
-        .select('gmail_account_id, error_message')
+        .select('gmail_account_id, error_message, started_at')
         .eq('user_id', user.id)
         .eq('status', 'failed')
         .order('started_at', { ascending: false })
         .limit(10);
 
-      // Cross-reference with gmail accounts to get emails for failed accounts
+      // Cross-reference with gmail accounts to get emails and updated_at for failed accounts
       let accountsNeedingReauth: AccountAuthError[] = [];
       if (authFailedLogs && authFailedLogs.length > 0) {
         const authFailures = authFailedLogs.filter(
@@ -283,17 +284,31 @@ export function useSyncStatus(): UseSyncStatusReturn {
 
           const { data: failedAccounts } = await supabase
             .from('gmail_accounts')
-            .select('id, email')
+            .select('id, email, updated_at')
             .in('id', failedAccountIds);
 
           if (failedAccounts) {
-            accountsNeedingReauth = failedAccounts.map(
-              (acc: { id: string; email: string }) => ({
+            // Only include accounts where the auth failure happened AFTER last credential update
+            const accountUpdatedMap = new Map(
+              failedAccounts.map((acc: { id: string; updated_at: string }) => [acc.id, acc.updated_at])
+            );
+
+            // Filter auth failures to only include those after the account was last updated
+            const relevantAccountIds = new Set<string>();
+            for (const log of authFailures) {
+              const accountUpdated = accountUpdatedMap.get(log.gmail_account_id);
+              if (!accountUpdated || new Date(log.started_at) > new Date(accountUpdated)) {
+                relevantAccountIds.add(log.gmail_account_id);
+              }
+            }
+
+            accountsNeedingReauth = failedAccounts
+              .filter((acc: { id: string }) => relevantAccountIds.has(acc.id))
+              .map((acc: { id: string; email: string }) => ({
                 accountId: acc.id,
                 email: acc.email,
                 error: 'Credentials expired. Please reconnect this account.',
-              })
-            );
+              }));
           }
         }
       }
