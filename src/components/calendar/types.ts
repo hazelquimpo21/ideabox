@@ -23,6 +23,7 @@ export interface CalendarItem {
   locationType?: string;
   source: 'google_calendar' | 'email_extracted';
   sourceEmailId?: string;
+  sourceEmailSubject?: string;
   sourceEmailSender?: string;
   summary?: string;
   keyPoints?: string[];
@@ -83,6 +84,7 @@ export function mergeToCalendarItems(
       locationType: meta?.locationType,
       source: 'email_extracted',
       sourceEmailId: event.email_id ?? undefined,
+      sourceEmailSubject: event.emails?.subject ?? undefined,
       sourceEmailSender: event.emails?.sender_name ?? event.emails?.sender_email ?? undefined,
       summary: meta?.eventSummary ?? undefined,
       keyPoints: meta?.keyPoints ?? undefined,
@@ -118,6 +120,7 @@ export function mergeToCalendarItems(
       locationType: meta?.locationType,
       source: 'email_extracted',
       sourceEmailId: d.email_id || undefined,
+      sourceEmailSubject: d.emails?.subject ?? undefined,
       sourceEmailSender: d.emails?.sender_name ?? d.emails?.sender_email ?? undefined,
       summary: meta?.eventSummary ?? undefined,
       keyPoints: meta?.keyPoints ?? undefined,

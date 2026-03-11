@@ -20,7 +20,13 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { Cake, MapPin, Star, Sparkles } from 'lucide-react';
 import { RsvpBadge } from './RsvpBadge';
 import { EventActions } from './EventActions';
+import { DateItemExpanded } from './DateItemExpanded';
 import type { CalendarItem } from './types';
+
+/** Date types that use the slim DateItemExpanded card instead of full event details. */
+const NON_EVENT_TYPES = new Set([
+  'deadline', 'payment_due', 'expiration', 'follow_up', 'reminder', 'recurring', 'other',
+]);
 
 interface TimelineItemProps {
   item: CalendarItem;
@@ -151,68 +157,77 @@ const TimelineItemInner = React.memo(function TimelineItemInner({
       >
         <div className="overflow-hidden">
           {hasExpanded.current && (
-            <div className="px-3 pb-4 pt-1 space-y-3">
-              {/* Location */}
-              {item.location && (
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 shrink-0" />
-                  <span>{item.location}</span>
-                  {item.locationType && (
-                    <span className="text-xs capitalize bg-muted px-1.5 py-0.5 rounded">
-                      {item.locationType.replace('_', ' ')}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* RSVP badge (expanded) */}
-              {item.rsvpRequired && item.rsvpDeadline && (
-                <RsvpBadge rsvpDeadline={item.rsvpDeadline} rsvpUrl={item.rsvpUrl} />
-              )}
-
-              {/* Why attend recommendation */}
-              {item.whyAttend && (
-                <div className="flex items-start gap-1.5">
-                  <Star className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    {item.whyAttend}
-                  </p>
-                </div>
-              )}
-
-              {/* Summary */}
-              {item.summary && (
-                <p className="text-sm text-muted-foreground">{item.summary}</p>
-              )}
-
-              {/* Key points */}
-              {item.keyPoints && item.keyPoints.length > 0 && (
-                <ul className="space-y-1">
-                  {item.keyPoints.map((point, i) => (
-                    <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                      <Sparkles className="h-3 w-3 mt-0.5 shrink-0 text-blue-500/60" />
-                      <span>{point}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {/* Birthday details */}
-              {item.isBirthday && item.birthdayAge && item.birthdayYearKnown && (
-                <p className="text-xs text-pink-600 dark:text-pink-400">
-                  Turning {item.birthdayAge}
-                  {item.birthdayRelationship && ` — ${item.birthdayRelationship}`}
-                </p>
-              )}
-
-              {/* Actions */}
-              <EventActions
+            NON_EVENT_TYPES.has(item.eventType) ? (
+              <DateItemExpanded
                 item={item}
                 onDismiss={onDismiss}
                 onSaveToCalendar={onSaveToCalendar}
                 onSnooze={onSnooze}
               />
-            </div>
+            ) : (
+              <div className="px-3 pb-4 pt-1 space-y-3">
+                {/* Location */}
+                {item.location && (
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    <span>{item.location}</span>
+                    {item.locationType && (
+                      <span className="text-xs capitalize bg-muted px-1.5 py-0.5 rounded">
+                        {item.locationType.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* RSVP badge (expanded) */}
+                {item.rsvpRequired && item.rsvpDeadline && (
+                  <RsvpBadge rsvpDeadline={item.rsvpDeadline} rsvpUrl={item.rsvpUrl} />
+                )}
+
+                {/* Why attend recommendation */}
+                {item.whyAttend && (
+                  <div className="flex items-start gap-1.5">
+                    <Star className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                      {item.whyAttend}
+                    </p>
+                  </div>
+                )}
+
+                {/* Summary */}
+                {item.summary && (
+                  <p className="text-sm text-muted-foreground">{item.summary}</p>
+                )}
+
+                {/* Key points */}
+                {item.keyPoints && item.keyPoints.length > 0 && (
+                  <ul className="space-y-1">
+                    {item.keyPoints.map((point, i) => (
+                      <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                        <Sparkles className="h-3 w-3 mt-0.5 shrink-0 text-blue-500/60" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Birthday details */}
+                {item.isBirthday && item.birthdayAge && item.birthdayYearKnown && (
+                  <p className="text-xs text-pink-600 dark:text-pink-400">
+                    Turning {item.birthdayAge}
+                    {item.birthdayRelationship && ` — ${item.birthdayRelationship}`}
+                  </p>
+                )}
+
+                {/* Actions */}
+                <EventActions
+                  item={item}
+                  onDismiss={onDismiss}
+                  onSaveToCalendar={onSaveToCalendar}
+                  onSnooze={onSnooze}
+                />
+              </div>
+            )
           )}
         </div>
       </div>
