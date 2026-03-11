@@ -17,7 +17,7 @@
 'use client';
 
 import * as React from 'react';
-import { Star } from 'lucide-react';
+import { Star, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
 import { getTimelinessAccent, type TimelinessNature } from '@/lib/utils/timeliness';
@@ -71,6 +71,45 @@ function getEmailTimelinessNature(email: Email): TimelinessNature {
   return 'reference'; // safe default — neutral slate border
 }
 
+/**
+ * Extract timeliness date chips from the email's timeliness JSONB.
+ * Returns up to one chip for late_after or expires (only future dates).
+ */
+function getTimelinessDateChip(email: Email): { label: string; type: 'warn' | 'danger' } | null {
+  const timeliness = email.timeliness as Record<string, unknown> | null;
+  if (!timeliness) return null;
+
+  const now = new Date();
+
+  // Check expires first (higher priority)
+  if (timeliness.expires && typeof timeliness.expires === 'string') {
+    const expiresDate = new Date(timeliness.expires);
+    if (expiresDate > now) {
+      return {
+        label: `Expires ${expiresDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        type: 'danger',
+      };
+    }
+  }
+
+  // Then late_after
+  if (timeliness.late_after && typeof timeliness.late_after === 'string') {
+    const lateDate = new Date(timeliness.late_after);
+    if (lateDate > now) {
+      return {
+        label: `Stale after ${lateDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        type: 'warn',
+      };
+    }
+  }
+
+  return null;
+}
+
+// TODO: Show contact company in sender line once contact join is available
+// on the inbox query (email.contacts?.company). Currently email.contact_id
+// exists but the inbox feed doesn't join to the contacts table.
+
 export const InboxEmailRow = React.memo(function InboxEmailRow({
   email,
   onClick,
@@ -84,6 +123,7 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   const senderName = email.sender_name || email.sender_email.split('@')[0];
   const senderDomain = email.sender_email.split('@')[1] || '';
   const gist = email.gist || email.summary || email.snippet;
+  const timelinessChip = getTimelinessDateChip(email);
 
   // Timeliness accent for left border
   const nature = getEmailTimelinessNature(email);
@@ -164,18 +204,38 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
 
         {/* Subject + snippet on one line */}
         {!compact && (
-          <div className="flex items-center gap-2">
-            <EmailHoverCard email={email}>
-              <p className={cn('text-sm truncate', isUnread ? 'font-medium text-foreground' : 'text-foreground/80')}>
-                {email.subject || '(No subject)'}
-              </p>
-            </EmailHoverCard>
-            {gist && (
-              <span className="text-xs text-muted-foreground/60 truncate hidden sm:inline">
-                — {gist}
-              </span>
+          <>
+            <div className="flex items-center gap-2">
+              <EmailHoverCard email={email}>
+                <p className={cn('text-sm truncate', isUnread ? 'font-medium text-foreground' : 'text-foreground/80')}>
+                  {email.subject || '(No subject)'}
+                </p>
+              </EmailHoverCard>
+              {gist && (
+                <span className="text-xs text-muted-foreground/60 truncate hidden sm:inline">
+                  — {gist}
+                </span>
+              )}
+            </div>
+
+            {/* Timeliness date chip — shows late_after/expires dates */}
+            {timelinessChip && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className={cn(
+                  'inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full',
+                  timelinessChip.type === 'danger'
+                    ? 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400'
+                    : 'bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400',
+                )}>
+                  {timelinessChip.type === 'danger'
+                    ? <AlertTriangle className="h-2.5 w-2.5" />
+                    : <Clock className="h-2.5 w-2.5" />
+                  }
+                  {timelinessChip.label}
+                </span>
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
