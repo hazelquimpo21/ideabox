@@ -419,7 +419,12 @@ function isRetryableError(error: unknown): boolean {
 
   const message = error.message.toLowerCase();
 
-  // Rate limit
+  // Quota exceeded (429) is NOT retryable — billing issue, won't resolve with retries
+  if (message.includes('quota') || message.includes('billing') || message.includes('exceeded your current')) {
+    return false;
+  }
+
+  // Rate limit (429) — transient, retryable
   if (message.includes('rate limit') || message.includes('429')) {
     return true;
   }
