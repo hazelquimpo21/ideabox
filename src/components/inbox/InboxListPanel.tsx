@@ -93,10 +93,10 @@ export function InboxListPanel({
 
     switch (activeFilter) {
       case 'unread':
-        params.unread = true;
+        params.unreadOnly = true;
         break;
       case 'starred':
-        params.starred = true;
+        params.starredOnly = true;
         break;
       case 'priority':
         params.replyWorthiness = 'must_reply';
@@ -233,6 +233,16 @@ export function InboxListPanel({
     [onEmailSelect],
   );
 
+  /** Handle category selection from CategoryOverview — switch to email list filtered by category */
+  const handleCategorySelect = React.useCallback(
+    (category: string) => {
+      logger.info('Category selected from overview', { category });
+      setActiveView('emails');
+      // TODO: Wire category filter into useEmails params when category filtering is added
+    },
+    [],
+  );
+
   // ─── Filter counts ────────────────────────────────────────────────────────
 
   const filterCounts = React.useMemo(() => ({
@@ -351,7 +361,10 @@ export function InboxListPanel({
         {/* Secondary: Category Overview */}
         {activeView === 'categories' && (
           <div className="p-3">
-            <CategoryOverview onEmailSelect={handleSecondaryEmailSelect} />
+            <CategoryOverview
+              onCategorySelect={handleCategorySelect}
+              onEmailSelect={handleSecondaryEmailSelect}
+            />
           </div>
         )}
 

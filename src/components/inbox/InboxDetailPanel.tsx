@@ -158,7 +158,7 @@ export function InboxDetailPanel({
 
   // ─── Action Handlers (optimistic updates) ─────────────────────────────────
 
-  const handleStar = React.useCallback(async () => {
+  const handleStar = React.useCallback(async (_emailId?: string) => {
     if (!email || !selectedEmailId) return;
 
     const newStarred = !email.is_starred;
@@ -180,7 +180,7 @@ export function InboxDetailPanel({
     }
   }, [email, selectedEmailId, supabase, onEmailUpdated]);
 
-  const handleArchive = React.useCallback(async () => {
+  const handleArchive = React.useCallback(async (_emailId?: string) => {
     if (!email || !selectedEmailId) return;
 
     logger.info('Email archived from detail panel', { emailId: selectedEmailId });
@@ -200,7 +200,7 @@ export function InboxDetailPanel({
     }
   }, [email, selectedEmailId, supabase, onEmailUpdated]);
 
-  const handleToggleRead = React.useCallback(async () => {
+  const handleToggleRead = React.useCallback(async (_emailId?: string) => {
     if (!email || !selectedEmailId) return;
 
     const newRead = !email.is_read;
@@ -222,7 +222,7 @@ export function InboxDetailPanel({
     }
   }, [email, selectedEmailId, supabase, onEmailUpdated]);
 
-  const handleAnalyze = React.useCallback(async () => {
+  const handleAnalyze = React.useCallback(async (_emailId?: string) => {
     if (!selectedEmailId) return;
 
     setIsAnalyzing(true);
