@@ -26,7 +26,7 @@
 import * as React from 'react';
 import { useAuth } from '@/lib/auth';
 import { ProtectedRoute } from '@/components/auth';
-import { Navbar, Sidebar, SyncStatusBanner, EmailSyncBanner } from '@/components/layout';
+import { Navbar, Sidebar, SyncStatusBanner, EmailSyncBanner, CredentialExpiryBanner } from '@/components/layout';
 import { useSidebarData, useSyncStatus } from '@/hooks';
 import { ContactsSyncStatusProvider } from '@/lib/contexts/sync-status-context';
 import { createLogger } from '@/lib/utils/logger';
@@ -151,6 +151,9 @@ export default function AuthLayout({
 
           {/* Email Sync Banner - shows during initial email sync after onboarding */}
           <EmailSyncBanner />
+
+          {/* Credential Expiry Banner - shows when Gmail accounts need re-authentication */}
+          <CredentialExpiryBanner />
 
           {/* Main Content Area */}
           <div className="flex">

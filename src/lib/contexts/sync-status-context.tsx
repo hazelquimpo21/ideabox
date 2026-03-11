@@ -75,7 +75,7 @@ const logger = createLogger('SyncStatusContext');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** How often to poll for sync progress (milliseconds) */
-const POLL_INTERVAL = 1000;
+const POLL_INTERVAL = 3000;
 
 /** How long to show success state before auto-dismissing (milliseconds) */
 const SUCCESS_DISMISS_DELAY = 5000;

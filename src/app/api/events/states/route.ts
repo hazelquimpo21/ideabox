@@ -76,9 +76,13 @@ export async function GET(request: NextRequest) {
       .in('email_id', emailIds);
 
     if (error) {
-      // Handle missing table gracefully
-      if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-        logger.debug('user_event_states table not found, returning empty');
+      // Handle missing table or missing column gracefully
+      // PGRST205 = table not in schema cache, 42703 = column does not exist
+      // These occur when migrations haven't been applied yet
+      if (error.code === 'PGRST205' || error.code === '42703' || error.message?.includes('schema cache')) {
+        logger.debug('user_event_states table/column not available, returning empty', {
+          code: error.code,
+        });
         return apiResponse({});
       }
 

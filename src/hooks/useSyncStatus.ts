@@ -55,6 +55,15 @@ const logger = createLogger('useSyncStatus');
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error' | 'never_synced' | 'loading';
 
 /**
+ * Auth error info for accounts that need re-authentication
+ */
+export interface AccountAuthError {
+  accountId: string;
+  email: string;
+  error: string;
+}
+
+/**
  * Sync result from API
  */
 export interface SyncResult {
@@ -79,6 +88,8 @@ export interface SyncResult {
       errors: Array<{ messageId: string; error: string }>;
     };
   }>;
+  /** Accounts that failed due to expired/revoked credentials */
+  authErrors?: AccountAuthError[];
 }
 
 /**
@@ -91,6 +102,8 @@ export interface SyncStatusInfo {
   accountEmail: string | null;
   errorMessage: string | null;
   lastSyncResult: SyncResult | null;
+  /** Accounts that need re-authentication (expired/revoked credentials) */
+  accountsNeedingReauth: AccountAuthError[];
 }
 
 /**
@@ -117,6 +130,8 @@ export interface UseSyncStatusReturn {
   refresh: () => Promise<void>;
   /** Last sync result details */
   lastSyncResult: SyncResult | null;
+  /** Accounts that need re-authentication (expired/revoked credentials) */
+  accountsNeedingReauth: AccountAuthError[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -163,6 +178,7 @@ export function useSyncStatus(): UseSyncStatusReturn {
     accountEmail: null,
     errorMessage: null,
     lastSyncResult: null,
+    accountsNeedingReauth: [],
   });
   const [isReady, setIsReady] = React.useState(false);
   const [isSyncing, setIsSyncing] = React.useState(false);
@@ -240,6 +256,60 @@ export function useSyncStatus(): UseSyncStatusReturn {
         logger.debug('Error fetching sync logs', { error: syncLogError.message });
       }
 
+      // Check for auth errors in recent sync logs
+      // Look for invalid_grant or similar auth failures across all accounts
+      const { data: authFailedLogs } = await supabase
+        .from('sync_logs')
+        .select('gmail_account_id, error_message')
+        .eq('user_id', user.id)
+        .eq('status', 'failed')
+        .order('started_at', { ascending: false })
+        .limit(10);
+
+      // Cross-reference with gmail accounts to get emails for failed accounts
+      let accountsNeedingReauth: AccountAuthError[] = [];
+      if (authFailedLogs && authFailedLogs.length > 0) {
+        const authFailures = authFailedLogs.filter(
+          (log: { error_message: string | null }) =>
+            log.error_message?.includes('invalid_grant') ||
+            log.error_message?.includes('invalid_client') ||
+            log.error_message?.includes('access_denied')
+        );
+
+        if (authFailures.length > 0) {
+          const failedAccountIds = [...new Set(authFailures.map(
+            (log: { gmail_account_id: string }) => log.gmail_account_id
+          ))];
+
+          const { data: failedAccounts } = await supabase
+            .from('gmail_accounts')
+            .select('id, email')
+            .in('id', failedAccountIds);
+
+          if (failedAccounts) {
+            accountsNeedingReauth = failedAccounts.map(
+              (acc: { id: string; email: string }) => ({
+                accountId: acc.id,
+                email: acc.email,
+                error: 'Credentials expired. Please reconnect this account.',
+              })
+            );
+          }
+        }
+      }
+
+      // Preserve auth errors from the last sync result if available
+      const lastResult = lastSyncResultRef.current;
+      if (lastResult?.authErrors && lastResult.authErrors.length > 0) {
+        // Merge with DB-detected auth errors, deduplicating by accountId
+        const existingIds = new Set(accountsNeedingReauth.map(a => a.accountId));
+        for (const authErr of lastResult.authErrors) {
+          if (!existingIds.has(authErr.accountId)) {
+            accountsNeedingReauth.push(authErr);
+          }
+        }
+      }
+
       // Determine status
       let status: SyncStatus = 'idle';
       let errorMessage: string | null = null;
@@ -250,6 +320,10 @@ export function useSyncStatus(): UseSyncStatusReturn {
       } else if (syncLog?.status === 'failed') {
         status = 'error';
         errorMessage = syncLog.error_message || 'Sync failed';
+        if (accountsNeedingReauth.length > 0) {
+          const emails = accountsNeedingReauth.map(a => a.email).join(', ');
+          errorMessage = `Credentials expired for: ${emails}. Please reconnect.`;
+        }
         logger.warn('Last sync failed', { errorMessage });
       } else if (syncLog?.status === 'started') {
         status = 'syncing';
@@ -263,6 +337,7 @@ export function useSyncStatus(): UseSyncStatusReturn {
         accountEmail: account?.email || null,
         errorMessage,
         lastSyncResult: lastSyncResultRef.current, // Preserve last result from ref
+        accountsNeedingReauth,
       };
 
       setStatusInfo(newStatusInfo);
@@ -324,20 +399,40 @@ export function useSyncStatus(): UseSyncStatusReturn {
         ...result.totals,
       });
 
+      // Capture auth errors from sync result
+      const newAuthErrors = result.authErrors || [];
+
       // Update ref first, then state
       lastSyncResultRef.current = result;
-      setStatusInfo(prev => ({
-        ...prev,
-        status: 'success',
-        lastSyncAt: new Date().toISOString(),
-        emailsCount: prev.emailsCount + (result.totals?.totalCreated || 0),
-        lastSyncResult: result,
-      }));
 
-      // Reset to idle after showing success
-      setTimeout(() => {
-        setStatusInfo(prev => ({ ...prev, status: 'idle' }));
-      }, 3000);
+      if (newAuthErrors.length > 0) {
+        const emails = newAuthErrors.map(a => a.email).join(', ');
+        logger.warn('Accounts need re-authentication', { emails });
+
+        setStatusInfo(prev => ({
+          ...prev,
+          status: 'error',
+          lastSyncAt: new Date().toISOString(),
+          emailsCount: prev.emailsCount + (result.totals?.totalCreated || 0),
+          errorMessage: `Credentials expired for: ${emails}. Please reconnect.`,
+          lastSyncResult: result,
+          accountsNeedingReauth: newAuthErrors,
+        }));
+      } else {
+        setStatusInfo(prev => ({
+          ...prev,
+          status: 'success',
+          lastSyncAt: new Date().toISOString(),
+          emailsCount: prev.emailsCount + (result.totals?.totalCreated || 0),
+          lastSyncResult: result,
+          accountsNeedingReauth: [],
+        }));
+
+        // Reset to idle after showing success
+        setTimeout(() => {
+          setStatusInfo(prev => ({ ...prev, status: 'idle' }));
+        }, 3000);
+      }
 
       return result;
     } catch (err) {
@@ -394,6 +489,7 @@ export function useSyncStatus(): UseSyncStatusReturn {
     triggerSync,
     refresh: fetchStatus,
     lastSyncResult: statusInfo.lastSyncResult,
+    accountsNeedingReauth: statusInfo.accountsNeedingReauth,
   };
 }
 
