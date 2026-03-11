@@ -26,8 +26,11 @@ import {
   AlarmClock,
 } from 'lucide-react';
 import { RsvpBadge } from '@/components/calendar/RsvpBadge';
+import { SourceChip } from '@/components/shared/SourceChip';
+import { CreateTaskFromEventDialog } from '@/components/calendar/CreateTaskFromEventDialog';
 import { createLogger } from '@/lib/utils/logger';
 import type { TriageItem } from '@/hooks/useTriageItems';
+import type { CalendarItem } from '@/components/calendar/types';
 
 const logger = createLogger('TriageEventCard');
 
@@ -51,13 +54,34 @@ export interface TriageEventCardProps {
   onAccept: (item: TriageItem) => void;
   onDismiss: (item: TriageItem) => void;
   onSnooze: (item: TriageItem) => void;
+  /** Available projects for the task creation dialog */
+  projects?: Array<{ id: string; name: string; color?: string | null }>;
 }
 
-export function TriageEventCard({ item, onAccept, onDismiss, onSnooze }: TriageEventCardProps) {
+export function TriageEventCard({ item, onAccept, onDismiss, onSnooze, projects }: TriageEventCardProps) {
   const [dismissed, setDismissed] = React.useState(false);
+  const [showCreateTask, setShowCreateTask] = React.useState(false);
   const location = (item.raw as Record<string, unknown>)?.location as string | undefined;
   const rsvpDeadline = (item.raw as Record<string, unknown>)?.rsvpDeadline as string | undefined;
   const rsvpUrl = (item.raw as Record<string, unknown>)?.rsvpUrl as string | undefined;
+
+  // Build a CalendarItem-compatible object for the CreateTaskFromEventDialog
+  const calendarItem = React.useMemo((): CalendarItem => ({
+    id: item.id,
+    title: item.title,
+    date: item.deadline ? new Date(item.deadline) : new Date(),
+    dateString: item.deadline ? item.deadline.split('T')[0]! : new Date().toISOString().split('T')[0]!,
+    eventType: 'event',
+    source: 'email_extracted',
+    sourceEmailId: item.sourceEmailId,
+    sourceEmailSubject: item.sourceEmailSubject,
+    sourceEmailSender: item.sourceEmailSender,
+    location,
+    rsvpDeadline,
+    rsvpUrl,
+    isOverdue: false,
+    isAcknowledged: false,
+  }), [item, location, rsvpDeadline, rsvpUrl]);
 
   const handleDismiss = React.useCallback(() => {
     logger.info('Event dismissed', { itemId: item.id });
@@ -69,6 +93,11 @@ export function TriageEventCard({ item, onAccept, onDismiss, onSnooze }: TriageE
     logger.info('Event snoozed', { itemId: item.id });
     onSnooze(item);
   }, [item, onSnooze]);
+
+  const handleCreateTask = React.useCallback(() => {
+    logger.info('Opening create task dialog from triage event', { itemId: item.id });
+    setShowCreateTask(true);
+  }, [item.id]);
 
   return (
     <div className={cn(
@@ -107,14 +136,11 @@ export function TriageEventCard({ item, onAccept, onDismiss, onSnooze }: TriageE
           )}
 
           {item.sourceEmailId && (
-            <Link
-              href={`/inbox?email=${item.sourceEmailId}`}
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-muted/60 hover:bg-muted hover:text-foreground transition-colors truncate max-w-[160px]"
-              title="View source email"
-            >
-              <Mail className="h-3 w-3 shrink-0" />
-              <span className="truncate">{item.sourceEmailSubject || item.sourceEmailSender || 'Source email'}</span>
-            </Link>
+            <SourceChip
+              type="email"
+              id={item.sourceEmailId}
+              label={item.sourceEmailSubject || item.sourceEmailSender || 'Source email'}
+            />
           )}
         </div>
       </div>
@@ -128,7 +154,7 @@ export function TriageEventCard({ item, onAccept, onDismiss, onSnooze }: TriageE
           </Button>
         </Link>
         <button
-          onClick={() => onAccept(item)}
+          onClick={handleCreateTask}
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
           title="Create task"
         >
@@ -149,6 +175,14 @@ export function TriageEventCard({ item, onAccept, onDismiss, onSnooze }: TriageE
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
+
+      {/* Task creation dialog */}
+      <CreateTaskFromEventDialog
+        open={showCreateTask}
+        onOpenChange={setShowCreateTask}
+        item={calendarItem}
+        projects={projects}
+      />
     </div>
   );
 }
