@@ -1,33 +1,43 @@
 /**
- * InboxEmailRow — redesigned email row with timeliness-driven accent.
- * Implements §5b "Email Row Redesign" from VIEW_REDESIGN_PLAN.md.
+ * InboxEmailRow — compact email row for the split-panel inbox.
  *
- * New layout:
- *   Left border (3px) = timeliness accent via getTimelinessAccent()
- *   [Avatar 32px] [Sender · domain] [Subject + snippet] ··· [Time] [Indicators] [Hover tray]
+ * Layout (compact mode for split panel):
+ *   [Avatar 36px] [Sender · company] ··· [Time]
+ *                 [Subject]
+ *                 [Snippet (1 line)]
  *
- * Unread: font-semibold + blue dot. No bg color change.
- * Max 2 indicators via EmailRowIndicators cascade.
- * Hover tray (Archive/Star/Snooze) slides in from right.
+ * Supports:
+ *   - isSelected: highlighted background when active in detail panel
+ *   - compact: tighter padding for split-panel layout (default: true)
+ *   - Unread: blue dot + bold sender + bold subject
+ *   - Star button with animation
+ *   - Keyboard focus ring via data-email-row
+ *
+ * Performance:
+ *   - React.memo prevents re-renders when props haven't changed
+ *   - Handlers use useCallback with stable deps
+ *   - formatSmartDate and getSenderCompanyProxy are pure functions (no allocation on re-render)
  *
  * @module components/inbox/InboxEmailRow
  * @since February 2026 — Inbox UI Redesign v2
+ * @updated March 2026 — Split Panel Redesign (isSelected, compact, removed hover tray)
  */
 
 'use client';
 
 import * as React from 'react';
-import { Star, Clock, AlertTriangle } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { createLogger } from '@/lib/utils/logger';
-import { getTimelinessAccent, type TimelinessNature } from '@/lib/utils/timeliness';
 import type { Email } from '@/types/database';
 import { SenderLogo } from './SenderLogo';
-import { EmailRowIndicators } from './EmailRowIndicators';
-import { EmailHoverActions } from './EmailHoverActions';
 import { EmailHoverCard } from '@/components/email/EmailHoverCard';
 
 const logger = createLogger('InboxEmailRow');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export interface InboxEmailRowProps {
   email: Email;
@@ -35,9 +45,16 @@ export interface InboxEmailRowProps {
   onToggleStar?: (email: Email) => void;
   onUpdate?: (emailId: string, updates: Partial<Email>) => void;
   showCategory?: boolean;
+  /** Compact mode — tighter padding for split-panel layout (default: true) */
   compact?: boolean;
+  /** Highlight when this email is selected in the detail panel */
+  isSelected?: boolean;
   accountMap?: Record<string, string>;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS (pure functions — no allocations on re-render)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Formats a date string into compact relative time.
@@ -62,101 +79,48 @@ function formatSmartDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
-/** Extract timeliness nature from the email's timeliness JSONB field */
-function getEmailTimelinessNature(email: Email): TimelinessNature {
-  const timeliness = email.timeliness as Record<string, unknown> | null;
-  if (timeliness?.nature && typeof timeliness.nature === 'string') {
-    return timeliness.nature as TimelinessNature;
-  }
-  return 'reference'; // safe default — neutral slate border
-}
-
-/**
- * Extract timeliness date chips from the email's timeliness JSONB.
- * Returns up to one chip for late_after or expires (only future dates).
- */
-function getTimelinessDateChip(email: Email): { label: string; type: 'warn' | 'danger' } | null {
-  const timeliness = email.timeliness as Record<string, unknown> | null;
-  if (!timeliness) return null;
-
-  const now = new Date();
-
-  // Check expires first (higher priority)
-  if (timeliness.expires && typeof timeliness.expires === 'string') {
-    const expiresDate = new Date(timeliness.expires);
-    if (expiresDate > now) {
-      return {
-        label: `Expires ${expiresDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-        type: 'danger',
-      };
-    }
-  }
-
-  // Then late_after
-  if (timeliness.late_after && typeof timeliness.late_after === 'string') {
-    const lateDate = new Date(timeliness.late_after);
-    if (lateDate > now) {
-      return {
-        label: `Stale after ${lateDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-        type: 'warn',
-      };
-    }
-  }
-
-  return null;
-}
+/** Personal email domains that don't make useful company names */
+const PERSONAL_DOMAINS = new Set([
+  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
+  'icloud.com', 'me.com', 'mac.com', 'live.com', 'msn.com',
+  'protonmail.com', 'proton.me', 'hey.com', 'fastmail.com',
+]);
 
 /**
  * Extract a company-like name from the sender email domain.
- * Strips common email providers (gmail, yahoo, etc.) and returns
- * a capitalized domain name as a company proxy.
- * Returns null for personal email domains.
+ * Returns null for personal email providers.
  */
-function getSenderCompanyProxy(email: string): string | null {
-  const domain = email.split('@')[1]?.toLowerCase();
-  if (!domain) return null;
+function getSenderCompanyProxy(emailAddr: string): string | null {
+  const domain = emailAddr.split('@')[1]?.toLowerCase();
+  if (!domain || PERSONAL_DOMAINS.has(domain)) return null;
 
-  // Skip common personal email providers — not useful as company names
-  const personalDomains = new Set([
-    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
-    'icloud.com', 'me.com', 'mac.com', 'live.com', 'msn.com',
-    'protonmail.com', 'proton.me', 'hey.com', 'fastmail.com',
-  ]);
-  if (personalDomains.has(domain)) return null;
-
-  // Extract company name from domain (e.g., "acme.com" → "Acme")
   const parts = domain.split('.');
   if (parts.length < 2) return null;
   const name = parts[parts.length - 2]!;
   if (name.length < 2) return null;
 
-  // Capitalize first letter
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export const InboxEmailRow = React.memo(function InboxEmailRow({
   email,
   onClick,
   onToggleStar,
-  onUpdate,
   showCategory = true,
-  compact = false,
+  compact = true,
+  isSelected = false,
   accountMap,
 }: InboxEmailRowProps) {
   const isUnread = !email.is_read;
   const senderName = email.sender_name || email.sender_email.split('@')[0];
-  const senderDomain = email.sender_email.split('@')[1] || '';
-  // Company proxy from domain (Phase 2 — replaces TODO for contact join)
   const senderCompany = getSenderCompanyProxy(email.sender_email);
-  const gist = email.gist || email.summary || email.snippet;
-  const timelinessChip = getTimelinessDateChip(email);
+  const snippet = email.gist || email.summary || email.snippet;
 
-  // Timeliness accent for left border
-  const nature = getEmailTimelinessNature(email);
-  const accent = getTimelinessAccent(nature);
-
-  // State change animation refs (Phase 4)
-  const rowRef = React.useRef<HTMLButtonElement>(null);
+  // Star animation
   const [isStarAnimating, setIsStarAnimating] = React.useState(false);
 
   const handleStarClick = React.useCallback((e: React.MouseEvent) => {
@@ -166,138 +130,91 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
     onToggleStar?.(email);
   }, [email, onToggleStar]);
 
-  const handleArchive = React.useCallback((id: string) => {
-    // Play slide-out animation, then perform the actual archive
-    if (rowRef.current) {
-      rowRef.current.classList.add('animate-slide-out-right');
-      setTimeout(() => onUpdate?.(id, { is_archived: true }), 300);
-    } else {
-      onUpdate?.(id, { is_archived: true });
-    }
-  }, [onUpdate]);
-
-  const handleStar = React.useCallback((_id: string) => {
-    setIsStarAnimating(true);
-    setTimeout(() => setIsStarAnimating(false), 200);
-    onToggleStar?.(email);
-  }, [email, onToggleStar]);
-
-  const handleSnooze = React.useCallback((_id: string) => {
-    logger.debug('Snooze action triggered', { emailId: email.id });
-  }, [email.id]);
-
   return (
     <button
-      ref={rowRef}
       type="button"
       data-email-row
       data-email-id={email.id}
       onClick={() => onClick(email)}
       className={cn(
-        'group relative w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
-        'hover:bg-muted/50 focus-visible:outline-none focus-visible:bg-muted/50',
-        'border-b border-border/40',
-        // Timeliness left border — always visible (3px)
-        'border-l-[3px]',
-        accent.border,
+        'group relative w-full flex items-start gap-3 text-left transition-colors',
+        'hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30',
+        'border-b border-border/30',
+        // Compact vs normal padding
+        compact ? 'px-3 py-2.5' : 'px-4 py-3',
+        // Selected state — subtle highlight with left accent
+        isSelected
+          ? 'bg-accent/60 border-l-2 border-l-primary'
+          : 'border-l-2 border-l-transparent',
       )}
     >
-      {/* Avatar (32px) */}
-      <div className="shrink-0">
-        <SenderLogo senderEmail={email.sender_email} size={32} className="rounded-full" />
+      {/* Avatar */}
+      <div className="shrink-0 mt-0.5">
+        <SenderLogo senderEmail={email.sender_email} size={36} className="rounded-full" />
       </div>
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        {/* Sender line */}
+        {/* Row 1: Sender + time */}
         <div className="flex items-center gap-1.5 mb-0.5">
           {isUnread && (
-            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" aria-label="Unread" />
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" aria-label="Unread" />
           )}
-          <span className={cn('text-sm truncate', isUnread ? 'font-semibold text-foreground' : 'text-foreground/80')}>
+          <span className={cn(
+            'text-sm truncate',
+            isUnread ? 'font-semibold text-foreground' : 'text-foreground/80',
+          )}>
             {senderName}
           </span>
-          {senderCompany ? (
-            <span className="text-xs text-muted-foreground/50 truncate hidden sm:inline">
+          {senderCompany && (
+            <span className="text-[11px] text-muted-foreground/50 truncate">
               {senderCompany}
             </span>
-          ) : senderDomain ? (
-            <span className="text-xs text-muted-foreground/50 truncate hidden sm:inline">
-              {senderDomain}
-            </span>
-          ) : null}
+          )}
           <span className="flex-1" />
-          <span className="text-xs text-muted-foreground/70 shrink-0 tabular-nums">
+          <span className="text-[11px] text-muted-foreground/60 shrink-0 tabular-nums">
             {formatSmartDate(email.date)}
           </span>
         </div>
 
-        {/* Subject + snippet on one line */}
-        {!compact && (
-          <>
-            <div className="flex items-center gap-2">
-              <EmailHoverCard email={email}>
-                <p className={cn('text-sm truncate', isUnread ? 'font-medium text-foreground' : 'text-foreground/80')}>
-                  {email.subject || '(No subject)'}
-                </p>
-              </EmailHoverCard>
-              {gist && (
-                <span className="text-xs text-muted-foreground/60 truncate hidden sm:inline">
-                  — {gist}
-                </span>
-              )}
-            </div>
+        {/* Row 2: Subject */}
+        <EmailHoverCard email={email}>
+          <p className={cn(
+            'text-[13px] truncate leading-snug',
+            isUnread ? 'font-medium text-foreground' : 'text-foreground/70',
+          )}>
+            {email.subject || '(No subject)'}
+          </p>
+        </EmailHoverCard>
 
-            {/* Timeliness date chip — shows late_after/expires dates */}
-            {timelinessChip && (
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={cn(
-                  'inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full',
-                  timelinessChip.type === 'danger'
-                    ? 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400'
-                    : 'bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400',
-                )}>
-                  {timelinessChip.type === 'danger'
-                    ? <AlertTriangle className="h-2.5 w-2.5" />
-                    : <Clock className="h-2.5 w-2.5" />
-                  }
-                  {timelinessChip.label}
-                </span>
-              </div>
-            )}
-          </>
+        {/* Row 3: Snippet */}
+        {snippet && (
+          <p className="text-xs text-muted-foreground/50 truncate mt-0.5 leading-relaxed">
+            {snippet}
+          </p>
         )}
       </div>
 
-      {/* Indicators (max 2) */}
-      <EmailRowIndicators
-        email={email}
-        onToggleStar={() => onToggleStar?.(email)}
-      />
-
-      {/* Star button (when not starred — starred state shown by indicators) */}
-      {!email.is_starred && (
-        <button
-          type="button"
-          onClick={handleStarClick}
-          className="p-1 rounded hover:bg-muted/80 transition-colors shrink-0"
-          aria-label="Star email"
-        >
-          <Star className={cn(
-            'h-4 w-4 text-muted-foreground/30 hover:text-yellow-400 transition-colors',
+      {/* Star button — visible on hover or when starred */}
+      <button
+        type="button"
+        onClick={handleStarClick}
+        className={cn(
+          'p-1 rounded transition-colors shrink-0 mt-0.5',
+          email.is_starred
+            ? 'text-yellow-500'
+            : 'text-muted-foreground/20 opacity-0 group-hover:opacity-100 hover:text-yellow-400',
+        )}
+        aria-label={email.is_starred ? 'Unstar' : 'Star email'}
+      >
+        <Star
+          className={cn(
+            'h-3.5 w-3.5',
             isStarAnimating && 'animate-star-spin',
-          )} />
-        </button>
-      )}
-
-      {/* Hover action tray — slides in from right */}
-      <EmailHoverActions
-        emailId={email.id}
-        isStarred={email.is_starred}
-        onArchive={handleArchive}
-        onStar={handleStar}
-        onSnooze={handleSnooze}
-      />
+          )}
+          fill={email.is_starred ? 'currentColor' : 'none'}
+        />
+      </button>
     </button>
   );
 });
