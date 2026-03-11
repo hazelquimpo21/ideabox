@@ -1031,3 +1031,4 @@ Three key design decisions:
 | Mar 2026 | View Redesign Phase 2: Inbox polish — InboxFeed breakup (682→264 lines), 7 extracted components, timeliness rows, sparklines, hover actions | Claude (view redesign phase 2) |
 | Mar 2026 | View Redesign Phase 3: Calendar redesign — timeline view, heat map grid, RSVP badges, birthday delight, calendar page 1234→297 lines | Claude (view redesign phase 3) |
 | Mar 2026 | Phase 4 preference learning: count-aware EMA, batch states endpoint, fire-and-forget preference writes, behavior weight in composite scoring | Claude (preference learning) |
+| Mar 2026 | Inbox Redesign v3: Split-panel layout (list+detail), 4 filter tabs + overflow, date grouping, keyboard shortcuts, retired modal + 5 tab bar | Claude (inbox split panel) |
