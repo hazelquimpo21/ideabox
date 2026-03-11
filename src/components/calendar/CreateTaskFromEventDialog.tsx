@@ -29,6 +29,7 @@ import {
 import { createLogger } from '@/lib/utils/logger';
 import { cn } from '@/lib/utils/cn';
 import { useProjects } from '@/hooks/useProjects';
+import { useProjectItems } from '@/hooks/useProjectItems';
 import type { CalendarItem } from './types';
 
 const logger = createLogger('CreateTaskFromEventDialog');
@@ -134,6 +135,9 @@ export function CreateTaskFromEventDialog({
     color: p.color,
   })) ?? [];
 
+  // Use Supabase-direct createItem (same pattern as triage cards)
+  const { createItem } = useProjectItems({ itemType: 'all', sortBy: 'sort_order' });
+
   // Re-populate when item changes or dialog opens
   React.useEffect(() => {
     if (open && item) {
@@ -156,7 +160,7 @@ export function CreateTaskFromEventDialog({
     logger.start('Creating task from event', { title, eventId: item.id.substring(0, 8) });
 
     try {
-      const body = {
+      const result = await createItem({
         title: title.trim(),
         description: description.trim() || undefined,
         item_type: 'task',
@@ -166,21 +170,14 @@ export function CreateTaskFromEventDialog({
         source_email_id: item.sourceEmailId || undefined,
         source_event_email_id: item.sourceEmailId || undefined,
         project_id: selectedProjectId || undefined,
-      };
-
-      const response = await fetch('/api/project-items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        logger.error('Task creation failed', { error: error.error });
+      if (!result) {
+        logger.error('Task creation failed — createItem returned null');
         return;
       }
 
-      logger.success('Task created from event', { title });
+      logger.success('Task created from event', { title, itemId: result.id });
       onOpenChange(false);
       onCreated?.();
     } catch (err) {

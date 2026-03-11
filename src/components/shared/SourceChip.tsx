@@ -53,7 +53,7 @@ function getEntityUrl(type: SourceChipProps['type'], id: string): string {
     case 'task':    return `/tasks?item=${id}`;
     case 'event':   return `/calendar?highlight=${id}`;
     case 'contact': return `/contacts/${id}`;
-    case 'link':    return `/discover?link=${id}`;
+    case 'link':    return `/inbox?link=${id}`;
     case 'idea':    return `/tasks?item=${id}`;
     default:        return '#';
   }
