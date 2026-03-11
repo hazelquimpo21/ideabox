@@ -697,7 +697,7 @@ interface ExtractedDateCandidate {
   /** The primary date (YYYY-MM-DD) */
   date: string;
   /** Time if known (HH:MM:SS), null for all-day */
-  time: string | null;
+  event_time: string | null;
   /** Display title: "Invoice #1234 due", "Sarah's birthday" */
   title: string;
   /** Additional context about the date */
@@ -907,7 +907,7 @@ async function fetchExtractedDateCandidates(supabase: any, userId: string): Prom
     const { data, error } = await supabase
       .from('extracted_dates')
       .select(`
-        id, date_type, date, time, title, description,
+        id, date_type, date, event_time, title, description,
         priority_score, email_id, contact_id, is_recurring,
         related_entity, confidence
       `)
@@ -918,7 +918,7 @@ async function fetchExtractedDateCandidates(supabase: any, userId: string): Prom
       .gte('date', todayStr)
       .lte('date', weekFromNowStr)
       .order('date', { ascending: true })
-      .order('time', { ascending: true, nullsFirst: false })
+      .order('event_time', { ascending: true, nullsFirst: false })
       .limit(HUB_SCORING_CONFIG.fetchLimits.extractedDates);
 
     if (error) {

@@ -54,6 +54,7 @@ import {
   TokenManager,
   EmailParser,
   GmailSyncError,
+  GmailAuthError,
 } from '@/lib/gmail';
 import { runAIAnalysis } from '@/lib/services/email-analysis';
 import { markSummaryStale } from '@/services/summary';
@@ -272,6 +273,7 @@ export async function POST(request: Request) {
 
     // Sync each account
     const results: Array<{ accountId: string; email: string; result: SyncResult }> = [];
+    const authErrors: Array<{ accountId: string; email: string; error: string }> = [];
 
     for (const account of accounts) {
       logSync.accountStart({
@@ -302,11 +304,26 @@ export async function POST(request: Request) {
           durationMs: result.durationMs,
         });
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const isAuthError = error instanceof GmailAuthError ||
+          errorMessage.includes('invalid_grant') ||
+          errorMessage.includes('invalid_client') ||
+          errorMessage.includes('access_denied');
+
         logger.error('Account sync failed', {
           accountId: account.id,
           email: account.email,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
+          isAuthError,
         });
+
+        if (isAuthError) {
+          authErrors.push({
+            accountId: account.id,
+            email: account.email,
+            error: errorMessage,
+          });
+        }
 
         // Create a failure result for this account
         results.push({
@@ -321,7 +338,7 @@ export async function POST(request: Request) {
             durationMs: 0,
             errors: [{
               messageId: 'N/A',
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage,
             }],
           },
         });
@@ -390,6 +407,8 @@ export async function POST(request: Request) {
       results,
       analysis: analysisResult,
       durationMs,
+      // Surface auth errors so the UI can prompt the user to reconnect
+      ...(authErrors.length > 0 && { authErrors }),
     });
   } catch (error) {
     timer.end({ error: 'sync_failed' });

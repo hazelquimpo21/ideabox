@@ -74,3 +74,9 @@ export { SyncStatusBanner } from './SyncStatusBanner';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export { EmailSyncBanner } from './EmailSyncBanner';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CREDENTIAL EXPIRY BANNER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export { CredentialExpiryBanner } from './CredentialExpiryBanner';

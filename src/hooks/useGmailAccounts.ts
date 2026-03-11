@@ -116,9 +116,10 @@ export interface UseGmailAccountsReturn {
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Extended GmailAccount type including email_count from API */
+/** Extended GmailAccount type including email_count and auth error from API */
 interface GmailAccountWithCount extends GmailAccount {
   email_count?: number;
+  auth_failed?: boolean;
 }
 
 /**
@@ -132,9 +133,12 @@ function transformAccount(
   account: GmailAccountWithCount,
   isPrimary: boolean
 ): GmailAccountDisplay {
-  // Determine sync status based on sync_enabled and last_sync_at
+  // Determine sync status based on sync_enabled, last_sync_at, and auth state
   let syncStatus: 'active' | 'paused' | 'error' = 'active';
-  if (!account.sync_enabled) {
+  if (account.auth_failed) {
+    // Account has auth failure (invalid_grant) - needs re-authentication
+    syncStatus = 'error';
+  } else if (!account.sync_enabled) {
     syncStatus = 'paused';
   } else if (account.last_sync_at) {
     // If last sync was more than 7 days ago, consider it an error state
@@ -247,7 +251,30 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
         throw new Error(accountsError.message);
       }
 
-      // Get email counts per account
+      // Check for auth failures in recent sync logs
+      const { data: recentFailedLogs } = await supabase
+        .from('sync_logs')
+        .select('gmail_account_id, error_message')
+        .eq('user_id', user.id)
+        .eq('status', 'failed')
+        .order('started_at', { ascending: false })
+        .limit(20);
+
+      // Build a set of account IDs with auth failures
+      const authFailedAccountIds = new Set<string>();
+      if (recentFailedLogs) {
+        for (const log of recentFailedLogs) {
+          if (
+            log.error_message?.includes('invalid_grant') ||
+            log.error_message?.includes('invalid_client') ||
+            log.error_message?.includes('access_denied')
+          ) {
+            authFailedAccountIds.add(log.gmail_account_id);
+          }
+        }
+      }
+
+      // Get email counts per account and check auth status
       const accountsWithCounts = await Promise.all(
         (rawAccounts || []).map(async (account) => {
           const { count } = await supabase
@@ -258,6 +285,7 @@ export function useGmailAccounts(): UseGmailAccountsReturn {
           return {
             ...account,
             email_count: count || 0,
+            auth_failed: authFailedAccountIds.has(account.id),
           } as GmailAccountWithCount;
         })
       );

@@ -115,7 +115,7 @@ export interface UseInitialSyncProgressReturn {
 // =============================================================================
 
 const DEFAULT_OPTIONS: Required<UseInitialSyncProgressOptions> = {
-  pollInterval: 1000,
+  pollInterval: 3000,
   autoStart: false,
   onComplete: () => {},
   onError: () => {},
