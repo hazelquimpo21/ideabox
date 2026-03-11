@@ -104,9 +104,16 @@ export async function GET(): Promise<NextResponse<SyncProgressResponse | { error
     const syncProgress = profile?.sync_progress as StoredSyncProgress | null;
 
     if (!syncProgress) {
-      // Sync hasn't started yet - return pending status
-      logger.debug('No sync progress found', { userId: user.id });
+      // No sync progress — if onboarding is already done, there's nothing to show
+      if (profile?.onboarding_completed) {
+        return NextResponse.json(
+          { error: 'No active sync' },
+          { status: 404 }
+        );
+      }
 
+      // Onboarding not completed yet — return pending
+      logger.debug('No sync progress found', { userId: user.id });
       return NextResponse.json({
         status: 'pending',
         progress: 0,
@@ -117,6 +124,27 @@ export async function GET(): Promise<NextResponse<SyncProgressResponse | { error
           clientsDetected: [],
         },
       });
+    }
+
+    // Don't return stale completed/failed data — if it finished more than
+    // 2 minutes ago, the banner shouldn't keep reappearing on navigation.
+    if (
+      (syncProgress.status === 'completed' || syncProgress.status === 'failed') &&
+      syncProgress.updatedAt
+    ) {
+      const updatedAt = new Date(syncProgress.updatedAt).getTime();
+      const ageMs = Date.now() - updatedAt;
+      if (ageMs > 2 * 60 * 1000) {
+        logger.debug('Sync progress is stale, returning 404', {
+          userId: user.id,
+          status: syncProgress.status,
+          ageMs,
+        });
+        return NextResponse.json(
+          { error: 'No active sync' },
+          { status: 404 }
+        );
+      }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
