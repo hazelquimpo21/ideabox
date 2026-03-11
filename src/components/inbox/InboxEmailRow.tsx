@@ -131,13 +131,15 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
   }, [email, onToggleStar]);
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       data-email-row
       data-email-id={email.id}
       onClick={() => onClick(email)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(email); } }}
       className={cn(
-        'group relative w-full flex items-start gap-3 text-left transition-colors',
+        'group relative w-full flex items-start gap-3 text-left transition-colors cursor-pointer',
         'hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30',
         'border-b border-border/30',
         // Compact vs normal padding
@@ -215,7 +217,7 @@ export const InboxEmailRow = React.memo(function InboxEmailRow({
           fill={email.is_starred ? 'currentColor' : 'none'}
         />
       </button>
-    </button>
+    </div>
   );
 });
 
