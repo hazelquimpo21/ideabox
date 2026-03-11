@@ -64,7 +64,18 @@ export function EmailSyncBanner() {
   const pollRef = React.useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = React.useRef(true);
 
+  // Session-level tracking: don't re-show the banner after it's been
+  // shown and auto-hidden or dismissed in this browser session.
+  const SESSION_KEY = 'emailSyncBannerShown';
+
   // ─── Poll for sync progress ─────────────────────────────────────────────────
+  const stopPolling = React.useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
   const fetchSyncStatus = React.useCallback(async () => {
     try {
       const response = await fetch('/api/onboarding/sync-status', {
@@ -74,13 +85,30 @@ export function EmailSyncBanner() {
       if (!isMountedRef.current) return;
 
       if (!response.ok) {
-        // No sync in progress or error — hide banner
+        // No active sync (404) or error — hide banner and stop polling
+        setIsVisible(false);
+        stopPolling();
         return;
       }
 
       const data: SyncProgressData = await response.json();
 
       if (!isMountedRef.current) return;
+
+      // Check if this sync was already shown and dismissed in this session
+      try {
+        if (sessionStorage.getItem(SESSION_KEY) === 'done') {
+          // Already showed completion — don't show again unless a NEW sync started
+          if (data.status === 'completed' || data.status === 'failed') {
+            stopPolling();
+            return;
+          }
+          // If status is in_progress/pending, a new sync started — clear the flag
+          sessionStorage.removeItem(SESSION_KEY);
+        }
+      } catch {
+        // sessionStorage unavailable (SSR) — continue normally
+      }
 
       // Only show banner when sync is actively running or just completed/failed
       if (data.status === 'in_progress' || data.status === 'pending') {
@@ -89,32 +117,27 @@ export function EmailSyncBanner() {
       } else if (data.status === 'completed') {
         setSyncData(data);
         setIsVisible(true);
+        // Mark as shown so it won't reappear on navigation
+        try { sessionStorage.setItem(SESSION_KEY, 'done'); } catch {}
         // Auto-hide after showing success
         setTimeout(() => {
           if (isMountedRef.current) {
             setIsVisible(false);
           }
         }, 4000);
-        // Stop polling
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
+        stopPolling();
       } else if (data.status === 'failed') {
         setSyncData(data);
         setIsVisible(true);
-        // Stop polling on failure
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
+        try { sessionStorage.setItem(SESSION_KEY, 'done'); } catch {}
+        stopPolling();
       }
     } catch (err) {
       logger.debug('Failed to fetch sync status', {
         error: err instanceof Error ? err.message : 'Unknown',
       });
     }
-  }, []);
+  }, [stopPolling]);
 
   // Start polling on mount
   React.useEffect(() => {
