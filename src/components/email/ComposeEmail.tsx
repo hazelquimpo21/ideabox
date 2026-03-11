@@ -58,6 +58,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { createLogger } from '@/lib/utils/logger';
+import { WritingTips, type EmailStyleIdeas } from './WritingTips';
 import {
   Send,
   Clock,
@@ -147,6 +148,8 @@ export interface ComposeEmailProps {
   open?: boolean;
   /** Called when open state changes */
   onOpenChange?: (open: boolean) => void;
+  /** AI-generated writing tips from email analysis (Phase 2) */
+  emailStyleIdeas?: Record<string, unknown> | null;
 }
 
 /**
@@ -233,6 +236,7 @@ export function ComposeEmail({
   onClose,
   open,
   onOpenChange,
+  emailStyleIdeas,
 }: ComposeEmailProps) {
   const { toast } = useToast();
 
@@ -487,6 +491,15 @@ export function ComposeEmail({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Writing tips — AI-generated suggestions from email analysis (Phase 2) */}
+          {emailStyleIdeas && replyTo?.id && (
+            <WritingTips
+              styleIdeas={emailStyleIdeas as EmailStyleIdeas}
+              emailId={replyTo.id}
+              isReply={mode === 'reply'}
+            />
+          )}
+
           {/* Send Scope Warning */}
           {needsSendScope && (
             <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
