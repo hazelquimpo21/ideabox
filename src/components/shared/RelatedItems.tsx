@@ -32,7 +32,6 @@ const MAX_VISIBLE = 8;
 export interface RelatedItemsProps {
   emailId?: string;
   contactId?: string;
-  projectId?: string;
   /** Optional className for outer wrapper */
   className?: string;
 }
@@ -41,8 +40,8 @@ export interface RelatedItemsProps {
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function RelatedItems({ emailId, contactId, projectId, className }: RelatedItemsProps) {
-  const { items, isLoading } = useRelatedItems({ emailId, contactId, projectId });
+export function RelatedItems({ emailId, contactId, className }: RelatedItemsProps) {
+  const { items, isLoading } = useRelatedItems({ emailId, contactId });
   const [showAll, setShowAll] = React.useState(false);
 
   // Don't render anything if no items and not loading

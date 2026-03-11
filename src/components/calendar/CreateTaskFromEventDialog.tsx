@@ -28,6 +28,7 @@ import {
 } from '@/components/ui';
 import { createLogger } from '@/lib/utils/logger';
 import { cn } from '@/lib/utils/cn';
+import { useProjects } from '@/hooks/useProjects';
 import type { CalendarItem } from './types';
 
 const logger = createLogger('CreateTaskFromEventDialog');
@@ -124,6 +125,14 @@ export function CreateTaskFromEventDialog({
   const [priority, setPriority] = React.useState('medium');
   const [selectedProjectId, setSelectedProjectId] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  // Self-fetch projects when none are provided via props
+  const { projects: fetchedProjects } = useProjects();
+  const availableProjects = projects ?? fetchedProjects?.map((p) => ({
+    id: p.id,
+    name: p.name,
+    color: p.color,
+  })) ?? [];
 
   // Re-populate when item changes or dialog opens
   React.useEffect(() => {
@@ -255,7 +264,7 @@ export function CreateTaskFromEventDialog({
           </div>
 
           {/* Project selector */}
-          {projects && projects.length > 0 && (
+          {availableProjects.length > 0 && (
             <div className="space-y-1.5">
               <label htmlFor="task-project" className="text-sm font-medium">
                 Project
@@ -267,7 +276,7 @@ export function CreateTaskFromEventDialog({
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="">No project</option>
-                {projects.map((p) => (
+                {availableProjects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>

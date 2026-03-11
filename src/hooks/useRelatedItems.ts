@@ -1,7 +1,7 @@
 /**
  * useRelatedItems — fetches cross-entity related items for navigation.
  *
- * Given an anchor (emailId, contactId, or projectId), calls the
+ * Given an anchor (emailId or contactId), calls the
  * GET /api/related endpoint and returns a deduplicated list of
  * related items across emails, tasks, events, contacts, and links.
  *
@@ -33,7 +33,6 @@ export interface RelatedItem {
 export interface UseRelatedItemsOptions {
   emailId?: string;
   contactId?: string;
-  projectId?: string;
 }
 
 export interface UseRelatedItemsReturn {
@@ -52,12 +51,12 @@ export interface UseRelatedItemsReturn {
  * const { items, isLoading } = useRelatedItems({ emailId: email.id });
  * const { items, isLoading } = useRelatedItems({ contactId: contact.id });
  */
-export function useRelatedItems({ emailId, contactId, projectId }: UseRelatedItemsOptions): UseRelatedItemsReturn {
+export function useRelatedItems({ emailId, contactId }: UseRelatedItemsOptions): UseRelatedItemsReturn {
   const [items, setItems] = React.useState<RelatedItem[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
 
   // Build stable cache key from anchor params
-  const anchorKey = emailId || contactId || projectId || '';
+  const anchorKey = emailId || contactId || '';
 
   React.useEffect(() => {
     if (!anchorKey) {
