@@ -22,6 +22,29 @@ import type { CalendarItem } from './types';
 
 const logger = createLogger('TimelineView');
 
+/**
+ * Computes a human-readable date range string from a group of items.
+ * e.g. "Mar 12 – 15" or "Mar 28 – Apr 3"
+ */
+function getDateRange(items: CalendarItem[]): string | undefined {
+  if (items.length === 0) return undefined;
+  const dates = items.map((i) => i.date).sort((a, b) => a.getTime() - b.getTime());
+  const first = dates[0]!;
+  const last = dates[dates.length - 1]!;
+  const fMonth = first.toLocaleDateString('en-US', { month: 'short' });
+  const fDay = first.getDate();
+  const lMonth = last.toLocaleDateString('en-US', { month: 'short' });
+  const lDay = last.getDate();
+
+  if (first.getTime() === last.getTime()) {
+    return `${fMonth} ${fDay}`;
+  }
+  if (fMonth === lMonth) {
+    return `${fMonth} ${fDay} – ${lDay}`;
+  }
+  return `${fMonth} ${fDay} – ${lMonth} ${lDay}`;
+}
+
 interface TimelineViewProps {
   items: CalendarItem[];
   highlightedItemId?: string | null;
@@ -30,14 +53,14 @@ interface TimelineViewProps {
   onSnooze?: (id: string, until: Date) => void;
 }
 
-/** Group definitions in display order. */
+/** Group definitions in display order. showDate = items need their own date label. */
 const GROUP_DEFS = [
-  { key: 'overdue' as const, label: 'OVERDUE', isOverdue: true },
-  { key: 'today' as const, label: 'TODAY', isOverdue: false },
-  { key: 'tomorrow' as const, label: 'TOMORROW', isOverdue: false },
-  { key: 'thisWeek' as const, label: 'THIS WEEK', isOverdue: false },
-  { key: 'nextWeek' as const, label: 'NEXT WEEK', isOverdue: false },
-  { key: 'later' as const, label: 'LATER', isOverdue: false },
+  { key: 'overdue' as const, label: 'OVERDUE', isOverdue: true, showDate: true },
+  { key: 'today' as const, label: 'TODAY', isOverdue: false, showDate: false },
+  { key: 'tomorrow' as const, label: 'TOMORROW', isOverdue: false, showDate: false },
+  { key: 'thisWeek' as const, label: 'THIS WEEK', isOverdue: false, showDate: true },
+  { key: 'nextWeek' as const, label: 'NEXT WEEK', isOverdue: false, showDate: true },
+  { key: 'later' as const, label: 'LATER', isOverdue: false, showDate: true },
 ] as const;
 
 export function TimelineView({
@@ -115,7 +138,7 @@ export function TimelineView({
 
   return (
     <div className="space-y-1">
-      {GROUP_DEFS.map(({ key, label, isOverdue }) => {
+      {GROUP_DEFS.map(({ key, label, isOverdue, showDate }) => {
         const groupItems = groups[key];
         if (groupItems.length === 0) return null;
 
@@ -125,6 +148,7 @@ export function TimelineView({
               label={label}
               count={groupItems.length}
               isOverdue={isOverdue}
+              dateRange={showDate ? getDateRange(groupItems) : undefined}
             />
             <div className="relative">
               {groupItems.map((item) => {
@@ -142,6 +166,7 @@ export function TimelineView({
                     <TimelineItem
                       item={item}
                       isExpanded={expandedId === item.id}
+                      showDate={showDate}
                       onToggle={() => handleToggle(item.id)}
                       onDismiss={handleDismissWithAnimation}
                       onSaveToCalendar={onSaveToCalendar}

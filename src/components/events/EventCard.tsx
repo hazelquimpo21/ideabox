@@ -761,7 +761,8 @@ export function EventCard({
     setShowEmailModal(true);
   };
 
-  // Get locality for visual styling
+  // Cache metadata/locality once per render to avoid repeated lookups
+  const metadata = getEventMetadata(event);
   const locality = getLocality(event);
   const localityBorderClass = getLocalityBorderClass(locality);
 
@@ -809,14 +810,14 @@ export function EventCard({
                 </h3>
 
                 {/* Why attend — personalized reason from AI */}
-                {getEventMetadata(event)?.whyAttend && (
+                {metadata?.whyAttend && (
                   <p className="text-sm text-blue-600 dark:text-blue-400 mt-1 italic">
-                    {getEventMetadata(event)!.whyAttend}
+                    {metadata.whyAttend}
                   </p>
                 )}
 
                 {/* Description if available (hidden if whyAttend is shown) */}
-                {!getEventMetadata(event)?.whyAttend && event.description && (
+                {!metadata?.whyAttend && event.description && (
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                     {event.description}
                   </p>
@@ -857,20 +858,20 @@ export function EventCard({
                 showRelative={!isToday}
               />
               <div className="flex items-center gap-1">
-                <CommitmentBadge metadata={getEventMetadata(event)} />
-                <EventTypeBadge metadata={getEventMetadata(event)} />
-                <KeyDateTypeBadge metadata={getEventMetadata(event)} />
-                <LocalityBadge locality={getLocality(event)} />
+                <CommitmentBadge metadata={metadata} />
+                <EventTypeBadge metadata={metadata} />
+                <KeyDateTypeBadge metadata={metadata} />
+                <LocalityBadge locality={locality} />
               </div>
             </div>
 
             {/* ─────────────────────────────────────────────────────────────────── */}
             {/* Location (from event_metadata) */}
             {/* ─────────────────────────────────────────────────────────────────── */}
-            {getEventMetadata(event)?.location && (
+            {metadata?.location && (
               <LocationDisplay
-                location={getEventMetadata(event)!.location!}
-                locality={getLocality(event)}
+                location={metadata.location}
+                locality={locality}
               />
             )}
 
@@ -878,11 +879,10 @@ export function EventCard({
             {/* RSVP and Cost Info (from event_metadata) */}
             {/* ─────────────────────────────────────────────────────────────────── */}
             {(() => {
-              const meta = getEventMetadata(event);
-              if (!meta) return null;
+              if (!metadata) return null;
 
-              const showRsvp = meta.rsvpRequired || meta.rsvpDeadline || meta.rsvpUrl;
-              const showCost = meta.cost;
+              const showRsvp = metadata.rsvpRequired || metadata.rsvpDeadline || metadata.rsvpUrl;
+              const showCost = metadata.cost;
 
               if (!showRsvp && !showCost) return null;
 
@@ -893,33 +893,33 @@ export function EventCard({
                     <Badge
                       variant="outline"
                       className={`text-xs ${
-                        meta.cost?.toLowerCase() === 'free'
+                        metadata.cost?.toLowerCase() === 'free'
                           ? 'border-green-300 text-green-700 dark:border-green-700 dark:text-green-300'
                           : 'border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-300'
                       }`}
                     >
-                      {meta.cost}
+                      {metadata.cost}
                     </Badge>
                   )}
 
                   {/* RSVP indicator */}
-                  {meta.rsvpRequired && (
+                  {metadata.rsvpRequired && (
                     <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
                       RSVP Required
                     </Badge>
                   )}
 
                   {/* RSVP deadline */}
-                  {meta.rsvpDeadline && (
+                  {metadata.rsvpDeadline && (
                     <span className="text-xs text-muted-foreground">
-                      RSVP by {formatEventDate(meta.rsvpDeadline, { short: true })}
+                      RSVP by {formatEventDate(metadata.rsvpDeadline, { short: true })}
                     </span>
                   )}
 
                   {/* RSVP link */}
-                  {meta.rsvpUrl && (
+                  {metadata.rsvpUrl && (
                     <a
-                      href={meta.rsvpUrl}
+                      href={metadata.rsvpUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"

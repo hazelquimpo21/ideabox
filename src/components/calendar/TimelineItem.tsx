@@ -17,10 +17,12 @@ import * as React from 'react';
 import { cn } from '@/lib/utils/cn';
 import { getEventTypeConfig } from '@/lib/utils/event-colors';
 import { Tooltip } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui';
 import { Cake, MapPin, Star, Sparkles } from 'lucide-react';
 import { RsvpBadge } from './RsvpBadge';
 import { EventActions } from './EventActions';
 import { DateItemExpanded } from './DateItemExpanded';
+import { EmailPreviewModal } from '@/components/events/EmailPreviewModal';
 import { RelatedItems } from '@/components/shared/RelatedItems';
 import type { CalendarItem } from './types';
 
@@ -29,9 +31,26 @@ const NON_EVENT_TYPES = new Set([
   'deadline', 'payment_due', 'expiration', 'follow_up', 'reminder', 'recurring', 'other',
 ]);
 
+/**
+ * Formats a short day label for timeline items (e.g., "Wed 12" or "Mar 18").
+ * Items in "Today"/"Tomorrow" groups don't need this since the header says it.
+ */
+function formatShortDate(date: Date): string {
+  const now = new Date();
+  const sameMonth = date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  if (sameMonth) {
+    // Same month: show weekday + day number, e.g. "Wed 12"
+    return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+  }
+  // Different month: show month + day, e.g. "Apr 5"
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 interface TimelineItemProps {
   item: CalendarItem;
   isExpanded: boolean;
+  /** Whether to show the date alongside time (for groups like "This Week", "Later") */
+  showDate?: boolean;
   onToggle: () => void;
   onDismiss?: (id: string) => void;
   onSaveToCalendar?: (id: string) => void;
@@ -63,6 +82,7 @@ function TimelineDot({ type }: { type: string }) {
 const TimelineItemInner = React.memo(function TimelineItemInner({
   item,
   isExpanded,
+  showDate = false,
   onToggle,
   onDismiss,
   onSaveToCalendar,
@@ -80,12 +100,22 @@ const TimelineItemInner = React.memo(function TimelineItemInner({
   const hasExpanded = React.useRef(false);
   if (isExpanded) hasExpanded.current = true;
 
+  // Email preview modal state
+  const [showEmailModal, setShowEmailModal] = React.useState(false);
+
+  const handleViewEmail = React.useCallback((emailId: string) => {
+    setShowEmailModal(true);
+  }, []);
+
   const tooltipContent = (
     <div className="text-xs space-y-0.5">
       <p>Source: {item.source === 'google_calendar' ? 'Google Calendar' : 'Email'}</p>
       {item.sourceEmailSender && <p>From: {item.sourceEmailSender}</p>}
     </div>
   );
+
+  // Format the date + time display
+  const dateLabel = showDate ? formatShortDate(item.date) : null;
 
   return (
     <div
@@ -114,10 +144,17 @@ const TimelineItemInner = React.memo(function TimelineItemInner({
             showConfetti && 'animate-confetti-pop'
           )}
         >
-          {/* Time */}
-          <span className="text-xs text-muted-foreground w-16 shrink-0 tabular-nums">
-            {item.time || 'All day'}
-          </span>
+          {/* Date + Time column */}
+          <div className="shrink-0 tabular-nums text-right" style={{ width: showDate ? '5.5rem' : '4rem' }}>
+            {dateLabel && (
+              <span className="text-xs font-medium text-foreground/80 block leading-tight">
+                {dateLabel}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground leading-tight">
+              {item.time || 'All day'}
+            </span>
+          </div>
 
           {/* Title + subtitle */}
           <div className="flex-1 min-w-0">
@@ -138,6 +175,18 @@ const TimelineItemInner = React.memo(function TimelineItemInner({
               </p>
             )}
           </div>
+
+          {/* Event type badge */}
+          <Badge
+            variant="outline"
+            className={cn(
+              'text-[10px] px-1.5 py-0 shrink-0 border-0 hidden sm:inline-flex',
+              config.bg,
+              config.text,
+            )}
+          >
+            {config.label}
+          </Badge>
 
           {/* RSVP badge (inline) */}
           {item.rsvpRequired && item.rsvpDeadline && (
@@ -226,6 +275,7 @@ const TimelineItemInner = React.memo(function TimelineItemInner({
                   onDismiss={onDismiss}
                   onSaveToCalendar={onSaveToCalendar}
                   onSnooze={onSnooze}
+                  onViewEmail={handleViewEmail}
                 />
 
                 {/* Related items — cross-entity navigation */}
@@ -237,6 +287,14 @@ const TimelineItemInner = React.memo(function TimelineItemInner({
           )}
         </div>
       </div>
+
+      {/* Email Preview Modal — opens inline instead of navigating away */}
+      <EmailPreviewModal
+        emailId={item.sourceEmailId ?? null}
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        title="Original Email"
+      />
     </div>
   );
 });
