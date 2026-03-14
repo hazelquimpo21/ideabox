@@ -21,11 +21,11 @@ import {
   Sparkles,
   ArrowUpRight,
   X,
-  AlarmClock,
   ExternalLink,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import { QuickAcceptPopover } from './QuickAcceptPopover';
+import { SnoozePicker } from './SnoozePicker';
 import { SourceChip } from '@/components/shared/SourceChip';
 import type { TriageItem } from '@/hooks/useTriageItems';
 import type { IdeaItem } from '@/hooks/useIdeas';
@@ -51,7 +51,7 @@ export interface TriageIdeaCardProps {
   item: TriageItem;
   onAccept: (item: TriageItem) => void;
   onDismiss: (item: TriageItem) => void;
-  onSnooze: (item: TriageItem) => void;
+  onSnooze: (item: TriageItem, minutes?: number) => void;
   /** Available projects for the QuickAcceptPopover dropdown */
   projects?: Project[];
   /** Create a project item — passed to QuickAcceptPopover */
@@ -85,9 +85,9 @@ export function TriageIdeaCard({ item, onAccept, onDismiss, onSnooze, projects, 
     onAccept(item);
   }, [item, onAccept]);
 
-  const handleSnooze = React.useCallback(() => {
-    logger.info('Idea snoozed', { itemId: item.id });
-    onSnooze(item);
+  const handleSnooze = React.useCallback((minutes: number) => {
+    logger.info('Idea snoozed', { itemId: item.id, minutes });
+    onSnooze(item, minutes);
   }, [item, onSnooze]);
 
   return (
@@ -169,13 +169,7 @@ export function TriageIdeaCard({ item, onAccept, onDismiss, onSnooze, projects, 
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         )}
-        <button
-          onClick={handleSnooze}
-          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-          title="Snooze"
-        >
-          <AlarmClock className="h-3.5 w-3.5" />
-        </button>
+        <SnoozePicker onSnooze={handleSnooze} />
         <button
           onClick={handleDismiss}
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"

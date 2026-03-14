@@ -116,6 +116,13 @@ export type ProjectItemStatus =
   | 'cancelled';
 
 /**
+ * Task firmness / obligation level.
+ * Affects dismiss friction and overdue escalation priority.
+ * @since March 2026
+ */
+export type ProjectItemFirmness = 'hard' | 'soft' | 'flexible';
+
+/**
  * Recurrence patterns for routine items.
  */
 export type RecurrencePattern = 'daily' | 'weekly' | 'biweekly' | 'monthly';
@@ -689,6 +696,7 @@ export interface Database {
           tags: string[];
           sort_order: number;
           completed_at: string | null;
+          firmness: ProjectItemFirmness;
           created_at: string;
           updated_at: string;
         };
@@ -713,6 +721,7 @@ export interface Database {
           tags?: string[];
           sort_order?: number;
           completed_at?: string | null;
+          firmness?: ProjectItemFirmness;
           created_at?: string;
           updated_at?: string;
         };
@@ -737,6 +746,7 @@ export interface Database {
           tags?: string[];
           sort_order?: number;
           completed_at?: string | null;
+          firmness?: ProjectItemFirmness;
           created_at?: string;
           updated_at?: string;
         };

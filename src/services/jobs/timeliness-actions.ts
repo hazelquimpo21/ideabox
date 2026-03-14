@@ -109,23 +109,78 @@ export async function runTimelinessActions(): Promise<TimelinessActionsResult> {
 
     // ─────────────────────────────────────────────────────────────────────────
     // 1. Auto-archive expired emails
+    //    SAFETY: Skip archival if the email has linked pending actions or
+    //    project_items — the task may still need the source context.
     // ─────────────────────────────────────────────────────────────────────────
     try {
-      const { data: expiredEmails, error: expiredError } = await supabase
+      // First, find candidate expired emails
+      const { data: candidates, error: candidateError } = await supabase
         .from('emails')
-        .update({ is_archived: true })
+        .select('id')
         .eq('is_archived', false)
         .not('timeliness', 'is', null)
         .lte('timeliness->>expires', now)
-        .select('id');
+        .limit(200);
 
-      if (expiredError) {
-        logger.warn('Failed to archive expired emails', { error: expiredError.message });
-        errors.push(`archive_expired: ${expiredError.message}`);
-      } else {
-        archived_expired = expiredEmails?.length ?? 0;
-        if (archived_expired > 0) {
-          logger.info('Auto-archived expired emails', { count: archived_expired });
+      if (candidateError) {
+        logger.warn('Failed to fetch expired email candidates', { error: candidateError.message });
+        errors.push(`archive_expired: ${candidateError.message}`);
+      } else if (candidates && candidates.length > 0) {
+        const candidateIds = candidates.map((e) => e.id);
+
+        // Check which emails have pending actions linked
+        const { data: linkedActions } = await supabase
+          .from('actions')
+          .select('email_id')
+          .in('email_id', candidateIds)
+          .eq('status', 'pending');
+
+        // Check which emails have pending project_items linked
+        const { data: linkedItems } = await supabase
+          .from('project_items')
+          .select('source_email_id')
+          .in('source_email_id', candidateIds)
+          .not('status', 'in', '("completed","cancelled")');
+
+        // Build set of protected email IDs
+        const protectedIds = new Set<string>();
+        if (linkedActions) {
+          for (const a of linkedActions) {
+            if (a.email_id) protectedIds.add(a.email_id);
+          }
+        }
+        if (linkedItems) {
+          for (const i of linkedItems) {
+            if (i.source_email_id) protectedIds.add(i.source_email_id);
+          }
+        }
+
+        // Archive only unprotected emails
+        const safeToArchive = candidateIds.filter((id) => !protectedIds.has(id));
+
+        if (protectedIds.size > 0) {
+          logger.info('Skipping archival for emails with linked pending items', {
+            protected: protectedIds.size,
+            archiving: safeToArchive.length,
+          });
+        }
+
+        if (safeToArchive.length > 0) {
+          const { data: archivedEmails, error: archiveError } = await supabase
+            .from('emails')
+            .update({ is_archived: true })
+            .in('id', safeToArchive)
+            .select('id');
+
+          if (archiveError) {
+            logger.warn('Failed to archive expired emails', { error: archiveError.message });
+            errors.push(`archive_expired: ${archiveError.message}`);
+          } else {
+            archived_expired = archivedEmails?.length ?? 0;
+            if (archived_expired > 0) {
+              logger.info('Auto-archived expired emails', { count: archived_expired });
+            }
+          }
         }
       }
     } catch (err) {

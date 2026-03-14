@@ -22,11 +22,13 @@ import {
   AlertTriangle,
   ArrowUpRight,
   X,
-  AlarmClock,
   Reply,
+  Shield,
+  ShieldAlert,
 } from 'lucide-react';
 import { createLogger } from '@/lib/utils/logger';
 import { QuickAcceptPopover } from './QuickAcceptPopover';
+import { SnoozePicker } from './SnoozePicker';
 import { SourceChip } from '@/components/shared/SourceChip';
 import type { TriageItem } from '@/hooks/useTriageItems';
 import type { Project } from '@/types/database';
@@ -84,7 +86,7 @@ export interface TriageActionCardProps {
   item: TriageItem;
   onAccept: (item: TriageItem) => void;
   onDismiss: (item: TriageItem) => void;
-  onSnooze: (item: TriageItem) => void;
+  onSnooze: (item: TriageItem, minutes?: number) => void;
   /** Available projects for the QuickAcceptPopover dropdown */
   projects?: Project[];
   /** Create a project item — passed to QuickAcceptPopover */
@@ -110,28 +112,37 @@ export function TriageActionCard({ item, onAccept, onDismiss, onSnooze, projects
   const raw = item.raw as { action_type?: string; description?: string; email_id?: string };
   const typeInfo = raw.action_type ? ACTION_TYPE_LABELS[raw.action_type] : null;
   const deadline = item.deadline ? formatDeadline(item.deadline) : null;
+  const firmness = item.firmness ?? 'flexible';
 
   const handleDismiss = React.useCallback(() => {
-    logger.info('Action dismissed', { itemId: item.id });
+    if (firmness === 'hard') {
+      const confirmed = window.confirm(
+        `"${item.title}" looks like a hard commitment. Are you sure you want to dismiss it?`
+      );
+      if (!confirmed) return;
+    }
+    logger.info('Action dismissed', { itemId: item.id, firmness });
     setDismissed(true);
     setTimeout(() => onDismiss(item), 300);
-  }, [item, onDismiss]);
+  }, [item, onDismiss, firmness]);
 
   const handleAccept = React.useCallback(() => {
     logger.info('Action accepted', { itemId: item.id });
     onAccept(item);
   }, [item, onAccept]);
 
-  const handleSnooze = React.useCallback(() => {
-    logger.info('Action snoozed', { itemId: item.id });
-    onSnooze(item);
+  const handleSnooze = React.useCallback((minutes: number) => {
+    logger.info('Action snoozed', { itemId: item.id, minutes });
+    onSnooze(item, minutes);
   }, [item, onSnooze]);
 
   return (
     <div className={cn(
-      'flex items-start gap-3 p-3 rounded-lg border border-border/50 group',
+      'flex items-start gap-3 p-3 rounded-lg border group',
       'transition-all duration-300 ease-out',
-      'hover:border-border hover:shadow-sm hover:bg-card',
+      firmness === 'hard'
+        ? 'border-red-200 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/5 hover:border-red-300 hover:shadow-md'
+        : 'border-border/50 hover:border-border hover:shadow-sm hover:bg-card',
       dismissed && 'opacity-0 scale-95 -translate-x-2 h-0 !p-0 !m-0 overflow-hidden border-0',
     )}>
       {/* Type icon */}
@@ -145,6 +156,12 @@ export function TriageActionCard({ item, onAccept, onDismiss, onSnooze, projects
           {typeInfo && (
             <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0', typeInfo.color)}>
               {typeInfo.label}
+            </span>
+          )}
+          {firmness === 'hard' && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 inline-flex items-center gap-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+              <ShieldAlert className="h-2.5 w-2.5" />
+              Hard
             </span>
           )}
         </div>
@@ -215,17 +232,11 @@ export function TriageActionCard({ item, onAccept, onDismiss, onSnooze, projects
             <Reply className="h-3.5 w-3.5" />
           </Link>
         )}
-        <button
-          onClick={handleSnooze}
-          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-          title="Snooze"
-        >
-          <AlarmClock className="h-3.5 w-3.5" />
-        </button>
+        <SnoozePicker onSnooze={handleSnooze} />
         <button
           onClick={handleDismiss}
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
-          title="Dismiss"
+          title={firmness === 'hard' ? 'Dismiss (requires confirmation)' : 'Dismiss'}
         >
           <X className="h-3.5 w-3.5" />
         </button>

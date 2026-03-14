@@ -30,7 +30,7 @@ const logger = createLogger('useProjectItems');
  * Avoids `select('*')` to reduce payload size.
  * @since March 2026 — Phase 3 query optimization
  */
-const BOARD_LIST_FIELDS = 'id, project_id, item_type, title, description, status, priority, due_date, source_email_id, source_action_id, tags, sort_order, completed_at, created_at, recurrence_pattern, recurrence_config, estimated_minutes';
+const BOARD_LIST_FIELDS = 'id, project_id, item_type, title, description, status, priority, due_date, source_email_id, source_action_id, tags, sort_order, completed_at, created_at, recurrence_pattern, recurrence_config, estimated_minutes, firmness';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS

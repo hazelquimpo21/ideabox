@@ -23,9 +23,9 @@ import {
   CalendarPlus,
   ListTodo,
   X,
-  AlarmClock,
 } from 'lucide-react';
 import { RsvpBadge } from '@/components/calendar/RsvpBadge';
+import { SnoozePicker } from './SnoozePicker';
 import { SourceChip } from '@/components/shared/SourceChip';
 import { CreateTaskFromEventDialog } from '@/components/calendar/CreateTaskFromEventDialog';
 import { createLogger } from '@/lib/utils/logger';
@@ -53,7 +53,7 @@ export interface TriageEventCardProps {
   item: TriageItem;
   onAccept: (item: TriageItem) => void;
   onDismiss: (item: TriageItem) => void;
-  onSnooze: (item: TriageItem) => void;
+  onSnooze: (item: TriageItem, minutes?: number) => void;
   /** Available projects for the task creation dialog */
   projects?: Array<{ id: string; name: string; color?: string | null }>;
 }
@@ -89,9 +89,9 @@ export function TriageEventCard({ item, onAccept, onDismiss, onSnooze, projects 
     setTimeout(() => onDismiss(item), 300);
   }, [item, onDismiss]);
 
-  const handleSnooze = React.useCallback(() => {
-    logger.info('Event snoozed', { itemId: item.id });
-    onSnooze(item);
+  const handleSnooze = React.useCallback((minutes: number) => {
+    logger.info('Event snoozed', { itemId: item.id, minutes });
+    onSnooze(item, minutes);
   }, [item, onSnooze]);
 
   const handleCreateTask = React.useCallback(() => {
@@ -160,13 +160,7 @@ export function TriageEventCard({ item, onAccept, onDismiss, onSnooze, projects 
         >
           <ListTodo className="h-3.5 w-3.5" />
         </button>
-        <button
-          onClick={handleSnooze}
-          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-          title="Snooze"
-        >
-          <AlarmClock className="h-3.5 w-3.5" />
-        </button>
+        <SnoozePicker onSnooze={handleSnooze} />
         <button
           onClick={handleDismiss}
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
